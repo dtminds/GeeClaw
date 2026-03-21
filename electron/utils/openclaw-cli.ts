@@ -3,11 +3,11 @@
  */
 import { app } from 'electron';
 import {
-  appendFileSync,
+  // appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
-  readFileSync,
+  // readFileSync,
   symlinkSync,
   unlinkSync,
 } from 'node:fs';
@@ -95,10 +95,10 @@ function getPackagedCliWrapperPath(): string | null {
   return null;
 }
 
-function getWindowsPowerShellPath(): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-  return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-}
+// function getWindowsPowerShellPath(): string {
+//   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+//   return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+// }
 
 // ── macOS / Linux install ────────────────────────────────────────────────────
 
