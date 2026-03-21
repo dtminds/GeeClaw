@@ -3,11 +3,11 @@
  */
 import { app } from 'electron';
 import {
-  appendFileSync,
+  // appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
-  readFileSync,
+  // readFileSync,
   symlinkSync,
   unlinkSync,
 } from 'node:fs';
@@ -95,10 +95,10 @@ function getPackagedCliWrapperPath(): string | null {
   return null;
 }
 
-function getWindowsPowerShellPath(): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-  return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-}
+// function getWindowsPowerShellPath(): string {
+//   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+//   return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+// }
 
 // ── macOS / Linux install ────────────────────────────────────────────────────
 
@@ -147,120 +147,120 @@ export async function installOpenClawCli(): Promise<{
 
 // ── Auto-install on first launch ─────────────────────────────────────────────
 
-function isCliInstalled(): boolean {
-  const platform = process.platform;
+// function isCliInstalled(): boolean {
+//   const platform = process.platform;
 
-  if (platform === 'win32') return true; // handled by NSIS installer
+//   if (platform === 'win32') return true; // handled by NSIS installer
 
-  const target = getCliTargetPath();
-  if (!existsSync(target)) return false;
+//   const target = getCliTargetPath();
+//   if (!existsSync(target)) return false;
 
-  // Also check /usr/local/bin/openclaw for deb installs
-  if (platform === 'linux' && existsSync('/usr/local/bin/openclaw')) return true;
+//   // Also check /usr/local/bin/openclaw for deb installs
+//   if (platform === 'linux' && existsSync('/usr/local/bin/openclaw')) return true;
 
-  return true;
-}
+//   return true;
+// }
 
-function ensureWindowsCliOnPath(): Promise<'updated' | 'already-present'> {
-  return new Promise((resolve, reject) => {
-    const cliWrapper = getPackagedCliWrapperPath();
-    if (!cliWrapper) {
-      reject(new Error('CLI wrapper not found in app resources.'));
-      return;
-    }
+// function ensureWindowsCliOnPath(): Promise<'updated' | 'already-present'> {
+//   return new Promise((resolve, reject) => {
+//     const cliWrapper = getPackagedCliWrapperPath();
+//     if (!cliWrapper) {
+//       reject(new Error('CLI wrapper not found in app resources.'));
+//       return;
+//     }
 
-    const cliDir = dirname(cliWrapper);
-    const helperPath = join(cliDir, 'update-user-path.ps1');
-    if (!existsSync(helperPath)) {
-      reject(new Error(`PATH helper not found at ${helperPath}`));
-      return;
-    }
+//     const cliDir = dirname(cliWrapper);
+//     const helperPath = join(cliDir, 'update-user-path.ps1');
+//     if (!existsSync(helperPath)) {
+//       reject(new Error(`PATH helper not found at ${helperPath}`));
+//       return;
+//     }
 
-    const child = spawn(
-      getWindowsPowerShellPath(),
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        helperPath,
-        '-Action',
-        'add',
-        '-CliDir',
-        cliDir,
-      ],
-      {
-        env: process.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      },
-    );
+//     const child = spawn(
+//       getWindowsPowerShellPath(),
+//       [
+//         '-NoProfile',
+//         '-NonInteractive',
+//         '-ExecutionPolicy',
+//         'Bypass',
+//         '-File',
+//         helperPath,
+//         '-Action',
+//         'add',
+//         '-CliDir',
+//         cliDir,
+//       ],
+//       {
+//         env: process.env,
+//         stdio: ['ignore', 'pipe', 'pipe'],
+//         windowsHide: true,
+//       },
+//     );
 
-    let stdout = '';
-    let stderr = '';
+//     let stdout = '';
+//     let stderr = '';
 
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
+//     child.stdout.on('data', (chunk) => {
+//       stdout += chunk.toString();
+//     });
 
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
+//     child.stderr.on('data', (chunk) => {
+//       stderr += chunk.toString();
+//     });
 
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `PowerShell exited with code ${code}`));
-        return;
-      }
+//     child.on('error', reject);
+//     child.on('close', (code) => {
+//       if (code !== 0) {
+//         reject(new Error(stderr.trim() || `PowerShell exited with code ${code}`));
+//         return;
+//       }
 
-      const status = stdout.trim();
-      if (status === 'updated' || status === 'already-present') {
-        resolve(status);
-        return;
-      }
+//       const status = stdout.trim();
+//       if (status === 'updated' || status === 'already-present') {
+//         resolve(status);
+//         return;
+//       }
 
-      reject(new Error(`Unexpected PowerShell output: ${status || '(empty)'}`));
-    });
-  });
-}
+//       reject(new Error(`Unexpected PowerShell output: ${status || '(empty)'}`));
+//     });
+//   });
+// }
 
-function ensureLocalBinInPath(): void {
-  if (process.platform === 'win32') return;
+// function ensureLocalBinInPath(): void {
+//   if (process.platform === 'win32') return;
 
-  const localBin = join(homedir(), '.local', 'bin');
-  const pathEnv = process.env.PATH || '';
-  if (pathEnv.split(':').includes(localBin)) return;
+//   const localBin = join(homedir(), '.local', 'bin');
+//   const pathEnv = process.env.PATH || '';
+//   if (pathEnv.split(':').includes(localBin)) return;
 
-  const shell = process.env.SHELL || '/bin/zsh';
-  const profileFile = shell.includes('zsh')
-    ? join(homedir(), '.zshrc')
-    : shell.includes('fish')
-      ? join(homedir(), '.config', 'fish', 'config.fish')
-      : join(homedir(), '.bashrc');
+//   const shell = process.env.SHELL || '/bin/zsh';
+//   const profileFile = shell.includes('zsh')
+//     ? join(homedir(), '.zshrc')
+//     : shell.includes('fish')
+//       ? join(homedir(), '.config', 'fish', 'config.fish')
+//       : join(homedir(), '.bashrc');
 
-  try {
-    const marker = '.local/bin';
-    let content = '';
-    try {
-      content = readFileSync(profileFile, 'utf-8');
-    } catch {
-      // file doesn't exist yet
-    }
+//   try {
+//     const marker = '.local/bin';
+//     let content = '';
+//     try {
+//       content = readFileSync(profileFile, 'utf-8');
+//     } catch {
+//       // file doesn't exist yet
+//     }
 
-    if (content.includes(marker)) return;
+//     if (content.includes(marker)) return;
 
-    const line = shell.includes('fish')
-      ? '\n# Added by GeeClaw\nfish_add_path "$HOME/.local/bin"\n'
-      : '\n# Added by GeeClaw\nexport PATH="$HOME/.local/bin:$PATH"\n';
+//     const line = shell.includes('fish')
+//       ? '\n# Added by GeeClaw\nfish_add_path "$HOME/.local/bin"\n'
+//       : '\n# Added by GeeClaw\nexport PATH="$HOME/.local/bin:$PATH"\n';
 
-    appendFileSync(profileFile, line);
-    logger.info(`Added ~/.local/bin to PATH in ${profileFile}`);
-  } catch (error) {
-    logger.warn('Failed to add ~/.local/bin to PATH:', error);
-  }
-}
+//     appendFileSync(profileFile, line);
+//     logger.info(`Added ~/.local/bin to PATH in ${profileFile}`);
+//   } catch (error) {
+//     logger.warn('Failed to add ~/.local/bin to PATH:', error);
+//   }
+// }
 
 export async function autoInstallCliIfNeeded(
   notify?: (path: string) => void,

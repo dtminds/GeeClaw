@@ -6,8 +6,10 @@ import {
   clearChannelBinding,
   createAgent,
   getDefaultAgentModelConfig,
+  getAgentPersona,
   deleteAgentConfig,
   listAgentsSnapshot,
+  updateAgentPersona,
   updateDefaultAgentFallbacks,
   updateAgentName,
 } from '../../utils/agent-config';
@@ -80,6 +82,23 @@ export async function handleAgentRoutes(
       return true;
     }
 
+    if (parts.length === 2 && parts[1] === 'persona') {
+      try {
+        const body = await parseJsonBody<{ identity?: string; master?: string; soul?: string; memory?: string }>(req);
+        const agentId = decodeURIComponent(parts[0]);
+        const snapshot = await updateAgentPersona(agentId, {
+          identity: body.identity,
+          master: body.master,
+          soul: body.soul,
+          memory: body.memory,
+        });
+        sendJson(res, 200, { success: true, ...snapshot });
+      } catch (error) {
+        sendJson(res, 400, { success: false, error: String(error) });
+      }
+      return true;
+    }
+
     if (parts.length === 3 && parts[1] === 'channels') {
       try {
         const agentId = decodeURIComponent(parts[0]);
@@ -126,6 +145,16 @@ export async function handleAgentRoutes(
   if (url.pathname.startsWith('/api/agents/') && req.method === 'GET') {
     const suffix = url.pathname.slice('/api/agents/'.length);
     const parts = suffix.split('/').filter(Boolean);
+    if (parts.length === 2 && parts[1] === 'persona') {
+      const agentId = decodeURIComponent(parts[0]);
+      try {
+        sendJson(res, 200, { success: true, ...(await getAgentPersona(agentId)) });
+      } catch (error) {
+        sendJson(res, 404, { success: false, error: String(error) });
+      }
+      return true;
+    }
+
     if (parts.length === 2 && parts[1] === 'sessions') {
       const agentId = decodeURIComponent(parts[0]);
       try {

@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readdir, rm } from 'fs/promises';
+import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join, normalize } from 'path';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
@@ -18,6 +18,7 @@ const DEFAULT_WORKSPACE_PATH = `${MANAGED_OPENCLAW_HOME}/workspace`;
 const AGENT_BOOTSTRAP_FILES = [
   'AGENTS.md',
   'SOUL.md',
+  'MEMORY.md',
   'TOOLS.md',
   'USER.md',
   'IDENTITY.md',
@@ -102,6 +103,22 @@ export interface AgentsSnapshot {
   explicitChannelAccountBindings: Record<string, string>;
 }
 
+export interface AgentPersonaFileSnapshot {
+  exists: boolean;
+  content: string;
+}
+
+export interface AgentPersonaSnapshot {
+  agentId: string;
+  workspace: string;
+  files: {
+    identity: AgentPersonaFileSnapshot;
+    master: AgentPersonaFileSnapshot;
+    soul: AgentPersonaFileSnapshot;
+    memory: AgentPersonaFileSnapshot;
+  };
+}
+
 export interface AvailableProviderModelGroup {
   providerId: string;
   providerName: string;
@@ -113,6 +130,13 @@ export interface DefaultAgentModelConfigSnapshot {
   fallbacks: string[];
   availableModels: AvailableProviderModelGroup[];
 }
+
+const PERSONA_FILE_MAP = {
+  identity: 'IDENTITY.md',
+  master: 'USER.md',
+  soul: 'SOUL.md',
+  memory: 'MEMORY.md',
+} as const;
 
 function formatModelLabel(model: unknown): string | null {
   if (typeof model === 'string' && model.trim()) {
@@ -605,6 +629,52 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
   };
 }
 
+function getWorkspacePathForEntry(config: AgentConfigDocument, entry: AgentListEntry): string {
+  return expandPath(
+    entry.workspace || (entry.id === MAIN_AGENT_ID ? getDefaultWorkspacePath(config) : getDefaultWorkspacePathForAgent(entry.id)),
+  );
+}
+
+function getAgentEntryById(config: AgentConfigDocument, agentId: string): AgentListEntry {
+  const { entries } = normalizeAgentsConfig(config);
+  const entry = entries.find((candidate) => candidate.id === agentId);
+  if (!entry) {
+    throw new Error(`Agent "${agentId}" not found`);
+  }
+  return entry;
+}
+
+async function readPersonaFileSnapshot(workspace: string, fileName: string): Promise<AgentPersonaFileSnapshot> {
+  const filePath = join(workspace, fileName);
+  if (!(await fileExists(filePath))) {
+    return { exists: false, content: '' };
+  }
+
+  return {
+    exists: true,
+    content: await readFile(filePath, 'utf-8'),
+  };
+}
+
+async function buildAgentPersonaSnapshot(
+  config: AgentConfigDocument,
+  agentId: string,
+): Promise<AgentPersonaSnapshot> {
+  const entry = getAgentEntryById(config, agentId);
+  const workspace = getWorkspacePathForEntry(config, entry);
+
+  return {
+    agentId: entry.id,
+    workspace,
+    files: {
+      identity: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.identity),
+      master: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.master),
+      soul: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.soul),
+      memory: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.memory),
+    },
+  };
+}
+
 async function persistAgentConfigAndPatchRuntime(config: AgentConfigDocument): Promise<void> {
   await saveAgentRuntimeConfigToStore({
     agents: config.agents,
@@ -616,6 +686,32 @@ async function persistAgentConfigAndPatchRuntime(config: AgentConfigDocument): P
 export async function listAgentsSnapshot(): Promise<AgentsSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
   return buildSnapshotFromConfig(config);
+}
+
+export async function getAgentPersona(agentId: string): Promise<AgentPersonaSnapshot> {
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  return buildAgentPersonaSnapshot(config, agentId);
+}
+
+export async function updateAgentPersona(
+  agentId: string,
+  updates: Partial<Record<keyof typeof PERSONA_FILE_MAP, string>>,
+): Promise<AgentPersonaSnapshot> {
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const entry = getAgentEntryById(config, agentId);
+  const workspace = getWorkspacePathForEntry(config, entry);
+
+  await ensureDir(workspace);
+
+  for (const [key, fileName] of Object.entries(PERSONA_FILE_MAP) as Array<[keyof typeof PERSONA_FILE_MAP, string]>) {
+    const nextContent = updates[key];
+    if (typeof nextContent !== 'string') {
+      continue;
+    }
+    await writeFile(join(workspace, fileName), nextContent, 'utf-8');
+  }
+
+  return buildAgentPersonaSnapshot(config, agentId);
 }
 
 export async function listConfiguredAgentIds(): Promise<string[]> {
