@@ -18,6 +18,14 @@ import { toUserMessage } from '@/lib/api-client';
 type PersonaFileKey = 'identity' | 'master' | 'soul' | 'memory';
 type SoulTemplateId = 'assistant' | 'companion' | 'mentor' | 'custom';
 
+type SoulTemplate = {
+  id: SoulTemplateId;
+  emoji: string;
+  name: string;
+  description: string;
+  content: string;
+};
+
 type PersonaResponse = {
   agentId: string;
   workspace: string;
@@ -44,6 +52,72 @@ interface PersonaDrawerProps {
 }
 
 const FILE_ORDER: PersonaFileKey[] = ['identity', 'master', 'soul', 'memory'];
+const SOUL_TEMPLATES: SoulTemplate[] = [
+  {
+    id: 'assistant',
+    emoji: '💡',
+    name: '全能助手',
+    description: '理性、客观、高效的得力干将',
+    content: `[核心驱动]
+你是一个理性、可靠、高执行力的全能助手。
+
+[行为原则]
+- 先给结论，再补充必要背景
+- 优先提供可执行方案，不说空话
+- 主动拆解复杂问题，帮助用户推进下一步
+- 保持客观、专业、稳定，不情绪化表演
+
+[表达风格]
+- 简洁清楚
+- 重点明确
+- 遇到不确定信息时直说不确定`,
+  },
+  {
+    id: 'companion',
+    emoji: '🌸',
+    name: '贴心伴侣',
+    description: '温柔倾听，提供满满的情绪价值',
+    content: `[核心驱动]
+你是一个温柔、细腻、善于共情的贴心陪伴型助手。
+
+[行为原则]
+- 先理解用户感受，再给建议
+- 关注情绪、氛围和陪伴感
+- 用轻柔但不敷衍的方式表达支持
+- 在给方案时保持温暖、耐心和鼓励
+
+[表达风格]
+- 自然亲近
+- 柔和真诚
+- 让用户感到被理解和被接住`,
+  },
+  {
+    id: 'mentor',
+    emoji: '🎓',
+    name: '严厉导师',
+    description: '直击痛点，鞭策你不断突破自我',
+    content: `[核心驱动]
+你是一个标准极高、判断直接、以成长为导向的导师型助手。
+
+[行为原则]
+- 不回避问题，敢于指出真正的卡点
+- 少安慰，多推动用户行动和复盘
+- 强调目标、节奏、纪律和结果
+- 对模糊、拖延、借口保持敏锐
+
+[表达风格]
+- 直接有力
+- 逻辑清晰
+- 尖锐但不羞辱，严格但以成长为目的`,
+  },
+  {
+    id: 'custom',
+    emoji: '⚙️',
+    name: '自定义',
+    description: '亲手编写 Prompt，为 TA 注入独一无二的灵魂',
+    content: '',
+  },
+];
 
 function normalizeTemplateSource(content: string): string {
   return content.replace(/\r\n/g, '\n').trim();
@@ -68,37 +142,6 @@ export function PersonaDrawer({
   });
   const [customSoulDraft, setCustomSoulDraft] = useState('');
   const [soulTemplateId, setSoulTemplateId] = useState<SoulTemplateId>('assistant');
-
-  const soulTemplates = useMemo(() => ([
-    {
-      id: 'assistant' as const,
-      emoji: '💡',
-      name: t('toolbar.persona.soulTemplates.assistant.name'),
-      description: t('toolbar.persona.soulTemplates.assistant.description'),
-      content: t('toolbar.persona.soulTemplates.assistant.content'),
-    },
-    {
-      id: 'companion' as const,
-      emoji: '🌸',
-      name: t('toolbar.persona.soulTemplates.companion.name'),
-      description: t('toolbar.persona.soulTemplates.companion.description'),
-      content: t('toolbar.persona.soulTemplates.companion.content'),
-    },
-    {
-      id: 'mentor' as const,
-      emoji: '🎓',
-      name: t('toolbar.persona.soulTemplates.mentor.name'),
-      description: t('toolbar.persona.soulTemplates.mentor.description'),
-      content: t('toolbar.persona.soulTemplates.mentor.content'),
-    },
-    {
-      id: 'custom' as const,
-      emoji: '⚙️',
-      name: t('toolbar.persona.soulTemplates.custom.name'),
-      description: t('toolbar.persona.soulTemplates.custom.description'),
-      content: '',
-    },
-  ]), [t]);
 
   const sectionTones = useMemo<Record<PersonaFileKey, SectionTone>>(() => ({
     identity: {
@@ -166,7 +209,7 @@ export function PersonaDrawer({
         if (cancelled) return;
 
         const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
-        const matchedTemplate = soulTemplates.find((template) => (
+        const matchedTemplate = SOUL_TEMPLATES.find((template) => (
           template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
         ));
 
@@ -192,7 +235,7 @@ export function PersonaDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, agentId, soulTemplates]);
+  }, [open, agentId]);
 
   const hasChanges = useMemo(() => {
     if (!snapshot) return false;
@@ -208,7 +251,7 @@ export function PersonaDrawer({
         `/api/agents/${encodeURIComponent(agentId)}/persona`,
       );
       const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
-      const matchedTemplate = soulTemplates.find((template) => (
+      const matchedTemplate = SOUL_TEMPLATES.find((template) => (
         template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
       ));
       setSnapshot(response);
@@ -244,7 +287,7 @@ export function PersonaDrawer({
       setCustomSoulDraft(drafts.soul);
     }
 
-    const template = soulTemplates.find((item) => item.id === nextTemplateId);
+    const template = SOUL_TEMPLATES.find((item) => item.id === nextTemplateId);
     if (!template) return;
 
     setSoulTemplateId(nextTemplateId);
@@ -481,7 +524,7 @@ export function PersonaDrawer({
                 {activeTab === 'soul' && (
                   <div className="flex min-h-0 flex-1 flex-col gap-2">
                     <div className="grid grid-cols-4 gap-2.5">
-                      {soulTemplates.map((template) => {
+                      {SOUL_TEMPLATES.map((template) => {
                         const selected = soulTemplateId === template.id;
                         return (
                           <button
@@ -537,10 +580,8 @@ export function PersonaDrawer({
                           fileKey: 'soul',
                           fileLabel: 'SOUL.md',
                           helperText: t('toolbar.persona.notes.soul'),
-                          value: soulTemplates.find((template) => template.id === soulTemplateId)?.content
-                            || t('toolbar.persona.soulPresetHint', {
-                              name: soulTemplates.find((template) => template.id === soulTemplateId)?.name || '',
-                            }),
+                          value: SOUL_TEMPLATES.find((template) => template.id === soulTemplateId)?.content
+                            || '',
                         })}
                     </div>
                   </div>

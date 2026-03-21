@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next';
+// import { useTranslation } from 'react-i18next';
 import { DashboardSettingsSection } from '@/components/settings/DashboardSettingsSection';
 import { InspirationPlazaSection } from '@/components/dashboard';
 
 export function Dashboard() {
-  const { t } = useTranslation(['dashboard', 'common']);
+  // const { t } = useTranslation(['dashboard', 'common']);
 
   return (
     <div className="flex flex-col dark:bg-background">

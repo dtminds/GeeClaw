@@ -10,17 +10,17 @@ import {
   Clock03Icon,
   ThreeDViewIcon,
 } from '@hugeicons/core-free-icons';
-import { useLocation } from 'react-router-dom';
+// import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGatewayStore } from '@/stores/gateway';
 import { useChannelsStore } from '@/stores/channels';
 import { useSkillsStore } from '@/stores/skills';
-import { useSettingsStore } from '@/stores/settings';
+// import { useSettingsStore } from '@/stores/settings';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { hostApiFetch } from '@/lib/host-api';
+// import { hostApiFetch } from '@/lib/host-api';
 import { trackUiEvent } from '@/lib/telemetry';
 import { useTranslation } from 'react-i18next';
-import { getSettingsModalState } from '@/lib/settings-modal';
+// import { getSettingsModalState } from '@/lib/settings-modal';
 import { cn } from '@/lib/utils';
 
 interface DashboardSettingsSectionProps {
@@ -29,14 +29,14 @@ interface DashboardSettingsSectionProps {
 
 export function DashboardSettingsSection({ className }: DashboardSettingsSectionProps = {}) {
   const { t } = useTranslation('dashboard');
-  const location = useLocation();
+  // const location = useLocation();
   const gatewayStatus = useGatewayStore((state) => state.status);
   const { channels, fetchChannels } = useChannelsStore();
   const { skills, fetchSkills } = useSkillsStore();
-  const devModeUnlocked = useSettingsStore((state) => state.devModeUnlocked);
+  // const devModeUnlocked = useSettingsStore((state) => state.devModeUnlocked);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
-  const settingsModalState = getSettingsModalState(location);
+  // const settingsModalState = getSettingsModalState(location);
   const [uptime, setUptime] = useState(0);
 
   // Track page view on mount only.
@@ -75,23 +75,23 @@ export function DashboardSettingsSection({ className }: DashboardSettingsSection
     return () => clearInterval(interval);
   }, [gatewayStatus.connectedAt]);
 
-  const openDevConsole = async () => {
-    try {
-      const result = await hostApiFetch<{
-        success: boolean;
-        url?: string;
-        error?: string;
-      }>('/api/gateway/control-ui');
-      if (result.success && result.url) {
-        trackUiEvent('dashboard.quick_action', { action: 'dev_console' });
-        window.electron.openExternal(result.url);
-      } else {
-        console.error('Failed to get Dev Console URL:', result.error);
-      }
-    } catch (err) {
-      console.error('Error opening Dev Console:', err);
-    }
-  };
+  // const openDevConsole = async () => {
+  //   try {
+  //     const result = await hostApiFetch<{
+  //       success: boolean;
+  //       url?: string;
+  //       error?: string;
+  //     }>('/api/gateway/control-ui');
+  //     if (result.success && result.url) {
+  //       trackUiEvent('dashboard.quick_action', { action: 'dev_console' });
+  //       window.electron.openExternal(result.url);
+  //     } else {
+  //       console.error('Failed to get Dev Console URL:', result.error);
+  //     }
+  //   } catch (err) {
+  //     console.error('Error opening Dev Console:', err);
+  //   }
+  // };
 
   return (
     <div className={cn('mx-auto w-full max-w-5xl space-y-6 pb-4', className)}>
