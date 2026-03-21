@@ -27,6 +27,7 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
     { pluginId: 'qqbot', packageName: '@sliverp/qqbot' },
     { pluginId: 'openclaw-lark', packageName: '@larksuite/openclaw-lark' },
     { pluginId: 'lossless-claw', packageName: '@martian-engineering/lossless-claw' },
+    { pluginId: 'qmemory', packageName: 'qmemory' },
   ];
 
   for (const plugin of pluginDefs) {
@@ -209,8 +210,8 @@ describe('reconcileBundledPluginLoadPaths', () => {
         getAlwaysEnabledBundledPluginIds,
       } = await import('@electron/utils/plugin-install');
 
-      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw']);
-      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw']);
+      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'qmemory']);
+      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'qmemory']);
 
       const result = await ensureAlwaysEnabledBundledPluginsConfigured();
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
@@ -234,9 +235,30 @@ describe('reconcileBundledPluginLoadPaths', () => {
 
       expect(result).toEqual({
         success: true,
-        updated: ['lossless-claw'],
+        updated: ['lossless-claw', 'qmemory'],
       });
-      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw']);
+      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'qmemory']);
+      expect(config.plugins?.entries).toEqual({
+        'lossless-claw': {
+          enabled: true,
+          config: {
+            dbPath: join(process.env.HOME, '.openclaw-geeclaw', 'lcm.db'),
+            freshTailCount: 64,
+            ignoreSessionPatterns: [
+              'agent:*:cron:**',
+              'agent:*:subagent:**',
+            ],
+            statelessSessionPatterns: [
+              'agent:*:subagent:**',
+              'agent:ops:subagent:**',
+            ],
+            skipStatelessSessions: true,
+          },
+        },
+        qmemory: {
+          enabled: true,
+        },
+      });
       expect(config.plugins?.entries?.['lossless-claw']).toEqual({
         enabled: true,
         config: {
@@ -252,6 +274,9 @@ describe('reconcileBundledPluginLoadPaths', () => {
           ],
           skipStatelessSessions: true,
         },
+      });
+      expect(config.plugins?.entries?.qmemory).toEqual({
+        enabled: true,
       });
     } finally {
       process.env.HOME = previousHome;

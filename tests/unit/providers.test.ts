@@ -41,9 +41,8 @@ describe('provider metadata', () => {
           id: 'geekai',
           name: 'GeekAI',
           requiresApiKey: true,
-          defaultBaseUrl: 'https://geekai.co/api/v1',
-          showBaseUrl: true,
           showModelId: true,
+          defaultModelId: 'qwen3.5-flash',
         }),
       ])
     );

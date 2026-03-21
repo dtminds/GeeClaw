@@ -31,13 +31,13 @@ describe('skills store error mapping', () => {
     expect(useSkillsStore.getState().error).toBe('fetchRateLimitError');
   });
 
-  it('maps searchSkills timeout error by AppError code', async () => {
+  it('surfaces marketplace catalog load errors on the marketplace error field', async () => {
     hostApiFetchMock.mockRejectedValueOnce(new Error('request timeout'));
 
     const { useSkillsStore } = await import('@/stores/skills');
-    await useSkillsStore.getState().searchSkills('git');
+    await useSkillsStore.getState().fetchMarketplaceCatalog(true);
 
-    expect(useSkillsStore.getState().searchError).toBe('searchTimeoutError');
+    expect(useSkillsStore.getState().marketplaceError).toContain('request timeout');
   });
 
   it('maps installSkill timeout result into installTimeoutError', async () => {
