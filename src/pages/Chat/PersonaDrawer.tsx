@@ -383,7 +383,7 @@ export function PersonaDrawer({
             onChange={(event) => onChange(event.target.value)}
             placeholder={t(`toolbar.persona.placeholders.${fileKey}`)}
             className={cn(
-              'min-h-[96px] resize-none border-0 bg-transparent px-0 py-0 text-sm leading-5 text-foreground shadow-none focus-visible:ring-0',
+              'min-h-[96px] resize-none border-0 bg-transparent px-0 py-0 text-sm leading-5 text-foreground shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
               fillHeight && 'h-full min-h-0 flex-1',
             )}
           />
