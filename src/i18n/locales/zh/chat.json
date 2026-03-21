@@ -27,30 +27,89 @@
         "temporarySessionExpireHint": "对话会在第二天自动删除",
         "noTemporarySessions": "暂无对话",
         "untitledTemporarySession": "未命名对话",
-        "deleteTemporarySession": "删除对话"
+        "deleteTemporarySession": "删除对话",
+        "persona": {
+            "button": "Agent设置",
+            "title": "Agent设置",
+            "createOnSave": "保存时创建",
+            "loadFailed": "加载人设文件失败",
+            "unsaved": "有未保存的修改",
+            "savedState": "当前内容已同步",
+            "saving": "保存中...",
+            "sections": {
+                "identity": "1. 身份 (IDENTITY)",
+                "master": "2. 你的档案 (MASTER)",
+                "soul": "3. 灵魂核心 (SOUL)",
+                "memory": "4. 记忆档案 (MEMORY)"
+            },
+            "tabs": {
+                "identity": "基础信息",
+                "soul": "人设风格",
+                "master": "主人档案",
+                "memory": "长期记忆"
+            },
+            "notes": {
+                "identity": "Agent 会读取此文件了解自己",
+                "master": "Agent 会读取此文件认识你",
+                "soul": "Agent 会读取此文件形成自己的人设风格",
+                "memory": "Agent 会在此文件读写记忆"
+            },
+            "soulPresetHint": "当前已选择“{{name}}”预设，保存后会直接写入 SOUL.md。",
+            "placeholders": {
+                "identity": "[Agent 设定]\n名称：Nova\n定位：你的全时段智能生活助理\n特质：稳定、清晰、可靠、行动导向",
+                "master": "[主人档案]\n称呼：主人\n简介：我是一名前端开发工程师，平时喜欢喝冰美式，最近在尝试做独立开发。",
+                "soul": "[核心驱动]\n在这里写下你希望注入给 Agent 的独特灵魂、说话方式和行为原则。",
+                "memory": "[记忆记录]\n- 用户偏好：\n- 最近目标：\n- 长期约束："
+            },
+            "soulTemplates": {
+                "assistant": {
+                    "name": "全能助手",
+                    "description": "理性、客观、高效的得力干将",
+                    "content": "[核心驱动]\n你是一个理性、可靠、高执行力的全能助手。\n\n[行为原则]\n- 先给结论，再补充必要背景\n- 优先提供可执行方案，不说空话\n- 主动拆解复杂问题，帮助用户推进下一步\n- 保持客观、专业、稳定，不情绪化表演\n\n[表达风格]\n- 简洁清楚\n- 重点明确\n- 遇到不确定信息时直说不确定"
+                },
+                "companion": {
+                    "name": "贴心伴侣",
+                    "description": "温柔倾听，提供满满的情绪价值",
+                    "content": "[核心驱动]\n你是一个温柔、细腻、善于共情的贴心陪伴型助手。\n\n[行为原则]\n- 先理解用户感受，再给建议\n- 关注情绪、氛围和陪伴感\n- 用轻柔但不敷衍的方式表达支持\n- 在给方案时保持温暖、耐心和鼓励\n\n[表达风格]\n- 自然亲近\n- 柔和真诚\n- 让用户感到被理解和被接住"
+                },
+                "mentor": {
+                    "name": "严厉导师",
+                    "description": "直击痛点，鞭策你不断突破自我",
+                    "content": "[核心驱动]\n你是一个标准极高、判断直接、以成长为导向的导师型助手。\n\n[行为原则]\n- 不回避问题，敢于指出真正的卡点\n- 少安慰，多推动用户行动和复盘\n- 强调目标、节奏、纪律和结果\n- 对模糊、拖延、借口保持敏锐\n\n[表达风格]\n- 直接有力\n- 逻辑清晰\n- 尖锐但不羞辱，严格但以成长为目的"
+                },
+                "custom": {
+                    "name": "自定义",
+                    "description": "亲手编写 Prompt，为 TA 注入独一无二的灵魂"
+                }
+            },
+            "toast": {
+                "saved": "人设已保存",
+                "failed": "保存人设失败"
+            }
+        }
     },
     "sessionPanel": {
         "title": "会话",
         "collapse": "收起会话栏",
         "expand": "展开会话栏",
-  "mainSection": "主会话",
-  "mainSession": "主会话",
-  "mainSessionHint": "长期上下文，会跟随当前 Agent 持续累积",
-  "temporaryTab": "对话",
-  "cronTab": "定时任务",
-  "temporarySection": "对话",
-  "temporarySessionHint": "独立对话，适合临时分支任务",
-  "cronRunHint": "定时任务运行记录",
-  "cronRunTitleFallback": "定时任务",
-  "loadingCronRuns": "正在加载定时任务记录...",
-  "new": "新建",
-  "delete": "删除",
-  "draftTemporarySession": "新对话",
-  "draftTemporarySessionHint": "聊点什么",
-  "emptyTemporarySessions": "还没有对话",
-  "emptyTemporarySessionsHint": "可以新建一个对话，上下文更轻，回答更快，消耗更少",
-  "emptyCronRuns": "还没有定时任务记录",
-  "emptyCronRunsHint": "当前 Agent 的定时任务运行记录会显示在这里"
+        "mainSection": "主会话",
+        "mainSession": "主会话",
+        "mainSessionHint": "长期上下文，会跟随当前 Agent 持续累积",
+        "temporaryTab": "对话",
+        "cronTab": "定时任务",
+        "temporarySection": "对话",
+        "temporarySessionHint": "独立对话，适合临时分支任务",
+        "cronRunHint": "定时任务运行记录",
+        "cronRunTitleFallback": "定时任务",
+        "loadingCronRuns": "正在加载定时任务记录...",
+        "new": "新建",
+        "delete": "删除",
+        "draftTemporarySession": "新对话",
+        "draftTemporarySessionHint": "聊点什么",
+        "emptyTemporarySessions": "还没有对话",
+        "emptyTemporarySessionsHint": "可以新建一个对话，上下文更轻，回答更快，消耗更少",
+        "emptyCronRuns": "还没有定时任务记录",
+        "emptyCronRunsHint": "当前 Agent 的定时任务运行记录会显示在这里"
     },
     "composer": {
         "attachFiles": "添加文件",
@@ -92,10 +151,10 @@
                 }
             }
         },
-  "tip": "内容由 AI 生成，请注意甄别",
-  "gatewayDisconnectedPlaceholder": "网关未连接...",
-  "cronFallbackPlaceholder": "这条定时任务记录没有可继续对话的实时会话。",
-  "safety": {
+        "tip": "内容由 AI 生成，请注意甄别",
+        "gatewayDisconnectedPlaceholder": "网关未连接...",
+        "cronFallbackPlaceholder": "这条定时任务记录没有可继续对话的实时会话。",
+        "safety": {
             "accessRange": "文件访问",
             "workspaceOnly": "工作目录",
             "unrestricted": "不限",

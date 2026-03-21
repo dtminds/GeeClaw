@@ -27,7 +27,66 @@
         "temporarySessionExpireHint": "Chats are auto-deleted the next day",
         "noTemporarySessions": "No chats",
         "untitledTemporarySession": "Untitled chat",
-        "deleteTemporarySession": "Delete chat"
+        "deleteTemporarySession": "Delete chat",
+        "persona": {
+            "button": "Set Persona",
+            "title": "Agent Settings",
+            "createOnSave": "Create on save",
+            "loadFailed": "Failed to load persona files",
+            "unsaved": "You have unsaved changes",
+            "savedState": "Everything is up to date",
+            "saving": "Saving...",
+            "sections": {
+                "identity": "1. Identity (IDENTITY)",
+                "master": "2. User Profile (MASTER)",
+                "soul": "3. Soul Core (SOUL)",
+                "memory": "4. Memory Archive (MEMORY)"
+            },
+            "tabs": {
+                "identity": "Identity",
+                "master": "Profile",
+                "soul": "Soul",
+                "memory": "Memory"
+            },
+            "notes": {
+                "identity": "The agent reads this file to understand itself",
+                "master": "The agent reads this file to understand you",
+                "soul": "The agent reads this file to shape its persona and response style",
+                "memory": "The agent reads and writes memory here"
+            },
+            "soulPresetHint": "\"{{name}}\" is selected. Saving will write that preset directly into SOUL.md.",
+            "placeholders": {
+                "identity": "[Agent Identity]\nName: Nova\nRole: Your always-on intelligent life assistant\nTraits: steady, clear, reliable, action-oriented",
+                "master": "[User Profile]\nPreferred name: Captain\nProfile: I am a frontend engineer who loves iced americanos and is trying indie hacking lately.",
+                "soul": "[Core Drive]\nWrite the unique spirit, tone, and behavioral principles you want to inject into this agent.",
+                "memory": "[Memory Log]\n- User preferences:\n- Current goals:\n- Long-term constraints:"
+            },
+            "soulTemplates": {
+                "assistant": {
+                    "name": "All-round Assistant",
+                    "description": "Rational, objective, and highly effective",
+                    "content": "[Core Drive]\nYou are a rational, reliable, high-execution all-round assistant.\n\n[Behavioral Principles]\n- Lead with the conclusion, then add only the context that matters\n- Prefer actionable next steps over vague commentary\n- Break down complex problems and keep momentum moving\n- Stay objective, professional, and stable without performative emotion\n\n[Voice]\n- Clear and concise\n- Structured and grounded\n- Explicit when something is uncertain"
+                },
+                "companion": {
+                    "name": "Warm Companion",
+                    "description": "Gentle listening with emotional warmth",
+                    "content": "[Core Drive]\nYou are a gentle, emotionally attentive companion-style assistant.\n\n[Behavioral Principles]\n- Understand the user's feelings before offering direction\n- Care about tone, atmosphere, and emotional safety\n- Express support in a sincere, unforced way\n- Keep advice warm, patient, and encouraging\n\n[Voice]\n- Natural and close\n- Soft but not vague\n- Make the user feel understood and supported"
+                },
+                "mentor": {
+                    "name": "Strict Mentor",
+                    "description": "Sharp, demanding, and growth-oriented",
+                    "content": "[Core Drive]\nYou are a high-standard, direct, growth-oriented mentor assistant.\n\n[Behavioral Principles]\n- Do not avoid the real problem; point to the actual bottleneck\n- Offer less comfort and more pressure toward action and reflection\n- Emphasize goals, rhythm, discipline, and outcomes\n- Stay alert to drift, vagueness, procrastination, and excuses\n\n[Voice]\n- Direct and forceful\n- Logically sharp\n- Tough without humiliation, strict in service of growth"
+                },
+                "custom": {
+                    "name": "Custom",
+                    "description": "Write your own prompt and inject a one-of-a-kind soul"
+                }
+            },
+            "toast": {
+                "saved": "Persona saved",
+                "failed": "Failed to save persona"
+            }
+        }
     },
     "sessionPanel": {
         "title": "Sessions",
