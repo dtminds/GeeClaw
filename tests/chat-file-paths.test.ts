@@ -147,9 +147,9 @@ describe('chat file path extraction', () => {
 
     const limited = limitAttachedFilesForMessage(files);
 
-    expect(limited.files).toHaveLength(48);
-    expect(limited.hiddenCount).toBe(12);
+    expect(limited.files).toHaveLength(9);
+    expect(limited.hiddenCount).toBe(51);
     expect(limited.files[0]?.fileName).toBe('file-0.txt');
-    expect(limited.files[47]?.fileName).toBe('file-47.txt');
+    expect(limited.files[8]?.fileName).toBe('file-8.txt');
   });
 });

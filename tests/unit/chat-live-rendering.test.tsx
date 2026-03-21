@@ -4,15 +4,19 @@ import { ChatMessage } from '@/pages/Chat/ChatMessage';
 import { buildChatItems } from '@/pages/Chat/build-chat-items';
 import type { RawMessage } from '@/stores/chat';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
-    i18n: {
-      language: 'zh-CN',
-      resolvedLanguage: 'zh-CN',
-    },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, fallback?: string) => fallback ?? key,
+      i18n: {
+        language: 'zh-CN',
+        resolvedLanguage: 'zh-CN',
+      },
+    }),
+  };
+});
 
 describe('chat live rendering', () => {
   it('renders text-tool-text as three separate live items', () => {

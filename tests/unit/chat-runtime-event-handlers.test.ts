@@ -21,8 +21,10 @@ const makeAttachedFile = vi.fn((ref: { filePath: string; mimeType: string }) => 
   preview: null,
   filePath: ref.filePath,
 }));
+const resolveToolLikeName = vi.fn((message: { toolName?: string; name?: string }) => message.toolName ?? message.name);
 const setErrorRecoveryTimer = vi.fn();
 const stripRenderedPrefixFromStreamingText = vi.fn((text: string) => text);
+const shouldDisplayToolResultFileRef = vi.fn(() => true);
 const shouldExtractRawFilePathsForTool = vi.fn(() => true);
 
 vi.mock('@/stores/chat/helpers', () => ({
@@ -41,8 +43,10 @@ vi.mock('@/stores/chat/helpers', () => ({
   isToolResultRole: (...args: unknown[]) => isToolResultRole(...args),
   limitAttachedFilesForMessage: (...args: unknown[]) => limitAttachedFilesForMessage(...args),
   makeAttachedFile: (...args: unknown[]) => makeAttachedFile(...args),
+  resolveToolLikeName: (...args: unknown[]) => resolveToolLikeName(...args),
   setErrorRecoveryTimer: (...args: unknown[]) => setErrorRecoveryTimer(...args),
   stripRenderedPrefixFromStreamingText: (...args: unknown[]) => stripRenderedPrefixFromStreamingText(...args),
+  shouldDisplayToolResultFileRef: (...args: unknown[]) => shouldDisplayToolResultFileRef(...args),
   shouldExtractRawFilePathsForTool: (...args: unknown[]) => shouldExtractRawFilePathsForTool(...args),
 }));
 
@@ -97,7 +101,9 @@ describe('chat runtime event handlers', () => {
     vi.resetAllMocks();
     hasErrorRecoveryTimer.mockReturnValue(false);
     hasEquivalentFinalAssistantMessage.mockReturnValue(false);
+    resolveToolLikeName.mockImplementation((message: { toolName?: string; name?: string }) => message.toolName ?? message.name);
     stripRenderedPrefixFromStreamingText.mockImplementation((text: string) => text);
+    shouldDisplayToolResultFileRef.mockReturnValue(true);
     shouldExtractRawFilePathsForTool.mockReturnValue(true);
     getMessageText.mockImplementation((content: unknown) => (typeof content === 'string' ? content : ''));
   });

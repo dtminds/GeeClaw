@@ -38,12 +38,12 @@ describe('handleSettingsRoutes', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getAllSettingsMock.mockResolvedValue({
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'moderate',
     });
     buildOpenClawSafetySettingsMock.mockReturnValue({
       configDir: '/Users/test/.openclaw-geeclaw',
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'moderate',
     });
     isSecurityPolicyMock.mockImplementation((value: unknown) => (
@@ -71,9 +71,9 @@ describe('handleSettingsRoutes', () => {
     );
 
     expect(handled).toBe(true);
-    expect(setSettingMock).toHaveBeenCalledWith('workspaceOnly', true);
+    expect(setSettingMock).toHaveBeenCalledWith('workspaceOnly', false);
     expect(syncOpenClawSafetySettingsMock).toHaveBeenCalledWith({
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'moderate',
     });
     expect(debouncedReload).toHaveBeenCalledTimes(1);
@@ -88,12 +88,12 @@ describe('handleSettingsRoutes', () => {
   it('persists safety settings without scheduling reload when gateway is stopped', async () => {
     parseJsonBodyMock.mockResolvedValueOnce({ securityPolicy: 'strict' });
     getAllSettingsMock.mockResolvedValue({
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'strict',
     });
     buildOpenClawSafetySettingsMock.mockReturnValue({
       configDir: '/Users/test/.openclaw-geeclaw',
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'strict',
     });
     const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
@@ -115,7 +115,7 @@ describe('handleSettingsRoutes', () => {
 
     expect(setSettingMock).toHaveBeenCalledWith('securityPolicy', 'strict');
     expect(syncOpenClawSafetySettingsMock).toHaveBeenCalledWith({
-      workspaceOnly: true,
+      workspaceOnly: false,
       securityPolicy: 'strict',
     });
     expect(debouncedReload).not.toHaveBeenCalled();
