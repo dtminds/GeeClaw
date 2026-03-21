@@ -1,0 +1,160 @@
+{
+    "gatewayNotRunning": "Gateway Not Running",
+    "gatewayRequired": "The OpenClaw Gateway needs to be running to use chat. It will start automatically, or you can start it from Settings.",
+    "welcome": {
+        "title": "GeeClaw Chat",
+        "subtitle": "Your AI assistant is ready. Start a conversation below.",
+        "askQuestions": "Ask Questions",
+        "askQuestionsDesc": "Get answers on any topic",
+        "creativeTasks": "Creative Tasks",
+        "creativeTasksDesc": "Writing, brainstorming, ideas"
+    },
+    "noLogs": "(No logs available yet)",
+    "toolbar": {
+        "refresh": "Refresh chat",
+        "thinking": "Thinking",
+        "toolCalls": "Tool calls",
+        "showThinking": "Show thinking",
+        "hideThinking": "Hide thinking",
+        "showToolCalls": "Show tool calls",
+        "hideToolCalls": "Hide tool calls",
+        "currentAgent": "Talking to {{agent}}",
+        "sessionId": "Session ID",
+        "temporarySessions": "Chats",
+        "newTemporarySession": "New chat",
+        "backToMainSession": "Back to main session",
+        "temporarySessionList": "Chats",
+        "temporarySessionExpireHint": "Chats are auto-deleted the next day",
+        "noTemporarySessions": "No chats",
+        "untitledTemporarySession": "Untitled chat",
+        "deleteTemporarySession": "Delete chat"
+    },
+    "sessionPanel": {
+        "title": "Sessions",
+        "collapse": "Collapse session panel",
+        "expand": "Expand session panel",
+  "mainSection": "Main session",
+  "mainSession": "Main session",
+  "mainSessionHint": "Long-lived context that stays with this agent",
+  "temporaryTab": "Chats",
+  "cronTab": "Scheduled",
+  "temporarySection": "Chats",
+  "temporarySessionHint": "A separate chat branch for one-off tasks",
+  "cronRunHint": "Scheduled task run",
+  "cronRunTitleFallback": "Scheduled task",
+  "loadingCronRuns": "Loading scheduled task runs...",
+  "new": "New",
+  "delete": "Delete",
+  "draftTemporarySession": "New chat",
+  "draftTemporarySessionHint": "It will appear in the list after the first message is sent",
+  "emptyTemporarySessions": "No chats yet",
+  "emptyTemporarySessionsHint": "Create a separate chat to keep one-off work away from the main thread",
+  "emptyCronRuns": "No scheduled task runs yet",
+  "emptyCronRunsHint": "Runs from this agent's scheduled tasks will appear here"
+    },
+    "composer": {
+        "attachFiles": "Attach files",
+        "modelMenuLabel": "Default Model",
+        "modelMenuTitle": "Switch model",
+        "modelMenuEmpty": "No configured provider models",
+        "pickAgent": "Choose agent",
+        "clearTarget": "Clear target agent",
+        "targetChip": "@{{agent}}",
+        "removeSkill": "Remove skill {{skill}}",
+        "agentPickerTitle": "Route the next message to another agent",
+        "placeholder": "Message the agent, / for skills",
+        "skillSearchPlaceholder": "Search skills",
+        "skillPickerLoading": "Loading skills...",
+        "skillPickerEmpty": "No matching skills found",
+        "skillRecommendation": {
+            "title": "Use the {{skill}} skill in this prompt",
+            "action": "Use",
+            "dismiss": "Cancel"
+        },
+        "slashCommands": {
+            "commandBadge": "Command",
+            "commands": {
+                "new": {
+                    "name": "New Session",
+                    "description": "Create a new session"
+                },
+                "session_status": {
+                    "name": "Session Status",
+                    "description": "View the current session status"
+                },
+                "stop": {
+                    "name": "Stop Reply",
+                    "description": "Stop the current in-progress reply"
+                },
+                "compact": {
+                    "name": "Compact Session",
+                    "description": "Compact the current session context"
+                }
+            }
+        },
+  "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
+  "gatewayDisconnectedPlaceholder": "Gateway not connected...",
+  "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
+  "safety": {
+            "accessRange": "File Access",
+            "workspaceOnly": "Workspace",
+            "unrestricted": "Unlimited",
+            "policy": "Permissions",
+            "saveFailed": "Failed to save safety settings",
+            "descriptions": {
+                "workspaceOnly": "Only access files in the current working directory",
+                "unrestricted": "Broader access, with higher risk"
+            },
+            "policyOptions": {
+                "moderate": {
+                    "label": "Default",
+                    "description": "Keeps common abilities for most people"
+                },
+                "strict": {
+                    "label": "Strict",
+                    "description": "Close to chat-only, without file access or automation"
+                },
+                "fullAccess": {
+                    "label": "Chaos Mode",
+                    "description": "Fewest limits, with the highest mistake risk"
+                }
+            }
+        },
+        "contextUsage": {
+            "label": "Context usage",
+            "ariaLabel": "Current session context usage {{percent}}",
+            "tooltipTitle": "Session context usage",
+            "lastRoundTotal": "Last round total",
+            "cache": "Cache combined",
+            "limit": "Context limit",
+            "unknown": "Unknown",
+            "ratio": "Usage ratio",
+            "stale": "Session stats are waiting for refresh"
+        },
+        "send": "Send",
+        "stop": "Stop"
+    },
+    "assistantHover": {
+        "usage": {
+            "input": "In",
+            "output": "Out",
+            "total": "Total",
+            "cacheRead": "Cache read",
+            "cacheWrite": "Cache write",
+            "cost": "Cost"
+        }
+    },
+    "auth": {
+        "loginRequiredToSend": "You are not signed in. Please sign in to send messages.",
+        "loginWithWechat": "Sign in",
+        "loginFailed": "Sign-in failed. Please try again."
+    },
+    "historyBuckets": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "withinWeek": "Within 1 Week",
+        "withinTwoWeeks": "Within 2 Weeks",
+        "withinMonth": "Within 1 Month",
+        "older": "Older than 1 Month"
+    }
+}

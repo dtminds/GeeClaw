@@ -1,0 +1,17 @@
+{
+  "title": "全部对话",
+  "description": "浏览 OpenClaw 的全部对话",
+  "refresh": "刷新会话",
+  "loading": "正在加载 Gateway 会话...",
+  "empty": "暂无 Gateway 会话",
+  "emptyDescription": "Gateway 目前还没有暴露任何会话。",
+  "historyLoading": "正在加载会话历史...",
+  "historyEmpty": "这个会话还没有消息",
+  "historyError": "加载会话历史失败",
+  "listTitle": "会话列表",
+  "previewDescription": "选择一个会话以查看其原始 transcript。",
+  "sessionKey": "会话 Key",
+  "sessionCount": "{{count}} 个会话",
+  "messageCount": "{{count}} 条消息",
+  "gatewayRequired": "必须先启动 Gateway 才能查看原始会话。"
+}

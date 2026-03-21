@@ -1,0 +1,502 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import './themes.css';
+@plugin "@tailwindcss/typography";
+
+/* Scan streamdown dist for Tailwind classes used internally */
+@source "../../node_modules/streamdown/dist/*.js";
+
+/* Class-based dark mode (matches v3 darkMode: ['class']) */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Theme: colors, radius, keyframes ──────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Border radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* Accordion animations (shadcn/ui) */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  /* Shimmer */
+  --animate-shimmer: shimmer 2.5s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+
+  to {
+    height: 0;
+  }
+}
+
+/* ── Base layer ────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :root {
+    --background: hsl(0, 0%, 100%);
+    --foreground: hsl(208, 28%, 16%);
+    --card: hsl(0, 0%, 100%);
+    --card-foreground: hsl(208, 28%, 16%);
+    --popover: hsl(0, 0%, 100%);
+    --popover-foreground: hsl(208, 28%, 16%);
+    --primary: hsl(205, 41%, 28%);
+    --primary-foreground: hsl(210, 33%, 98%);
+    --secondary: hsl(200, 18%, 96%);
+    --secondary-foreground: hsl(208, 24%, 22%);
+    --muted: hsl(200, 20%, 96%);
+    --muted-foreground: hsl(210, 12%, 42%);
+    --accent: hsl(200, 18%, 95%);
+    --accent-foreground: hsl(208, 24%, 22%);
+    --destructive: hsl(4, 72%, 54%);
+    --destructive-foreground: hsl(210, 40%, 98%);
+    --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
+    --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
+    --ring: hsl(205, 41%, 28%);
+    --radius: 0.625rem;
+    --chart-1: hsl(209, 55%, 60%);
+    --chart-2: hsl(224, 64%, 40%);
+    --chart-3: hsl(228, 70%, 36%);
+    --chart-4: hsl(231, 72%, 33%);
+    --chart-5: hsl(234, 58%, 28%);
+
+    /* Derived: adapt when color themes override --background / --accent */
+    --app-shell: var(--background);
+    --app-sidebar: color-mix(in oklab, var(--accent) 55%, var(--background) 45%);
+    --app-sidebar-strong: color-mix(in oklab, var(--accent) 82%, var(--background) 18%);
+    --app-canvas: var(--background);
+    --app-line: color-mix(in oklab, var(--accent) 72%, var(--foreground) 28%);
+    --app-shadow: var(--foreground);
+
+    /* Streamdown expects --sidebar / --sidebar-foreground for code blocks & tables */
+    --sidebar: color-mix(in oklab, var(--accent) 40%, var(--background));
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+  }
+
+  .dark {
+    --background: hsl(222.2, 84%, 4.9%);
+    --foreground: hsl(210, 40%, 98%);
+    --card: hsl(222.2, 84%, 4.9%);
+    --card-foreground: hsl(210, 40%, 98%);
+    --popover: hsl(222.2, 84%, 4.9%);
+    --popover-foreground: hsl(210, 40%, 98%);
+    --primary: hsl(217.2, 91.2%, 59.8%);
+    --primary-foreground: hsl(222.2, 47.4%, 11.2%);
+    --secondary: hsl(217.2, 32.6%, 17.5%);
+    --secondary-foreground: hsl(210, 40%, 98%);
+    --muted: hsl(217.2, 32.6%, 17.5%);
+    --muted-foreground: hsl(215, 20.2%, 65.1%);
+    --accent: hsl(217.2, 32.6%, 17.5%);
+    --accent-foreground: hsl(210, 40%, 98%);
+    --destructive: hsl(0, 62.8%, 30.6%);
+    --destructive-foreground: hsl(210, 40%, 98%);
+    --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
+    --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
+    --ring: hsl(224.3, 76.3%, 48%);
+    --chart-1: hsl(209, 55%, 60%);
+    --chart-2: hsl(224, 64%, 40%);
+    --chart-3: hsl(228, 70%, 36%);
+    --chart-4: hsl(231, 72%, 33%);
+    --chart-5: hsl(234, 58%, 28%);
+
+    /* Derived: adapt when color themes override --background / --accent */
+    --app-shell: color-mix(in oklab, var(--background) 70%, var(--accent) 30%);
+    --app-sidebar: color-mix(in oklab, var(--accent) 45%, var(--background) 55%);
+    --app-sidebar-strong: color-mix(in oklab, var(--accent) 70%, var(--background) 30%);
+    --app-canvas: color-mix(in oklab, var(--background) 75%, var(--accent) 25%);
+    --app-line: color-mix(in oklab, var(--accent) 72%, var(--foreground) 28%);
+    --app-shadow: var(--foreground);
+
+    /* Streamdown expects --sidebar / --sidebar-foreground for code blocks & tables */
+    --sidebar: color-mix(in oklab, var(--accent) 40%, var(--background));
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+  }
+}
+
+/* ── Base layer (continued) ────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    background-image:
+      radial-gradient(circle at top left, color-mix(in oklab, white 72%, var(--app-sidebar) 28%), transparent 34%),
+      linear-gradient(180deg, color-mix(in oklab, white 98%, var(--app-sidebar) 2%), var(--background));
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at top left, color-mix(in oklab, var(--app-sidebar) 72%, black 28%), transparent 36%),
+      linear-gradient(180deg, color-mix(in oklab, var(--app-sidebar) 18%, var(--background) 82%), var(--background));
+  }
+
+  code,
+  pre {
+    font-feature-settings: normal;
+  }
+}
+
+@layer components {
+  .app-shell {
+    background: var(--app-shell);
+  }
+
+  .app-titlebar {
+    background: var(--app-canvas);
+    border-color: color-mix(in srgb, var(--app-line) 70%, transparent);
+  }
+
+  .app-sidebar {
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 92%, white 8%) 100%);
+    border-color: color-mix(in srgb, var(--app-line) 25%, transparent);
+  }
+
+  .dark .app-sidebar {
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 88%, black 12%) 100%);
+  }
+
+  .app-canvas {
+    background:
+      linear-gradient(180deg, var(--app-canvas) 0%, color-mix(in oklab, var(--app-canvas) 97%, var(--app-sidebar) 3%) 100%);
+  }
+
+  .dark .app-canvas {
+    background:
+      linear-gradient(180deg, var(--app-canvas) 0%, color-mix(in oklab, var(--app-canvas) 94%, black 6%) 100%);
+  }
+
+  .modal-card-surface {
+    background: color-mix(in oklab, var(--card) 90%, var(--app-sidebar) 10%);
+    border-color: color-mix(in srgb, var(--app-line) 28%, transparent);
+    box-shadow: 0 32px 80px -42px rgba(20, 37, 44, 0.34);
+  }
+
+  .dark .modal-card-surface {
+    background: color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%);
+    border-color: color-mix(in srgb, var(--app-line) 50%, transparent);
+    box-shadow: 0 30px 72px -40px rgba(0, 0, 0, 0.62);
+  }
+
+  .modal-section-surface {
+    background: color-mix(in oklab, white 68%, var(--muted) 32%);
+    border-color: color-mix(in srgb, var(--app-line) 34%, transparent);
+  }
+
+  .dark .modal-section-surface {
+    background: color-mix(in oklab, var(--muted) 76%, black 24%);
+    border-color: color-mix(in srgb, var(--app-line) 62%, transparent);
+  }
+
+  .modal-field-surface {
+    background: color-mix(in oklab, white 82%, var(--muted) 18%);
+    border-color: color-mix(in srgb, var(--app-line) 45%, transparent);
+  }
+
+  .dark .modal-field-surface {
+    background: color-mix(in oklab, var(--muted) 68%, black 32%);
+    border-color: color-mix(in srgb, var(--app-line) 78%, transparent);
+  }
+
+  .modal-title {
+    font-size: 1.5rem;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--foreground);
+  }
+
+  .modal-description {
+    margin-top: 0.35rem;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+    max-width: 40rem;
+  }
+
+  .modal-close-button {
+    height: 2rem;
+    width: 2rem;
+    border-radius: 9999px;
+    color: var(--muted-foreground);
+    background: transparent;
+  }
+
+  .modal-close-button:hover {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  }
+
+  .dark .modal-close-button:hover {
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 1rem;
+  }
+
+  .modal-secondary-button {
+    height: 2.625rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--app-line) 50%, transparent);
+    background: transparent;
+    padding-inline: 1.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--foreground) 80%, transparent);
+    box-shadow: none;
+  }
+
+  .modal-secondary-button:hover {
+    background: color-mix(in srgb, var(--foreground) 4.5%, transparent);
+    color: var(--foreground);
+  }
+
+  .dark .modal-secondary-button {
+    border-color: color-mix(in srgb, var(--app-line) 72%, transparent);
+  }
+
+  .dark .modal-secondary-button:hover {
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .modal-primary-button {
+    height: 2.625rem;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background: #0a84ff;
+    padding-inline: 1.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: white;
+    box-shadow: 0 12px 30px -20px rgba(10, 132, 255, 0.72);
+  }
+
+  .modal-primary-button:hover {
+    background: #007aff;
+  }
+
+  .sidebar-item-active {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--foreground);
+    box-shadow: 0 6px 14px -14px rgba(21, 42, 51, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .sidebar-item-active {
+    background: color-mix(in oklab, var(--app-sidebar-strong) 78%, white 22%);
+    color: var(--foreground);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .settings-modal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--border) 45%, transparent) transparent;
+  }
+
+  .settings-modal-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .settings-modal-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .settings-modal-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--border) 42%, transparent);
+  }
+
+  .settings-modal-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted-foreground) 28%, transparent);
+  }
+
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .scroll-fade-y {
+    mask-image: linear-gradient(to bottom,
+        transparent,
+        black 1.5rem,
+        black calc(100% - 1.5rem),
+        transparent);
+    -webkit-mask-image: linear-gradient(to bottom,
+        transparent,
+        black 1.5rem,
+        black calc(100% - 1.5rem),
+        transparent);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+/* macOS traffic light spacing */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Smooth transitions */
+.transition-theme {
+  @apply transition-colors duration-200;
+}
+
+/* Focus ring */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+}
+
+.prose {
+  --tw-prose-pre-bg: transparent;
+  --tw-prose-pre-code: var(--tw-prose-code);
+}
+
+.prose table {
+  margin: 0;
+}
+
+.chat-markdown [data-streamdown="strong"] {
+  color: var(--foreground);
+}
+
+.chat-markdown [data-streamdown="table"] thead {
+  background: transparent;
+}
+
+.chat-markdown [data-streamdown="code-block-body"] {
+  padding: 0;
+}
+
+
+/* Typing indicator animation */
+@keyframes bounce {
+
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+
+  30% {
+    transform: translateY(-4px);
+  }
+}

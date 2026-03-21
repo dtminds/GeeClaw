@@ -1,0 +1,63 @@
+{
+    "title": "Agents",
+    "subtitle": "Manage your OpenClaw agents and see which channel accounts are routed to each one",
+    "refresh": "Refresh",
+    "addAgent": "Add Agent",
+    "settings": "Settings",
+    "gatewayWarning": "Gateway service is not running. Agent changes may take a moment to apply.",
+    "defaultBadge": "default",
+    "inherited": "inherited",
+    "none": "none",
+    "modelLine": "Model: {{model}}{{suffix}}",
+    "channelsLine": "Channels: {{channels}}",
+    "deleteAgent": "Delete Agent",
+    "creating": "Creating...",
+    "rename": "Rename",
+    "createDialog": {
+        "title": "Add Agent",
+        "description": "Create a new agent with both name and ID. Agent ID must be unique and only contain lowercase letters, numbers, and hyphens.",
+        "nameLabel": "Agent Name",
+        "namePlaceholder": "Coding Helper",
+        "idLabel": "Agent ID",
+        "idPlaceholder": "coding-helper",
+        "idHint": "Use lowercase letters, numbers, and hyphens (for example: trading-expert-2).",
+        "idFormatError": "Agent ID format is invalid.",
+        "idDuplicateError": "Agent ID already exists."
+    },
+    "deleteDialog": {
+        "title": "Delete Agent",
+        "message": "Delete \"{{name}}\" from GeeClaw? Its managed workspace and runtime directories will be removed as well."
+    },
+    "settingsDialog": {
+        "title": "Agent Settings: {{name}}",
+        "description": "Manage this agent's name and review the channel accounts currently routed here.",
+        "nameLabel": "Agent Name",
+        "agentIdLabel": "Agent ID",
+        "modelLabel": "Model",
+        "channelsTitle": "Channels",
+        "addChannel": "Add Channel",
+        "noChannels": "This agent does not own any channel accounts yet."
+    },
+    "removeChannelDialog": {
+        "title": "Unbind Channel",
+        "message": "Unbind {{name}} from this agent? The account config will stay on the Channels page."
+    },
+    "fields": {
+        "agentId": "Agent ID",
+        "workspace": "Workspace",
+        "mainSession": "Main Session"
+    },
+    "empty": "No extra agents yet. Create one to enable multi-agent routing.",
+    "toast": {
+        "agentCreated": "Agent created",
+        "agentCreateFailed": "Failed to create agent: {{error}}",
+        "agentDeleted": "Agent deleted",
+        "agentDeleteFailed": "Failed to delete agent: {{error}}",
+        "agentUpdated": "Agent updated",
+        "agentUpdateFailed": "Failed to update agent: {{error}}",
+        "channelAssigned": "{{channel}} assigned to agent",
+        "channelAssignFailed": "Failed to assign channel: {{error}}",
+        "channelRemoved": "{{channel}} removed",
+        "channelRemoveFailed": "Failed to remove channel: {{error}}"
+    }
+}

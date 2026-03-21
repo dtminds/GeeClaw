@@ -1,0 +1,306 @@
+/**
+ * Chat Page
+ * Native React implementation communicating with OpenClaw Gateway
+ * via gateway:rpc IPC. Session selector, thinking toggle, and refresh
+ * are in the toolbar; messages render with markdown + streaming.
+ */
+import { useEffect } from 'react';
+import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
+import { useChatStore } from '@/stores/chat';
+import { useAgentsStore } from '@/stores/agents';
+import { useGatewayStore } from '@/stores/gateway';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ChatMessage } from './ChatMessage';
+import { ChatInput, type FileAttachment } from './ChatInput';
+import { ChatToolbar } from './ChatToolbar';
+import { ChatSessionsPanel } from './ChatSessionsPanel';
+import { useAutoScroll } from './useAutoScroll';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
+import logoSvg from '@/assets/logo.svg';
+import { buildChatItems } from './build-chat-items';
+import { useSettingsStore } from '@/stores/settings';
+
+export function Chat() {
+  const { t } = useTranslation('chat');
+  const gatewayStatus = useGatewayStore((s) => s.status);
+  const isGatewayRunning = gatewayStatus.state === 'running';
+  const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
+
+  const messages = useChatStore((s) => s.messages);
+  const loading = useChatStore((s) => s.loading);
+  const sending = useChatStore((s) => s.sending);
+  const error = useChatStore((s) => s.error);
+  const showThinking = useChatStore((s) => s.showThinking);
+  const showToolCalls = useChatStore((s) => s.showToolCalls);
+  const streamingText = useChatStore((s) => s.streamingText);
+  const streamingTextStartedAt = useChatStore((s) => s.streamingTextStartedAt);
+  const streamSegments = useChatStore((s) => s.streamSegments);
+  const toolMessages = useChatStore((s) => s.toolMessages);
+  const pendingFinal = useChatStore((s) => s.pendingFinal);
+  const currentDesktopSessionId = useChatStore((s) => s.currentDesktopSessionId);
+  const currentSessionKey = useChatStore((s) => s.currentSessionKey);
+  const currentViewMode = useChatStore((s) => s.currentViewMode);
+  const selectedCronRun = useChatStore((s) => s.selectedCronRun);
+  const loadHistory = useChatStore((s) => s.loadHistory);
+  const loadSessions = useChatStore((s) => s.loadSessions);
+  const sendMessage = useChatStore((s) => s.sendMessage);
+  const abortRun = useChatStore((s) => s.abortRun);
+  const clearError = useChatStore((s) => s.clearError);
+  const fetchAgents = useAgentsStore((s) => s.fetchAgents);
+
+  const cleanupEmptySession = useChatStore((s) => s.cleanupEmptySession);
+  const chatItems = buildChatItems({
+    messages,
+    toolMessages,
+    streamSegments,
+    streamingText,
+    streamingTextStartedAt,
+    sessionKey: currentSessionKey,
+  });
+  const hasLiveText = streamingText.trim().length > 0;
+  const hasLiveItems = toolMessages.length > 0 || streamSegments.length > 0;
+  const hasAnyStreamContent = hasLiveText || hasLiveItems;
+  const isStreamingActive = sending || hasAnyStreamContent;
+  const autoScrollSessionId = currentDesktopSessionId
+    || (currentViewMode === 'cron' && selectedCronRun ? `cron:${selectedCronRun.jobId}:${selectedCronRun.id}` : currentSessionKey);
+  const isComposerDisabled = !isGatewayRunning || (currentViewMode === 'cron' && !selectedCronRun?.sessionKey);
+  const disabledPlaceholder = currentViewMode === 'cron' && !selectedCronRun?.sessionKey
+    ? t('composer.cronFallbackPlaceholder')
+    : undefined;
+
+  // ── Auto-scroll behaviour ──────────────────────────────────────
+  const {
+    containerRef,
+    innerRef,
+    isAutoScrollEnabled,
+    scrollToBottomAndFollow,
+    containerEventHandlers,
+  } = useAutoScroll({
+    sessionId: autoScrollSessionId,
+    sending: isStreamingActive,
+    pendingFinal,
+    messagesLength: chatItems.length,
+    loading,
+  });
+
+  const handleSend = (text: string, attachments?: FileAttachment[], targetAgentId?: string | null) => {
+    scrollToBottomAndFollow();
+    sendMessage(text, attachments, targetAgentId);
+  };
+
+  // Load data when gateway is running.
+  // When the store already holds messages for this session (i.e. the user
+  // is navigating *back* to Chat), use quiet mode so the existing messages
+  // stay visible while fresh data loads in the background.  This avoids
+  // an unnecessary messages → spinner → messages flicker.
+  useEffect(() => {
+    if (!isGatewayRunning) return;
+    let cancelled = false;
+    const hasExistingMessages = useChatStore.getState().messages.length > 0;
+    (async () => {
+      await fetchAgents();
+      await loadSessions();
+      if (cancelled) return;
+      await loadHistory(hasExistingMessages);
+    })();
+    return () => {
+      cancelled = true;
+      // If the user navigates away without sending any messages, remove the
+      // empty session so it doesn't linger as a ghost entry in the sidebar.
+      cleanupEmptySession();
+    };
+  }, [isGatewayRunning, loadHistory, loadSessions, fetchAgents, cleanupEmptySession]);
+
+  // Gateway not running
+  if (!isGatewayRunning) {
+    return (
+      <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center text-center p-8">
+        <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+        <h2 className="text-xl font-semibold mb-2">{t('gatewayNotRunning')}</h2>
+        <p className="text-muted-foreground max-w-md">
+          {t('gatewayRequired')}
+        </p>
+      </div>
+    );
+  }
+
+  const isEmpty = chatItems.length === 0 && !loading && !isStreamingActive;
+
+  return (
+    <div
+      className={cn(
+        'flex h-[calc(100%)] min-h-0 flex-col overflow-hidden transition-colors duration-500 dark:bg-background',
+      )}
+    >
+      <div className="flex shrink-0 items-center border-b border-black/5 px-4 py-2 dark:border-white/6">
+        <ChatToolbar />
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          className={cn(
+            'min-h-0 min-w-0 shrink-0 overflow-hidden transition-[width,opacity] duration-200 ease-out',
+            sessionsPanelCollapsed ? 'w-0 opacity-0' : 'w-[232px] opacity-100',
+          )}
+          aria-hidden={sessionsPanelCollapsed}
+        >
+          <ChatSessionsPanel />
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Messages Area */}
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={containerRef}
+              {...containerEventHandlers}
+              className="flex h-full min-h-0 overflow-y-auto px-4 py-4"
+              style={{
+                maskImage: 'linear-gradient(to bottom, transparent, black 1.5rem, black calc(100% - 1.5rem), transparent)',
+                WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 1.5rem, black calc(100% - 1.5rem), transparent)'
+              }}
+            >
+              <div ref={innerRef} className="max-w-4xl mx-auto w-full space-y-2 px-4">
+                {loading && !isStreamingActive ? (
+                  <div className="flex h-[60vh] items-center justify-center">
+                    <LoadingSpinner size="lg" />
+                  </div>
+                ) : isEmpty ? (
+                  <WelcomeScreen />
+                ) : (
+                  <>
+                    {chatItems.map((item) => (
+                      <ChatMessage
+                        key={item.key}
+                        message={item.message}
+                        showThinking={showThinking}
+                        showToolCalls={showToolCalls}
+                        isStreaming={item.isStreaming}
+                      />
+                    ))}
+
+                    {sending && pendingFinal && !hasLiveText && (
+                      <ActivityIndicator phase="tool_processing" />
+                    )}
+
+                    {sending && !pendingFinal && !hasAnyStreamContent && (
+                      <TypingIndicator />
+                    )}
+
+                    <div aria-hidden="true" className="h-4 shrink-0" />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {!isEmpty && !isAutoScrollEnabled && (
+              <button
+                type="button"
+                onClick={scrollToBottomAndFollow}
+                className="absolute bottom-6 right-8 inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-background/95 text-foreground shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-background dark:border-white/10"
+                aria-label={t('common:actions.scrollToBottom', 'Scroll to bottom')}
+                title={t('common:actions.scrollToBottom', 'Scroll to bottom')}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Error bar */}
+          {error && (
+            <div className="border-t border-destructive/20 bg-destructive/10 px-4 py-2">
+              <div className="mx-auto flex max-w-4xl items-center justify-between">
+                <p className="flex items-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
+                </p>
+                <button
+                  onClick={clearError}
+                  className="text-xs text-destructive/60 underline hover:text-destructive"
+                >
+                  {t('common:actions.dismiss')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="shrink-0 px-4">
+            <ChatInput
+              onSend={handleSend}
+              onStop={abortRun}
+              disabled={isComposerDisabled}
+              disabledPlaceholder={disabledPlaceholder}
+              sending={sending}
+              isEmpty={isEmpty}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Welcome Screen ──────────────────────────────────────────────
+
+function WelcomeScreen() {
+  const { t } = useTranslation('chat');
+  return (
+    <div className="flex flex-col items-center justify-center text-center h-[60vh]">
+      <div className="flex h-32 w-32 items-center justify-center rounded-[20px] bg-white/80 dark:bg-white/10 shadow-[0_1px_2px_rgba(18,38,45,0.06)] ring-1 ring-black/5">
+        <img src={logoSvg} alt="GeeClaw" className="h-32 w-auto" />
+      </div>
+      <h1 className="text-6xl md:text-7xl text-foreground mt-3 mb-3 font-normal tracking-tight">
+        {t('welcome.title')}
+      </h1>
+      <p className="text-[17px] text-foreground/80 mb-8 font-medium">
+        {t('welcome.subtitle')}
+      </p>
+
+      <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-lg w-full">
+        {['Ask Questions', 'Creative Tasks', 'Brainstorming'].map((label, i) => (
+          <button 
+            key={i} 
+            className="px-4 py-1.5 rounded-full border border-black/10 dark:border-white/10 text-[13px] font-medium text-foreground/70 hover:bg-black/5 dark:hover:bg-white/5 transition-colors bg-black/[0.02]"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Typing Indicator ────────────────────────────────────────────
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3">
+      <div className="rounded-2xl py-3">
+        <div className="flex gap-1">
+          <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Activity Indicator (shown between tool cycles) ─────────────
+
+function ActivityIndicator({ phase }: { phase: 'tool_processing' }) {
+  void phase;
+  return (
+    <div className="flex gap-3">
+      <div className="rounded-2xl py-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <span>思考中</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Chat;

@@ -1,0 +1,248 @@
+{
+  "ret": 0,
+  "data": {
+    "resp": {
+      "common": {
+        "code": 0,
+        "message": "Success"
+      },
+      "data": {
+        "total": 15,
+        "page": 1,
+        "page_size": 100,
+        "list": [
+          {
+            "category": "办公提效",
+            "category_icon": "?",
+            "order": 1,
+            "title": "创建定时任务：热点资讯自动汇总",
+            "subtitle": "还在一条条刷资讯？每日自动整理，不用费心查找，快速看懂当天重点",
+            "card_label": "热点资讯自动汇总",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/clock.svg",
+            "prompt": "设置每日「8:00」的自动定时任务，自动抓取全网的今日「AI科技」相关热点、重要资讯与要闻简报，整理成简洁清晰的内容发送给我。",
+            "hidden_prompt": "请先检查是否已安装GitHub Trending、Hacker News、Product Hun技能，若未安装，请去GitHub安装该技能；若已安装，则直接使用该技能。",
+            "scene": "🚗早高峰赶时间：来不及刷新闻，出门前一键获取当日重点，路上就能快速了解天下事；\n💻开会前应急：需要快速掌握行业动态，避免开会时被问得哑口无言；\n📖高效办公需求：不想被碎片化信息打扰，又怕错过关键政策 / 行业风向。",
+            "is_recommend": true,
+            "is_banner": true,
+            "banner_bg_color": {
+              "from": "#E6FFE4",
+              "to": "#E6FFE4"
+            },
+            "banner_icon": "https://webcdn.m.qq.com/qclaw/inspiration/clock-banner.svg",
+            "is_show": true
+          },
+          {
+            "category": "办公提效",
+            "category_icon": "?",
+            "order": 2,
+            "title": "发票/单据智能归档",
+            "subtitle": "一到月末报销就火急火燎？把你桌面上那堆发票烂摊子全甩给我吧",
+            "card_label": "发票智能归档",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/book.svg",
+            "prompt": "把桌面上「发票」文件夹里的发票都帮我整理成「报销明细」Excel表格。",
+            "scene": "月末报销忙乱🧾：发票堆积杂乱难整理，一键自动归档成报销表格，省时省力；\n财务核对繁琐📊：需要清晰的发票明细，快速统计金额、分类单据，提升核对效率；\n办公整理需求🗂️：桌面文件杂乱，自动规整发票文件，让办公资料更有序。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "办公提效",
+            "category_icon": "?",
+            "order": 3,
+            "title": "日程安排/任务跟踪与提醒",
+            "subtitle": "每天任务太多，安排不过来怎么办？帮你管日程、盯进度、到点喊你",
+            "card_label": "日程任务全管理",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/diary.svg",
+            "prompt": "帮我管日程。我说任务，你需要1. 追问：多久？什么时候要？2. 排程：算好时间，写进日历；3. 提醒：到点喊我；4. 记录：做完告诉我实际多久；5. 复盘：下班生成报告\n直接开始吧，问我今天有什么任务？",
+            "required_skills": [
+              "niuamaxia-scheduler"
+            ],
+            "scene": "日常工作繁忙📋：任务繁多易遗漏，实时跟踪进度，到点提醒不耽误；\n项目推进跟进📈：多人 / 多任务统筹难，清晰记录完成情况，方便复盘优化；\n个人时间规划⏰：生活工作事务杂，合理排程日历，让时间利用更高效。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "研究学习",
+            "category_icon": "?",
+            "order": 4,
+            "title": "制定轻量学习规划",
+            "subtitle": "一到备考就头大？把你的学习计划烂摊子全甩给我吧",
+            "card_label": "轻量学习规划",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/calendar.svg",
+            "prompt": "帮我制定一个「为期7天的轻量学习计划，助力我考大学英语4级」。请细化每天的日程，并和我核对每日计划是否完成",
+            "hidden_prompt": "请先检查是否已安装Proactive Agent技能，若未安装，请去GitHub安装该技能；若已安装，则直接使用该技能",
+            "scene": "考前备考迷茫📚：面对考试无复习思路，量身定制阶段学习计划，精准提分；\n日常学习无序📖：不知道如何分配学习时间，细化每日日程，让学习更有节奏；\n短期提升需求⚡：想在指定时间内提升某项能力，科学规划学习内容，高效达成目标。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "研究学习",
+            "category_icon": "?",
+            "order": 5,
+            "title": "拆解学习目标与督促打卡",
+            "subtitle": "单词背了就忘？每天帮你盯进度，到点就催你学",
+            "card_label": "学习打卡督促",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/card.svg",
+            "prompt": "我的目标是「每天背诵30个日常英语单词」，请每天帮我找30个并在每日「20:00」督促我背诵",
+            "hidden_prompt": "请先检查是否已安装Study Habits技能，若未安装，请去GitHub安装该技能；若已安装，则直接使用该技能",
+            "scene": "学习目标模糊🎯：不知道如何拆解大目标，细化每日小任务，逐步达成目标；\n自主学习散漫⏳：没有学习约束，实时盯紧学习进度，培养良好习惯。",
+            "is_recommend": true,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "研究学习",
+            "category_icon": "?",
+            "order": 6,
+            "title": "知识点框架梳理",
+            "subtitle": "看书越看越乱？帮你把知识点理成一张清晰骨架图",
+            "card_label": "知识点框架梳理",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/knowledge.svg",
+            "prompt": "针对「中国近代史」帮我生成一套极简的知识框架图，让我更清楚的理解知识点脉络",
+            "scene": "书本内容繁杂📖：知识点零散难理解，梳理成框架图，理清知识脉络；\n备考复习低效🧠：记不住知识点关联，通过骨架图快速串联，提升复习效率；\n知识总结需求📑：需要快速掌握学科核心内容，极简框架提炼重点，便于记忆。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "研究学习",
+            "category_icon": "?",
+            "order": 7,
+            "title": "深度内容讲解",
+            "subtitle": "遇到难题卡壳想放弃？帮你拆解卡点，找到破局思路",
+            "card_label": "深度内容讲解",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/jimeng.svg",
+            "prompt": "给我详细讲解一下「AI技术」内容，要深入浅出的讲解，假设我只有10岁，一定要确保浅显且易懂",
+            "scene": "工作问题困惑💼：接触新领域内容搞不懂，通俗化讲解核心，快速入门；\n知识探索好奇🧐：想了解陌生领域知识，用简单易懂的方式解读，满足探索欲；\n学习难题卡壳🤔：遇到不懂的知识点无从下手，深入浅出拆解，轻松理解。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "研究学习",
+            "category_icon": "?",
+            "order": 10,
+            "title": "把一堆资料整理成结构化文档",
+            "subtitle": "收藏夹塞满了却从没看？把资料链接发给我，帮你提炼出有用的东西",
+            "card_label": "资料结构化整理",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/text.svg",
+            "prompt": "我给你一批资料链接，帮我：① 逐一读取每个链接的核心内容 ② 提取关键观点和数据 ③ 去掉重复信息 ④ 整理成一份结构清晰的「研究笔记」，用 Markdown 格式输出，带目录。",
+            "scene": "收藏资料闲置⭐：收藏夹资料过多没时间看，自动提取核心内容，高效利用；\n研究资料繁杂📑：收集的研究资料零散，整理成结构化文档，便于查阅；\n学习资料积累📚：各类资料链接杂乱，提炼关键观点数据，形成清晰笔记。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "娱乐游戏",
+            "category_icon": "?",
+            "order": 12,
+            "title": "懒人出游规划",
+            "subtitle": "周末不知道去哪玩？直接喂到你嘴边",
+            "card_label": "懒人出游规划",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/plan.svg",
+            "prompt": "请帮我规划这周末的出行方案。\n步骤：1. 打开 browser 访问 https://browserleaks.com/geo  获取我的精确坐标；2. 使用 weather skill 查询周末天气3. 根据我的位置和天气，推荐【车程1小时内的】目的地；4. 制定详细行程\n5. 提供下雨备用方案\n要求：- 目的地分3类：海边、山林、文艺- 包含车程、特色、适合人群- 有具体时间安排",
+            "hidden_prompt": "请先检查是否已安装weather、browser、web_fetch 技能，若未安装，请去clawhub安装该技能；若已安装，则直接使用该技能。",
+            "scene": "周末宅家无聊😩：想出门散心却毫无头绪，不用费心做攻略，一键获取专属出游方案；\n朋友小聚纠结📍：不知道和朋友去哪打卡，快速拿到多类型目的地选择，适配不同游玩需求；\n短途出行需求🚗：车程可控，还有天气备用方案，出行更省心。",
+            "is_recommend": true,
+            "is_banner": true,
+            "banner_bg_color": {
+              "from": "#E6F6FF",
+              "to": "#B1E8FF"
+            },
+            "banner_icon": "https://webcdn.m.qq.com/qclaw/inspiration/bus.svg",
+            "is_show": true
+          },
+          {
+            "category": "娱乐游戏",
+            "category_icon": "?",
+            "order": 13,
+            "title": "创建定时任务：每日星座行动建议",
+            "subtitle": "每日星座专属指引，规划当日行动",
+            "card_label": "星座行动建议",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/xingzuo.svg",
+            "prompt": "设置每日「8:00」的自动定时任务，根据我的星座「双子座」提供今日的行动注意指引发送给我",
+            "scene": "日常出行迷茫🚶：不知道当天做什么，星座指引给出行动参考；\n工作决策纠结💼：遇到小选择难以决定，专属建议提供行动思路；\n生活趣味探索🧐：喜欢星座文化，每日获取专属指引，增添生活趣味。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "娱乐游戏",
+            "category_icon": "?",
+            "order": 14,
+            "title": "趣味塔罗小指引",
+            "subtitle": "心中有小纠结？塔罗趣味抽牌，给你轻松小参考",
+            "card_label": "趣味塔罗指引",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/cards.svg",
+            "prompt": "请说出你想问的问题，越具体越好：「今天适合跟老板提加薪吗？」想好后告诉我你的问题，我为你抽牌解读 ?",
+            "hidden_prompt": "请先检查是否已安装Tarot from Univoice技能，若未安装，请去clawhub安装该技能；若已安装，则直接使用该技能。",
+            "scene": "生活小事纠结🤷：遇到小选择拿不定主意，塔罗抽牌给出趣味参考；\n工作决策犹豫💼：职场小选择难以判断，轻松指引缓解选择焦虑；\n生活趣味消遣🧩：闲来无事想找点乐趣，塔罗解读增添生活趣味。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "娱乐游戏",
+            "category_icon": "?",
+            "order": 15,
+            "title": "生辰趣味解读",
+            "subtitle": "输入生辰，解锁传统命理文化趣味解读",
+            "card_label": "生辰趣味解读",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/taiji.svg",
+            "prompt": "请提供你的出生信息：出生日期（公历）：____年____月____日，出生时间：____时____分，出生地点（用于真太阳时校正）：____（我将为你排出八字命盘，包含： 四柱八字（年柱、月柱、日柱、时柱）? 五行分布（金木水火土占比）⚡ 日主与十神关系? 命盘简析（旺衰、喜忌）",
+            "hidden_prompt": "请先检查是否已安装npx skills add wolke/bazi-mingli@bazi-mingli技能，若未安装，请去clawhub安装该技能；若已安装，则直接使用该技能。",
+            "scene": "好奇命理文化🧐：想了解自己的八字命盘，解锁传统命理文化的趣味知识；\n朋友互动趣味🤝：和朋友一起解读生辰，增添社交互动的乐趣；\n自我认知探索💡：通过生辰命理分析，从新角度了解自己的性格特质。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "娱乐游戏",
+            "category_icon": "?",
+            "order": 16,
+            "title": "MBTI 配对分析",
+            "subtitle": "想知道合不合？帮你分析性格契合度",
+            "card_label": "MBTI 配对分",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/mbit.svg",
+            "prompt": "进行MBTI 配对分析：请告诉我：? A方的mbti（你）：____；?B方的mbti（TA）：____；关系类型：爱情 / 友情 / 合作 / 其他",
+            "hidden_prompt": "请先检查是否已安装Agent Mbti技能，若未安装，请去clawhub安装该技能；若已安装，则直接使用该技能。",
+            "scene": "恋爱相处好奇💑：想知道和另一半的性格契合度，分析相处模式与注意点；\n友情维系探索🤝：了解和朋友的性格匹配度，让友情相处更融洽；\n职场合作考量💼：判断和同事 / 合作伙伴的性格契合度，提升团队合作效率。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "自律生活",
+            "category_icon": "?",
+            "order": 17,
+            "title": "定时任务：明日运动计划",
+            "subtitle": "想运动又怕坚持不下来？每天帮你排好计划，到点喊你动起来",
+            "card_label": "明日运动计划",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/basketball.svg",
+            "prompt": "设置每日「22:00」的自动定时任务，根据明天「深圳南山」的天气、每小时的气温情况变化情况和日期为我量身定制明天人性化的\"运动计划\"。",
+            "scene": "健身打卡难坚持💪：想运动却无规划，量身定制运动计划，到点督促执行；\n日常运动无序⏰：不知道何时运动、做什么运动，科学规划时间与项目，提升运动效果。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          },
+          {
+            "category": "自律生活",
+            "category_icon": "?",
+            "order": 19,
+            "title": "锻炼任务调整",
+            "subtitle": "锻炼计划乱了？帮你重新安排锻炼节奏",
+            "card_label": "锻炼任务调整",
+            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/sports.svg",
+            "prompt": "我今天「加班到22:00，去不了健身房了。」根据之前的目标和当前的情况和时间，给我输出一份平替的运动方案文档，播放对应的跟练视频或者教程，最后更新当前的日程。",
+            "scene": "突发情况断练🚫：加班 / 有事无法按原计划锻炼，快速生成平替运动方案；\n运动计划不适🚶：原锻炼计划难度过高 / 过低，重新调整节奏，适配自身状态；\n日常时间冲突⏰：生活工作占用运动时间，根据剩余时间定制合适的锻炼内容。",
+            "is_recommend": false,
+            "is_banner": false,
+            "is_show": true
+          }
+        ]
+      }
+    }
+  }
+}

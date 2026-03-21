@@ -1,0 +1,1 @@
+export { InspirationPlazaSection } from './InspirationPlazaSection';

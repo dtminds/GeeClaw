@@ -1,0 +1,355 @@
+{
+  "title": "Settings",
+  "subtitle": "Configure your GeeClaw experience",
+  "nav": {
+    "general": "General",
+    "gateway": "OpenClaw"
+  },
+  "safety": {
+    "navTitle": "Safety",
+    "title": "Safety",
+    "description": "Manage safety levels here and review the managed directory GeeClaw is using.",
+    "loadFailed": "Failed to load safety settings",
+    "saveFailed": "Failed to save safety settings",
+    "openDirFailed": "Failed to open directory",
+    "workspaceOnlyEnabled": "Restricted file access enabled",
+    "workspaceOnlyDisabled": "Restricted file access disabled",
+    "directory": {
+      "title": "Default Project Directory",
+      "description": "Where GeeClaw projects and context files are stored.",
+      "browse": "Browse",
+      "opening": "Opening..."
+    },
+    "workspaceOnly": {
+      "title": "Restrict File Access Range",
+      "description": "Choose whether AI can only access files inside the current working directory",
+      "help": "Recommended. When enabled, AI can only read and change files inside the current working directory. Turning it off gives broader access and increases the risk of mistakes.",
+      "note": "Back up important files before changing this setting. Due to technical limitations, we cannot guarantee that all out-of-directory actions are fully blocked, so please choose carefully based on your situation."
+    },
+    "policy": {
+      "title": "Safety Policy",
+      "description": "Choose how much access AI should have.",
+      "saved": "Safety policy updated",
+      "options": {
+        "moderate": {
+          "title": "Default",
+          "description": "Best for most people. Keeps common features available while limiting a small set of higher-risk actions."
+        },
+        "strict": {
+          "title": "Strict",
+          "description": "Close to chat-only mode. AI will no longer have abilities like file access or automation, which is best if you only want a safer conversation experience."
+        },
+        "fullAccess": {
+          "title": "Chaos Mode",
+          "description": "Fewest limits. AI can use more capabilities, but mistakes may have a bigger impact, so only use this if you understand the risk."
+        }
+      }
+    }
+  },
+  "appearance": {
+    "title": "Appearance",
+    "description": "Customize the look and feel",
+    "mode": "Appearance Mode",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "language": "Language",
+    "colorTheme": {
+      "title": "Color Theme",
+      "description": "Choose your preferred color theme",
+      "standard": "Standard",
+      "standardDesc": "Default neutral colors for everyday use",
+      "ink": "Ink",
+      "inkDesc": "Classic deep green with warm beige",
+      "ocean": "Ocean",
+      "oceanDesc": "Calm, professional blue tones",
+      "forest": "Forest",
+      "forestDesc": "Fresh, natural emerald tones",
+      "vintage": "Vintage",
+      "vintageDesc": "Warm, nostalgic amber tones",
+      "neon": "Neon",
+      "neonDesc": "Bold, vibrant purple theme",
+      "citrus": "Citrus",
+      "citrusDesc": "Lively yellow-green with purple",
+      "dusk": "Dusk",
+      "duskDesc": "Soft, warm twilight tones",
+      "minimal": "Minimal",
+      "minimalDesc": "Clean, focused blue accents",
+      "vitality": "Vitality",
+      "vitalityDesc": "Fresh, bright teal theme",
+      "nature": "Nature",
+      "natureDesc": "Pastoral warm green tones",
+      "art": "Art",
+      "artDesc": "Subtle, understated blue-gray tones"
+    }
+  },
+  "aiProviders": {
+    "title": "AI Providers",
+    "description": "Configure your AI model providers and API keys",
+    "overview": {
+      "title": "Provider Accounts",
+      "description": "A summary of the provider accounts and models currently configured.",
+      "noModelSelected": "No model selected",
+      "multiAccountReady": "Multi-account ready",
+      "singletonVendor": "Single-account vendor"
+    },
+    "authModes": {
+      "apiKey": "API Key",
+      "oauthDevice": "OAuth Device",
+      "oauthBrowser": "OAuth Browser",
+      "local": "Local"
+    },
+    "sections": {
+      "model": "Model Settings",
+      "fallback": "Fallback Settings"
+    },
+    "add": "Add Provider",
+    "custom": "Custom",
+    "notRequired": "Not required",
+    "empty": {
+      "title": "No providers configured",
+      "desc": "Add an AI provider to start using GeeClaw",
+      "cta": "Add Your First Provider"
+    },
+    "dialog": {
+      "title": "Add AI Provider",
+      "desc": "Configure a new AI model provider",
+      "displayName": "Display Name",
+      "apiKey": "API Key",
+      "apiKeyConfigured": "An API key is already stored for this provider.",
+      "apiKeyMissing": "No API key is stored for this provider yet.",
+      "apiKeyStored": "Your API key is stored locally on your machine.",
+      "replaceApiKey": "Replace API Key",
+      "replaceApiKeyHelp": "Leave this field empty if you want to keep the currently stored API key.",
+      "baseUrl": "Base URL",
+      "protocol": "Protocol",
+      "modelId": "Model ID",
+      "modelIds": "Models",
+      "modelIdsHelp": "One model ID per line. These become the models configured under this provider.",
+      "fallbackModels": "Fallback Models",
+      "fallbackProviders": "Fallback Providers",
+      "fallbackModelIds": "Fallback Model IDs",
+      "fallbackModelIdsPlaceholder": "gpt-4.1-mini\nanother-model-id",
+      "fallbackModelIdsHelp": "One model ID per line. These models use the current provider config before falling back to other providers.",
+      "noFallbackOptions": "Add another provider first to use it as a fallback target.",
+      "cancel": "Cancel",
+      "change": "Change provider",
+      "customDoc": "Provider docs",
+      "add": "Add Provider",
+      "save": "Save",
+      "validate": "Validate"
+    },
+    "protocols": {
+      "openai": "OpenAI Compatible",
+      "openaiCompletions": "OpenAI Completions",
+      "openaiResponses": "OpenAI Responses",
+      "anthropic": "Anthropic Compatible"
+    },
+    "card": {
+      "default": "Default",
+      "configured": "Configured",
+      "noKey": "No API key set",
+      "none": "None",
+      "fallbacks_one": "Fallback: {{names}}",
+      "fallbacks_other": "Fallbacks ({{count}}): {{names}}",
+      "setDefault": "Set as default",
+      "editKey": "Edit API key",
+      "delete": "Delete provider"
+    },
+    "toast": {
+      "added": "Provider added successfully",
+      "failedAdd": "Failed to add provider",
+      "deleted": "Provider deleted",
+      "failedDelete": "Failed to delete provider",
+      "defaultUpdated": "Default provider updated",
+      "failedDefault": "Failed to set default",
+      "updated": "Provider updated",
+      "failedUpdate": "Failed to update provider",
+      "invalidKey": "Invalid API key",
+      "modelRequired": "Model ID is required",
+      "minimaxConflict": "Cannot add both MiniMax (Global) and MiniMax (CN) providers."
+    },
+    "oauth": {
+      "loginMode": "OAuth Login",
+      "apikeyMode": "API Key",
+      "loginPrompt": "This provider requires signing in via your browser.",
+      "loginButton": "Login with Browser",
+      "getApiKey": "Get API Key",
+      "waiting": "Waiting...",
+      "openLoginPage": "Open Login Page",
+      "waitingApproval": "Waiting for approval in browser...",
+      "cancel": "Cancel",
+      "codeCopied": "Code copied to clipboard",
+      "authFailed": "Authentication Failed",
+      "browserFlowUnavailable": "Browser OAuth is not wired for this provider yet.",
+      "tryAgain": "Try Again",
+      "approveLogin": "Approve Login",
+      "step1": "Copy the authorization code below.",
+      "step2": "Open the login page in your browser.",
+      "step3": "Paste the code to approve access.",
+      "requestingCode": "Requesting secure login code..."
+    }
+  },
+  "agentModels": {
+    "title": "Agent Model Defaults",
+    "primary": "Primary Model",
+    "fallbacks": "Fallback Models",
+    "none": "Not configured",
+    "primaryHelp": "The current default provider's first configured model is used as the agent primary model.",
+    "configureFallbacks": "Configure Fallbacks",
+    "refresh": "Refresh",
+    "dialog": {
+      "title": "Configure Agent Fallbacks",
+      "desc": "Fallback models are agent-level settings. Every entry must already exist under one of the configured providers below.",
+      "fallbacksLabel": "Fallback Model Refs",
+      "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeekai/kimi-k2.5",
+      "fallbacksHelp": "Use one full model ref per line, for example provider/model-id.",
+      "available": "Available Provider Models",
+      "availableHelp": "These are the model refs currently defined under your providers and allowed for fallback use.",
+      "save": "Save Fallbacks"
+    },
+    "toast": {
+      "saved": "Agent fallback models updated",
+      "failedSave": "Failed to save agent fallback models",
+      "failedLoad": "Failed to load agent model defaults"
+    }
+  },
+  "gateway": {
+    "title": "Gateway",
+    "description": "OpenClaw Gateway settings",
+    "sessions": {
+      "title": "Sessions",
+      "description": "View all your chats with OpenClaw across multiple IM channels",
+      "openAll": "View all sessions"
+    },
+    "logs": "Logs",
+    "appLogs": "Application Logs",
+    "openFolder": "Open Folder",
+    "autoStart": "Auto-start Gateway",
+    "autoStartDesc": "Start Gateway when GeeClaw launches",
+    "runtimeSource": {
+      "label": "OpenClaw Runtime",
+      "desc": "GeeClaw always runs its bundled OpenClaw runtime and leaves any system OpenClaw installation untouched.",
+      "detected": "{{runtime}} detected: v{{version}}",
+      "notDetected": "Bundled OpenClaw runtime is not available."
+    },
+    "proxyTitle": "Proxy",
+    "proxyDesc": "Route Electron and Gateway traffic through your local proxy client.",
+    "proxyServer": "Proxy Server",
+    "proxyServerHelp": "The default proxy for all requests. Bare host:port values default to HTTP.",
+    "proxyHttpServer": "HTTP Proxy",
+    "proxyHttpServerHelp": "Advanced override for HTTP requests. Leave blank to use Proxy Server.",
+    "proxyHttpsServer": "HTTPS Proxy",
+    "proxyHttpsServerHelp": "Advanced override for HTTPS requests. Leave blank to use Proxy Server.",
+    "proxyAllServer": "ALL_PROXY / SOCKS",
+    "proxyAllServerHelp": "Advanced fallback for SOCKS-capable clients and protocols such as Telegram. Leave blank to use Proxy Server.",
+    "showAdvancedProxy": "Show advanced proxy fields",
+    "hideAdvancedProxy": "Hide advanced proxy fields",
+    "proxyBypass": "Bypass Rules",
+    "proxyBypassHelp": "Semicolon, comma, or newline separated hosts that should connect directly.",
+    "proxyRestartNote": "Saving reapplies Electron networking and restarts the Gateway immediately.",
+    "proxySaved": "Proxy settings saved",
+    "proxySaveFailed": "Failed to save proxy settings"
+  },
+  "updates": {
+    "title": "Updates",
+    "description": "Keep GeeClaw up to date",
+    "autoCheck": "Auto-check for updates",
+    "autoCheckDesc": "Check for updates on startup",
+    "autoDownload": "Auto-update",
+    "autoDownloadDesc": "Automatically download and install updates",
+    "status": {
+      "checking": "Checking for updates...",
+      "downloading": "Downloading update...",
+      "available": "Update available: v{{version}}",
+      "downloaded": "Ready to install: v{{version}}",
+      "autoInstalling": "Restarting to install update in {{seconds}}s...",
+      "failed": "Update check failed",
+      "latest": "You have the latest version",
+      "check": "Check for updates to get the latest features"
+    },
+    "action": {
+      "checking": "Checking...",
+      "downloading": "Downloading...",
+      "download": "Download Update",
+      "install": "Install & Restart",
+      "cancelAutoInstall": "Cancel",
+      "retry": "Retry",
+      "check": "Check for Updates"
+    },
+    "currentVersion": "Current Version",
+    "whatsNew": "What's New:",
+    "errorDetails": "Error Details:",
+    "help": "When auto-update is enabled, updates are downloaded and installed automatically."
+  },
+  "advanced": {
+    "title": "Advanced",
+    "description": "Power-user options",
+    "transport": {
+      "label": "Gateway Transport Preference",
+      "desc": "Choose how renderer requests gateway RPC: WebSocket, HTTP proxy, or IPC fallback.",
+      "saved": "Gateway transport preference saved",
+      "options": {
+        "wsFirst": "WS First",
+        "httpFirst": "HTTP First",
+        "wsOnly": "WS Only",
+        "httpOnly": "HTTP Only",
+        "ipcOnly": "IPC Only"
+      },
+      "descriptions": {
+        "wsFirst": "WS -> HTTP -> IPC",
+        "httpFirst": "HTTP -> WS -> IPC",
+        "wsOnly": "WS -> IPC",
+        "httpOnly": "HTTP -> IPC",
+        "ipcOnly": "IPC only"
+      }
+    },
+    "devMode": "Developer Mode",
+    "devModeDesc": "Show developer tools and shortcuts"
+  },
+  "developer": {
+    "title": "Developer",
+    "description": "Advanced options for developers",
+    "console": "OpenClaw Console",
+    "consoleDesc": "Access the native OpenClaw management interface",
+    "openConsole": "Open Developer Console",
+    "consoleNote": "Opens the Control UI with gateway token injected",
+    "gatewayToken": "Gateway Token",
+    "gatewayTokenDesc": "Paste this into Control UI settings if prompted",
+    "tokenUnavailable": "Token unavailable",
+    "tokenCopied": "Gateway token copied",
+    "cli": "OpenClaw CLI",
+    "cliDesc": "Copy a command that runs GeeClaw's bundled OpenClaw without modifying PATH.",
+    "cliPowershell": "PowerShell command.",
+    "cmdUnavailable": "Command unavailable",
+    "cmdCopied": "CLI command copied",
+    "wsDiagnostic": "WS Diagnostic Mode",
+    "wsDiagnosticDesc": "Temporarily enable WS/HTTP fallback chain for gateway RPC debugging.",
+    "wsDiagnosticEnabled": "WS diagnostic mode enabled",
+    "wsDiagnosticDisabled": "WS diagnostic mode disabled",
+    "telemetryViewer": "Telemetry Viewer",
+    "telemetryViewerDesc": "Local-only UX/performance telemetry, latest 200 entries.",
+    "telemetryAggregated": "Top Events",
+    "telemetryTotal": "Total",
+    "telemetryErrors": "Errors",
+    "telemetrySlow": "Slow (>=800ms)",
+    "telemetryEmpty": "No telemetry yet",
+    "telemetryCopied": "Telemetry copied",
+    "telemetryCleared": "Telemetry cleared",
+    "installCmd": "Install \"openclaw\" Command",
+    "installCmdDesc": "Installs ~/.local/bin/openclaw (no admin required)",
+    "installTitle": "Install OpenClaw Command",
+    "installMessage": "Install the \"openclaw\" command?",
+    "installDetail": "This will create ~/.local/bin/openclaw. Ensure ~/.local/bin is on your PATH if you want to run it globally."
+  },
+  "about": {
+    "title": "About",
+    "appName": "GeeClaw",
+    "tagline": "Graphical AI Assistant",
+    "basedOn": "Based on OpenClaw & ClawX",
+    "version": "Version {{version}}",
+    "docs": "Website",
+    "github": "GitHub"
+  }
+}

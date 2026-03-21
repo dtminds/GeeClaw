@@ -1,0 +1,160 @@
+{
+    "gatewayNotRunning": "网关未运行",
+    "gatewayRequired": "OpenClaw 网关需要运行才能使用聊天。它将自动启动，或者您可以从设置中启动。",
+    "welcome": {
+        "title": "GeeClaw",
+        "subtitle": "您的 AI 龙虾助手已就绪，在下方开始对话。",
+        "askQuestions": "提问",
+        "askQuestionsDesc": "获取任何话题的答案",
+        "creativeTasks": "创意任务",
+        "creativeTasksDesc": "写作、头脑风暴、创意"
+    },
+    "noLogs": "（暂无日志）",
+    "toolbar": {
+        "refresh": "刷新聊天",
+        "thinking": "思考过程",
+        "toolCalls": "工具调用",
+        "showThinking": "显示思考过程",
+        "hideThinking": "隐藏思考过程",
+        "showToolCalls": "显示工具调用",
+        "hideToolCalls": "隐藏工具调用",
+        "currentAgent": "当前对话对象：{{agent}}",
+        "sessionId": "会话 ID",
+        "temporarySessions": "对话",
+        "newTemporarySession": "新建对话",
+        "backToMainSession": "返回主会话",
+        "temporarySessionList": "对话列表",
+        "temporarySessionExpireHint": "对话会在第二天自动删除",
+        "noTemporarySessions": "暂无对话",
+        "untitledTemporarySession": "未命名对话",
+        "deleteTemporarySession": "删除对话"
+    },
+    "sessionPanel": {
+        "title": "会话",
+        "collapse": "收起会话栏",
+        "expand": "展开会话栏",
+  "mainSection": "主会话",
+  "mainSession": "主会话",
+  "mainSessionHint": "长期上下文，会跟随当前 Agent 持续累积",
+  "temporaryTab": "对话",
+  "cronTab": "定时任务",
+  "temporarySection": "对话",
+  "temporarySessionHint": "独立对话，适合临时分支任务",
+  "cronRunHint": "定时任务运行记录",
+  "cronRunTitleFallback": "定时任务",
+  "loadingCronRuns": "正在加载定时任务记录...",
+  "new": "新建",
+  "delete": "删除",
+  "draftTemporarySession": "新对话",
+  "draftTemporarySessionHint": "聊点什么",
+  "emptyTemporarySessions": "还没有对话",
+  "emptyTemporarySessionsHint": "可以新建一个对话，上下文更轻，回答更快，消耗更少",
+  "emptyCronRuns": "还没有定时任务记录",
+  "emptyCronRunsHint": "当前 Agent 的定时任务运行记录会显示在这里"
+    },
+    "composer": {
+        "attachFiles": "添加文件",
+        "modelMenuLabel": "默认模型",
+        "modelMenuTitle": "切换模型",
+        "modelMenuEmpty": "没有可用的 Provider 模型",
+        "pickAgent": "选择 Agent",
+        "clearTarget": "清除目标 Agent",
+        "targetChip": "@{{agent}}",
+        "removeSkill": "移除技能 {{skill}}",
+        "agentPickerTitle": "将下一条消息直接发送给其他 Agent",
+        "placeholder": "提出任何问题，或输入 / 使用技能",
+        "skillSearchPlaceholder": "搜索技能",
+        "skillPickerLoading": "正在加载技能...",
+        "skillPickerEmpty": "没有匹配的技能",
+        "skillRecommendation": {
+            "title": "在当前提示词中使用 {{skill}} 技能",
+            "action": "使用",
+            "dismiss": "取消"
+        },
+        "slashCommands": {
+            "commandBadge": "命令",
+            "commands": {
+                "new": {
+                    "name": "新会话",
+                    "description": "创建一个新的会话，现有会话内容会被归档并不再展现"
+                },
+                "compact": {
+                    "name": "压缩会话",
+                    "description": "压缩当前会话上下文"
+                },
+                "session_status": {
+                    "name": "会话状态",
+                    "description": "查看当前会话的状态"
+                },
+                "stop": {
+                    "name": "强制停止",
+                    "description": "停止当前正在进行的回复"
+                }
+            }
+        },
+  "tip": "内容由 AI 生成，请注意甄别",
+  "gatewayDisconnectedPlaceholder": "网关未连接...",
+  "cronFallbackPlaceholder": "这条定时任务记录没有可继续对话的实时会话。",
+  "safety": {
+            "accessRange": "文件访问",
+            "workspaceOnly": "工作目录",
+            "unrestricted": "不限",
+            "policy": "权限设置",
+            "saveFailed": "保存安全设置失败",
+            "descriptions": {
+                "workspaceOnly": "只允许访问当前工作目录内的文件",
+                "unrestricted": "可访问更大范围，风险更高"
+            },
+            "policyOptions": {
+                "moderate": {
+                    "label": "默认",
+                    "description": "保留常用能力，适合大多数人"
+                },
+                "strict": {
+                    "label": "严格",
+                    "description": "接近纯聊天，不具备文件读写和自动化能力"
+                },
+                "fullAccess": {
+                    "label": "疯狂模式",
+                    "description": "限制最少，但误操作风险也最高"
+                }
+            }
+        },
+        "contextUsage": {
+            "label": "上下文占用",
+            "ariaLabel": "当前会话上下文占用 {{percent}}",
+            "tooltipTitle": "会话上下文占用",
+            "lastRoundTotal": "上一轮总计",
+            "cache": "缓存综合",
+            "limit": "上下文上限",
+            "unknown": "未知",
+            "ratio": "占用比例",
+            "stale": "当前会话统计尚未刷新"
+        },
+        "send": "发送",
+        "stop": "停止"
+    },
+    "assistantHover": {
+        "usage": {
+            "input": "输入",
+            "output": "输出",
+            "total": "总计",
+            "cacheRead": "缓存读",
+            "cacheWrite": "缓存写",
+            "cost": "成本"
+        }
+    },
+    "auth": {
+        "loginRequiredToSend": "当前未登录，登录后才可发送消息。",
+        "loginWithWechat": "登录",
+        "loginFailed": "登录失败，请稍后重试。"
+    },
+    "historyBuckets": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "withinWeek": "一周内",
+        "withinTwoWeeks": "两周内",
+        "withinMonth": "一个月内",
+        "older": "一个月之前"
+    }
+}

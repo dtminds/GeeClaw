@@ -1,0 +1,17 @@
+{
+  "title": "All Gateway Sessions",
+  "description": "Browse the raw sessions exposed by OpenClaw Gateway. This view is read-only and separate from GeeClaw desktop chat.",
+  "refresh": "Refresh sessions",
+  "loading": "Loading gateway sessions...",
+  "empty": "No gateway sessions found",
+  "emptyDescription": "Gateway has not exposed any sessions yet.",
+  "historyLoading": "Loading session history...",
+  "historyEmpty": "No messages in this session yet",
+  "historyError": "Failed to load session history",
+  "listTitle": "Session List",
+  "previewDescription": "Select a session to inspect its raw transcript.",
+  "sessionKey": "Session Key",
+  "sessionCount": "{{count}} sessions",
+  "messageCount": "{{count}} messages",
+  "gatewayRequired": "Gateway must be running to inspect raw sessions."
+}

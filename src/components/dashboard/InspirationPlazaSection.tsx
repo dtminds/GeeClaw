@@ -1,0 +1,273 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
+import inspirationJson from '@/assets/inspiration/inspiration.json';
+import { cn } from '@/lib/utils';
+import { useAgentsStore } from '@/stores/agents';
+import { useChatStore } from '@/stores/chat';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+interface InspirationItem {
+  category: string;
+  order: number;
+  title: string;
+  subtitle: string;
+  emoji?: string;
+  prompt: string;
+  scene?: string;
+  is_show: boolean;
+}
+
+interface InspirationPayload {
+  data?: {
+    resp?: {
+      data?: {
+        list?: InspirationItem[];
+      };
+    };
+  };
+}
+
+const CATEGORY_TRANSLATION_KEYS: Record<string, string> = {
+  '办公提效': 'productivity',
+  '研究学习': 'study',
+  '娱乐游戏': 'fun',
+  '自律生活': 'life',
+};
+
+const rawInspirationItems: InspirationItem[] =
+  (inspirationJson as InspirationPayload).data?.resp?.data?.list ?? [];
+
+const inspirationItems: InspirationItem[] = [...rawInspirationItems]
+  .filter((item) => item.is_show)
+  .sort((a, b) => a.order - b.order);
+
+const inspirationCategories: string[] = Array.from(
+  new Set(inspirationItems.map((item) => item.category)),
+);
+
+export function InspirationPlazaSection() {
+  const { t } = useTranslation('dashboard');
+  const navigate = useNavigate();
+  const agents = useAgentsStore((state) => state.agents);
+  const defaultAgentId = useAgentsStore((state) => state.defaultAgentId);
+  const fetchAgents = useAgentsStore((state) => state.fetchAgents);
+  const openAgentMainSession = useChatStore((state) => state.openAgentMainSession);
+  const queueComposerSeed = useChatStore((state) => state.queueComposerSeed);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [selectedItem, setSelectedItem] = useState<InspirationItem | null>(null);
+
+  const filteredItems = activeCategory === 'all'
+    ? inspirationItems
+    : inspirationItems.filter((item) => item.category === activeCategory);
+
+  const sceneLines = useMemo(
+    () => selectedItem?.scene
+      ?.split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean) ?? [],
+    [selectedItem],
+  );
+
+  const getCategoryLabel = (category: string) => {
+    if (category === 'all') {
+      return t('inspirationPlaza.all');
+    }
+
+    const key = CATEGORY_TRANSLATION_KEYS[category];
+    return key ? t(`inspirationPlaza.categories.${key}`) : category;
+  };
+
+  const handleUseNow = async () => {
+    if (!selectedItem) {
+      return;
+    }
+
+    if (agents.length === 0) {
+      try {
+        await fetchAgents();
+      } catch (error) {
+        console.warn('Failed to refresh agents before opening inspiration prompt:', error);
+      }
+    }
+
+    const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
+    await openAgentMainSession(resolvedDefaultAgentId);
+    queueComposerSeed(selectedItem.prompt);
+    setSelectedItem(null);
+    navigate('/');
+  };
+
+  return (
+    <>
+      <section className="space-y-5">
+        <div className="space-y-1.5">
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+            {t('inspirationPlaza.title')}
+          </h2>
+          <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground">
+            {t('inspirationPlaza.description')}
+          </p>
+        </div>
+
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <div
+            role="tablist"
+            aria-label={t('inspirationPlaza.title')}
+            className="flex min-w-max items-center gap-2"
+          >
+            {['all', ...inspirationCategories].map((category) => {
+              const active = activeCategory === category;
+
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                onClick={() => setActiveCategory(category)}
+                className={cn(
+                  'rounded-full px-4 py-2 text-[13px] font-medium tracking-[-0.01em] transition-all',
+                  active
+                    ? 'bg-foreground text-background shadow-[0_10px_24px_-20px_rgba(15,23,42,0.38)]'
+                    : 'text-foreground/55 hover:bg-black/[0.035] hover:text-foreground dark:hover:bg-white/[0.06]',
+                  )}
+                >
+                  {getCategoryLabel(category)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredItems.map((item) => (
+            <button
+              key={`${item.category}-${item.order}-${item.title}`}
+              type="button"
+              onClick={() => setSelectedItem(item)}
+              className={cn(
+                'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
+                'bg-[var(--app-sidebar)] p-5 shadow-none transition-all duration-200',
+                'hover:-translate-y-0.5 hover:border-black/[0.09]',
+                'dark:border-white/[0.08]',
+                'dark:hover:border-white/[0.12]',
+              )}
+            >
+              <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-sky-200/60 to-transparent opacity-80" />
+
+              <div className="mb-5 flex h-12 w-12 items-center justify-center">
+                {item.emoji ? (
+                  <img
+                    src={item.emoji}
+                    alt=""
+                    loading="lazy"
+                    className="h-12 w-12 object-contain"
+                  />
+                ) : (
+                  <span className="text-xl">✨</span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="max-w-[22ch] text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
+                  {item.title}
+                </h3>
+                <p className="max-w-[38ch] text-[12px] leading-4 text-foreground/45 line-clamp-3 dark:text-foreground/56">
+                  {item.subtitle}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+        <DialogContent
+          hideCloseButton
+          className="modal-card-surface w-[min(620px,calc(100vw-2rem))] max-w-[620px] overflow-hidden rounded-[28px] border bg-[var(--app-sidebar)] p-0 shadow-none"
+        >
+          {selectedItem && (
+            <div className="relative px-6 py-6 sm:px-8 sm:py-8">
+              <button
+                type="button"
+                onClick={() => setSelectedItem(null)}
+                className="modal-close-button absolute right-6 top-6"
+                aria-label={t('inspirationPlaza.close')}
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <DialogHeader className="items-center pt-6 text-center sm:pt-8">
+                <div className="mb-2 flex h-18 w-18 items-center justify-center">
+                  {selectedItem.emoji ? (
+                    <img
+                      src={selectedItem.emoji}
+                      alt=""
+                      loading="lazy"
+                      className="h-18 w-18 object-contain"
+                    />
+                  ) : (
+                    <span className="text-xl">✨</span>
+                  )}
+                </div>
+                <DialogTitle className="modal-title max-w-[24ch] text-center text-[22px] leading-[1.3] tracking-[-0.03em] sm:text-[26px]">
+                  {selectedItem.title}
+                </DialogTitle>
+                <DialogDescription className="modal-description mt-1 max-w-3xl text-center text-[13px] leading-7 text-foreground/42 dark:text-foreground/56 sm:text-[14px]">
+                  {selectedItem.subtitle}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-6 space-y-6 sm:mt-8">
+                <section className="border-t border-black/6 pt-6 dark:border-white/10">
+                  <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                    {t('inspirationPlaza.sceneTitle')}
+                  </h3>
+                  <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-2 shadow-none">
+                    <div className="text-[14px] leading-6 text-foreground/72">
+                      {sceneLines.map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="border-t border-black/6 pt-6 dark:border-white/10">
+                  <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                    {t('inspirationPlaza.promptTitle')}
+                  </h3>
+                  <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
+                    <p className="whitespace-pre-wrap text-[14px] leading-6 text-foreground/78">
+                      {selectedItem.prompt}
+                    </p>
+                  </div>
+                </section>
+              </div>
+
+              <div className="modal-footer mt-8 justify-center pb-1 sm:mt-10">
+                <Button
+                  type="button"
+                  onClick={() => void handleUseNow()}
+                  className="modal-primary-button min-w-[160px] px-8 text-[14px]"
+                >
+                  {t('inspirationPlaza.useNow')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export default InspirationPlazaSection;
