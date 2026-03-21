@@ -172,6 +172,7 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - 高级代理项留空时，会自动回退到“代理服务器”。
 - 保存代理设置后，Electron 网络层会立即重新应用代理，并自动重启 Gateway。
 - 如果启用了 Telegram，GeeClaw 还会把代理同步到 OpenClaw 的 Telegram 频道配置中。
+- 在 Windows 打包版本中，内置的 `openclaw` CLI/TUI 会通过随包分发的 `node.exe` 入口运行，以保证终端输入行为稳定。
 
 ---
 

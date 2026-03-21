@@ -172,6 +172,7 @@ Notes:
 - If advanced proxy fields are left empty, GeeClaw falls back to `Proxy Server`.
 - Saving proxy settings reapplies Electron networking immediately and restarts the Gateway automatically.
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
+- On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
 
 ---
 
