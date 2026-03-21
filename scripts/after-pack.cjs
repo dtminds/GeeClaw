@@ -162,7 +162,7 @@ const MODULE_PATCHES = {
 };
 
 function patchBrokenModules(nodeModulesDir) {
-  const { writeFileSync } = require('fs');
+  const { writeFileSync, existsSync: fsExistsSync } = require('fs');
   let count = 0;
   for (const [rel, content] of Object.entries(MODULE_PATCHES)) {
     const target = join(nodeModulesDir, rel);
@@ -173,6 +173,57 @@ function patchBrokenModules(nodeModulesDir) {
   }
   if (count > 0) {
     console.log(`[after-pack] 🩹 Patched ${count} broken module(s) in ${nodeModulesDir}`);
+  }
+
+  // https-proxy-agent: add a CJS `require` condition only when we can point to
+  // a real CommonJS entry. Mapping `require` to an ESM file can cause
+  // ERR_REQUIRE_CYCLE_MODULE in Node.js CLI/TUI flows.
+  const hpaPkgPath = join(nodeModulesDir, 'https-proxy-agent', 'package.json');
+  if (existsSync(hpaPkgPath)) {
+    try {
+      const raw = readFileSync(hpaPkgPath, 'utf8');
+      const pkg = JSON.parse(raw);
+      const exp = pkg.exports;
+      const hasRequireCondition = Boolean(
+        (exp && typeof exp === 'object' && exp.require) ||
+        (exp && typeof exp === 'object' && exp['.'] && exp['.'].require),
+      );
+
+      const pkgDir = dirname(hpaPkgPath);
+      const mainEntry = typeof pkg.main === 'string' ? pkg.main : null;
+      const dotImport = exp && typeof exp === 'object' && exp['.'] && typeof exp['.'].import === 'string'
+        ? exp['.'].import
+        : null;
+      const rootImport = exp && typeof exp === 'object' && typeof exp.import === 'string'
+        ? exp.import
+        : null;
+      const importEntry = dotImport || rootImport;
+
+      const cjsCandidates = [
+        mainEntry,
+        importEntry && importEntry.endsWith('.js') ? importEntry.replace(/\.js$/, '.cjs') : null,
+        './dist/index.cjs',
+      ].filter(Boolean);
+
+      const requireTarget = cjsCandidates.find((candidate) =>
+        fsExistsSync(join(pkgDir, candidate)),
+      );
+
+      if (exp && !hasRequireCondition && requireTarget) {
+        pkg.exports = {
+          '.': {
+            import: importEntry || requireTarget,
+            require: requireTarget,
+            default: importEntry || requireTarget,
+          },
+        };
+        writeFileSync(hpaPkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+        count++;
+        console.log(`[after-pack] 🩹 Patched https-proxy-agent exports for CJS compatibility (require=${requireTarget})`);
+      }
+    } catch (err) {
+      console.warn('[after-pack] ⚠️  Failed to patch https-proxy-agent:', err.message);
+    }
   }
 }
 
