@@ -257,21 +257,21 @@ const labelClasses = 'text-[14px] text-foreground/80 font-bold';
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
     case 'telegram':
-      return <img src={telegramIcon} alt="Telegram" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={telegramIcon} alt="Telegram" className="h-[32px] w-[32px]" />;
     case 'discord':
-      return <img src={discordIcon} alt="Discord" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={discordIcon} alt="Discord" className="h-[32px] w-[32px]" />;
     case 'whatsapp':
-      return <img src={whatsappIcon} alt="WhatsApp" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={whatsappIcon} alt="WhatsApp" className="h-[32px] w-[32px]" />;
     case 'dingtalk':
-      return <img src={dingtalkIcon} alt="DingTalk" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={dingtalkIcon} alt="DingTalk" className="h-[32px] w-[32px]" />;
     case 'feishu':
-      return <img src={feishuIcon} alt="Feishu" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={feishuIcon} alt="Feishu" className="h-[32px] w-[32px]" />;
     case 'wecom':
-      return <img src={wecomIcon} alt="WeCom" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={wecomIcon} alt="WeCom" className="h-[32px] w-[32px]" />;
     case 'openclaw-weixin':
-      return <img src={weixinIcon} alt="Weixin" className="h-[20px] w-[20px]" />;
+      return <img src={weixinIcon} alt="Weixin" className="h-[32px] w-[32px]" />;
     case 'qqbot':
-      return <img src={qqIcon} alt="QQ" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={qqIcon} alt="QQ" className="h-[32px] w-[32px]" />;
     default:
       return <span className="text-[20px] leading-none">{CHANNEL_ICONS[type] || '💬'}</span>;
   }
@@ -510,7 +510,7 @@ function AgentSettingsModal({
                     className="surface-muted flex items-center justify-between rounded-2xl border border-transparent p-4"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="surface-muted flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm dark:border-white/10">
+                      <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center">
                         <ChannelLogo type={channel.channelType} />
                       </div>
                       <div className="min-w-0">
