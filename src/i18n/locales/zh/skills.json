@@ -98,6 +98,8 @@
         "copiedPath": "路径已复制",
         "failedCopyPath": "复制路径失败",
         "failedOpenActualFolder": "打开技能实际目录失败",
+        "skillHubInstalled": "SkillHub 已安装，后续市场安装将优先使用国内镜像",
+        "skillHubInstallFailed": "安装 SkillHub 失败",
         "searchTimeoutError": "搜索超时，请检查网络。您也可访问 ClawHub.ai 搜索并下载压缩包，解压到 \"{{path}}\"",
         "installTimeoutError": "安装超时，请检查网络。您也可在 ClawHub.ai 下载该技能压缩包，解压到 \"{{path}}\"",
         "searchRateLimitError": "搜索请求过于频繁。您也可访问 ClawHub.ai 搜索并下载压缩包，解压到 \"{{path}}\"",
@@ -117,6 +119,13 @@
         "emptyPrompt": "搜索新技能以扩展您的能力。",
         "searchError": "ClawHub 搜索失败。请检查您的连接或安装。",
         "loadError": "加载市场目录失败。",
+        "skillHub": {
+            "title": "推荐安装 SkillHub",
+            "description": "SkillHub 会优先使用国内镜像源，通常能显著降低技能安装失败和请求频繁的问题。点击后 GeeClaw 会自动准备 Python 并安装 SkillHub CLI。",
+            "fallback": "当前仍会回退到 ClawHub 安装器；安装 SkillHub 后，新安装将优先走 SkillHub。",
+            "install": "安装 SkillHub",
+            "enabled": "SkillHub 加速已启用（v{{version}}）"
+        },
         "pagination": {
             "previous": "上一页",
             "next": "下一页",

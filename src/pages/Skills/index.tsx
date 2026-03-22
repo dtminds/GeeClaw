@@ -41,7 +41,7 @@ import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
-import type { MarketplaceSkill, Skill } from '@/types/skill';
+import type { MarketplaceSkill, Skill, SkillHubStatus } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -756,6 +756,9 @@ export function Skills() {
   const [selectedSource, setSelectedSource] = useState<InstalledSkillFilter>('enabled');
   const [marketplaceSection, setMarketplaceSection] = useState('featured');
   const [marketplacePage, setMarketplacePage] = useState(1);
+  const [skillHubStatus, setSkillHubStatus] = useState<SkillHubStatus | null>(null);
+  const [skillHubStatusLoading, setSkillHubStatusLoading] = useState(false);
+  const [skillHubInstalling, setSkillHubInstalling] = useState(false);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
@@ -880,6 +883,48 @@ export function Skills() {
     }
     void fetchMarketplaceCatalog();
   }, [activeTab, marketplaceCatalog, marketplaceLoading, fetchMarketplaceCatalog]);
+
+  const loadSkillHubStatus = useCallback(async () => {
+    setSkillHubStatusLoading(true);
+    try {
+      const result = await hostApiFetch<{ success: boolean; result?: SkillHubStatus; error?: string }>('/api/skillhub/status');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load SkillHub status');
+      }
+      setSkillHubStatus(result.result || null);
+    } catch (err) {
+      console.error('Failed to load SkillHub status:', err);
+      setSkillHubStatus(null);
+    } finally {
+      setSkillHubStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'marketplace') {
+      return;
+    }
+    void loadSkillHubStatus();
+  }, [activeTab, loadSkillHubStatus]);
+
+  const handleInstallSkillHub = useCallback(async () => {
+    setSkillHubInstalling(true);
+    try {
+      const result = await hostApiFetch<{ success: boolean; result?: SkillHubStatus; error?: string }>('/api/skillhub/install', {
+        method: 'POST',
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'SkillHub install failed');
+      }
+      setSkillHubStatus(result.result || null);
+      toast.success(t('toast.skillHubInstalled'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(t('toast.skillHubInstallFailed') + ': ' + message, { duration: 10000 });
+    } finally {
+      setSkillHubInstalling(false);
+    }
+  }, [t]);
 
   const marketplaceSections = [
     { key: 'featured', label: t('marketplace.featured', '精选'), count: marketplaceCatalog?.featured.length || 0 },
@@ -1198,6 +1243,44 @@ export function Skills() {
 
           {activeTab === 'marketplace' && (
              <div className="flex flex-col gap-1 mt-2">
+                {!skillHubStatusLoading && skillHubStatus && !skillHubStatus.available && (
+                  <div className="mb-4 rounded-2xl border border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.10),rgba(34,197,94,0.08))] px-4 py-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {t('marketplace.skillHub.title')}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {t('marketplace.skillHub.description')}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {t('marketplace.skillHub.fallback')}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleInstallSkillHub()}
+                        disabled={skillHubInstalling}
+                        className="h-9 rounded-full px-4 shadow-none"
+                      >
+                        {skillHubInstalling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : t('marketplace.skillHub.install')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {!skillHubStatusLoading && skillHubStatus?.available && skillHubStatus.preferredBackend === 'skillhub' && (
+                  <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    <Puzzle className="h-4 w-4 shrink-0" />
+                    <span>
+                      {t('marketplace.skillHub.enabled', { version: skillHubStatus.version || 'latest' })}
+                    </span>
+                  </div>
+                )}
+
                 {marketplaceError && (
                   <div className="mb-4 p-4 rounded-xl border border-destructive/50 bg-destructive/10 text-destructive text-sm font-medium flex items-center gap-2">
                     <AlertCircle className="h-5 w-5 shrink-0" />

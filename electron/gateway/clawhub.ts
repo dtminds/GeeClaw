@@ -7,6 +7,13 @@ import fs from 'fs';
 import path from 'path';
 import { app, shell } from 'electron';
 import { getOpenClawConfigDir, getResourcesDir, ensureDir, quoteForCmd } from '../utils/paths';
+import {
+    getSkillHubInstallLocations,
+    installSkillHubCli,
+    isSkillHubInstalledAtKnownLocation,
+    readInstalledSkillHubVersion,
+} from '../utils/skillhub-installer';
+import { checkUvInstalled, isPythonReady } from '../utils/uv-setup';
 
 export interface ClawHubSearchParams {
     query: string;
@@ -78,6 +85,16 @@ interface ClawHubCatalogResult {
     skills: ClawHubSkillResult[];
     featured: string[];
     categories: Record<string, string[]>;
+}
+
+export interface SkillHubStatusResult {
+    available: boolean;
+    path?: string;
+    version?: string;
+    autoInstallSupported: boolean;
+    uvAvailable: boolean;
+    pythonReady: boolean;
+    preferredBackend: SkillMarketplaceCliName | 'none';
 }
 
 type SkillMarketplaceCliName = 'clawhub' | 'skillhub';
@@ -290,7 +307,13 @@ export class ClawHubService {
             .split(path.delimiter)
             .map((entry) => entry.trim())
             .filter(Boolean);
-        const preferredEntries = homeDir ? [path.join(homeDir, '.local', 'bin'), ...pathEntries] : pathEntries;
+        const preferredEntries = homeDir
+            ? [
+                path.join(homeDir, '.local', 'bin'),
+                path.join(homeDir, '.skillhub', 'bin'),
+                ...pathEntries,
+            ]
+            : pathEntries;
         const seenPaths = new Set<string>();
         const executableNames = process.platform === 'win32'
             ? [`${name}.cmd`, `${name}.exe`, `${name}.bat`, name]
@@ -658,6 +681,46 @@ export class ClawHubService {
         return this.getMarketplaceCatalog();
     }
 
+    async getSkillHubStatus(): Promise<SkillHubStatusResult> {
+        const skillhubCandidate = this.cliCandidates.find((candidate) => candidate.name === 'skillhub');
+        const fallbackCandidate = this.cliCandidates.find((candidate) => candidate.name === 'clawhub');
+        const knownLocations = getSkillHubInstallLocations();
+        const wrapperExists = fs.existsSync(knownLocations.wrapperPath);
+        const cliExists = fs.existsSync(knownLocations.cliPath);
+        const pathHint = skillhubCandidate?.cliPath
+            || (wrapperExists ? knownLocations.wrapperPath : cliExists ? knownLocations.cliPath : undefined);
+        const version = skillhubCandidate
+            ? await this.readCliVersion(skillhubCandidate).catch(() => readInstalledSkillHubVersion())
+            : await readInstalledSkillHubVersion();
+        const uvAvailable = await checkUvInstalled().catch(() => false);
+        const pythonReady = await isPythonReady().catch(() => false);
+
+        return {
+            available: Boolean(skillhubCandidate || wrapperExists || cliExists || isSkillHubInstalledAtKnownLocation()),
+            path: pathHint,
+            version: version || undefined,
+            autoInstallSupported: true,
+            uvAvailable,
+            pythonReady,
+            preferredBackend: skillhubCandidate
+                ? 'skillhub'
+                : fallbackCandidate
+                    ? 'clawhub'
+                    : 'none',
+        };
+    }
+
+    async installSkillHub(): Promise<SkillHubStatusResult> {
+        const existing = await this.getSkillHubStatus();
+        if (!existing.available || existing.preferredBackend !== 'skillhub') {
+            const result = await installSkillHubCli();
+            console.log(`SkillHub CLI installed at ${result.wrapperPath}`);
+            this.cliCandidates = this.resolveCliCandidates();
+        }
+
+        return await this.getSkillHubStatus();
+    }
+
     /**
      * Install a skill
      */
@@ -797,5 +860,21 @@ export class ClawHubService {
         }
 
         return true;
+    }
+
+    private async readCliVersion(candidate: SkillMarketplaceCliCandidate): Promise<string | undefined> {
+        try {
+            const output = await this.runCommandWithCandidate(candidate, ['--version']);
+            const normalized = output.trim();
+            if (!normalized) {
+                return undefined;
+            }
+
+            const match = normalized.match(/(\d+(?:\.\d+)+(?:[-a-zA-Z0-9.]*)?)/);
+            return match?.[1] || normalized;
+        } catch (error) {
+            console.warn(`Failed to read ${candidate.name} version:`, error);
+            return undefined;
+        }
     }
 }

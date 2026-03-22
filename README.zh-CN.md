@@ -84,6 +84,7 @@ GeeClaw 也支持“启动时强制启用”的内置插件策略。当前受保
 
 ### 🧩 可扩展技能系统
 通过预构建的技能扩展 AI 智能体的能力。在集成的技能面板中浏览、安装和管理技能——无需包管理器。
+对于全新安装环境，技能市场现在会检测是否已具备国内优化的 `skillhub` CLI，并提供一键引导安装；安装过程复用 GeeClaw 自带的 `uv` 与托管 Python 运行时。若 `skillhub` 不可用，GeeClaw 会自动回退到内置的 `clawhub` 安装器。
 GeeClaw 还会内置预装完整的文档处理技能（`pdf`、`xlsx`、`docx`、`pptx`），在启动时自动部署到托管技能目录（默认 `~/.openclaw-geeclaw/skills`），并在首次安装时默认启用。额外预装技能（`find-skills`、`self-improving-agent`、`tavily-search`、`brave-web-search`、`bocha-skill`）也会默认启用；若缺少必需的 API Key，OpenClaw 会在运行时给出配置错误提示。
 Skills 页面可展示来自多个 OpenClaw 来源的技能（托管目录、workspace、额外技能目录），并显示每个技能的实际路径，便于直接打开真实安装位置。
 当启动阶段扫描到新的 skill key，且该 key 尚未出现在 `openclaw.json` 中时，GeeClaw 会把这个新发现技能写入 `skills.entries`，并默认设置为 `enabled: false`。同时，用户手动开关过的技能状态会额外持久化到应用 settings store，并在 Gateway 启动前回放回 `openclaw.json`，这样手动开启的技能能跨重启保留，而全新的 `.agents` 技能也不会被自动启用。

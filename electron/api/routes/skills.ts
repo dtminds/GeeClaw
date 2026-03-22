@@ -63,7 +63,7 @@ export async function handleSkillRoutes(
 
   if (url.pathname === '/api/clawhub/search' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<Record<string, unknown>>(req);
+      const body = await parseJsonBody<{ query: string; limit?: number }>(req);
       sendJson(res, 200, {
         success: true,
         results: await ctx.clawHubService.search(body),
@@ -88,7 +88,7 @@ export async function handleSkillRoutes(
 
   if (url.pathname === '/api/clawhub/install' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<Record<string, unknown>>(req);
+      const body = await parseJsonBody<{ slug: string; version?: string; force?: boolean }>(req);
       await ctx.clawHubService.install(body);
       sendJson(res, 200, { success: true });
     } catch (error) {
@@ -99,7 +99,7 @@ export async function handleSkillRoutes(
 
   if (url.pathname === '/api/clawhub/uninstall' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<Record<string, unknown>>(req);
+      const body = await parseJsonBody<{ slug: string }>(req);
       await ctx.clawHubService.uninstall(body);
       sendJson(res, 200, { success: true });
     } catch (error) {
@@ -133,6 +133,30 @@ export async function handleSkillRoutes(
       const body = await parseJsonBody<{ slug?: string; skillKey?: string; baseDir?: string }>(req);
       await ctx.clawHubService.openSkillPath(body.skillKey || body.slug || '', body.slug, body.baseDir);
       sendJson(res, 200, { success: true });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/skillhub/status' && req.method === 'GET') {
+    try {
+      sendJson(res, 200, {
+        success: true,
+        result: await ctx.clawHubService.getSkillHubStatus(),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/skillhub/install' && req.method === 'POST') {
+    try {
+      sendJson(res, 200, {
+        success: true,
+        result: await ctx.clawHubService.installSkillHub(),
+      });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

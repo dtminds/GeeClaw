@@ -77,6 +77,16 @@ export interface MarketplaceCatalog {
   categories: Record<string, string[]>;
 }
 
+export interface SkillHubStatus {
+  available: boolean;
+  path?: string;
+  version?: string;
+  autoInstallSupported: boolean;
+  uvAvailable: boolean;
+  pythonReady: boolean;
+  preferredBackend: 'skillhub' | 'clawhub' | 'none';
+}
+
 /**
  * Skill configuration schema
  */
