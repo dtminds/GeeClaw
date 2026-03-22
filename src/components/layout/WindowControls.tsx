@@ -76,7 +76,7 @@ function WindowControlButton({
         'hover:-translate-y-px',
         tone === 'danger'
           ? 'hover:bg-red-500 hover:text-white'
-          : 'hover:bg-black/5 hover:text-foreground',
+          : 'surface-hover hover:text-foreground',
       )}
     >
       {children}

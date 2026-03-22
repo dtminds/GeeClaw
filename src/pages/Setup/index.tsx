@@ -690,7 +690,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
               </Button>
             </div>
           </div>
-          <pre className="text-xs text-slate-300 bg-black/50 p-3 rounded max-h-60 overflow-auto whitespace-pre-wrap font-mono">
+          <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded border border-border/60 bg-popover px-3 py-3 font-mono text-xs text-popover-foreground">
             {logContent || '(No logs available yet)'}
           </pre>
         </div>
@@ -1120,7 +1120,7 @@ export function ProviderContent({
               href={providerDocsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] text-blue-500 hover:text-blue-600 font-medium inline-flex items-center gap-1"
+              className="text-info inline-flex items-center gap-1 text-[13px] font-medium hover:opacity-80"
             >
               {t('settings:aiProviders.dialog.customDoc')}
               <ExternalLink className="h-3 w-3" />
@@ -1363,14 +1363,14 @@ export function ProviderContent({
           {/* Device OAuth Trigger */}
           {useOAuthFlow && (
             <div className="space-y-4 pt-2">
-              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 text-center">
-                <p className="text-sm text-blue-200 mb-3 block">
+              <div className="rounded-lg border border-info/20 bg-info/10 p-4 text-center">
+                <p className="text-info-foreground mb-3 block text-sm">
                   This provider requires signing in via your browser.
                 </p>
                 <Button
                   onClick={handleStartOAuth}
                   disabled={oauthFlowing}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {oauthFlowing ? (
                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Waiting...</>

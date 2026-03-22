@@ -121,7 +121,7 @@ export function ChannelsSettingsSection() {
             void fetchChannels();
             void fetchConfiguredTypes();
           }}
-          className="h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors hover:bg-black/5 hover:text-foreground dark:border-white/10 dark:hover:bg-white/5"
+          className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors dark:border-white/10"
         >
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
           {t('refresh')}
@@ -190,10 +190,10 @@ export function ChannelsSettingsSection() {
                       setShowAddDialog(true);
                     }}
                     className={cn(
-                      "group flex items-start gap-4 p-4 rounded-2xl transition-all text-left border relative overflow-hidden bg-transparent border-transparent hover:bg-black/5 dark:hover:bg-white/5"
+                      "surface-hover group relative overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all"
                     )}
                   >
-                    <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3">
+                    <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm dark:border-white/10">
                       <ChannelLogo type={type} />
                     </div>
                     <div className="flex flex-col flex-1 min-w-0 py-0.5 mt-1">
@@ -291,8 +291,8 @@ function ChannelCard({ channel, onDelete }: ChannelCardProps) {
   const meta = CHANNEL_META[channel.type];
 
   return (
-    <div className="group flex items-start gap-4 p-4 rounded-2xl transition-all text-left border relative overflow-hidden bg-transparent border-transparent hover:bg-black/5 dark:hover:bg-white/5">
-      <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3">
+    <div className="surface-hover group relative overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all">
+      <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm dark:border-white/10">
         <ChannelLogo type={channel.type} />
       </div>
       <div className="flex flex-col flex-1 min-w-0 py-0.5 mt-1">
@@ -662,7 +662,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[140] bg-black/50 flex items-center justify-center p-6">
+    <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-6">
       <Card className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl border-0 shadow-2xl bg-[#f3f1e9] dark:bg-[#1a1a19] overflow-hidden">
         <CardHeader className="flex flex-row items-start justify-between pb-2 shrink-0">
           <div>
@@ -679,7 +679,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 : meta ? t(meta.description.replace('channels:', '')) : t('dialog.selectDesc')}
             </CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8 -mr-2 -mt-2 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5">
+          <Button variant="ghost" size="icon" onClick={onClose} className="surface-hover rounded-full h-8 w-8 -mr-2 -mt-2 text-muted-foreground">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -693,9 +693,9 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   <button
                     key={type}
                     onClick={() => onSelectType(type)}
-                    className="p-4 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-left group"
+                    className="surface-hover rounded-2xl border border-black/5 p-4 text-left transition-all group dark:border-white/5"
                   >
-                    <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3 group-hover:scale-105 transition-transform">
+                    <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm transition-transform group-hover:scale-105 dark:border-white/10">
                       <ChannelLogo type={type} />
                     </div>
                     <p className="font-semibold text-[15px]">{channelMeta.name}</p>
@@ -725,7 +725,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 <Button variant="outline" onClick={() => {
                   setQrCode(null);
                   handleConnect(); // Retry
-                }} className="rounded-full px-6 h-[42px] text-[13px] font-semibold border-black/20 dark:border-white/20 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground shadow-sm">
+                }} className="surface-hover h-[42px] rounded-full border-black/20 bg-transparent px-6 text-[13px] font-semibold text-foreground/80 shadow-sm dark:border-white/20">
                   {t('dialog.refreshCode')}
                 </Button>
               </div>
@@ -741,14 +741,14 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
             <div className="space-y-4">
               {/* Existing config hint */}
               {isExistingConfig && (
-                <div className="bg-[#eeece3] dark:bg-[#151514] text-foreground/80 font-medium p-4 rounded-2xl text-[13.5px] flex items-center gap-2.5 shadow-sm border border-black/5 dark:border-white/5">
-                  <CheckCircle className="h-4 w-4 shrink-0 text-blue-500" />
+                <div className="modal-section-surface flex items-center gap-2.5 rounded-2xl border p-4 text-[13.5px] font-medium text-foreground/80 shadow-sm">
+                  <CheckCircle className="text-info h-4 w-4 shrink-0" />
                   <span>{t('dialog.existingHint')}</span>
                 </div>
               )}
 
               {/* Instructions */}
-              <div className="bg-[#eeece3] dark:bg-[#151514] p-5 rounded-2xl space-y-3 shadow-sm border border-black/5 dark:border-white/5">
+              <div className="modal-section-surface space-y-3 rounded-2xl border p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-[14px] text-foreground/80">{t('dialog.howToConnect')}</p>
                   <Button
@@ -777,7 +777,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   placeholder={t('dialog.channelNamePlaceholder', { name: meta?.name })}
                   value={channelName}
                   onChange={(e) => setChannelName(e.target.value)}
-                  className="h-[44px] rounded-xl font-mono text-[13px] bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+                  className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
                 />
               </div>
 
@@ -795,11 +795,11 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
 
               {/* Validation Results */}
               {validationResult && (
-                <div className={`p-4 rounded-2xl text-[13.5px] shadow-sm border border-black/5 dark:border-white/5 ${validationResult.valid ? 'bg-[#eeece3] dark:bg-[#151514] text-foreground/80' : 'bg-destructive/10 text-destructive'
+                <div className={`rounded-2xl border p-4 text-[13.5px] shadow-sm ${validationResult.valid ? 'modal-section-surface text-foreground/80' : 'bg-destructive/10 text-destructive'
                   }`}>
                   <div className="flex items-start gap-2.5">
                     {validationResult.valid ? (
-                      <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-green-500" />
+                      <CheckCircle className="text-success h-4 w-4 mt-0.5 shrink-0" />
                     ) : (
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                     )}
@@ -815,14 +815,14 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                         </ul>
                       )}
                       {validationResult.valid && validationResult.warnings.length > 0 && (
-                        <div className="mt-1 text-green-600 dark:text-green-500 space-y-0.5 font-medium">
+                        <div className="text-success mt-1 space-y-0.5 font-medium">
                           {validationResult.warnings.map((info, i) => (
                             <p key={i} className="text-[13px]">{info}</p>
                           ))}
                         </div>
                       )}
                       {!validationResult.valid && validationResult.warnings.length > 0 && (
-                        <div className="mt-2 text-yellow-600 dark:text-yellow-500 font-medium">
+                        <div className="text-warning mt-2 font-medium">
                           <p className="font-bold text-[12px] uppercase mb-1">{t('dialog.warnings')}</p>
                           <ul className="list-disc list-inside space-y-0.5">
                             {validationResult.warnings.map((warn, i) => (
@@ -836,7 +836,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 </div>
               )}
 
-              <Separator className="bg-black/10 dark:bg-white/10" />
+              <Separator className="separator-subtle" />
 
               <div className="flex justify-end pt-4">
                 <div className="flex gap-3">
@@ -846,7 +846,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                       variant="secondary"
                       onClick={handleValidate}
                       disabled={validating}
-                      className="rounded-full px-6 h-[42px] text-[13px] font-semibold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-foreground shadow-sm"
+                      className="surface-hover-strong h-[42px] rounded-full px-6 text-[13px] font-semibold text-foreground shadow-sm"
                     >
                       {validating ? (
                         <>
@@ -864,7 +864,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   <Button
                     onClick={handleConnect}
                     disabled={connecting || !isFormValid()}
-                    className="rounded-full px-6 h-[42px] text-[13px] font-semibold bg-[#0a84ff] hover:bg-[#007aff] text-white shadow-sm border border-transparent transition-all"
+                    className="h-[42px] rounded-full border border-transparent bg-primary px-6 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
                   >
                     {connecting ? (
                       <>
@@ -918,7 +918,7 @@ function ConfigField({ field, value, onChange, showSecret, onToggleSecret }: Con
           placeholder={field.placeholder ? t(field.placeholder.replace('channels:', '')) : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-[44px] rounded-xl font-mono text-[13px] bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+          className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
         />
         {isPassword && (
           <Button
@@ -926,7 +926,7 @@ function ConfigField({ field, value, onChange, showSecret, onToggleSecret }: Con
             variant="outline"
             size="icon"
             onClick={onToggleSecret}
-            className="h-[44px] w-[44px] rounded-xl bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 text-muted-foreground hover:text-foreground shrink-0 shadow-sm"
+            className="modal-field-surface h-[44px] w-[44px] shrink-0 rounded-xl text-muted-foreground shadow-sm hover:text-foreground"
           >
             {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>

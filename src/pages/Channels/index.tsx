@@ -188,7 +188,7 @@ export function Channels() {
         <Button
           variant="outline"
           onClick={() => void refreshAll()}
-          className="h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors hover:bg-black/5 hover:text-foreground dark:border-white/10 dark:hover:bg-white/5"
+          className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors dark:border-white/10"
         >
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
           {t('refresh')}
@@ -265,9 +265,9 @@ export function Channels() {
                   key={type}
                   type="button"
                   onClick={() => setModalState({ type })}
-                  className="group flex items-start gap-4 rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all hover:bg-black/5 dark:hover:bg-white/5"
+                  className="surface-hover group flex items-start gap-4 rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all"
                 >
-                  <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
+                  <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center">
                     <ChannelLogo type={type} />
                   </div>
                   <div className="min-w-0 flex-1 pt-1">
@@ -362,10 +362,10 @@ function ChannelGroupCard({
   const meta = CHANNEL_META[channel.type];
 
   return (
-    <div className="rounded-3xl border border-black/5 bg-white/70 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+    <div className="rounded-3xl border border-black/5 bg-white/70 p-5 dark:border-white/10 dark:bg-white/[0.03]">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
+          <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center">
             <ChannelLogo type={channel.type} />
           </div>
           <div className="space-y-1">
@@ -389,7 +389,7 @@ function ChannelGroupCard({
           <Button
             variant="outline"
             onClick={onAddAccount}
-            className="h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none hover:bg-black/5 hover:text-foreground dark:border-white/10 dark:hover:bg-white/5"
+            className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none dark:border-white/10"
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
             {t('addAccount', 'Add Account')}
@@ -511,7 +511,7 @@ function ChannelAccountRow({
               value={selectedAgentId}
               disabled={busyKey === `${channel.type}:${account.accountId}:bind`}
               onChange={(event) => onBindAgent(event.target.value)}
-              className="h-10 w-full appearance-none rounded-xl border border-black/10 bg-white/85 px-4 pr-10 text-sm text-foreground shadow-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-background"
+              className="field-focus-ring h-10 w-full appearance-none rounded-xl border border-black/10 bg-white/85 px-4 pr-10 text-sm text-foreground shadow-sm outline-none transition-all disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-background"
             >
               <option value="">{t('unassigned', 'Unassigned')}</option>
               {agents.map((agent) => (
@@ -531,7 +531,7 @@ function ChannelAccountRow({
               disabled={account.isDefault || busyKey === `${channel.type}:${account.accountId}:default`}
               title={t('setDefault', 'Set Default')}
               aria-label={t('setDefault', 'Set Default')}
-              className="h-9 w-9 rounded-full text-muted-foreground hover:bg-black/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10"
+              className="surface-hover-strong h-9 w-9 rounded-full text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Star className="h-4 w-4" />
             </Button>
@@ -539,7 +539,7 @@ function ChannelAccountRow({
               variant="ghost"
               size="icon"
               onClick={onEdit}
-              className="h-9 w-9 rounded-full text-muted-foreground hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+              className="surface-hover-strong h-9 w-9 rounded-full text-muted-foreground"
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -562,23 +562,23 @@ function ChannelAccountRow({
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
     case 'telegram':
-      return <img src={telegramIcon} alt="Telegram" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={telegramIcon} alt="Telegram" className="h-[32px] w-[32px]" />;
     case 'discord':
-      return <img src={discordIcon} alt="Discord" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={discordIcon} alt="Discord" className="h-[32px] w-[32px]" />;
     case 'whatsapp':
-      return <img src={whatsappIcon} alt="WhatsApp" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={whatsappIcon} alt="WhatsApp" className="h-[32px] w-[32px]" />;
     case 'dingtalk':
-      return <img src={dingtalkIcon} alt="DingTalk" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={dingtalkIcon} alt="DingTalk" className="h-[32px] w-[32px]" />;
     case 'feishu':
-      return <img src={feishuIcon} alt="Feishu" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={feishuIcon} alt="Feishu" className="h-[32px] w-[32px]" />;
     case 'wecom':
-      return <img src={wecomIcon} alt="WeCom" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={wecomIcon} alt="WeCom" className="h-[32px] w-[32px]" />;
     case 'openclaw-weixin':
-      return <img src={weixinIcon} alt="Weixin" className="h-[22px] w-[22px]" />;
+      return <img src={weixinIcon} alt="Weixin" className="h-[32px] w-[32px]" />;
     case 'qqbot':
-      return <img src={qqIcon} alt="QQ" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={qqIcon} alt="QQ" className="h-[32px] w-[32px]" />;
     default:
-      return <span className="text-[22px]">{CHANNEL_ICONS[type] || '💬'}</span>;
+      return <span className="text-[32px]">{CHANNEL_ICONS[type] || '💬'}</span>;
   }
 }
 

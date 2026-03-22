@@ -38,7 +38,7 @@ export function ChatToolbar() {
   return (
     <>
       <div className="flex w-full flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-[12px] text-foreground/70">
+        <div className="flex flex-1 min-w-0 items-center gap-2 text-[12px] text-foreground/70">
           <HugeiconsIcon icon={Robot02Icon} className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate font-medium text-foreground/85">{currentAgentName}</span>
           <span className="shrink-0 text-foreground/35">/</span>

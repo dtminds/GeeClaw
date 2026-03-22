@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import './themes.css';
 @plugin "@tailwindcss/typography";
 
 /* Scan streamdown dist for Tailwind classes used internally */
@@ -25,6 +24,15 @@
 
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -122,6 +130,12 @@
     --accent-foreground: hsl(208, 24%, 22%);
     --destructive: hsl(4, 72%, 54%);
     --destructive-foreground: hsl(210, 40%, 98%);
+    --success: #198754;
+    --success-foreground: #f4fbf6;
+    --warning: #b26a00;
+    --warning-foreground: #fff8eb;
+    --info: #0f63be;
+    --info-foreground: #f3f9ff;
     --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
     --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
     --ring: hsl(205, 41%, 28%);
@@ -168,6 +182,12 @@
     --accent-foreground: hsl(210, 40%, 98%);
     --destructive: hsl(0, 62.8%, 30.6%);
     --destructive-foreground: hsl(210, 40%, 98%);
+    --success: #6dd9a4;
+    --success-foreground: #0d2418;
+    --warning: #ffcc73;
+    --warning-foreground: #342100;
+    --info: #81b7f0;
+    --info-foreground: #12263d;
     --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
     --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
     --ring: hsl(224.3, 76.3%, 48%);
@@ -227,7 +247,13 @@
 
 @layer components {
   .app-shell {
-    background: var(--app-shell);
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 92%, white 8%) 100%);
+  }
+
+  .dark .app-shell {
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 88%, black 12%) 100%);
   }
 
   .app-titlebar {
@@ -238,7 +264,6 @@
   .app-sidebar {
     background:
       linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 92%, white 8%) 100%);
-    border-color: color-mix(in srgb, var(--app-line) 25%, transparent);
   }
 
   .dark .app-sidebar {
@@ -247,6 +272,9 @@
   }
 
   .app-canvas {
+    border-radius: 18px 0 0 18px;
+    box-shadow: -5px 0 10px -4px rgba(20, 37, 44, 0.04);
+    border-left: 1px solid color-mix(in srgb, var(--app-line) 25%, transparent);
     background:
       linear-gradient(180deg, var(--app-canvas) 0%, color-mix(in oklab, var(--app-canvas) 97%, var(--app-sidebar) 3%) 100%);
   }
@@ -263,9 +291,18 @@
   }
 
   .dark .modal-card-surface {
-    background: color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%);
-    border-color: color-mix(in srgb, var(--app-line) 50%, transparent);
-    box-shadow: 0 30px 72px -40px rgba(0, 0, 0, 0.62);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--card) 76%, white 24%) 0%,
+        color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%) 100%
+      );
+    border-color: color-mix(in srgb, white 18%, var(--app-line) 82%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 24px 56px -28px rgba(0, 0, 0, 0.72),
+      0 42px 96px -46px rgba(0, 0, 0, 0.82),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .modal-section-surface {
@@ -357,16 +394,69 @@
     height: 2.625rem;
     border-radius: 9999px;
     border: 1px solid transparent;
-    background: #0a84ff;
+    background: var(--primary);
     padding-inline: 1.5rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: white;
-    box-shadow: 0 12px 30px -20px rgba(10, 132, 255, 0.72);
+    color: var(--primary-foreground);
+    box-shadow: 0 12px 30px -20px color-mix(in srgb, var(--primary) 72%, transparent);
   }
 
   .modal-primary-button:hover {
-    background: #007aff;
+    background: color-mix(in oklab, var(--primary) 90%, black 10%);
+  }
+
+  .surface-muted {
+    background: color-mix(in srgb, var(--muted) 72%, transparent);
+  }
+
+  .dark .surface-muted {
+    background: color-mix(in srgb, var(--muted) 84%, transparent);
+  }
+
+  .surface-muted-strong {
+    background: color-mix(in srgb, var(--muted) 88%, transparent);
+  }
+
+  .dark .surface-muted-strong {
+    background: color-mix(in srgb, var(--muted) 94%, transparent);
+  }
+
+  .surface-hover:hover {
+    background: color-mix(in srgb, var(--accent) 78%, transparent);
+    color: var(--foreground);
+  }
+
+  .dark .surface-hover:hover {
+    background: color-mix(in srgb, var(--accent) 88%, transparent);
+  }
+
+  .surface-hover-strong:hover {
+    background: color-mix(in srgb, var(--accent) 92%, transparent);
+    color: var(--foreground);
+  }
+
+  .dark .surface-hover-strong:hover {
+    background: color-mix(in srgb, var(--accent) 96%, transparent);
+  }
+
+  .field-focus-ring:focus,
+  .field-focus-ring:focus-visible {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 34%, transparent);
+  }
+
+  .overlay-backdrop {
+    background: color-mix(in srgb, var(--foreground) 32%, transparent);
+  }
+
+  .dark .overlay-backdrop {
+    background: color-mix(in srgb, black 58%, transparent);
+  }
+
+  .separator-subtle {
+    background: color-mix(in srgb, var(--border) 72%, transparent);
   }
 
   .sidebar-item-active {

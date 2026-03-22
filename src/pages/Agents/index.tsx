@@ -73,7 +73,7 @@ export function Agents() {
             <Button
               variant="outline"
               onClick={handleRefresh}
-              className="h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors hover:bg-black/5 hover:text-foreground dark:border-white/10 dark:hover:bg-white/5"
+              className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors dark:border-white/10"
             >
               <RefreshCw className="mr-2 h-3.5 w-3.5" />
               {t('refresh')}
@@ -190,7 +190,7 @@ function AgentCard({
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-4 overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all hover:bg-black/5 dark:hover:bg-white/5',
+        'surface-hover group relative flex items-start gap-4 overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all',
         agent.isDefault && 'bg-black/[0.04] dark:bg-white/[0.06]',
       )}
     >
@@ -227,7 +227,7 @@ function AgentCard({
               variant="ghost"
               size="icon"
               className={cn(
-                'h-7 w-7 text-muted-foreground transition-all hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10',
+                'surface-hover-strong h-7 w-7 text-muted-foreground transition-all',
                 !agent.isDefault && 'opacity-0 group-hover:opacity-100',
               )}
               onClick={onOpenSettings}
@@ -251,27 +251,27 @@ function AgentCard({
   );
 }
 
-const inputClasses = 'modal-field-surface h-[44px] rounded-xl font-mono text-[13px] focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40';
+const inputClasses = 'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40';
 const labelClasses = 'text-[14px] text-foreground/80 font-bold';
 
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
     case 'telegram':
-      return <img src={telegramIcon} alt="Telegram" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={telegramIcon} alt="Telegram" className="h-[32px] w-[32px]" />;
     case 'discord':
-      return <img src={discordIcon} alt="Discord" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={discordIcon} alt="Discord" className="h-[32px] w-[32px]" />;
     case 'whatsapp':
-      return <img src={whatsappIcon} alt="WhatsApp" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={whatsappIcon} alt="WhatsApp" className="h-[32px] w-[32px]" />;
     case 'dingtalk':
-      return <img src={dingtalkIcon} alt="DingTalk" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={dingtalkIcon} alt="DingTalk" className="h-[32px] w-[32px]" />;
     case 'feishu':
-      return <img src={feishuIcon} alt="Feishu" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={feishuIcon} alt="Feishu" className="h-[32px] w-[32px]" />;
     case 'wecom':
-      return <img src={wecomIcon} alt="WeCom" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={wecomIcon} alt="WeCom" className="h-[32px] w-[32px]" />;
     case 'openclaw-weixin':
-      return <img src={weixinIcon} alt="Weixin" className="h-[20px] w-[20px]" />;
+      return <img src={weixinIcon} alt="Weixin" className="h-[32px] w-[32px]" />;
     case 'qqbot':
-      return <img src={qqIcon} alt="QQ" className="h-[20px] w-[20px] dark:invert" />;
+      return <img src={qqIcon} alt="QQ" className="h-[32px] w-[32px]" />;
     default:
       return <span className="text-[20px] leading-none">{CHANNEL_ICONS[type] || '💬'}</span>;
   }
@@ -313,7 +313,7 @@ function AddAgentDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="overlay-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
       <Card className="modal-card-surface w-full max-w-md overflow-hidden rounded-3xl border shadow-2xl">
         <CardHeader className="pb-2">
           <CardTitle className="modal-title">
@@ -427,7 +427,7 @@ function AgentSettingsModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="overlay-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
       <Card className="modal-card-surface flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border shadow-2xl">
         <CardHeader className="flex shrink-0 flex-row items-start justify-between pb-2">
           <div>
@@ -464,7 +464,7 @@ function AgentSettingsModal({
                     variant="outline"
                     onClick={() => void handleSaveName()}
                     disabled={savingName || !name.trim() || name.trim() === agent.name}
-                    className="modal-field-surface h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none hover:bg-black/5 hover:text-foreground dark:hover:bg-white/5"
+                    className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
                   >
                     {savingName ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
                   </Button>
@@ -473,13 +473,13 @@ function AgentSettingsModal({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1 rounded-2xl border border-transparent bg-black/5 p-4 dark:bg-white/5">
+              <div className="surface-muted space-y-1 rounded-2xl border border-transparent p-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
                   {t('settingsDialog.agentIdLabel')}
                 </p>
                 <p className="font-mono text-[13px] text-foreground">{agent.id}</p>
               </div>
-              <div className="space-y-1 rounded-2xl border border-transparent bg-black/5 p-4 dark:bg-white/5">
+              <div className="surface-muted space-y-1 rounded-2xl border border-transparent p-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
                   {t('settingsDialog.modelLabel')}
                 </p>
@@ -499,7 +499,7 @@ function AgentSettingsModal({
             </div>
 
             {assignedChannels.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-black/5 p-4 text-[13.5px] text-muted-foreground dark:border-white/10 dark:bg-white/5">
+              <div className="surface-muted rounded-2xl border border-dashed border-black/10 p-4 text-[13.5px] text-muted-foreground dark:border-white/10">
                 {t('settingsDialog.noChannels')}
               </div>
             ) : (
@@ -507,10 +507,10 @@ function AgentSettingsModal({
                 {assignedChannels.map((channel) => (
                   <div
                     key={`${channel.channelType}:${channel.accountId}`}
-                    className="flex items-center justify-between rounded-2xl border border-transparent bg-black/5 p-4 dark:bg-white/5"
+                    className="surface-muted flex items-center justify-between rounded-2xl border border-transparent p-4"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
+                      <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center">
                         <ChannelLogo type={channel.channelType} />
                       </div>
                       <div className="min-w-0">

@@ -4,6 +4,8 @@
     "welcome": {
         "title": "GeeClaw",
         "subtitle": "您的 AI 龙虾助手已就绪，在下方开始对话。",
+        "channelPrompt": "或连接以下聊天工具发起会话",
+        "channelAriaLabel": "从 {{channel}} 发起会话",
         "askQuestions": "提问",
         "askQuestionsDesc": "获取任何话题的答案",
         "creativeTasks": "创意任务",

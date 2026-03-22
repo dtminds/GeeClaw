@@ -41,7 +41,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useSettingsStore, type ColorTheme, type SecurityPolicy } from '@/stores/settings';
+import { useSettingsStore, type SecurityPolicy } from '@/stores/settings';
 import { useGatewayStore } from '@/stores/gateway';
 import { useUpdateStore } from '@/stores/update';
 import { UpdateSettings } from '@/components/settings/UpdateSettings';
@@ -70,6 +70,7 @@ import {
   resolveSettingsSection,
   type SettingsModalSection,
 } from '@/lib/settings-modal';
+import { COLOR_THEME_REGISTRY } from '@/theme/color-themes';
 type ControlUiInfo = {
   url: string;
   token: string;
@@ -486,7 +487,7 @@ function AppSettingsPanel({
               </div>
 
               {showLogs && (
-                <div className="mt-4 rounded-lg border border-border bg-black/10 p-4 dark:bg-black/40">
+                <div className="surface-muted-strong mt-4 rounded-lg border border-border p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-sm font-medium">{t('gateway.appLogs')}</p>
                     <div className="flex gap-2">
@@ -972,24 +973,6 @@ function AppearanceSettingsPanel() {
     setLanguage,
   } = useSettingsStore();
 
-  const COLOR_THEMES: Array<{
-    id: ColorTheme;
-    swatches: { light: [string, string]; dark: [string, string] };
-  }> = [
-    { id: 'standard', swatches: { light: ['#1f3e59', '#c3d1dd'], dark: ['#5a8dcc', '#293a4e'] } },
-    { id: 'ink', swatches: { light: ['#2d5844', '#dfe7de'], dark: ['#8ec8ad', '#213128'] } },
-    { id: 'ocean', swatches: { light: ['#1777b8', '#d9e9f5'], dark: ['#7bbef0', '#22334a'] } },
-    { id: 'forest', swatches: { light: ['#2a8a53', '#d8efe0'], dark: ['#88d7ab', '#1f3329'] } },
-    { id: 'vintage', swatches: { light: ['#c26618', '#f0dfcc'], dark: ['#efb27e', '#332519'] } },
-    { id: 'neon', swatches: { light: ['#9e23ba', '#ebd6f0'], dark: ['#e08eef', '#311f3e'] } },
-    { id: 'citrus', swatches: { light: ['#6d49a7', '#e7efb9'], dark: ['#d7e874', '#313c23'] } },
-    { id: 'dusk', swatches: { light: ['#7d7f33', '#ebeacb'], dark: ['#c1c27b', '#33351e'] } },
-    { id: 'minimal', swatches: { light: ['#0f63be', '#dce8f5'], dark: ['#81b7f0', '#223043'] } },
-    { id: 'vitality', swatches: { light: ['#37a9a9', '#d3eeee'], dark: ['#8de3e3', '#1f3535'] } },
-    { id: 'nature', swatches: { light: ['#2f6c2e', '#e5e8d0'], dark: ['#98d698', '#273525'] } },
-    { id: 'art', swatches: { light: ['#5f6b80', '#dce1ea'], dark: ['#b7c2d8', '#2a3446'] } },
-  ];
-
   // Determine effective mode for swatch display
   const effectiveTheme = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -1030,7 +1013,7 @@ function AppearanceSettingsPanel() {
           <p className="text-sm text-muted-foreground mt-0.5">{t('appearance.colorTheme.description')}</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {COLOR_THEMES.map((ct) => {
+          {COLOR_THEME_REGISTRY.map((ct) => {
             const isSelected = colorTheme === ct.id;
             const swatchPair = effectiveTheme === 'dark' ? ct.swatches.dark : ct.swatches.light;
             return (

@@ -555,7 +555,7 @@ export function ChannelConfigModal({
   }, [accountId, handleConnect, handleStartWeComScan, selectedType, t]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-6">
+    <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-6">
       <Card className="modal-card-surface flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl">
         <CardHeader className="flex shrink-0 flex-row items-start justify-between pb-2">
           <div>
@@ -591,9 +591,9 @@ export function ChannelConfigModal({
                     key={type}
                     type="button"
                     onClick={() => setSelectedType(type)}
-                    className="group rounded-2xl border border-black/5 p-4 text-left transition-all hover:bg-black/5 dark:border-white/5 dark:hover:bg-white/5"
+                    className="surface-hover group rounded-2xl border border-black/5 p-4 text-left transition-all dark:border-white/5"
                   >
-                    <div className="mb-3 flex h-[46px] w-[46px] items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm transition-transform group-hover:scale-105 dark:border-white/10 dark:bg-white/5">
+                    <div className="surface-muted mb-3 flex h-[46px] w-[46px] items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm transition-transform group-hover:scale-105 dark:border-white/10">
                       <ChannelLogo type={type} />
                     </div>
                     <p className="text-[15px] font-semibold">{channelMeta.name}</p>
@@ -637,7 +637,7 @@ export function ChannelConfigModal({
             <div className="space-y-4">
               {isExistingConfig && allowExistingConfig && (
                 <div className="modal-section-surface flex items-center gap-2.5 rounded-2xl border p-4 text-[13.5px] font-medium text-foreground/80 shadow-sm">
-                  <CheckCircle className="h-4 w-4 shrink-0 text-blue-500" />
+                  <CheckCircle className="text-info h-4 w-4 shrink-0" />
                   <span>{t('dialog.existingHint')}</span>
                 </div>
               )}
@@ -673,7 +673,7 @@ export function ChannelConfigModal({
                     placeholder={t('dialog.accountIdPlaceholder', 'default')}
                     value={editableAccountId}
                     onChange={(event) => setEditableAccountId(event.target.value)}
-                    className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40"
                   />
                 </div>
               )}
@@ -735,7 +735,7 @@ export function ChannelConfigModal({
                 </div>
               )}
 
-              <Separator className="bg-black/10 dark:bg-white/10" />
+              <Separator className="separator-subtle" />
 
               <div className="modal-footer">
                 <div className="flex gap-3">
@@ -843,7 +843,7 @@ function ConfigField({
           placeholder={field.placeholder ? t(field.placeholder.replace('channels:', '')) : undefined}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40"
         />
         {isPassword && (
           <Button
