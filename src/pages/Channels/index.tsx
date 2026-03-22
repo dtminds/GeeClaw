@@ -267,7 +267,7 @@ export function Channels() {
                   onClick={() => setModalState({ type })}
                   className="group flex items-start gap-4 rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all hover:bg-black/5 dark:hover:bg-white/5"
                 >
-                  <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
+                  <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center">
                     <ChannelLogo type={type} />
                   </div>
                   <div className="min-w-0 flex-1 pt-1">
@@ -362,10 +362,10 @@ function ChannelGroupCard({
   const meta = CHANNEL_META[channel.type];
 
   return (
-    <div className="rounded-3xl border border-black/5 bg-white/70 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+    <div className="rounded-3xl border border-black/5 bg-white/70 p-5 dark:border-white/10 dark:bg-white/[0.03]">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border border-black/5 bg-black/5 text-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
+          <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center">
             <ChannelLogo type={channel.type} />
           </div>
           <div className="space-y-1">
@@ -562,23 +562,23 @@ function ChannelAccountRow({
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
     case 'telegram':
-      return <img src={telegramIcon} alt="Telegram" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={telegramIcon} alt="Telegram" className="h-[32px] w-[32px]" />;
     case 'discord':
-      return <img src={discordIcon} alt="Discord" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={discordIcon} alt="Discord" className="h-[32px] w-[32px]" />;
     case 'whatsapp':
-      return <img src={whatsappIcon} alt="WhatsApp" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={whatsappIcon} alt="WhatsApp" className="h-[32px] w-[32px]" />;
     case 'dingtalk':
-      return <img src={dingtalkIcon} alt="DingTalk" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={dingtalkIcon} alt="DingTalk" className="h-[32px] w-[32px]" />;
     case 'feishu':
-      return <img src={feishuIcon} alt="Feishu" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={feishuIcon} alt="Feishu" className="h-[32px] w-[32px]" />;
     case 'wecom':
-      return <img src={wecomIcon} alt="WeCom" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={wecomIcon} alt="WeCom" className="h-[32px] w-[32px]" />;
     case 'openclaw-weixin':
-      return <img src={weixinIcon} alt="Weixin" className="h-[22px] w-[22px]" />;
+      return <img src={weixinIcon} alt="Weixin" className="h-[32px] w-[32px]" />;
     case 'qqbot':
-      return <img src={qqIcon} alt="QQ" className="h-[22px] w-[22px] dark:invert" />;
+      return <img src={qqIcon} alt="QQ" className="h-[32px] w-[32px]" />;
     default:
-      return <span className="text-[22px]">{CHANNEL_ICONS[type] || '💬'}</span>;
+      return <span className="text-[32px]">{CHANNEL_ICONS[type] || '💬'}</span>;
   }
 }
 
