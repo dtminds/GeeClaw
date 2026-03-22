@@ -6,6 +6,7 @@
  */
 import { useEffect } from 'react';
 import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
@@ -18,8 +19,57 @@ import { useAutoScroll } from './useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import logoSvg from '@/assets/logo.svg';
+import telegramIcon from '@/assets/channels/telegram.svg';
+import discordIcon from '@/assets/channels/discord.svg';
+import whatsappIcon from '@/assets/channels/whatsapp.svg';
+import dingtalkIcon from '@/assets/channels/dingtalk.svg';
+import feishuIcon from '@/assets/channels/feishu.svg';
+import wecomIcon from '@/assets/channels/wecom.svg';
+import weixinIcon from '@/assets/channels/weixin.svg';
+import qqIcon from '@/assets/channels/qq.svg';
 import { buildChatItems } from './build-chat-items';
 import { useSettingsStore } from '@/stores/settings';
+import { CHANNEL_ICONS, CHANNEL_NAMES, getPrimaryChannels, type ChannelType } from '@/types/channel';
+
+const CHANNEL_LOGO_SVGS: Partial<Record<ChannelType, string>> = {
+  telegram: telegramIcon,
+  discord: discordIcon,
+  whatsapp: whatsappIcon,
+  dingtalk: dingtalkIcon,
+  feishu: feishuIcon,
+  wecom: wecomIcon,
+  'openclaw-weixin': weixinIcon,
+  qqbot: qqIcon,
+};
+
+const CHANNEL_PRIORITY_ORDER: ChannelType[] = [
+  'openclaw-weixin',
+  'wecom',
+  'feishu',
+  'dingtalk',
+  'qqbot',
+];
+
+const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
+  .sort((left, right) => {
+    const leftPriority = CHANNEL_PRIORITY_ORDER.indexOf(left);
+    const rightPriority = CHANNEL_PRIORITY_ORDER.indexOf(right);
+
+    if (leftPriority === -1 && rightPriority === -1) {
+      return 0;
+    }
+
+    if (leftPriority === -1) {
+      return 1;
+    }
+
+    if (rightPriority === -1) {
+      return -1;
+    }
+
+    return leftPriority - rightPriority;
+  })
+  .slice(0, 8);
 
 export function Chat() {
   const { t } = useTranslation('chat');
@@ -245,9 +295,10 @@ export function Chat() {
 
 function WelcomeScreen() {
   const { t } = useTranslation('chat');
+
   return (
     <div className="flex flex-col items-center justify-center text-center h-[60vh]">
-      <div className="surface-muted flex h-32 w-32 items-center justify-center rounded-[20px] shadow-[0_1px_2px_rgba(18,38,45,0.06)] ring-1 ring-black/5">
+      <div className="flex h-32 w-32 items-center justify-center">
         <img src={logoSvg} alt="GeeClaw" className="h-32 w-auto" />
       </div>
       <h1 className="text-6xl md:text-7xl text-foreground mt-3 mb-3 font-normal tracking-tight">
@@ -256,7 +307,42 @@ function WelcomeScreen() {
       <p className="text-[17px] text-foreground/80 mb-8 font-medium">
         {t('welcome.subtitle')}
       </p>
+      <div className="flex max-w-full flex-col items-center gap-4">
+        <p className="text-sm text-muted-foreground">
+          {t('welcome.channelPrompt')}
+        </p>
+        <div className="flex max-w-full flex-nowrap items-start justify-center gap-5 overflow-x-auto px-2 pb-2">
+          {WELCOME_CHANNEL_TYPES.map((type) => (
+            <Link
+              key={type}
+              to="/channels"
+              className="flex min-w-[56px] shrink-0 flex-col items-center gap-2 text-center text-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2"
+              aria-label={t('welcome.channelAriaLabel', { channel: CHANNEL_NAMES[type] })}
+              title={CHANNEL_NAMES[type]}
+            >
+              <ChannelWelcomeIcon type={type} />
+              <span className="text-[12px] leading-none text-muted-foreground">
+                {CHANNEL_NAMES[type]}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function ChannelWelcomeIcon({ type }: { type: ChannelType }) {
+  const logo = CHANNEL_LOGO_SVGS[type];
+
+  if (logo) {
+    return <img src={logo} alt="" aria-hidden="true" className="h-6 w-6" />;
+  }
+
+  return (
+    <span aria-hidden="true" className="text-[20px] leading-none">
+      {CHANNEL_ICONS[type] || '💬'}
+    </span>
   );
 }
 

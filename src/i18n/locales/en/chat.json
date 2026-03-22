@@ -4,6 +4,8 @@
     "welcome": {
         "title": "GeeClaw Chat",
         "subtitle": "Your AI assistant is ready. Start a conversation below.",
+        "channelPrompt": "You can also start a conversation from these chat tools",
+        "channelAriaLabel": "Start a conversation from {{channel}}",
         "askQuestions": "Ask Questions",
         "askQuestionsDesc": "Get answers on any topic",
         "creativeTasks": "Creative Tasks",
