@@ -5,8 +5,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  AiCloudIcon,
   CodesandboxIcon,
   Download05Icon,
+  LaptopCheckIcon,
+  Pacman02Icon,
   SoftwareLicenseIcon,
   StarIcon,
 } from '@hugeicons/core-free-icons';
@@ -31,9 +34,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useSkillsStore } from '@/stores/skills';
 import { useGatewayStore } from '@/stores/gateway';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -41,7 +43,7 @@ import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
-import type { MarketplaceSkill, Skill } from '@/types/skill';
+import type { MarketplaceSkill, Skill, SkillHubStatus } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -54,7 +56,7 @@ interface SkillDetailDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
-  onUninstall?: (slug: string) => void;
+  onUninstall?: (skill: Pick<Skill, 'id' | 'slug' | 'baseDir'>) => Promise<void> | void;
   onOpenFolder?: (skill: Skill) => Promise<void> | void;
 }
 
@@ -207,12 +209,13 @@ function getSkillIssueMessages(skill: Skill, labels: SkillIssueLabels): string[]
   return issues;
 }
 
-function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
+export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
   const { t } = useTranslation(['skills', 'common']);
   const { fetchSkills } = useSkillsStore();
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   const [apiKey, setApiKey] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUninstalling, setIsUninstalling] = useState(false);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const issueLabels: SkillIssueLabels = {
     unavailable: t('detail.unavailable'),
@@ -253,6 +256,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
   useEffect(() => {
     if (!isOpen) {
       setShowUninstallConfirm(false);
+      setIsUninstalling(false);
     }
   }, [isOpen]);
 
@@ -335,6 +339,12 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
           className="app-canvas flex w-full flex-col border-l border-black/10 p-0 shadow-xl dark:border-white/10 sm:max-w-[500px]"
           side="right"
         >
+        <SheetHeader className="sr-only">
+          <SheetTitle>{skill.name}</SheetTitle>
+          <SheetDescription>
+            {skill.description || t('subtitle') || 'Browse and manage AI capabilities.'}
+          </SheetDescription>
+        </SheetHeader>
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mb-6 flex items-start gap-4 text-left">
             <div className="surface-muted relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-black/10 text-2xl dark:border-white/10">
@@ -531,7 +541,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
                 variant={!skill.isBundled && onUninstall ? 'destructive' : 'outline'}
                 className="h-10 rounded-xl px-4 text-[13px] font-medium"
                 onClick={() => {
-                  if (!skill.isBundled && onUninstall && skill.slug) {
+                  if (!skill.isBundled && onUninstall) {
                     setShowUninstallConfirm(true);
                   } else {
                     onToggle(!skill.enabled);
@@ -549,21 +559,50 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
         </SheetContent>
       </Sheet>
 
-      <ConfirmDialog
-        open={showUninstallConfirm}
-        title={t('detail.uninstallConfirmTitle', 'Confirm uninstall')}
-        message={t('detail.uninstallConfirmMessage', { name: skill.name })}
-        confirmLabel={t('detail.uninstall', 'Uninstall')}
-        cancelLabel={t('common:cancel', 'Cancel')}
-        variant="destructive"
-        onConfirm={async () => {
-          if (!skill.slug || !onUninstall) return;
-          await onUninstall(skill.slug);
-          setShowUninstallConfirm(false);
-          onClose();
-        }}
-        onCancel={() => setShowUninstallConfirm(false)}
-      />
+      <Dialog open={showUninstallConfirm} onOpenChange={setShowUninstallConfirm}>
+        <DialogContent className="w-[min(420px,calc(100vw-2rem))] max-w-[420px] rounded-[16px] p-0">
+          <div className="p-6">
+            <DialogHeader>
+              <DialogTitle>{t('detail.uninstallConfirmTitle', 'Confirm uninstall')}</DialogTitle>
+              <DialogDescription>
+                {t('detail.uninstallConfirmMessage', { name: skill.name })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowUninstallConfirm(false)}
+                disabled={isUninstalling}
+              >
+                {t('common:cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={isUninstalling}
+                onClick={async () => {
+                  if (!onUninstall || isUninstalling) return;
+                  setIsUninstalling(true);
+                  try {
+                    await onUninstall({
+                      id: skill.id,
+                      slug: skill.slug,
+                      baseDir: skill.baseDir,
+                    });
+                    setShowUninstallConfirm(false);
+                    onClose();
+                  } finally {
+                    setIsUninstalling(false);
+                  }
+                }}
+              >
+                {isUninstalling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : t('detail.uninstall', 'Uninstall')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -620,6 +659,12 @@ function MarketplaceDetailDialog({
         className="w-[min(880px,calc(100vw-2rem))] max-w-[880px] overflow-hidden rounded-[16px] border border-black/8 bg-background p-0 shadow-[0_32px_110px_-42px_rgba(15,23,42,0.42)] dark:border-white/10"
         closeButtonClassName="right-5 top-5 h-8 w-8 border-0 bg-transparent text-foreground/55 hover:bg-transparent hover:text-foreground dark:bg-transparent dark:hover:bg-transparent"
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{skill.name}</DialogTitle>
+          <DialogDescription>
+            {skill.description || t('marketplace.emptyPrompt')}
+          </DialogDescription>
+        </DialogHeader>
         <div className="flex max-h-[min(88vh,760px)] flex-col overflow-hidden">
           <div className="px-8 py-7 dark:border-white/10">
             <div className="flex items-start gap-5 pr-12">
@@ -732,6 +777,10 @@ export function Skills() {
     marketplaceLoading,
     marketplaceError,
     fetchMarketplaceCatalog,
+    fetchCategorySkills,
+    categorySkills,
+    categorySkillsLoading,
+    categorySkillsTotal,
     installSkill,
     uninstallSkill,
     installing
@@ -756,6 +805,9 @@ export function Skills() {
   const [selectedSource, setSelectedSource] = useState<InstalledSkillFilter>('enabled');
   const [marketplaceSection, setMarketplaceSection] = useState('featured');
   const [marketplacePage, setMarketplacePage] = useState(1);
+  const [skillHubStatus, setSkillHubStatus] = useState<SkillHubStatus | null>(null);
+  const [skillHubStatusLoading, setSkillHubStatusLoading] = useState(false);
+  const [skillHubInstalling, setSkillHubInstalling] = useState(false);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
@@ -879,49 +931,127 @@ export function Skills() {
       return;
     }
     void fetchMarketplaceCatalog();
-  }, [activeTab, marketplaceCatalog, marketplaceLoading, fetchMarketplaceCatalog]);
+  }, [activeTab, marketplaceCatalog, marketplaceLoading]);
+
+  const loadSkillHubStatus = useCallback(async () => {
+    setSkillHubStatusLoading(true);
+    try {
+      const result = await hostApiFetch<{ success: boolean; result?: SkillHubStatus; error?: string }>('/api/skillhub/status');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load SkillHub status');
+      }
+      setSkillHubStatus(result.result || null);
+    } catch (err) {
+      console.error('Failed to load SkillHub status:', err);
+      setSkillHubStatus(null);
+    } finally {
+      setSkillHubStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'marketplace') {
+      return;
+    }
+    void loadSkillHubStatus();
+  }, [activeTab, loadSkillHubStatus]);
+
+  const handleInstallSkillHub = useCallback(async () => {
+    setSkillHubInstalling(true);
+    try {
+      const result = await hostApiFetch<{ success: boolean; result?: SkillHubStatus; error?: string }>('/api/skillhub/install', {
+        method: 'POST',
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'SkillHub install failed');
+      }
+      setSkillHubStatus(result.result || null);
+      toast.success(t('toast.skillHubInstalled'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(t('toast.skillHubInstallFailed') + ': ' + message, { duration: 10000 });
+    } finally {
+      setSkillHubInstalling(false);
+    }
+  }, [t]);
 
   const marketplaceSections = [
-    { key: 'featured', label: t('marketplace.featured', '精选'), count: marketplaceCatalog?.featured.length || 0 },
-    ...Object.entries(marketplaceCatalog?.categories || {}).map(([key, slugs]) => ({
-      key,
-      label: key,
-      count: slugs.length,
+    { key: 'featured', label: t('marketplace.featured', '精选') },
+    { key: 'all', label: t('marketplace.all', '全部') },
+    ...(marketplaceCatalog?.categoryList || []).map((cat) => ({
+      key: cat.id,
+      label: cat.name,
     })),
   ];
   const effectiveMarketplaceSection = marketplaceSections.some((section) => section.key === marketplaceSection)
     ? marketplaceSection
     : 'featured';
 
+  // Fetch category skills when a non-featured section is selected or when page/query changes
+  useEffect(() => {
+    if (activeTab !== 'marketplace' || effectiveMarketplaceSection === 'featured') {
+      return;
+    }
+    // For 'all' section, pass empty category; for specific categories, pass the category id
+    const categoryId = effectiveMarketplaceSection === 'all' ? '' : effectiveMarketplaceSection;
+    void fetchCategorySkills(categoryId, marketplacePage, marketplaceQuery);
+  }, [activeTab, effectiveMarketplaceSection, marketplacePage, marketplaceQuery, fetchCategorySkills]);
+
+  // For featured: use the catalog skills; for categories and 'all': use API-fetched categorySkills
+  const isFeaturedSection = effectiveMarketplaceSection === 'featured';
   const marketplaceSkillMap = new Map((marketplaceCatalog?.skills || []).map((skill) => [skill.slug, skill]));
-  const marketplaceBaseSlugs = effectiveMarketplaceSection === 'featured'
-    ? (marketplaceCatalog?.featured || [])
-    : (marketplaceCatalog?.categories?.[effectiveMarketplaceSection] || []);
-  const marketplaceBaseSkills = marketplaceBaseSlugs
-    .map((slug) => marketplaceSkillMap.get(slug))
-    .filter((skill): skill is MarketplaceSkill => Boolean(skill));
-  const normalizedMarketplaceQuery = marketplaceQuery.trim().toLowerCase();
-  const marketplaceFilteredSkills = !normalizedMarketplaceQuery
-    ? marketplaceBaseSkills
-    : marketplaceBaseSkills.filter((skill) =>
-      skill.slug.toLowerCase().includes(normalizedMarketplaceQuery)
-      || skill.name.toLowerCase().includes(normalizedMarketplaceQuery)
-      || skill.description.toLowerCase().includes(normalizedMarketplaceQuery)
-      || (skill.author || '').toLowerCase().includes(normalizedMarketplaceQuery)
-      || (skill.tags || []).some((tag) => tag.toLowerCase().includes(normalizedMarketplaceQuery))
+
+  let marketplaceVisibleSkills: MarketplaceSkill[];
+  let marketplaceTotalPages: number;
+  let safeMarketplacePage: number;
+  let marketplacePageStart: number;
+  let marketplaceFilteredSkillsCount: number;
+
+  if (isFeaturedSection) {
+    // Featured: client-side filtering from catalog.skills
+    const featuredSlugs = marketplaceCatalog?.featured || [];
+    const featuredBaseSkills = featuredSlugs
+      .map((slug) => marketplaceSkillMap.get(slug))
+      .filter((skill): skill is MarketplaceSkill => Boolean(skill));
+    const normalizedMarketplaceQuery = marketplaceQuery.trim().toLowerCase();
+    const filteredSkills = !normalizedMarketplaceQuery
+      ? featuredBaseSkills
+      : featuredBaseSkills.filter((skill) =>
+        skill.slug.toLowerCase().includes(normalizedMarketplaceQuery)
+        || skill.name.toLowerCase().includes(normalizedMarketplaceQuery)
+        || skill.description.toLowerCase().includes(normalizedMarketplaceQuery)
+        || (skill.author || '').toLowerCase().includes(normalizedMarketplaceQuery)
+        || (skill.tags || []).some((tag) => tag.toLowerCase().includes(normalizedMarketplaceQuery))
+      );
+    marketplaceFilteredSkillsCount = filteredSkills.length;
+    marketplaceTotalPages = Math.max(1, Math.ceil(filteredSkills.length / MARKETPLACE_PAGE_SIZE));
+    safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
+    marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
+    marketplaceVisibleSkills = filteredSkills.slice(
+      marketplacePageStart,
+      marketplacePageStart + MARKETPLACE_PAGE_SIZE,
     );
-  const marketplaceTotalPages = Math.max(1, Math.ceil(marketplaceFilteredSkills.length / MARKETPLACE_PAGE_SIZE));
-  const safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
-  const marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
-  const marketplaceVisibleSkills = marketplaceFilteredSkills.slice(
-    marketplacePageStart,
-    marketplacePageStart + MARKETPLACE_PAGE_SIZE,
-  );
+  } else {
+    // Category or All: server-side pagination from API
+    marketplaceVisibleSkills = categorySkills;
+    marketplaceFilteredSkillsCount = categorySkillsTotal;
+    marketplaceTotalPages = Math.max(1, Math.ceil(categorySkillsTotal / MARKETPLACE_PAGE_SIZE));
+    safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
+    marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
+  }
 
   // Handle uninstall
-  const handleUninstall = useCallback(async (slug: string) => {
+  const handleUninstall = useCallback(async (target: string | Pick<Skill, 'id' | 'slug' | 'baseDir'>) => {
     try {
-      await uninstallSkill(slug);
+      if (typeof target === 'string') {
+        await uninstallSkill(target);
+      } else {
+        await uninstallSkill({
+          slug: target.slug,
+          skillKey: target.id,
+          baseDir: target.baseDir,
+        });
+      }
       toast.success(t('toast.uninstalled'));
     } catch (err) {
       toast.error(t('toast.failedUninstall') + ': ' + String(err));
@@ -1006,7 +1136,7 @@ export function Skills() {
               variant="outline"
               size="icon"
               onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills()}
-              disabled={activeTab === 'all' ? !isGatewayRunning : marketplaceLoading}
+              disabled={activeTab === 'all' ? !isGatewayRunning : (marketplaceLoading || categorySkillsLoading)}
               className="surface-hover ml-1 h-8 w-8 rounded-md border-black/10 bg-transparent text-muted-foreground shadow-none dark:border-white/10"
               title="Refresh"
             >
@@ -1026,23 +1156,21 @@ export function Skills() {
         )}
 
         {/* Sub Navigation and Actions */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4 shrink-0 gap-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 text-[14px]">
-            <div className="flex items-center gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 shrink-0 gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 text-[14px]">
+            {/* Segment Control: Installed / Marketplace */}
+            <div className="inline-flex w-fit items-center rounded-full border border-border/60 bg-muted/40 p-1 gap-0.5">
               <button
                 onClick={() => { setActiveTab('all'); setSelectedSource('all'); }}
                 className={cn(
-                  'relative pb-2 font-medium transition-colors flex items-center gap-1.5',
+                  'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all',
                   activeTab === 'all'
-                    ? 'text-foreground'
+                    ? 'bg-foreground text-background shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
+                <HugeiconsIcon icon={LaptopCheckIcon} className="w-4" />
                 {t('filter.allSkills')}
-                <span className="text-[12px] font-normal opacity-70">{sourceStats.all}</span>
-                {activeTab === 'all' && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
-                )}
               </button>
               <button
                 onClick={() => {
@@ -1050,22 +1178,20 @@ export function Skills() {
                   setMarketplacePage(1);
                 }}
                 className={cn(
-                  'relative pb-2 font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all',
                   activeTab === 'marketplace'
-                    ? 'text-foreground'
+                    ? 'bg-foreground text-background shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {t('marketplace.title')}
-                {activeTab === 'marketplace' && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
-                )}
+                <HugeiconsIcon icon={AiCloudIcon} className="w-4" /> {t('marketplace.title')}
               </button>
             </div>
 
-            <div className="flex items-center flex-wrap gap-4">
+            {/* Sub-tabs: underline style */}
+            <div className="flex items-center flex-wrap gap-6 border-b border-black/5 dark:border-white/5 px-4">
               {activeTab === 'all' && (
-                <div className="flex flex-wrap items-center gap-2">
+                <>
                   {installedFilters.map((filter) => {
                     const active = selectedSource === filter.key;
                     return (
@@ -1074,21 +1200,24 @@ export function Skills() {
                         type="button"
                         onClick={() => setSelectedSource(filter.key)}
                         className={cn(
-                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          'relative pb-2 text-[14px] font-medium transition-colors',
                           active
-                            ? 'bg-foreground text-background'
-                            : 'surface-hover text-foreground/70',
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {filter.label}
-                        <span className="ml-1.5 opacity-70">{filter.count}</span>
+                        <span className="ml-1 text-[12px] font-normal opacity-60">{filter.count}</span>
+                        {active && (
+                          <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
+                        )}
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
               {activeTab === 'marketplace' && (
-                <div className="flex flex-wrap items-center gap-2">
+                <>
                   {marketplaceSections.map((section) => {
                     const active = effectiveMarketplaceSection === section.key;
                     return (
@@ -1100,18 +1229,20 @@ export function Skills() {
                           setMarketplacePage(1);
                         }}
                         className={cn(
-                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          'relative pb-2 text-[14px] font-medium transition-colors',
                           active
-                            ? 'bg-foreground text-background'
-                            : 'surface-hover text-foreground/70',
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {section.label}
-                        <span className="ml-1.5 opacity-70">{section.count}</span>
+                        {active && (
+                          <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
+                        )}
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -1198,6 +1329,41 @@ export function Skills() {
 
           {activeTab === 'marketplace' && (
              <div className="flex flex-col gap-1 mt-2">
+                {!skillHubStatusLoading && skillHubStatus && !skillHubStatus.available && (
+                  <div className="mb-4 rounded-2xl border border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.10),rgba(34,197,94,0.08))] px-4 py-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {t('marketplace.skillHub.title')}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {t('marketplace.skillHub.description')}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleInstallSkillHub()}
+                        disabled={skillHubInstalling}
+                        className="h-9 rounded-full px-4 shadow-none"
+                      >
+                        {skillHubInstalling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : t('marketplace.skillHub.install')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {!skillHubStatusLoading && skillHubStatus?.available && skillHubStatus.preferredBackend === 'skillhub' && (
+                  <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    <Puzzle className="h-4 w-4 shrink-0" />
+                    <span>
+                      {t('marketplace.skillHub.enabled', { version: skillHubStatus.version || 'latest' })}
+                    </span>
+                  </div>
+                )}
+
                 {marketplaceError && (
                   <div className="mb-4 p-4 rounded-xl border border-destructive/50 bg-destructive/10 text-destructive text-sm font-medium flex items-center gap-2">
                     <AlertCircle className="h-5 w-5 shrink-0" />
@@ -1205,14 +1371,12 @@ export function Skills() {
                   </div>
                 )}
                 
-                {marketplaceLoading && !marketplaceCatalog && (
+                {(marketplaceLoading && !marketplaceCatalog) || (categorySkillsLoading && !isFeaturedSection) ? (
                   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                     <LoadingSpinner size="lg" />
                     <p className="mt-4 text-sm">{t('marketplace.loading', 'Loading marketplace...')}</p>
                   </div>
-                )}
-
-                {!marketplaceLoading && marketplaceVisibleSkills.length > 0 ? (
+                ) : marketplaceVisibleSkills.length > 0 ? (
                   <>
                   {marketplaceVisibleSkills.map((skill) => {
                     const isInstalled = skills.some(s => s.id === skill.slug || s.name === skill.name);
@@ -1239,9 +1403,6 @@ export function Skills() {
                               <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
                                 /{skill.slug}
                               </span>
-                              {skill.author && (
-                                <span className="text-xs text-muted-foreground">• {skill.author}</span>
-                              )}
                             </div>
                             <p className="text-[13.5px] text-muted-foreground line-clamp-1 pr-6 leading-relaxed">
                               {skill.description}
@@ -1259,6 +1420,12 @@ export function Skills() {
                                 <HugeiconsIcon icon={CodesandboxIcon} size={14} strokeWidth={1.8} />
                                 <span>v{skill.version}</span>
                               </span>
+                              {skill.author && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <HugeiconsIcon icon={Pacman02Icon} size={14} strokeWidth={1.8} />
+                                  <span>{skill.author}</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1296,8 +1463,8 @@ export function Skills() {
                       <div className="text-[12px] text-muted-foreground">
                         {t('marketplace.pagination.summary', {
                           from: marketplacePageStart + 1,
-                          to: Math.min(marketplacePageStart + MARKETPLACE_PAGE_SIZE, marketplaceFilteredSkills.length),
-                          count: marketplaceFilteredSkills.length,
+                          to: Math.min(marketplacePageStart + MARKETPLACE_PAGE_SIZE, marketplaceFilteredSkillsCount),
+                          count: marketplaceFilteredSkillsCount,
                           defaultValue: '{{from}}-{{to}} / {{count}}',
                         })}
                       </div>
@@ -1330,7 +1497,7 @@ export function Skills() {
                   )}
                   </>
                 ) : (
-                  !marketplaceLoading && marketplaceCatalog && (
+                  !marketplaceLoading && !categorySkillsLoading && marketplaceCatalog && (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                       <HugeiconsIcon icon={CodesandboxIcon} size={40} strokeWidth={1.8} className="mb-4 opacity-50" />
                       <p>{marketplaceQuery ? t('marketplace.noResults') : t('marketplace.emptyPrompt')}</p>

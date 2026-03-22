@@ -60,6 +60,53 @@ function findUvInPathSync(): boolean {
   }
 }
 
+async function findManagedPythonPathWithUv(
+  uvBin: string,
+  extraEnv?: Record<string, string | undefined>,
+): Promise<string> {
+  const useShell = needsWinShell(uvBin);
+
+  return new Promise<string>((resolve, reject) => {
+    try {
+      const child = spawn(useShell ? quoteForCmd(uvBin) : uvBin, ['python', 'find', '3.12'], {
+        shell: useShell,
+        env: {
+          ...process.env,
+          ...(extraEnv || {}),
+        },
+        windowsHide: true,
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code) => {
+        const resolvedPath = stdout.trim();
+        if (code === 0 && resolvedPath) {
+          resolve(resolvedPath);
+          return;
+        }
+
+        reject(new Error(stderr.trim() || stdout.trim() || `uv python find failed with code ${code}`));
+      });
+
+      child.on('error', (error) => {
+        reject(error);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 /**
  * Check if uv is available (either bundled or in system PATH)
  */
@@ -89,20 +136,12 @@ export async function installUv(): Promise<void> {
  */
 export async function isPythonReady(): Promise<boolean> {
   const { bin: uvBin } = resolveUvBin();
-  const useShell = needsWinShell(uvBin);
-
-  return new Promise<boolean>((resolve) => {
-    try {
-      const child = spawn(useShell ? quoteForCmd(uvBin) : uvBin, ['python', 'find', '3.12'], {
-        shell: useShell,
-        windowsHide: true,
-      });
-      child.on('close', (code) => resolve(code === 0));
-      child.on('error', () => resolve(false));
-    } catch {
-      resolve(false);
-    }
-  });
+  try {
+    await findManagedPythonPathWithUv(uvBin);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -206,23 +245,24 @@ export async function setupManagedPython(): Promise<void> {
   }
 
   // After installation, verify and log the Python path
-  const verifyShell = needsWinShell(uvBin);
   try {
-    const findPath = await new Promise<string>((resolve) => {
-      const child = spawn(verifyShell ? quoteForCmd(uvBin) : uvBin, ['python', 'find', '3.12'], {
-        shell: verifyShell,
-        env: { ...process.env, ...uvEnv },
-        windowsHide: true,
-      });
-      let output = '';
-      child.stdout?.on('data', (data) => { output += data; });
-      child.on('close', () => resolve(output.trim()));
-    });
+    const findPath = await findManagedPythonPathWithUv(uvBin, uvEnv);
 
     if (findPath) {
       logger.info(`Managed Python 3.12 installed at: ${findPath}`);
     }
   } catch (err) {
     logger.warn('Could not determine Python path after install:', err);
+  }
+}
+
+export async function getManagedPythonPath(): Promise<string> {
+  const { bin: uvBin, source } = resolveUvBin();
+  const uvEnv = await getUvMirrorEnv();
+  try {
+    return await findManagedPythonPathWithUv(uvBin, uvEnv);
+  } catch (firstError) {
+    logger.warn(`Failed to resolve managed Python path via uv=${uvBin} (source=${source}) with mirror env:`, firstError);
+    return await findManagedPythonPathWithUv(uvBin);
   }
 }

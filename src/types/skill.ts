@@ -67,6 +67,16 @@ export interface MarketplaceSkill {
   installs?: number;
   tags?: string[];
   featured?: boolean;
+  category?: string;
+  description_zh?: string;
+  ownerName?: string;
+  score?: number;
+  updated_at?: number;
+}
+
+export interface CategoryInfo {
+  id: string;
+  name: string;
 }
 
 export interface MarketplaceCatalog {
@@ -75,6 +85,17 @@ export interface MarketplaceCatalog {
   skills: MarketplaceSkill[];
   featured: string[];
   categories: Record<string, string[]>;
+  categoryList: CategoryInfo[];
+}
+
+export interface SkillHubStatus {
+  available: boolean;
+  path?: string;
+  version?: string;
+  autoInstallSupported: boolean;
+  uvAvailable: boolean;
+  pythonReady: boolean;
+  preferredBackend: 'skillhub' | 'clawhub' | 'none';
 }
 
 /**

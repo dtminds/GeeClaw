@@ -1,0 +1,30 @@
+[
+    {
+        "id": "ai-intelligence",
+        "name": "AI智能"
+    },
+    {
+        "id": "developer-tools",
+        "name": "开发工具"
+    },
+    {
+        "id": "productivity",
+        "name": "效率提升"
+    },
+    {
+        "id": "data-analysis",
+        "name": "数据分析"
+    },
+    {
+        "id": "content-creation",
+        "name": "内容创作"
+    },
+    {
+        "id": "security-compliance",
+        "name": "安全合规"
+    },
+    {
+        "id": "communication-collaboration",
+        "name": "通讯协作"
+    }
+]

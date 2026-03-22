@@ -1294,7 +1294,7 @@ export function Settings({ embedded = false }: SettingsProps) {
 
   const content = (
     <div className="grid h-[min(84vh,780px)] min-h-[620px] grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-[12px] sm:grid-cols-[184px_minmax(0,1fr)] md:grid-cols-[196px_minmax(0,1fr)]">
-      <aside className="app-sidebar relative flex flex-col border-r px-2 py-3 dark:border-white/8 sm:px-3">
+      <aside className="bg-sidebar relative flex flex-col border-r px-2 py-3 dark:border-white/8 sm:px-3">
         <nav className="space-y-1">
           {settingsGroups.map((group) => {
             const active = group.key === section;
@@ -1333,7 +1333,7 @@ export function Settings({ embedded = false }: SettingsProps) {
         </div>
       </aside>
 
-      <section className="settings-modal-scroll app-canvas min-h-0 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+      <section className="settings-modal-scroll min-h-0 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
         <div className="mx-auto max-w-5xl">
           {section === 'appearance' && <AppearanceSettingsPanel />}
           {section === 'safety' && <SafetySettingsPanel />}

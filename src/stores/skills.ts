@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { AppError, normalizeAppError } from '@/lib/error-model';
 import { useGatewayStore } from './gateway';
-import type { MarketplaceCatalog, Skill, SkillMissingRequirements } from '../types/skill';
+import type { CategoryInfo, MarketplaceCatalog, MarketplaceSkill, Skill, SkillMissingRequirements } from '../types/skill';
 
 type GatewaySkillStatus = {
   skillKey: string;
@@ -36,6 +36,12 @@ type ClawHubListResult = {
   slug: string;
   version?: string;
   source?: string;
+  baseDir?: string;
+};
+
+type SkillUninstallTarget = string | {
+  slug?: string;
+  skillKey?: string;
   baseDir?: string;
 };
 
@@ -83,12 +89,16 @@ interface SkillsState {
   marketplaceError: string | null;
   installing: Record<string, boolean>; // slug -> boolean
   error: string | null;
+  categorySkills: MarketplaceSkill[];
+  categorySkillsTotal: number;
+  categorySkillsLoading: boolean;
 
   // Actions
   fetchSkills: () => Promise<void>;
   fetchMarketplaceCatalog: (force?: boolean) => Promise<void>;
+  fetchCategorySkills: (categoryId: string, page: number, keyword: string) => Promise<void>;
   installSkill: (slug: string, version?: string) => Promise<void>;
-  uninstallSkill: (slug: string) => Promise<void>;
+  uninstallSkill: (target: SkillUninstallTarget) => Promise<void>;
   enableSkill: (skillId: string) => Promise<void>;
   disableSkill: (skillId: string) => Promise<void>;
   setSkills: (skills: Skill[]) => void;
@@ -103,6 +113,9 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   marketplaceError: null,
   installing: {},
   error: null,
+  categorySkills: [],
+  categorySkillsTotal: 0,
+  categorySkillsLoading: false,
 
   fetchSkills: async () => {
     // Only show loading state if we have no skills yet (initial load)
@@ -237,20 +250,69 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
 
     set({ marketplaceLoading: true, marketplaceError: null });
     try {
-      const result = await hostApiFetch<{ success: boolean; result?: MarketplaceCatalog; error?: string }>('/api/clawhub/catalog');
-      if (result.success) {
-        set({ marketplaceCatalog: result.result || null });
-      } else {
-        throw normalizeAppError(new Error(result.error || 'Marketplace catalog load failed'), {
+      // Load featured skills from top.json
+      const featuredResult = await hostApiFetch<{ success: boolean; result?: MarketplaceSkill[]; error?: string }>('/api/marketplace/featured');
+      // Load category list from category.json
+      const categoriesResult = await hostApiFetch<{ success: boolean; result?: CategoryInfo[]; error?: string }>('/api/marketplace/categories');
+
+      if (!featuredResult.success) {
+        throw normalizeAppError(new Error(featuredResult.error || 'Featured skills load failed'), {
           module: 'skills',
           operation: 'fetch',
         });
       }
+
+      const featuredSkills = featuredResult.result || [];
+      const categoryList = categoriesResult.result || [];
+
+      // Build catalog: featured slugs, featured skills as the base skills array
+      const catalog: MarketplaceCatalog = {
+        skills: featuredSkills,
+        featured: featuredSkills.map((s) => s.slug),
+        categories: {},
+        categoryList,
+      };
+
+      set({ marketplaceCatalog: catalog });
     } catch (error) {
       console.error('Marketplace catalog load error:', error);
       set({ marketplaceError: String(error) });
     } finally {
       set({ marketplaceLoading: false });
+    }
+  },
+
+  fetchCategorySkills: async (categoryId: string, page: number, keyword: string) => {
+    set({ categorySkillsLoading: true });
+    try {
+      const params = new URLSearchParams({
+        category: categoryId,
+        page: String(page),
+        pageSize: '24',
+        sortBy: 'score',
+        order: 'desc',
+        keyword: keyword || '',
+      });
+      const result = await hostApiFetch<{
+        success: boolean;
+        result?: { skills: MarketplaceSkill[]; total: number };
+        error?: string;
+      }>(`/api/marketplace/category-skills?${params.toString()}`);
+
+      if (result.success && result.result) {
+        set({
+          categorySkills: result.result.skills,
+          categorySkillsTotal: result.result.total,
+        });
+      } else {
+        console.error('Failed to fetch category skills:', result.error);
+        set({ categorySkills: [], categorySkillsTotal: 0 });
+      }
+    } catch (error) {
+      console.error('Category skills fetch error:', error);
+      set({ categorySkills: [], categorySkillsTotal: 0 });
+    } finally {
+      set({ categorySkillsLoading: false });
     }
   },
 
@@ -282,12 +344,17 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  uninstallSkill: async (slug: string) => {
-    set((state) => ({ installing: { ...state.installing, [slug]: true } }));
+  uninstallSkill: async (target: SkillUninstallTarget) => {
+    const requestBody = typeof target === 'string'
+      ? { slug: target }
+      : target;
+    const installKey = requestBody.slug || requestBody.skillKey || requestBody.baseDir || 'unknown';
+
+    set((state) => ({ installing: { ...state.installing, [installKey]: true } }));
     try {
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/clawhub/uninstall', {
         method: 'POST',
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify(requestBody),
       });
       if (!result.success) {
         throw new Error(result.error || 'Uninstall failed');
@@ -300,7 +367,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     } finally {
       set((state) => {
         const newInstalling = { ...state.installing };
-        delete newInstalling[slug];
+        delete newInstalling[installKey];
         return { installing: newInstalling };
       });
     }

@@ -98,6 +98,8 @@
         "copiedPath": "Path copied",
         "failedCopyPath": "Failed to copy path",
         "failedOpenActualFolder": "Failed to open actual skill folder",
+        "skillHubInstalled": "SkillHub installed. Marketplace installs will now prefer the faster mirror.",
+        "skillHubInstallFailed": "Failed to install SkillHub",
         "searchTimeoutError": "Search timed out, check network. You can also search on ClawHub.ai, download the ZIP, and extract it to \"{{path}}\"",
         "installTimeoutError": "Installation timed out, check network. You can also download the ZIP from ClawHub.ai and extract it to \"{{path}}\"",
         "searchRateLimitError": "Search rate limit exceeded. You can also search on ClawHub.ai, download the ZIP, and extract it to \"{{path}}\"",
@@ -117,6 +119,12 @@
         "emptyPrompt": "Search for new skills to expand your capabilities.",
         "searchError": "ClawHub search failed. Check your connection or installation.",
         "loadError": "Failed to load marketplace catalog.",
+        "skillHub": {
+            "title": "Recommended: install SkillHub",
+            "description": "SkillHub prefers a China-optimized mirror and usually avoids the frequent rate-limit failures from the public installer. GeeClaw will automatically prepare Python and install the SkillHub CLI for you.",
+            "install": "Install SkillHub",
+            "enabled": "SkillHub acceleration enabled (v{{version}})"
+        },
         "pagination": {
             "previous": "Previous",
             "next": "Next",
