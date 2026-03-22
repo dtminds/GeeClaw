@@ -72,10 +72,11 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 通过现代化的聊天体验与 AI 智能体交互。侧边栏现在遵循 OpenClaw 原生会话模型，展示 Agent 列表并直接进入各 Agent 的主会话（`agent:{agentId}:main`）；进入聊天页后，左侧还会显示当前 Agent 的会话面板，分开展示主会话与临时会话，并可直接在面板内新建临时会话。GeeClaw 仍会将桌面管理的聊天条目与原始 Gateway 会话注册表分离，并额外提供一个只读入口，用于浏览全部 Gateway 会话及其 transcript。现在也支持多 Agent，并且可以在主输入框中通过 `@agent-id` 将下一条消息直接路由到目标 Agent 的主会话。主输入框的模型切换菜单现在基于各个 provider 已配置的模型目录生成，而 Agent 的 primary 模型和 fallback 链路则在设置中独立维护。与此同时，也支持类似 Codex 的 `/` 技能搜索，可持续筛选、键盘导航，并以内嵌 skill token 的形式把已选中的启用技能直接插入到句子里。
 
 ### 📡 多频道管理
-在侧边栏的独立频道工作区中统一配置和监控多个 AI 频道。现在单个 Channel 下可以配置多个账号，并且每个账号都可以单独路由到不同 Agent，同时保留可切换的默认账号。桌面端已内置钉钉、企业微信、QQ Bot，以及飞书/Lark 官方 OpenClaw 插件的打包与安装支持。
+在侧边栏的独立频道工作区中统一配置和监控多个 AI 频道。现在单个 Channel 下可以配置多个账号，并且每个账号都可以单独路由到不同 Agent，同时保留可切换的默认账号。桌面端已内置钉钉、企业微信、微信、QQ Bot，以及飞书/Lark 官方 OpenClaw 插件的打包与安装支持。
 应用启动时，GeeClaw 会把这些内置频道插件以 `plugins.load.paths` 的形式写入 `openclaw.json`，直接从应用资源目录加载，不再依赖 `~/.openclaw-geeclaw/extensions` 里的镜像副本。
 GeeClaw 也支持“启动时强制启用”的内置插件策略。当前受保护插件为 `lossless-claw`，启动时会自动补入 `plugins.allow`，并校正 `plugins.entries.lossless-claw` 与 `plugins.slots.contextEngine`，包括 `enabled: true`、指向 GeeClaw 托管 OpenClaw 配置目录的 `config.dbPath`（`<openclaw-config-dir>/lcm.db`）、`contextEngine: "lossless-claw"`，以及受保护的 session pattern 默认配置。
 企业微信在频道配置弹窗中新增了“扫码一键绑定”：扫码后会自动回填并保存 `botId` 与 `secret`。
+微信频道内置的是官方 `@tencent-weixin/openclaw-weixin` 插件，并严格遵循其“仅扫码登录”的接入方式。扫码确认后，插件 token 会写入 GeeClaw 托管的 OpenClaw 状态目录下 `openclaw-weixin/accounts*.json`，而频道配置本身只保留账号级别的路由与展示设置。
 
 ### ⏰ 定时任务自动化
 调度 AI 任务自动执行。定义触发器、设置时间间隔，让 AI 智能体 7×24 小时不间断工作。

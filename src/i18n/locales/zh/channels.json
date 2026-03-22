@@ -42,6 +42,8 @@
         "whatsappFailed": "WhatsApp 连接失败: {{error}}",
         "wecomConnected": "企微扫码绑定成功",
         "wecomScanFailed": "企微扫码失败: {{error}}",
+        "weixinConnected": "微信扫码绑定成功",
+        "weixinScanFailed": "微信扫码失败: {{error}}",
         "channelSaved": "频道 {{name}} 已保存",
         "channelConnecting": "正在连接 {{name}}...",
         "restartManual": "请手动重启网关",
@@ -233,6 +235,16 @@
                 "您可以在企业微信管理后台创建应用并获取配置信息",
                 "确保已启用接收消息服务器配置",
                 "填写 Bot ID（可选企业 ID 或者直接使用机器人专属 ID）及 Secret 即可建立连接"
+            ]
+        },
+        "openclaw-weixin": {
+            "description": "通过官方 OpenClaw 微信插件扫码连接微信账号",
+            "docsUrl": "https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin",
+            "fields": {},
+            "instructions": [
+                "点击下方按钮生成二维码",
+                "使用微信扫描二维码并在手机上确认授权",
+                "授权成功后，GeeClaw 会自动保存登录状态并创建对应账号"
             ]
         },
         "imessage": {

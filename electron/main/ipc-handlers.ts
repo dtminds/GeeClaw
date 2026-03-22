@@ -43,6 +43,7 @@ import { checkUvInstalled, installUv, setupManagedPython } from '../utils/uv-set
 import { updateSkillConfig, getSkillConfig, getAllSkillConfigs } from '../utils/skill-config';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { weComLoginManager } from '../utils/wecom-login';
+import { weixinLoginManager } from '../utils/weixin-login';
 import { getProviderConfig } from '../utils/provider-registry';
 import { deviceOAuthManager, OAuthProviderType } from '../utils/device-oauth';
 import { browserOAuthManager, type BrowserOAuthProviderType } from '../utils/browser-oauth';
@@ -141,6 +142,7 @@ export function registerIpcHandlers(
   // WhatsApp handlers
   registerWhatsAppHandlers(mainWindow);
   registerWeComHandlers(mainWindow);
+  registerWeixinHandlers(mainWindow);
 
   // Device OAuth handlers (Code Plan)
   registerDeviceOAuthHandlers(mainWindow);
@@ -1648,6 +1650,28 @@ function registerWeComHandlers(mainWindow: BrowserWindow): void {
     if (!mainWindow.isDestroyed()) {
       logger.error('wecom:login-error', error);
       mainWindow.webContents.send('channel:wecom-error', error);
+    }
+  });
+}
+
+function registerWeixinHandlers(mainWindow: BrowserWindow): void {
+  weixinLoginManager.on('qr', (data) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('channel:openclaw-weixin-qr', data);
+    }
+  });
+
+  weixinLoginManager.on('success', (data) => {
+    if (!mainWindow.isDestroyed()) {
+      logger.info('weixin:login-success', { accountId: data?.accountId });
+      mainWindow.webContents.send('channel:openclaw-weixin-success', data);
+    }
+  });
+
+  weixinLoginManager.on('error', (error) => {
+    if (!mainWindow.isDestroyed()) {
+      logger.error('weixin:login-error', error);
+      mainWindow.webContents.send('channel:openclaw-weixin-error', error);
     }
   });
 }

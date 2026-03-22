@@ -16,15 +16,23 @@ import { buildManagedOpenClawArgs } from './openclaw-managed-profile';
 import { reconcileBundledPluginLoadPaths } from './plugin-install';
 import * as logger from './logger';
 import { proxyAwareFetch } from './proxy-fetch';
+import {
+    clearAllWeixinState,
+    deleteWeixinAccountState,
+    listWeixinAccountIds,
+    WEIXIN_CHANNEL_ID,
+} from './weixin-state';
 
 const OPENCLAW_DIR = getOpenClawConfigDir();
 const CONFIG_FILE = join(OPENCLAW_DIR, 'openclaw.json');
 const DINGTALK_PLUGIN_ID = 'dingtalk';
 const WECOM_PLUGIN_ID = 'wecom-openclaw-plugin';
+const WEIXIN_PLUGIN_ID = WEIXIN_CHANNEL_ID;
 const FEISHU_PLUGIN_ID = 'openclaw-lark';
 const QQ_PLUGIN_ID = 'qqbot';
 const DEFAULT_ACCOUNT_ID = 'default';
 const CHANNEL_TOP_LEVEL_KEYS_TO_KEEP = new Set(['enabled', 'defaultAccount', 'accounts']);
+const MANAGED_PLUGIN_ENTRY_IDS = ['whatsapp', DINGTALK_PLUGIN_ID, WECOM_PLUGIN_ID, WEIXIN_PLUGIN_ID, FEISHU_PLUGIN_ID, QQ_PLUGIN_ID];
 
 // Channels that are managed as plugins (config goes under plugins.entries, not channels)
 const PLUGIN_CHANNELS = ['whatsapp'];
@@ -32,6 +40,7 @@ const PLUGIN_CHANNELS = ['whatsapp'];
 const CHANNEL_PLUGIN_INSTALLS: Record<string, { pluginId: string; installDir: string }> = {
     dingtalk: { pluginId: DINGTALK_PLUGIN_ID, installDir: 'dingtalk' },
     wecom: { pluginId: WECOM_PLUGIN_ID, installDir: WECOM_PLUGIN_ID },
+    [WEIXIN_CHANNEL_ID]: { pluginId: WEIXIN_PLUGIN_ID, installDir: WEIXIN_PLUGIN_ID },
     feishu: { pluginId: FEISHU_PLUGIN_ID, installDir: FEISHU_PLUGIN_ID },
     qqbot: { pluginId: QQ_PLUGIN_ID, installDir: QQ_PLUGIN_ID },
 };
@@ -175,12 +184,11 @@ export async function writeOpenClawConfig(
                 channelStore.delete('channels');
             }
 
-            const pluginChannels = ['whatsapp', 'wecom', 'feishu', 'dingtalk', 'qqbot'];
             const pluginsToSave: Record<string, unknown> = {};
             if (config.plugins?.entries) {
-                for (const type of pluginChannels) {
-                    if (config.plugins.entries[type]) {
-                        pluginsToSave[type] = config.plugins.entries[type];
+                for (const pluginId of MANAGED_PLUGIN_ENTRY_IDS) {
+                    if (config.plugins.entries[pluginId]) {
+                        pluginsToSave[pluginId] = config.plugins.entries[pluginId];
                     }
                 }
             }
@@ -245,6 +253,16 @@ export function ensurePluginAllowlist(currentConfig: OpenClawConfig, channelType
             plugins.allow = [...normalizedAllow, WECOM_PLUGIN_ID];
         } else if (normalizedAllow.length !== allow.length) {
             plugins.allow = normalizedAllow;
+        }
+        setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
+        return;
+    }
+
+    if (channelType === WEIXIN_CHANNEL_ID) {
+        const plugins = ensurePlugins();
+        const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
+        if (!allow.includes(WEIXIN_PLUGIN_ID)) {
+            plugins.allow = [...allow, WEIXIN_PLUGIN_ID];
         }
         setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
         return;
@@ -320,10 +338,35 @@ function setManagedChannelPluginEntryEnabled(
     }
 }
 
+function hasLegacyManagedPluginEntryEnabled(currentConfig: OpenClawConfig, channelType: string): boolean {
+    const pluginEntries = currentConfig.plugins?.entries;
+    if (!pluginEntries || typeof pluginEntries !== 'object') {
+        return false;
+    }
+
+    const pluginInstall = CHANNEL_PLUGIN_INSTALLS[channelType];
+    if (!pluginInstall) {
+        return false;
+    }
+
+    const candidateEntryIds = [pluginInstall.pluginId];
+    if (channelType === 'wecom') {
+        candidateEntryIds.push('wecom');
+    }
+    if (channelType === 'feishu') {
+        candidateEntryIds.push('feishu');
+    }
+
+    return candidateEntryIds.some((entryId) => {
+        const entry = pluginEntries[entryId];
+        return Boolean(entry && typeof entry === 'object' && (entry as ChannelConfigData).enabled !== false);
+    });
+}
+
 function isChannelEnabledForPluginAllowlist(currentConfig: OpenClawConfig, channelType: string): boolean {
     const channelSection = currentConfig.channels?.[channelType];
     if (!channelSection || typeof channelSection !== 'object') {
-        return false;
+        return hasLegacyManagedPluginEntryEnabled(currentConfig, channelType);
     }
 
     if (channelSection.enabled === false) {
@@ -762,7 +805,12 @@ export async function getChannelFormValues(channelType: string, accountId?: stri
 export async function deleteChannelAccountConfig(channelType: string, accountId: string): Promise<void> {
     const currentConfig = await readOpenClawConfig();
     const channelSection = currentConfig.channels?.[channelType];
-    if (!channelSection) return;
+    if (!channelSection) {
+        if (channelType === WEIXIN_CHANNEL_ID) {
+            await deleteWeixinAccountState(accountId);
+        }
+        return;
+    }
 
     migrateLegacyChannelConfigToAccounts(channelSection, DEFAULT_ACCOUNT_ID);
     const defaultAccountId = getResolvedDefaultAccountId(channelSection);
@@ -779,6 +827,10 @@ export async function deleteChannelAccountConfig(channelType: string, accountId:
         delete currentConfig.channels![channelType];
     } else {
         syncTopLevelFromDefaultAccount(channelSection, getResolvedDefaultAccountId(channelSection));
+    }
+
+    if (channelType === WEIXIN_CHANNEL_ID) {
+        await deleteWeixinAccountState(accountId);
     }
 
     await writeOpenClawConfig(currentConfig);
@@ -839,6 +891,10 @@ export async function deleteChannelConfig(channelType: string): Promise<void> {
             console.error('Failed to delete WhatsApp credentials:', error);
         }
     }
+
+    if (channelType === WEIXIN_CHANNEL_ID) {
+        await clearAllWeixinState();
+    }
 }
 
 export async function listConfiguredChannels(): Promise<string[]> {
@@ -884,6 +940,15 @@ export async function listConfiguredChannels(): Promise<string[]> {
         // Ignore errors checking whatsapp dir
     }
 
+    try {
+        const weixinAccountIds = await listWeixinAccountIds();
+        if (weixinAccountIds.length > 0 && !channels.includes(WEIXIN_CHANNEL_ID)) {
+            channels.push(WEIXIN_CHANNEL_ID);
+        }
+    } catch {
+        // Ignore errors checking weixin state dir
+    }
+
     return channels;
 }
 
@@ -891,11 +956,7 @@ export async function listConfiguredChannelAccounts(): Promise<Record<string, Co
     const config = await readOpenClawConfig();
     const summaries: Record<string, ConfiguredChannelSummary> = {};
 
-    if (!config.channels) {
-        return summaries;
-    }
-
-    for (const [channelType, section] of Object.entries(config.channels)) {
+    for (const [channelType, section] of Object.entries(config.channels ?? {})) {
         if (!section || typeof section !== 'object') {
             continue;
         }
@@ -922,6 +983,35 @@ export async function listConfiguredChannelAccounts(): Promise<Record<string, Co
 
         summaries[channelType] = {
             defaultAccount,
+            accounts: accountEntries,
+        };
+    }
+
+    const weixinAccountIds = await listWeixinAccountIds();
+    if (weixinAccountIds.length > 0) {
+        const channelSection = config.channels?.[WEIXIN_CHANNEL_ID];
+        const requestedDefault =
+            channelSection && typeof channelSection.defaultAccount === 'string' && channelSection.defaultAccount.trim()
+                ? channelSection.defaultAccount.trim()
+                : weixinAccountIds[0];
+        const configuredDefault = weixinAccountIds.includes(requestedDefault)
+            ? requestedDefault
+            : weixinAccountIds[0];
+        const accountConfigMap = ((channelSection?.accounts as Record<string, ChannelConfigData> | undefined) ?? {});
+        const accountEntries = [...new Set(weixinAccountIds)]
+            .sort((left, right) => {
+                if (left === configuredDefault) return -1;
+                if (right === configuredDefault) return 1;
+                return left.localeCompare(right);
+            })
+            .map((accountId) => ({
+                accountId,
+                enabled: accountConfigMap[accountId]?.enabled !== false,
+                isDefault: accountId === configuredDefault,
+            }));
+
+        summaries[WEIXIN_CHANNEL_ID] = {
+            defaultAccount: configuredDefault,
             accounts: accountEntries,
         };
     }

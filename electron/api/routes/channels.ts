@@ -15,11 +15,13 @@ import { assignChannelAccountToAgent, clearAllBindingsForChannel, clearChannelBi
 import { refreshGatewayAfterConfigChange } from '../../utils/gateway-refresh';
 import { whatsAppLoginManager } from '../../utils/whatsapp-login';
 import { weComLoginManager } from '../../utils/wecom-login';
+import { weixinLoginManager } from '../../utils/weixin-login';
 import {
   ensureDingTalkPluginInstalled,
   ensureFeishuPluginInstalled,
   ensureQQBotPluginInstalled,
   ensureWeComPluginInstalled,
+  ensureWeixinPluginInstalled,
 } from '../../utils/plugin-install';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -106,6 +108,27 @@ export async function handleChannelRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/channels/openclaw-weixin/start' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ accountId?: string }>(req);
+      await weixinLoginManager.start(body.accountId);
+      sendJson(res, 200, { success: true });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/channels/openclaw-weixin/cancel' && req.method === 'POST') {
+    try {
+      await weixinLoginManager.stop();
+      sendJson(res, 200, { success: true });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
   if (url.pathname === '/api/channels/config' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{
@@ -138,6 +161,13 @@ export async function handleChannelRoutes(
         const installResult = await ensureQQBotPluginInstalled();
         if (!installResult.installed) {
           sendJson(res, 500, { success: false, error: installResult.warning || 'QQ Bot bundled plugin unavailable' });
+          return true;
+        }
+      }
+      if (body.channelType === 'openclaw-weixin') {
+        const installResult = await ensureWeixinPluginInstalled();
+        if (!installResult.installed) {
+          sendJson(res, 500, { success: false, error: installResult.warning || 'Weixin bundled plugin unavailable' });
           return true;
         }
       }

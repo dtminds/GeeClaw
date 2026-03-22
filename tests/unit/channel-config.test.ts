@@ -412,6 +412,191 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.entries?.feishu?.enabled).toBe(false);
   });
 
+  it('enables the bundled openclaw-weixin plugin id when saving weixin config', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const bundledPluginPath = join('/tmp/geeclaw-test-app', 'build', 'openclaw-plugins', 'openclaw-weixin');
+    mkdirSync(bundledPluginPath, { recursive: true });
+    writeFileSync(join(bundledPluginPath, 'openclaw.plugin.json'), '{"id":"openclaw-weixin"}\n', 'utf8');
+    writeFileSync(join(bundledPluginPath, 'package.json'), '{"version":"1.0.2"}\n', 'utf8');
+
+    const { readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    await saveChannelConfig('openclaw-weixin', { enabled: true }, 'wx-bot');
+
+    const config = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, { enabled?: boolean }>;
+      };
+    };
+
+    expect(config.plugins?.allow).toContain('openclaw-weixin');
+    expect(config.plugins?.entries?.['openclaw-weixin']?.enabled).toBe(true);
+  });
+
+  it('preserves legacy managed plugin entries when saving weixin config', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const bundledPluginPath = join('/tmp/geeclaw-test-app', 'build', 'openclaw-plugins', 'openclaw-weixin');
+    mkdirSync(bundledPluginPath, { recursive: true });
+    writeFileSync(join(bundledPluginPath, 'openclaw.plugin.json'), '{"id":"openclaw-weixin"}\n', 'utf8');
+    writeFileSync(join(bundledPluginPath, 'package.json'), '{"version":"1.0.2"}\n', 'utf8');
+
+    const configDir = join(homeDir, '.openclaw-geeclaw');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      plugins: {
+        allow: ['wecom-openclaw-plugin'],
+        entries: {
+          'wecom-openclaw-plugin': {
+            enabled: true,
+          },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    await saveChannelConfig('openclaw-weixin', { enabled: true }, 'wx-bot');
+
+    const config = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, { enabled?: boolean }>;
+      };
+    };
+
+    expect(config.plugins?.allow).toContain('wecom-openclaw-plugin');
+    expect(config.plugins?.allow).toContain('openclaw-weixin');
+    expect(config.plugins?.entries?.['wecom-openclaw-plugin']?.enabled).toBe(true);
+    expect(config.plugins?.entries?.['openclaw-weixin']?.enabled).toBe(true);
+  });
+
+  it('persists managed plugin entries to the channel store using canonical plugin ids', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const bundledPluginPath = join('/tmp/geeclaw-test-app', 'build', 'openclaw-plugins', 'wecom-openclaw-plugin');
+    mkdirSync(bundledPluginPath, { recursive: true });
+    writeFileSync(join(bundledPluginPath, 'openclaw.plugin.json'), '{"id":"wecom-openclaw-plugin"}\n', 'utf8');
+    writeFileSync(join(bundledPluginPath, 'package.json'), '{"version":"1.0.6"}\n', 'utf8');
+
+    const { saveChannelConfig } = await import('@electron/utils/channel-config');
+    const { getGeeClawChannelStore } = await import('../../electron/services/channels/store-instance');
+
+    await saveChannelConfig('wecom', { enabled: true }, 'default');
+
+    const store = await getGeeClawChannelStore();
+    const storedPlugins = store.get('plugins') as Record<string, { enabled?: boolean }> | undefined;
+
+    expect(storedPlugins?.['wecom-openclaw-plugin']?.enabled).toBe(true);
+    expect(storedPlugins?.wecom).toBeUndefined();
+  });
+
+  it('lists weixin accounts discovered from plugin state files', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { saveWeixinAccountState } = await import('@electron/utils/weixin-state');
+    const { listConfiguredChannelAccounts } = await import('@electron/utils/channel-config');
+
+    await saveWeixinAccountState('wx-bot@im.bot', {
+      token: 'token-1',
+      baseUrl: 'https://ilinkai.weixin.qq.com',
+      userId: 'user@im.wechat',
+    });
+
+    const summaries = await listConfiguredChannelAccounts();
+
+    expect(summaries['openclaw-weixin']).toEqual({
+      defaultAccount: 'wx-bot-im-bot',
+      accounts: [
+        {
+          accountId: 'wx-bot-im-bot',
+          enabled: true,
+          isDefault: true,
+        },
+      ],
+    });
+  });
+
   it('removes managed channel plugin ids from allow when the channel is disabled', async () => {
     const { reconcileManagedChannelPluginConfig } = await import('@electron/utils/channel-config');
     const config = {

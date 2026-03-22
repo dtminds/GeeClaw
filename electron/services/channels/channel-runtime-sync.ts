@@ -3,6 +3,8 @@ import { readOpenClawConfig, reconcileManagedChannelPluginConfig, type OpenClawC
 import { mutateOpenClawConfigDocument } from '../../utils/openclaw-config-coordinator';
 import { isDeepStrictEqual } from 'node:util';
 
+const MANAGED_PLUGIN_ENTRY_IDS = ['whatsapp', 'dingtalk', 'wecom-openclaw-plugin', 'openclaw-weixin', 'openclaw-lark', 'qqbot'];
+
 const MANAGED_SESSION_DM_SCOPE = 'per-channel-peer';
 const MANAGED_SESSION_RESET_MODE = 'daily';
 const MANAGED_SESSION_RESET_AT_HOUR = 4;
@@ -253,13 +255,12 @@ async function migrateOpenClawConfigToStore(): Promise<void> {
   }
 
   if (config.plugins?.entries && Object.keys(config.plugins.entries).length > 0) {
-    // We only care about plugin channels like whatsapp, feishu
-    const pluginChannels = ['whatsapp', 'wecom', 'feishu', 'dingtalk', 'qqbot'];
+    // We only care about managed plugin-backed channels here.
     const entriesToSave: Record<string, unknown> = {};
     
-    for (const type of pluginChannels) {
-      if (config.plugins.entries[type]) {
-        entriesToSave[type] = config.plugins.entries[type];
+    for (const pluginId of MANAGED_PLUGIN_ENTRY_IDS) {
+      if (config.plugins.entries[pluginId]) {
+        entriesToSave[pluginId] = config.plugins.entries[pluginId];
       }
     }
     

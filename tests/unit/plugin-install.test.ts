@@ -24,6 +24,7 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
   const pluginDefs = [
     { pluginId: 'dingtalk', packageName: '@soimy/dingtalk' },
     { pluginId: 'wecom-openclaw-plugin', packageName: '@wecom/wecom-openclaw-plugin' },
+    { pluginId: 'openclaw-weixin', packageName: '@tencent-weixin/openclaw-weixin' },
     { pluginId: 'qqbot', packageName: '@sliverp/qqbot' },
     { pluginId: 'openclaw-lark', packageName: '@larksuite/openclaw-lark' },
     { pluginId: 'lossless-claw', packageName: '@martian-engineering/lossless-claw' },
