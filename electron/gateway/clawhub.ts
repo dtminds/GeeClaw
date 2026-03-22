@@ -326,18 +326,24 @@ export class ClawHubService {
     }
 
     private resolveSystemCliCandidate(name: SkillMarketplaceCliName): SkillMarketplaceCliCandidate | null {
-        const homeDir = process.env.HOME?.trim();
+        const knownInstallLocations = getSkillHubInstallLocations();
         const pathEntries = (process.env.PATH || '')
             .split(path.delimiter)
             .map((entry) => entry.trim())
             .filter(Boolean);
-        const preferredEntries = homeDir
-            ? [
+        const homeDirs = [
+            process.env.HOME?.trim(),
+            process.platform === 'win32' ? process.env.USERPROFILE?.trim() : undefined,
+            knownInstallLocations.homeDir.trim(),
+        ].filter((value): value is string => Boolean(value));
+        const preferredEntries = [
+            ...(name === 'skillhub' ? [knownInstallLocations.binDir] : []),
+            ...homeDirs.flatMap((homeDir) => [
                 path.join(homeDir, '.local', 'bin'),
                 path.join(homeDir, '.skillhub', 'bin'),
-                ...pathEntries,
-            ]
-            : pathEntries;
+            ]),
+            ...pathEntries,
+        ];
         const seenPaths = new Set<string>();
         const executableNames = process.platform === 'win32'
             ? [`${name}.cmd`, `${name}.exe`, `${name}.bat`, name]
