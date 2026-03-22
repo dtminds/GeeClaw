@@ -122,7 +122,6 @@
         "skillHub": {
             "title": "Recommended: install SkillHub",
             "description": "SkillHub prefers a China-optimized mirror and usually avoids the frequent rate-limit failures from the public installer. GeeClaw will automatically prepare Python and install the SkillHub CLI for you.",
-            "fallback": "Until then, marketplace installs still fall back to ClawHub. Once SkillHub is installed, new installs will prefer it automatically.",
             "install": "Install SkillHub",
             "enabled": "SkillHub acceleration enabled (v{{version}})"
         },

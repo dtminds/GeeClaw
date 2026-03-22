@@ -122,7 +122,6 @@
         "skillHub": {
             "title": "推荐安装 SkillHub",
             "description": "SkillHub 会优先使用国内镜像源，通常能显著降低技能安装失败和请求频繁的问题。点击后 GeeClaw 会自动准备 Python 并安装 SkillHub CLI。",
-            "fallback": "当前仍会回退到 ClawHub 安装器；安装 SkillHub 后，新安装将优先走 SkillHub。",
             "install": "安装 SkillHub",
             "enabled": "SkillHub 加速已启用（v{{version}}）"
         },

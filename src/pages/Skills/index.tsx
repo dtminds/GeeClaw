@@ -1253,9 +1253,6 @@ export function Skills() {
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {t('marketplace.skillHub.description')}
                         </p>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {t('marketplace.skillHub.fallback')}
-                        </p>
                       </div>
                       <Button
                         type="button"
