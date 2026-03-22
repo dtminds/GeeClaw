@@ -39,6 +39,12 @@ type ClawHubListResult = {
   baseDir?: string;
 };
 
+type SkillUninstallTarget = string | {
+  slug?: string;
+  skillKey?: string;
+  baseDir?: string;
+};
+
 type SkillPolicyResult = {
   alwaysEnabledSkillKeys?: string[];
 };
@@ -92,7 +98,7 @@ interface SkillsState {
   fetchMarketplaceCatalog: (force?: boolean) => Promise<void>;
   fetchCategorySkills: (categoryId: string, page: number, keyword: string) => Promise<void>;
   installSkill: (slug: string, version?: string) => Promise<void>;
-  uninstallSkill: (slug: string) => Promise<void>;
+  uninstallSkill: (target: SkillUninstallTarget) => Promise<void>;
   enableSkill: (skillId: string) => Promise<void>;
   disableSkill: (skillId: string) => Promise<void>;
   setSkills: (skills: Skill[]) => void;
@@ -338,12 +344,17 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  uninstallSkill: async (slug: string) => {
-    set((state) => ({ installing: { ...state.installing, [slug]: true } }));
+  uninstallSkill: async (target: SkillUninstallTarget) => {
+    const requestBody = typeof target === 'string'
+      ? { slug: target }
+      : target;
+    const installKey = requestBody.slug || requestBody.skillKey || requestBody.baseDir || 'unknown';
+
+    set((state) => ({ installing: { ...state.installing, [installKey]: true } }));
     try {
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/clawhub/uninstall', {
         method: 'POST',
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify(requestBody),
       });
       if (!result.success) {
         throw new Error(result.error || 'Uninstall failed');
@@ -356,7 +367,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     } finally {
       set((state) => {
         const newInstalling = { ...state.installing };
-        delete newInstalling[slug];
+        delete newInstalling[installKey];
         return { installing: newInstalling };
       });
     }

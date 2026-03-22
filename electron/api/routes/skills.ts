@@ -149,7 +149,7 @@ export async function handleSkillRoutes(
 
   if (url.pathname === '/api/clawhub/uninstall' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<{ slug: string }>(req);
+      const body = await parseJsonBody<{ slug?: string; skillKey?: string; baseDir?: string }>(req);
       await ctx.clawHubService.uninstall(body);
       sendJson(res, 200, { success: true });
     } catch (error) {

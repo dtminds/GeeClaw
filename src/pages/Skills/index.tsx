@@ -34,9 +34,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useSkillsStore } from '@/stores/skills';
 import { useGatewayStore } from '@/stores/gateway';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -57,7 +56,7 @@ interface SkillDetailDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
-  onUninstall?: (slug: string) => void;
+  onUninstall?: (skill: Pick<Skill, 'id' | 'slug' | 'baseDir'>) => Promise<void> | void;
   onOpenFolder?: (skill: Skill) => Promise<void> | void;
 }
 
@@ -210,12 +209,13 @@ function getSkillIssueMessages(skill: Skill, labels: SkillIssueLabels): string[]
   return issues;
 }
 
-function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
+export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
   const { t } = useTranslation(['skills', 'common']);
   const { fetchSkills } = useSkillsStore();
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   const [apiKey, setApiKey] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUninstalling, setIsUninstalling] = useState(false);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const issueLabels: SkillIssueLabels = {
     unavailable: t('detail.unavailable'),
@@ -256,6 +256,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
   useEffect(() => {
     if (!isOpen) {
       setShowUninstallConfirm(false);
+      setIsUninstalling(false);
     }
   }, [isOpen]);
 
@@ -338,6 +339,12 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
           className="app-canvas flex w-full flex-col border-l border-black/10 p-0 shadow-xl dark:border-white/10 sm:max-w-[500px]"
           side="right"
         >
+        <SheetHeader className="sr-only">
+          <SheetTitle>{skill.name}</SheetTitle>
+          <SheetDescription>
+            {skill.description || t('subtitle') || 'Browse and manage AI capabilities.'}
+          </SheetDescription>
+        </SheetHeader>
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mb-6 flex items-start gap-4 text-left">
             <div className="surface-muted relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-black/10 text-2xl dark:border-white/10">
@@ -534,7 +541,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
                 variant={!skill.isBundled && onUninstall ? 'destructive' : 'outline'}
                 className="h-10 rounded-xl px-4 text-[13px] font-medium"
                 onClick={() => {
-                  if (!skill.isBundled && onUninstall && skill.slug) {
+                  if (!skill.isBundled && onUninstall) {
                     setShowUninstallConfirm(true);
                   } else {
                     onToggle(!skill.enabled);
@@ -552,21 +559,50 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
         </SheetContent>
       </Sheet>
 
-      <ConfirmDialog
-        open={showUninstallConfirm}
-        title={t('detail.uninstallConfirmTitle', 'Confirm uninstall')}
-        message={t('detail.uninstallConfirmMessage', { name: skill.name })}
-        confirmLabel={t('detail.uninstall', 'Uninstall')}
-        cancelLabel={t('common:cancel', 'Cancel')}
-        variant="destructive"
-        onConfirm={async () => {
-          if (!skill.slug || !onUninstall) return;
-          await onUninstall(skill.slug);
-          setShowUninstallConfirm(false);
-          onClose();
-        }}
-        onCancel={() => setShowUninstallConfirm(false)}
-      />
+      <Dialog open={showUninstallConfirm} onOpenChange={setShowUninstallConfirm}>
+        <DialogContent className="w-[min(420px,calc(100vw-2rem))] max-w-[420px] rounded-[16px] p-0">
+          <div className="p-6">
+            <DialogHeader>
+              <DialogTitle>{t('detail.uninstallConfirmTitle', 'Confirm uninstall')}</DialogTitle>
+              <DialogDescription>
+                {t('detail.uninstallConfirmMessage', { name: skill.name })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowUninstallConfirm(false)}
+                disabled={isUninstalling}
+              >
+                {t('common:cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={isUninstalling}
+                onClick={async () => {
+                  if (!onUninstall || isUninstalling) return;
+                  setIsUninstalling(true);
+                  try {
+                    await onUninstall({
+                      id: skill.id,
+                      slug: skill.slug,
+                      baseDir: skill.baseDir,
+                    });
+                    setShowUninstallConfirm(false);
+                    onClose();
+                  } finally {
+                    setIsUninstalling(false);
+                  }
+                }}
+              >
+                {isUninstalling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : t('detail.uninstall', 'Uninstall')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -623,6 +659,12 @@ function MarketplaceDetailDialog({
         className="w-[min(880px,calc(100vw-2rem))] max-w-[880px] overflow-hidden rounded-[16px] border border-black/8 bg-background p-0 shadow-[0_32px_110px_-42px_rgba(15,23,42,0.42)] dark:border-white/10"
         closeButtonClassName="right-5 top-5 h-8 w-8 border-0 bg-transparent text-foreground/55 hover:bg-transparent hover:text-foreground dark:bg-transparent dark:hover:bg-transparent"
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{skill.name}</DialogTitle>
+          <DialogDescription>
+            {skill.description || t('marketplace.emptyPrompt')}
+          </DialogDescription>
+        </DialogHeader>
         <div className="flex max-h-[min(88vh,760px)] flex-col overflow-hidden">
           <div className="px-8 py-7 dark:border-white/10">
             <div className="flex items-start gap-5 pr-12">
@@ -999,9 +1041,17 @@ export function Skills() {
   }
 
   // Handle uninstall
-  const handleUninstall = useCallback(async (slug: string) => {
+  const handleUninstall = useCallback(async (target: string | Pick<Skill, 'id' | 'slug' | 'baseDir'>) => {
     try {
-      await uninstallSkill(slug);
+      if (typeof target === 'string') {
+        await uninstallSkill(target);
+      } else {
+        await uninstallSkill({
+          slug: target.slug,
+          skillKey: target.id,
+          baseDir: target.baseDir,
+        });
+      }
       toast.success(t('toast.uninstalled'));
     } catch (err) {
       toast.error(t('toast.failedUninstall') + ': ' + String(err));

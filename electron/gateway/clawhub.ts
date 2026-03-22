@@ -27,7 +27,9 @@ export interface ClawHubInstallParams {
 }
 
 export interface ClawHubUninstallParams {
-    slug: string;
+    slug?: string;
+    skillKey?: string;
+    baseDir?: string;
 }
 
 export interface ClawHubSkillResult {
@@ -401,13 +403,18 @@ export class ClawHubService {
         return message.includes('rate limit') || message.includes('429');
     }
 
-    private readManagedLockfile(): SkillLockfile {
-        const candidatePaths = [
+    private getManagedLockfilePaths(): string[] {
+        return [
             path.join(this.workDir, '.clawhub', 'lock.json'),
             path.join(this.workDir, '.clawdhub', 'lock.json'),
         ];
+    }
 
-        for (const candidatePath of candidatePaths) {
+    private readManagedLockfile(): SkillLockfile {
+        const mergedLock: SkillLockfile = { version: 1, skills: {} };
+        let hasParsedLockfile = false;
+
+        for (const candidatePath of this.getManagedLockfilePaths()) {
             if (!fs.existsSync(candidatePath)) {
                 continue;
             }
@@ -416,14 +423,58 @@ export class ClawHubService {
                 const raw = fs.readFileSync(candidatePath, 'utf8');
                 const parsed = JSON.parse(raw) as SkillLockfile;
                 if (parsed && typeof parsed === 'object') {
-                    return parsed;
+                    hasParsedLockfile = true;
+                    if (typeof parsed.version === 'number') {
+                        mergedLock.version = parsed.version;
+                    }
+                    if (parsed.skills && typeof parsed.skills === 'object') {
+                        mergedLock.skills = {
+                            ...(mergedLock.skills || {}),
+                            ...parsed.skills,
+                        };
+                    }
                 }
             } catch (error) {
                 console.warn(`Failed to read skill lockfile at ${candidatePath}:`, error);
             }
         }
 
-        return { version: 1, skills: {} };
+        return hasParsedLockfile ? mergedLock : { version: 1, skills: {} };
+    }
+
+    private resolveUninstallTargets(params: ClawHubUninstallParams): {
+        skillDir: string | null;
+        lockKeys: string[];
+    } {
+        const lockKeys = new Set<string>();
+        const normalizedSlug = params.slug?.trim();
+        const normalizedSkillKey = params.skillKey?.trim();
+
+        if (normalizedSlug) {
+            lockKeys.add(normalizedSlug);
+        }
+        if (normalizedSkillKey) {
+            lockKeys.add(normalizedSkillKey);
+        }
+
+        const skillDir = this.resolveSkillDir(
+            normalizedSkillKey || normalizedSlug || '',
+            normalizedSlug,
+            params.baseDir,
+        );
+
+        if (skillDir) {
+            lockKeys.add(path.basename(skillDir));
+            const manifestName = this.extractFrontmatterName(path.join(skillDir, 'SKILL.md'));
+            if (manifestName) {
+                lockKeys.add(manifestName);
+            }
+        }
+
+        return {
+            skillDir,
+            lockKeys: [...lockKeys],
+        };
     }
 
     private isSkillInstalledLocally(slug: string): boolean {
@@ -898,26 +949,41 @@ export class ClawHubService {
      */
     async uninstall(params: ClawHubUninstallParams): Promise<void> {
         const fsPromises = fs.promises;
+        const { skillDir, lockKeys } = this.resolveUninstallTargets(params);
 
         // 1. Delete the skill directory
-        const skillDir = path.join(this.workDir, 'skills', params.slug);
-        if (fs.existsSync(skillDir)) {
+        if (skillDir && fs.existsSync(skillDir)) {
             console.log(`Deleting skill directory: ${skillDir}`);
             await fsPromises.rm(skillDir, { recursive: true, force: true });
         }
 
-        // 2. Remove from lock.json
-        const lockFile = path.join(this.workDir, '.clawhub', 'lock.json');
-        if (fs.existsSync(lockFile)) {
+        // 2. Remove from all managed lockfiles
+        for (const lockFile of this.getManagedLockfilePaths()) {
+            if (!fs.existsSync(lockFile)) {
+                continue;
+            }
+
             try {
-                const lockData = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
-                if (lockData.skills && lockData.skills[params.slug]) {
-                    console.log(`Removing ${params.slug} from lock.json`);
-                    delete lockData.skills[params.slug];
+                const lockData = JSON.parse(fs.readFileSync(lockFile, 'utf8')) as SkillLockfile;
+                if (!lockData.skills || typeof lockData.skills !== 'object') {
+                    continue;
+                }
+
+                let didUpdate = false;
+                for (const key of lockKeys) {
+                    if (!key || !lockData.skills[key]) {
+                        continue;
+                    }
+                    console.log(`Removing ${key} from ${lockFile}`);
+                    delete lockData.skills[key];
+                    didUpdate = true;
+                }
+
+                if (didUpdate) {
                     await fsPromises.writeFile(lockFile, JSON.stringify(lockData, null, 2));
                 }
             } catch (err) {
-                console.error('Failed to update ClawHub lock file:', err);
+                console.error(`Failed to update skill lock file at ${lockFile}:`, err);
             }
         }
     }
