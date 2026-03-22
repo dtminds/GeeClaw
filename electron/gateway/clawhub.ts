@@ -417,10 +417,7 @@ export class ClawHubService {
         }
 
         const candidatePaths = [
-            path.join(app.getAppPath(), 'src', 'assets', 'skills', 'skills.json'),
-            path.join(process.resourcesPath, 'skills', 'skills.json'),
             path.join(getResourcesDir(), 'skills', 'skills.json'),
-            path.join(getResourcesDir(), 'skills', 'bundles.json'),
         ];
 
         let lastError: unknown = null;
@@ -447,40 +444,6 @@ export class ClawHubService {
                         skills: allSkills,
                         featured,
                         categories: this.buildCategoryIndex(allSkills, parsed.categories),
-                    };
-
-                    return this.marketplaceCatalogCache;
-                }
-
-                // Backward-compatible fallback for older bundles-only files.
-                if (Array.isArray(parsed.bundles)) {
-                    const uniqueSlugs = new Set<string>();
-                    const orderedSlugs: string[] = [];
-
-                    for (const bundle of parsed.bundles) {
-                        if (!Array.isArray(bundle.skills)) continue;
-                        for (const slug of bundle.skills) {
-                            if (uniqueSlugs.has(slug)) continue;
-                            uniqueSlugs.add(slug);
-                            orderedSlugs.push(slug);
-                            if (orderedSlugs.length >= 50) break;
-                        }
-                        if (orderedSlugs.length >= 50) break;
-                    }
-
-                    const allSkills = orderedSlugs.map((slug) => ({
-                        slug,
-                        name: slug,
-                        version: 'latest',
-                        description: '',
-                        tags: [],
-                    }));
-
-                    this.marketplaceCatalogCache = {
-                        total: allSkills.length,
-                        skills: allSkills,
-                        featured: orderedSlugs,
-                        categories: {},
                     };
 
                     return this.marketplaceCatalogCache;
