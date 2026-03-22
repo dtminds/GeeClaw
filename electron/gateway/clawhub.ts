@@ -1,12 +1,12 @@
 /**
  * ClawHub Service
- * Manages interactions with the ClawHub CLI for skills management
+ * Manages interactions with skill marketplace CLIs for skills management.
  */
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { app, shell } from 'electron';
-import { getOpenClawConfigDir, getResourcesDir, ensureDir, getClawHubCliBinPath, getClawHubCliEntryPath, quoteForCmd } from '../utils/paths';
+import { getOpenClawConfigDir, getResourcesDir, ensureDir, quoteForCmd } from '../utils/paths';
 
 export interface ClawHubSearchParams {
     query: string;
@@ -80,12 +80,27 @@ interface ClawHubCatalogResult {
     categories: Record<string, string[]>;
 }
 
+type SkillMarketplaceCliName = 'clawhub' | 'skillhub';
+
+interface SkillMarketplaceCliCandidate {
+    name: SkillMarketplaceCliName;
+    binName: string;
+    cliPath: string;
+    cliEntryPath?: string;
+    useNodeRunner: boolean;
+}
+
+interface SkillLockfile {
+    version?: number;
+    skills?: Record<string, {
+        version?: string;
+        installedAt?: number;
+    }>;
+}
+
 export class ClawHubService {
     private workDir: string;
-    private cliPath: string;
-    private cliEntryPath: string;
-    private useNodeRunner: boolean;
-    private ansiRegex: RegExp;
+    private cliCandidates: SkillMarketplaceCliCandidate[];
     private marketplaceCatalogCache: ClawHubCatalogResult | null = null;
 
     constructor() {
@@ -94,25 +109,7 @@ export class ClawHubService {
         this.workDir = getOpenClawConfigDir();
         ensureDir(this.workDir);
 
-        const binPath = getClawHubCliBinPath();
-        const entryPath = getClawHubCliEntryPath();
-
-        this.cliEntryPath = entryPath;
-        if (!app.isPackaged && fs.existsSync(binPath)) {
-            this.cliPath = binPath;
-            this.useNodeRunner = false;
-        } else {
-            this.cliPath = process.execPath;
-            this.useNodeRunner = true;
-        }
-        const esc = String.fromCharCode(27);
-        const csi = String.fromCharCode(155);
-        const pattern = `(?:${esc}|${csi})[[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]`;
-        this.ansiRegex = new RegExp(pattern, 'g');
-    }
-
-    private stripAnsi(line: string): string {
-        return line.replace(this.ansiRegex, '').trim();
+        this.cliCandidates = this.resolveCliCandidates();
     }
 
     private extractFrontmatterName(skillManifestPath: string): string | null {
@@ -219,6 +216,178 @@ export class ClawHubService {
         return mergedCategories;
     }
 
+    private resolveCliCandidates(): SkillMarketplaceCliCandidate[] {
+        const orderedNames: SkillMarketplaceCliName[] = ['skillhub', 'clawhub'];
+        return orderedNames
+            .map((name) => this.resolveCliCandidate(name))
+            .filter((candidate): candidate is SkillMarketplaceCliCandidate => candidate !== null);
+    }
+
+    private resolveCliCandidate(name: SkillMarketplaceCliName): SkillMarketplaceCliCandidate | null {
+        const systemCandidate = this.resolveSystemCliCandidate(name);
+        if (systemCandidate) {
+            return systemCandidate;
+        }
+
+        const appPath = app.getAppPath();
+        const packageDir = path.join(appPath, 'node_modules', name);
+        const packageJsonPath = path.join(packageDir, 'package.json');
+
+        if (!fs.existsSync(packageJsonPath)) {
+            return null;
+        }
+
+        try {
+            const raw = fs.readFileSync(packageJsonPath, 'utf8');
+            const parsed = JSON.parse(raw) as { bin?: string | Record<string, string> };
+            const binField = parsed.bin;
+
+            let binEntry: string | null = null;
+            if (typeof binField === 'string') {
+                binEntry = binField;
+            } else if (binField && typeof binField === 'object') {
+                const namedEntry = binField[name];
+                if (typeof namedEntry === 'string' && namedEntry.trim()) {
+                    binEntry = namedEntry;
+                } else {
+                    const firstEntry = Object.values(binField).find((value) => typeof value === 'string' && value.trim());
+                    if (typeof firstEntry === 'string') {
+                        binEntry = firstEntry;
+                    }
+                }
+            }
+
+            if (!binEntry) {
+                return null;
+            }
+
+            const cliEntryPath = path.join(packageDir, binEntry);
+            const binFileName = process.platform === 'win32' ? `${name}.cmd` : name;
+            const binPath = path.join(appPath, 'node_modules', '.bin', binFileName);
+            const useNodeRunner = app.isPackaged || !fs.existsSync(binPath);
+            const cliPath = useNodeRunner ? process.execPath : binPath;
+
+            if (useNodeRunner && !fs.existsSync(cliEntryPath)) {
+                return null;
+            }
+
+            return {
+                name,
+                binName: name,
+                cliPath,
+                cliEntryPath,
+                useNodeRunner,
+            };
+        } catch (error) {
+            console.warn(`Failed to resolve ${name} CLI candidate:`, error);
+            return null;
+        }
+    }
+
+    private resolveSystemCliCandidate(name: SkillMarketplaceCliName): SkillMarketplaceCliCandidate | null {
+        const homeDir = process.env.HOME?.trim();
+        const pathEntries = (process.env.PATH || '')
+            .split(path.delimiter)
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+        const preferredEntries = homeDir ? [path.join(homeDir, '.local', 'bin'), ...pathEntries] : pathEntries;
+        const seenPaths = new Set<string>();
+        const executableNames = process.platform === 'win32'
+            ? [`${name}.cmd`, `${name}.exe`, `${name}.bat`, name]
+            : [name];
+
+        for (const entry of preferredEntries) {
+            for (const executableName of executableNames) {
+                const candidatePath = path.join(entry, executableName);
+                if (seenPaths.has(candidatePath)) {
+                    continue;
+                }
+                seenPaths.add(candidatePath);
+
+                if (!fs.existsSync(candidatePath)) {
+                    continue;
+                }
+
+                return {
+                    name,
+                    binName: executableName,
+                    cliPath: candidatePath,
+                    useNodeRunner: false,
+                };
+            }
+        }
+
+        return null;
+    }
+
+    private getOrderedCliCandidates(preferredOrder?: SkillMarketplaceCliName[]): SkillMarketplaceCliCandidate[] {
+        const order: SkillMarketplaceCliName[] = preferredOrder && preferredOrder.length > 0
+            ? preferredOrder
+            : ['skillhub', 'clawhub'];
+        const byName = new Map(this.cliCandidates.map((candidate) => [candidate.name, candidate]));
+        const ordered: SkillMarketplaceCliCandidate[] = [];
+
+        for (const name of order) {
+            const candidate = byName.get(name);
+            if (candidate) {
+                ordered.push(candidate);
+            }
+        }
+
+        for (const candidate of this.cliCandidates) {
+            if (!ordered.some((entry) => entry.name === candidate.name)) {
+                ordered.push(candidate);
+            }
+        }
+
+        return ordered;
+    }
+
+    private isRateLimitError(error: unknown): boolean {
+        const message = String(error).toLowerCase();
+        return message.includes('rate limit') || message.includes('429');
+    }
+
+    private readManagedLockfile(): SkillLockfile {
+        const candidatePaths = [
+            path.join(this.workDir, '.clawhub', 'lock.json'),
+            path.join(this.workDir, '.clawdhub', 'lock.json'),
+        ];
+
+        for (const candidatePath of candidatePaths) {
+            if (!fs.existsSync(candidatePath)) {
+                continue;
+            }
+
+            try {
+                const raw = fs.readFileSync(candidatePath, 'utf8');
+                const parsed = JSON.parse(raw) as SkillLockfile;
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch (error) {
+                console.warn(`Failed to read skill lockfile at ${candidatePath}:`, error);
+            }
+        }
+
+        return { version: 1, skills: {} };
+    }
+
+    private isSkillInstalledLocally(slug: string): boolean {
+        const normalizedSlug = slug.trim();
+        if (!normalizedSlug) {
+            return false;
+        }
+
+        const skillDir = path.join(this.workDir, 'skills', normalizedSlug);
+        if (fs.existsSync(skillDir)) {
+            return true;
+        }
+
+        const lock = this.readManagedLockfile();
+        return Boolean(lock.skills?.[normalizedSlug]);
+    }
+
     async getMarketplaceCatalog(): Promise<ClawHubCatalogResult> {
         if (this.marketplaceCatalogCache) {
             return this.marketplaceCatalogCache;
@@ -306,42 +475,85 @@ export class ClawHubService {
     /**
      * Run a ClawHub CLI command
      */
-    private async runCommand(args: string[]): Promise<string> {
+    private async runCommand(
+        args: string[],
+        options: {
+            preferredOrder?: SkillMarketplaceCliName[];
+            retryOnRateLimit?: boolean;
+        } = {},
+    ): Promise<string> {
+        const candidates = this.getOrderedCliCandidates(options.preferredOrder);
+
+        if (candidates.length === 0) {
+            throw new Error('No skill marketplace CLI found. Expected one of: clawhub, skillhub');
+        }
+
+        let lastError: unknown = null;
+
+        for (let index = 0; index < candidates.length; index += 1) {
+            const candidate = candidates[index];
+
+            try {
+                return await this.runCommandWithCandidate(candidate, args);
+            } catch (error) {
+                lastError = error;
+                const hasNextCandidate = index < candidates.length - 1;
+                const shouldRetryWithFallback = hasNextCandidate
+                    && options.retryOnRateLimit
+                    && this.isRateLimitError(error);
+
+                if (!shouldRetryWithFallback) {
+                    throw error;
+                }
+
+                console.warn(
+                    `${candidate.name} install hit rate limit, retrying with ${candidates[index + 1].name}: ${String(error)}`,
+                );
+            }
+        }
+
+        throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    }
+
+    private async runCommandWithCandidate(candidate: SkillMarketplaceCliCandidate, args: string[]): Promise<string> {
         return new Promise((resolve, reject) => {
-            if (this.useNodeRunner && !fs.existsSync(this.cliEntryPath)) {
-                reject(new Error(`ClawHub CLI entry not found at: ${this.cliEntryPath}`));
+            if (candidate.useNodeRunner && (!candidate.cliEntryPath || !fs.existsSync(candidate.cliEntryPath))) {
+                reject(new Error(`${candidate.name} CLI entry not found at: ${candidate.cliEntryPath}`));
                 return;
             }
 
-            if (!this.useNodeRunner && !fs.existsSync(this.cliPath)) {
-                reject(new Error(`ClawHub CLI not found at: ${this.cliPath}`));
+            if (!candidate.useNodeRunner && !fs.existsSync(candidate.cliPath)) {
+                reject(new Error(`${candidate.name} CLI not found at: ${candidate.cliPath}`));
                 return;
             }
 
-            const commandArgs = this.useNodeRunner ? [this.cliEntryPath, ...args] : args;
-            const displayCommand = [this.cliPath, ...commandArgs].join(' ');
-            console.log(`Running ClawHub command: ${displayCommand}`);
+            const normalizedArgs = this.normalizeArgsForCandidate(candidate, args);
+            const commandArgs = candidate.useNodeRunner && candidate.cliEntryPath
+                ? [candidate.cliEntryPath, ...normalizedArgs]
+                : normalizedArgs;
+            const displayCommand = [candidate.cliPath, ...commandArgs].join(' ');
+            console.log(`Running ${candidate.name} command: ${displayCommand}`);
 
             const isWin = process.platform === 'win32';
-            const useShell = isWin && !this.useNodeRunner;
+            const useShell = isWin && !candidate.useNodeRunner;
             const { NODE_OPTIONS: _nodeOptions, ...baseEnv } = process.env;
             const env = {
                 ...baseEnv,
                 CI: 'true',
                 FORCE_COLOR: '0',
-            };
-            if (this.useNodeRunner) {
+                CLAWHUB_WORKDIR: this.workDir,
+            } as NodeJS.ProcessEnv;
+
+            if (candidate.useNodeRunner) {
                 env.ELECTRON_RUN_AS_NODE = '1';
             }
-            const spawnCmd = useShell ? quoteForCmd(this.cliPath) : this.cliPath;
-            const spawnArgs = useShell ? commandArgs.map(a => quoteForCmd(a)) : commandArgs;
+
+            const spawnCmd = useShell ? quoteForCmd(candidate.cliPath) : candidate.cliPath;
+            const spawnArgs = useShell ? commandArgs.map((arg) => quoteForCmd(arg)) : commandArgs;
             const child = spawn(spawnCmd, spawnArgs, {
                 cwd: this.workDir,
                 shell: useShell,
-                env: {
-                    ...env,
-                    CLAWHUB_WORKDIR: this.workDir,
-                },
+                env,
                 windowsHide: true,
             });
 
@@ -357,13 +569,13 @@ export class ClawHubService {
             });
 
             child.on('error', (error) => {
-                console.error('ClawHub process error:', error);
+                console.error(`${candidate.name} process error:`, error);
                 reject(error);
             });
 
             child.on('close', (code) => {
                 if (code !== 0 && code !== null) {
-                    console.error(`ClawHub command failed with code ${code}`);
+                    console.error(`${candidate.name} command failed with code ${code}`);
                     console.error('Stderr:', stderr);
                     reject(new Error(`Command failed: ${stderr || stdout}`));
                 } else {
@@ -371,6 +583,28 @@ export class ClawHubService {
                 }
             });
         });
+    }
+
+    private normalizeArgsForCandidate(candidate: SkillMarketplaceCliCandidate, args: string[]): string[] {
+        if (candidate.name !== 'skillhub' || args[0] !== 'install') {
+            return [...args];
+        }
+
+        const normalized: string[] = [];
+        for (let index = 0; index < args.length; index += 1) {
+            const value = args[index];
+            if (value === '--version') {
+                const requestedVersion = args[index + 1];
+                console.warn(
+                    `skillhub does not support version-pinned install requests; ignoring requested version "${requestedVersion || ''}"`,
+                );
+                index += 1;
+                continue;
+            }
+            normalized.push(value);
+        }
+
+        return normalized;
     }
 
     /**
@@ -428,6 +662,11 @@ export class ClawHubService {
      * Install a skill
      */
     async install(params: ClawHubInstallParams): Promise<void> {
+        if (!params.force && this.isSkillInstalledLocally(params.slug)) {
+            console.log(`Skipping install for already-installed skill: ${params.slug}`);
+            return;
+        }
+
         const args = ['install', params.slug];
 
         if (params.version) {
@@ -438,7 +677,10 @@ export class ClawHubService {
             args.push('--force');
         }
 
-        await this.runCommand(args);
+        await this.runCommand(args, {
+            preferredOrder: ['skillhub', 'clawhub'],
+            retryOnRateLimit: true,
+        });
     }
 
     /**
@@ -475,26 +717,15 @@ export class ClawHubService {
      */
     async listInstalled(): Promise<ClawHubInstalledSkillResult[]> {
         try {
-            const output = await this.runCommand(['list']);
-            if (!output || output.includes('No installed skills')) {
-                return [];
-            }
+            const lock = this.readManagedLockfile();
+            const entries = Object.entries(lock.skills || {});
 
-            const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(line => {
-                const cleanLine = this.stripAnsi(line);
-                const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)/);
-                if (match) {
-                    const slug = match[1];
-                    return {
-                        slug,
-                        version: match[2],
-                        source: 'openclaw-managed',
-                        baseDir: path.join(this.workDir, 'skills', slug),
-                    };
-                }
-                return null;
-            }).filter((s): s is ClawHubInstalledSkillResult => s !== null);
+            return entries.map(([slug, entry]) => ({
+                slug,
+                version: entry.version || 'latest',
+                source: 'openclaw-managed',
+                baseDir: path.join(this.workDir, 'skills', slug),
+            }));
         } catch (error) {
             console.error('ClawHub list error:', error);
             return [];
