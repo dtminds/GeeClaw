@@ -9,6 +9,7 @@ import {
   CodesandboxIcon,
   Download05Icon,
   LaptopCheckIcon,
+  Pacman02Icon,
   SoftwareLicenseIcon,
   StarIcon,
 } from '@hugeicons/core-free-icons';
@@ -1352,9 +1353,6 @@ export function Skills() {
                               <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
                                 /{skill.slug}
                               </span>
-                              {skill.author && (
-                                <span className="text-xs text-muted-foreground">• {skill.author}</span>
-                              )}
                             </div>
                             <p className="text-[13.5px] text-muted-foreground line-clamp-1 pr-6 leading-relaxed">
                               {skill.description}
@@ -1372,6 +1370,12 @@ export function Skills() {
                                 <HugeiconsIcon icon={CodesandboxIcon} size={14} strokeWidth={1.8} />
                                 <span>v{skill.version}</span>
                               </span>
+                              {skill.author && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <HugeiconsIcon icon={Pacman02Icon} size={14} strokeWidth={1.8} />
+                                  <span>{skill.author}</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
