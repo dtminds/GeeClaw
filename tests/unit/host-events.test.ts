@@ -42,6 +42,28 @@ describe('host-events', () => {
     expect(offMock).toHaveBeenCalledWith('gateway:status-changed', expect.any(Function));
   });
 
+  it('maps weixin channel host events through IPC', async () => {
+    const onMock = vi.mocked(window.electron.ipcRenderer.on);
+    const offMock = vi.mocked(window.electron.ipcRenderer.off);
+    const captured: Array<(...args: unknown[]) => void> = [];
+    onMock.mockImplementation((_, cb: (...args: unknown[]) => void) => {
+      captured.push(cb);
+      return () => {};
+    });
+
+    const { subscribeHostEvent } = await import('@/lib/host-events');
+    const handler = vi.fn();
+    const unsubscribe = subscribeHostEvent('channel:openclaw-weixin-qr', handler);
+
+    expect(onMock).toHaveBeenCalledWith('channel:openclaw-weixin-qr', expect.any(Function));
+
+    captured[0]({ qr: 'base64-payload' });
+    expect(handler).toHaveBeenCalledWith({ qr: 'base64-payload' });
+
+    unsubscribe();
+    expect(offMock).toHaveBeenCalledWith('channel:openclaw-weixin-qr', expect.any(Function));
+  });
+
   it('does not use SSE fallback by default for unknown events', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { subscribeHostEvent } = await import('@/lib/host-events');
@@ -71,4 +93,3 @@ describe('host-events', () => {
     expect(removeEventListenerMock).toHaveBeenCalledWith('unknown:event', expect.any(Function));
   });
 });
-

@@ -20,6 +20,7 @@ export interface BundledPluginSourceResult {
 const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'dingtalk', npmName: '@soimy/dingtalk', displayName: '钉钉' },
   { pluginId: 'wecom-openclaw-plugin', npmName: '@wecom/wecom-openclaw-plugin', displayName: '企业微信' },
+  { pluginId: 'openclaw-weixin', npmName: '@tencent-weixin/openclaw-weixin', displayName: '微信' },
   { pluginId: 'qqbot', npmName: '@sliverp/qqbot', displayName: 'QQ Bot' },
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
   { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
@@ -112,6 +113,9 @@ function getCandidateBundledPluginMirrorSources(
     join(appPath, 'build', 'openclaw-plugins', pluginId),
     join(currentWorkingDirectory, 'build', 'openclaw-plugins', pluginId),
     join(__dirname, '../../build/openclaw-plugins', pluginId),
+    join(appPath, 'plugins', 'openclaw', pluginId),
+    join(currentWorkingDirectory, 'plugins', 'openclaw', pluginId),
+    join(__dirname, '../../plugins/openclaw', pluginId),
   ];
 }
 
@@ -491,10 +495,14 @@ export function ensureWeComPluginInstalled(): BundledPluginSourceResult {
   return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[1]);
 }
 
-export function ensureQQBotPluginInstalled(): BundledPluginSourceResult {
+export function ensureWeixinPluginInstalled(): BundledPluginSourceResult {
   return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[2]);
 }
 
-export function ensureFeishuPluginInstalled(): BundledPluginSourceResult {
+export function ensureQQBotPluginInstalled(): BundledPluginSourceResult {
   return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[3]);
+}
+
+export function ensureFeishuPluginInstalled(): BundledPluginSourceResult {
+  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[4]);
 }

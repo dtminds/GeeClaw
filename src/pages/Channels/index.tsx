@@ -28,6 +28,7 @@ import whatsappIcon from '@/assets/channels/whatsapp.svg';
 import dingtalkIcon from '@/assets/channels/dingtalk.svg';
 import feishuIcon from '@/assets/channels/feishu.svg';
 import wecomIcon from '@/assets/channels/wecom.svg';
+import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
 interface ModalState {
@@ -572,6 +573,8 @@ function ChannelLogo({ type }: { type: ChannelType }) {
       return <img src={feishuIcon} alt="Feishu" className="h-[22px] w-[22px] dark:invert" />;
     case 'wecom':
       return <img src={wecomIcon} alt="WeCom" className="h-[22px] w-[22px] dark:invert" />;
+    case 'openclaw-weixin':
+      return <img src={weixinIcon} alt="Weixin" className="h-[22px] w-[22px]" />;
     case 'qqbot':
       return <img src={qqIcon} alt="QQ" className="h-[22px] w-[22px] dark:invert" />;
     default:

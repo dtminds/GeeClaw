@@ -14,6 +14,7 @@ export type ChannelType =
   | 'signal'
   | 'feishu'
   | 'wecom'
+  | 'openclaw-weixin'
   | 'qqbot'
   | 'imessage'
   | 'matrix'
@@ -110,6 +111,7 @@ export const CHANNEL_ICONS: Record<ChannelType, string> = {
   signal: '🔒',
   feishu: '🐦',
   wecom: '💼',
+  'openclaw-weixin': '💚',
   qqbot: '🐧',
   imessage: '💬',
   matrix: '🔗',
@@ -130,6 +132,7 @@ export const CHANNEL_NAMES: Record<ChannelType, string> = {
   signal: 'Signal',
   feishu: '飞书 / Lark',
   wecom: '企业微信',
+  'openclaw-weixin': '微信',
   qqbot: 'QQ Bot',
   imessage: 'iMessage',
   matrix: 'Matrix',
@@ -402,6 +405,21 @@ export const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     ],
     isPlugin: true,
   },
+  'openclaw-weixin': {
+    id: 'openclaw-weixin',
+    name: '微信',
+    icon: '💚',
+    description: 'channels:meta.openclaw-weixin.description',
+    connectionType: 'qr',
+    docsUrl: 'channels:meta.openclaw-weixin.docsUrl',
+    configFields: [],
+    instructions: [
+      'channels:meta.openclaw-weixin.instructions.0',
+      'channels:meta.openclaw-weixin.instructions.1',
+      'channels:meta.openclaw-weixin.instructions.2',
+    ],
+    isPlugin: true,
+  },
   imessage: {
     id: 'imessage',
     name: 'iMessage',
@@ -585,7 +603,7 @@ export const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
  * Get primary supported channels (non-plugin, commonly used)
  */
 export function getPrimaryChannels(): ChannelType[] {
-  return ['telegram', 'discord', 'whatsapp', 'dingtalk', 'feishu', 'wecom', 'qqbot'];
+  return ['telegram', 'discord', 'whatsapp', 'dingtalk', 'feishu', 'wecom', 'openclaw-weixin', 'qqbot'];
 }
 
 /**

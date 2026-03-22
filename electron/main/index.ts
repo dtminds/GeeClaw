@@ -30,6 +30,7 @@ import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { weComLoginManager } from '../utils/wecom-login';
+import { weixinLoginManager } from '../utils/weixin-login';
 import { PORTS } from '../utils/config';
 
 // Disable GPU hardware acceleration globally for maximum stability across
@@ -358,6 +359,18 @@ async function initialize(): Promise<void> {
 
   weComLoginManager.on('error', (error) => {
     hostEventBus.emit('channel:wecom-error', error);
+  });
+
+  weixinLoginManager.on('qr', (data) => {
+    hostEventBus.emit('channel:openclaw-weixin-qr', data);
+  });
+
+  weixinLoginManager.on('success', (data) => {
+    hostEventBus.emit('channel:openclaw-weixin-success', data);
+  });
+
+  weixinLoginManager.on('error', (error) => {
+    hostEventBus.emit('channel:openclaw-weixin-error', error);
   });
 
   const gatewayAutoStart = await getSetting('gatewayAutoStart');

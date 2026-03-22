@@ -52,6 +52,7 @@ import whatsappIcon from '@/assets/channels/whatsapp.svg';
 import dingtalkIcon from '@/assets/channels/dingtalk.svg';
 import feishuIcon from '@/assets/channels/feishu.svg';
 import wecomIcon from '@/assets/channels/wecom.svg';
+import weixinIcon from '@/assets/channels/weixin.svg';
 
 export function ChannelsSettingsSection() {
   const { t } = useTranslation('channels');
@@ -271,6 +272,8 @@ function ChannelLogo({ type }: { type: ChannelType }) {
       return <img src={feishuIcon} alt="Feishu" className="w-[22px] h-[22px] dark:invert" />;
     case 'wecom':
       return <img src={wecomIcon} alt="WeCom" className="w-[22px] h-[22px] dark:invert" />;
+    case 'openclaw-weixin':
+      return <img src={weixinIcon} alt="Weixin" className="w-[22px] h-[22px]" />;
     default:
       return <span className="text-[22px]">{CHANNEL_ICONS[type] || '💬'}</span>;
   }

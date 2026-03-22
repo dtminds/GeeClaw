@@ -37,6 +37,7 @@ import whatsappIcon from '@/assets/channels/whatsapp.svg';
 import dingtalkIcon from '@/assets/channels/dingtalk.svg';
 import feishuIcon from '@/assets/channels/feishu.svg';
 import wecomIcon from '@/assets/channels/wecom.svg';
+import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
 interface ChannelConfigModalProps {
@@ -62,6 +63,8 @@ function ChannelLogo({ type }: { type: ChannelType }) {
       return <img src={feishuIcon} alt="Feishu" className="h-[22px] w-[22px] dark:invert" />;
     case 'wecom':
       return <img src={wecomIcon} alt="WeCom" className="h-[22px] w-[22px] dark:invert" />;
+    case 'openclaw-weixin':
+      return <img src={weixinIcon} alt="Weixin" className="h-[22px] w-[22px]" />;
     case 'qqbot':
       return <img src={qqIcon} alt="QQ" className="h-[22px] w-[22px] dark:invert" />;
     default:
@@ -121,6 +124,7 @@ export function ChannelConfigModal({
       setValidationResult(null);
       void hostApiFetch('/api/channels/whatsapp/cancel', { method: 'POST' }).catch(() => {});
       void hostApiFetch('/api/channels/wecom/cancel', { method: 'POST' }).catch(() => {});
+      void hostApiFetch('/api/channels/openclaw-weixin/cancel', { method: 'POST' }).catch(() => {});
       return;
     }
 
@@ -293,6 +297,67 @@ export function ChannelConfigModal({
     };
   }, [onChannelSaved, onClose, resolvedAccountId, selectedType, t]);
 
+  useEffect(() => {
+    if (selectedType !== 'openclaw-weixin') return;
+
+    const handleQr = (...args: unknown[]) => {
+      const data = args[0] as { qr?: string };
+      if (data?.qr) {
+        setQrCode(`data:image/png;base64,${data.qr}`);
+      }
+    };
+
+    const handleSuccess = (...args: unknown[]) => {
+      const data = args[0] as { accountId?: string } | undefined;
+      const nextAccountId = data?.accountId?.trim();
+      void (async () => {
+        try {
+          if (!nextAccountId) {
+            throw new Error('Weixin scan result is missing account ID');
+          }
+
+          const saveResult = await hostApiFetch<{ success?: boolean; error?: string }>('/api/channels/config', {
+            method: 'POST',
+            body: JSON.stringify({
+              channelType: 'openclaw-weixin',
+              config: { enabled: true },
+              accountId: nextAccountId,
+            }),
+          });
+          if (!saveResult?.success) {
+            throw new Error(saveResult?.error || 'Failed to save Weixin config');
+          }
+
+          toast.success(t('toast.weixinConnected'));
+          await onChannelSaved('openclaw-weixin', nextAccountId);
+          onClose();
+        } catch (error) {
+          toast.error(t('toast.configFailed', { error: String(error) }));
+        } finally {
+          setConnecting(false);
+        }
+      })();
+    };
+
+    const handleError = (...args: unknown[]) => {
+      const error = String(args[0] || 'Unknown error');
+      toast.error(t('toast.weixinScanFailed', { error }));
+      setQrCode(null);
+      setConnecting(false);
+    };
+
+    const removeQrListener = subscribeHostEvent('channel:openclaw-weixin-qr', handleQr);
+    const removeSuccessListener = subscribeHostEvent('channel:openclaw-weixin-success', handleSuccess);
+    const removeErrorListener = subscribeHostEvent('channel:openclaw-weixin-error', handleError);
+
+    return () => {
+      if (typeof removeQrListener === 'function') removeQrListener();
+      if (typeof removeSuccessListener === 'function') removeSuccessListener();
+      if (typeof removeErrorListener === 'function') removeErrorListener();
+      void hostApiFetch('/api/channels/openclaw-weixin/cancel', { method: 'POST' }).catch(() => {});
+    };
+  }, [onChannelSaved, onClose, selectedType, t]);
+
   const isFormValid = useCallback(() => {
     if (!meta) return false;
     return meta.configFields
@@ -368,6 +433,14 @@ export function ChannelConfigModal({
 
     try {
       if (meta.connectionType === 'qr') {
+        if (selectedType === 'openclaw-weixin') {
+          await hostApiFetch('/api/channels/openclaw-weixin/start', {
+            method: 'POST',
+            body: JSON.stringify(accountId ? { accountId } : {}),
+          });
+          return;
+        }
+
         await hostApiFetch('/api/channels/whatsapp/start', {
           method: 'POST',
           body: JSON.stringify({ accountId: resolvedAccountId }),
@@ -465,8 +538,21 @@ export function ChannelConfigModal({
       await handleStartWeComScan();
       return;
     }
+    if (selectedType === 'openclaw-weixin') {
+      setConnecting(true);
+      try {
+        await hostApiFetch('/api/channels/openclaw-weixin/start', {
+          method: 'POST',
+          body: JSON.stringify(accountId ? { accountId } : {}),
+        });
+      } catch (error) {
+        toast.error(t('toast.weixinScanFailed', { error: String(error) }));
+        setConnecting(false);
+      }
+      return;
+    }
     await handleConnect();
-  }, [handleConnect, handleStartWeComScan, selectedType]);
+  }, [accountId, handleConnect, handleStartWeComScan, selectedType, t]);
 
   return createPortal(
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-6">
@@ -576,7 +662,7 @@ export function ChannelConfigModal({
                 </ol>
               </div>
 
-              {!accountId && (
+              {!accountId && selectedType !== 'openclaw-weixin' && (
                 <div className="space-y-2.5">
                   <Label htmlFor="account-id" className="text-[14px] font-bold text-foreground/80">
                     {t('dialog.accountId', 'Account ID')}

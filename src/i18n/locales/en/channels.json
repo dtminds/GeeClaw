@@ -42,6 +42,8 @@
         "whatsappFailed": "WhatsApp connection failed: {{error}}",
         "wecomConnected": "WeCom bound successfully via QR scan",
         "wecomScanFailed": "WeCom scan failed: {{error}}",
+        "weixinConnected": "Weixin bound successfully via QR scan",
+        "weixinScanFailed": "Weixin scan failed: {{error}}",
         "channelSaved": "Channel {{name}} saved",
         "channelConnecting": "Connecting to {{name}}...",
         "restartManual": "Please restart the gateway manually",
@@ -233,6 +235,16 @@
                 "Create an application in WeCom Admin Console to get configuration info",
                 "Ensure receive message server config is enabled",
                 "Enter your Bot ID (or Corp ID) and Secret to establish connection"
+            ]
+        },
+        "openclaw-weixin": {
+            "description": "Connect a Weixin account via the official OpenClaw Weixin plugin",
+            "docsUrl": "https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin",
+            "fields": {},
+            "instructions": [
+                "Generate a QR code from the button below",
+                "Scan it with Weixin and confirm authorization on your phone",
+                "GeeClaw will save the login state and create the account automatically after authorization"
             ]
         },
         "imessage": {

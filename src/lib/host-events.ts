@@ -18,6 +18,9 @@ const HOST_EVENT_TO_IPC_CHANNEL: Record<string, string> = {
   'channel:wecom-qr': 'channel:wecom-qr',
   'channel:wecom-success': 'channel:wecom-success',
   'channel:wecom-error': 'channel:wecom-error',
+  'channel:openclaw-weixin-qr': 'channel:openclaw-weixin-qr',
+  'channel:openclaw-weixin-success': 'channel:openclaw-weixin-success',
+  'channel:openclaw-weixin-error': 'channel:openclaw-weixin-error',
 };
 
 function getEventSource(): EventSource {
