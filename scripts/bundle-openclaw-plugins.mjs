@@ -44,6 +44,7 @@ const PLUGINS = [
   { npmName: '@sliverp/qqbot', pluginId: 'qqbot' },
   { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
   { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
+  { npmName: '@tencent-weixin/openclaw-weixin', pluginId: 'openclaw-weixin' },
 ];
 
 function discoverLocalPlugins() {
