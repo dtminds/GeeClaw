@@ -121,7 +121,7 @@ export function ChannelsSettingsSection() {
             void fetchChannels();
             void fetchConfiguredTypes();
           }}
-          className="h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors hover:bg-black/5 hover:text-foreground dark:border-white/10 dark:hover:bg-white/5"
+          className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors dark:border-white/10"
         >
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
           {t('refresh')}
@@ -190,10 +190,10 @@ export function ChannelsSettingsSection() {
                       setShowAddDialog(true);
                     }}
                     className={cn(
-                      "group flex items-start gap-4 p-4 rounded-2xl transition-all text-left border relative overflow-hidden bg-transparent border-transparent hover:bg-black/5 dark:hover:bg-white/5"
+                      "surface-hover group relative overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all"
                     )}
                   >
-                    <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3">
+                    <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm dark:border-white/10">
                       <ChannelLogo type={type} />
                     </div>
                     <div className="flex flex-col flex-1 min-w-0 py-0.5 mt-1">
@@ -291,8 +291,8 @@ function ChannelCard({ channel, onDelete }: ChannelCardProps) {
   const meta = CHANNEL_META[channel.type];
 
   return (
-    <div className="group flex items-start gap-4 p-4 rounded-2xl transition-all text-left border relative overflow-hidden bg-transparent border-transparent hover:bg-black/5 dark:hover:bg-white/5">
-      <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3">
+    <div className="surface-hover group relative overflow-hidden rounded-2xl border border-transparent bg-transparent p-4 text-left transition-all">
+      <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm dark:border-white/10">
         <ChannelLogo type={channel.type} />
       </div>
       <div className="flex flex-col flex-1 min-w-0 py-0.5 mt-1">
@@ -662,7 +662,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[140] bg-black/50 flex items-center justify-center p-6">
+    <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-6">
       <Card className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl border-0 shadow-2xl bg-[#f3f1e9] dark:bg-[#1a1a19] overflow-hidden">
         <CardHeader className="flex flex-row items-start justify-between pb-2 shrink-0">
           <div>
@@ -679,7 +679,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 : meta ? t(meta.description.replace('channels:', '')) : t('dialog.selectDesc')}
             </CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8 -mr-2 -mt-2 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5">
+          <Button variant="ghost" size="icon" onClick={onClose} className="surface-hover rounded-full h-8 w-8 -mr-2 -mt-2 text-muted-foreground">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -693,9 +693,9 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   <button
                     key={type}
                     onClick={() => onSelectType(type)}
-                    className="p-4 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-left group"
+                    className="surface-hover rounded-2xl border border-black/5 p-4 text-left transition-all group dark:border-white/5"
                   >
-                    <div className="h-[46px] w-[46px] shrink-0 flex items-center justify-center text-foreground bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full shadow-sm mb-3 group-hover:scale-105 transition-transform">
+                    <div className="surface-muted mb-3 flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-black/5 text-foreground shadow-sm transition-transform group-hover:scale-105 dark:border-white/10">
                       <ChannelLogo type={type} />
                     </div>
                     <p className="font-semibold text-[15px]">{channelMeta.name}</p>
@@ -725,7 +725,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 <Button variant="outline" onClick={() => {
                   setQrCode(null);
                   handleConnect(); // Retry
-                }} className="rounded-full px-6 h-[42px] text-[13px] font-semibold border-black/20 dark:border-white/20 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground shadow-sm">
+                }} className="surface-hover h-[42px] rounded-full border-black/20 bg-transparent px-6 text-[13px] font-semibold text-foreground/80 shadow-sm dark:border-white/20">
                   {t('dialog.refreshCode')}
                 </Button>
               </div>
@@ -836,7 +836,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                 </div>
               )}
 
-              <Separator className="bg-black/10 dark:bg-white/10" />
+              <Separator className="separator-subtle" />
 
               <div className="flex justify-end pt-4">
                 <div className="flex gap-3">
@@ -846,7 +846,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                       variant="secondary"
                       onClick={handleValidate}
                       disabled={validating}
-                      className="rounded-full px-6 h-[42px] text-[13px] font-semibold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-foreground shadow-sm"
+                      className="surface-hover-strong h-[42px] rounded-full px-6 text-[13px] font-semibold text-foreground shadow-sm"
                     >
                       {validating ? (
                         <>

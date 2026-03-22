@@ -337,7 +337,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
         >
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mb-6 flex items-start gap-4 text-left">
-            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/5 text-2xl dark:border-white/10 dark:bg-white/5">
+            <div className="surface-muted relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-black/10 text-2xl dark:border-white/10">
               <span>{skill.icon || '🔧'}</span>
               {skill.isCore && (
                 <div className="absolute -bottom-1 -right-1 rounded-full border border-black/10 bg-background p-1 dark:border-white/10">
@@ -461,7 +461,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
                     <h3 className="text-[13px] font-semibold text-foreground/80">
                       Environment Variables
                       {envVars.length > 0 && (
-                        <Badge variant="secondary" className="ml-2 h-5 bg-black/10 px-1.5 py-0 text-[10px] text-foreground dark:bg-white/10">
+                        <Badge variant="secondary" className="surface-muted-strong ml-2 h-5 px-1.5 py-0 text-[10px] text-foreground">
                           {envVars.length}
                         </Badge>
                       )}
@@ -470,7 +470,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-[12px] font-medium text-foreground/80 hover:bg-black/5 dark:hover:bg-white/5"
+                    className="surface-hover h-8 gap-1.5 px-2.5 text-[12px] font-medium text-foreground/80"
                     onClick={handleAddEnv}
                   >
                     <Plus className="h-3 w-3" strokeWidth={3} />
@@ -970,7 +970,7 @@ export function Skills() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 md:mt-2">
-            <div className="relative group flex items-center rounded-full border border-transparent bg-black/5 px-3 py-1.5 transition-colors focus-within:border-black/10 focus-within:bg-black/10 dark:bg-white/5 dark:focus-within:border-white/10">
+            <div className="surface-muted group relative flex items-center rounded-full border border-transparent px-3 py-1.5 transition-colors focus-within:bg-accent/70 focus-within:border-black/10 dark:focus-within:border-white/10">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
               <input
                 placeholder={activeTab === 'marketplace' ? t('searchMarketplace') : t('search')}
@@ -1007,7 +1007,7 @@ export function Skills() {
               size="icon"
               onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills()}
               disabled={activeTab === 'all' ? !isGatewayRunning : marketplaceLoading}
-              className="h-8 w-8 ml-1 rounded-md border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 shadow-none text-muted-foreground hover:text-foreground"
+              className="surface-hover ml-1 h-8 w-8 rounded-md border-black/10 bg-transparent text-muted-foreground shadow-none dark:border-white/10"
               title="Refresh"
             >
               <RefreshCw className={cn("h-4 w-4", (loading || marketplaceLoading) && "animate-spin")} />
@@ -1077,7 +1077,7 @@ export function Skills() {
                           'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
                           active
                             ? 'bg-foreground text-background'
-                            : 'bg-black/5 text-foreground/70 hover:bg-black/8 hover:text-foreground dark:bg-white/6 dark:text-foreground/70 dark:hover:bg-white/10 dark:hover:text-foreground',
+                            : 'surface-hover text-foreground/70',
                         )}
                       >
                         {filter.label}
@@ -1103,7 +1103,7 @@ export function Skills() {
                           'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
                           active
                             ? 'bg-foreground text-background'
-                            : 'bg-black/5 text-foreground/70 hover:bg-black/8 hover:text-foreground dark:bg-white/6 dark:text-foreground/70 dark:hover:bg-white/10 dark:hover:text-foreground',
+                            : 'surface-hover text-foreground/70',
                         )}
                       >
                         {section.label}
@@ -1146,11 +1146,11 @@ export function Skills() {
                   return (
                     <div
                       key={skill.id}
-                      className="group flex flex-row items-center justify-between py-3.5 px-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-black/5 dark:border-white/5 last:border-0"
+                      className="surface-hover group flex cursor-pointer flex-row items-center justify-between rounded-xl border-b border-black/5 px-3 py-3.5 transition-colors dark:border-white/5 last:border-0"
                       onClick={() => setSelectedSkill(skill)}
                     >
                       <div className="flex items-start gap-4 flex-1 overflow-hidden pr-4">
-                        <div className="h-10 w-10 shrink-0 flex items-center justify-center text-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl overflow-hidden">
+                        <div className="surface-muted h-10 w-10 shrink-0 flex items-center justify-center overflow-hidden rounded-xl border border-black/5 text-2xl dark:border-white/10">
                           {skill.icon || '🧩'}
                         </div>
                         <div className="flex flex-col overflow-hidden">
@@ -1159,7 +1159,7 @@ export function Skills() {
                             {skill.isCore ? (
                               <Lock className="h-3 w-3 text-muted-foreground" />
                             ) : skill.isBundled ? (
-                              <Puzzle className="h-3 w-3 text-blue-500/70" />
+                              <Puzzle className="text-info/80 h-3 w-3" />
                             ) : null}
                             {skill.slug && skill.slug !== skill.name ? (
                               <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
@@ -1223,7 +1223,7 @@ export function Skills() {
                     return (
                       <div
                         key={skill.slug}
-                        className="group flex flex-row items-center justify-between py-3.5 px-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-black/5 dark:border-white/5 last:border-0"
+                        className="surface-hover group flex cursor-pointer flex-row items-center justify-between rounded-xl border-b border-black/5 px-3 py-3.5 transition-colors dark:border-white/5 last:border-0"
                         onClick={() => setSelectedMarketplaceSkill(skill)}
                       >
                         <div className="flex items-start gap-4 flex-1 overflow-hidden pr-4">

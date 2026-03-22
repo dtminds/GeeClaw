@@ -247,7 +247,7 @@ function WelcomeScreen() {
   const { t } = useTranslation('chat');
   return (
     <div className="flex flex-col items-center justify-center text-center h-[60vh]">
-      <div className="flex h-32 w-32 items-center justify-center rounded-[20px] bg-white/80 dark:bg-white/10 shadow-[0_1px_2px_rgba(18,38,45,0.06)] ring-1 ring-black/5">
+      <div className="surface-muted flex h-32 w-32 items-center justify-center rounded-[20px] shadow-[0_1px_2px_rgba(18,38,45,0.06)] ring-1 ring-black/5">
         <img src={logoSvg} alt="GeeClaw" className="h-32 w-auto" />
       </div>
       <h1 className="text-6xl md:text-7xl text-foreground mt-3 mb-3 font-normal tracking-tight">
@@ -256,17 +256,6 @@ function WelcomeScreen() {
       <p className="text-[17px] text-foreground/80 mb-8 font-medium">
         {t('welcome.subtitle')}
       </p>
-
-      <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-lg w-full">
-        {['Ask Questions', 'Creative Tasks', 'Brainstorming'].map((label, i) => (
-          <button 
-            key={i} 
-            className="px-4 py-1.5 rounded-full border border-black/10 dark:border-white/10 text-[13px] font-medium text-foreground/70 hover:bg-black/5 dark:hover:bg-white/5 transition-colors bg-black/[0.02]"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

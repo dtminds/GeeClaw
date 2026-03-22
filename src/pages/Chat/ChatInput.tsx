@@ -1524,7 +1524,7 @@ export function ChatInput({
                     variant="ghost"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => setDismissedSkillRecommendationKey(activeSkillRecommendation.recommendationKey)}
-                    className="h-7 w-7 shrink-0 rounded-full p-0 text-muted-foreground shadow-none hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+                    className="surface-hover-strong h-7 w-7 shrink-0 rounded-full p-0 text-muted-foreground shadow-none"
                     aria-label={t('composer.skillRecommendation.dismiss')}
                     title={t('composer.skillRecommendation.dismiss')}
                   >
@@ -1586,7 +1586,7 @@ export function ChatInput({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+                className="surface-hover-strong h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors"
                 onClick={pickFiles}
                 disabled={disabled || sending}
                 title={t('composer.attachFiles')}
@@ -1598,7 +1598,7 @@ export function ChatInput({
                 <DropdownMenu.Trigger asChild>
                   <Button
                     variant="ghost"
-                    className="h-8 max-w-[220px] shrink-0 rounded-full px-3 text-xs text-muted-foreground/80 transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+                    className="surface-hover h-8 max-w-[220px] shrink-0 rounded-full px-3 text-xs text-muted-foreground/80 transition-colors"
                     disabled={disabled || sending || providerModelGroups.length === 0}
                     title={activeModelValue ? `${t('composer.modelMenuTitle')}: ${activeModelValue}` : t('composer.modelMenuTitle')}
                   >
@@ -1625,7 +1625,7 @@ export function ChatInput({
                           <DropdownMenu.Item
                             key={`${group.providerId}-${model}`}
                             onSelect={() => handleModelSelect(group.providerId, model)}
-                            className="mx-1 flex cursor-default items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-black/5 dark:focus:bg-white/10"
+                            className="mx-1 flex cursor-default items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                           >
                             <span className="truncate">{model}</span>
                             {modelValuesMatch(activeModelValue, `${group.providerId}/${model}`) && (
@@ -1656,7 +1656,7 @@ export function ChatInput({
                 'h-8 w-8 shrink-0 rounded-full transition-colors',
                 sending || canSend
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'bg-black/[0.04] text-muted-foreground/70 hover:bg-black/[0.06] dark:bg-white/[0.08] dark:hover:bg-white/[0.1]',
+                  : 'surface-muted text-muted-foreground/70 hover:bg-accent/50',
               )}
               variant="ghost"
               title={sending ? t('composer.stop') : t('composer.send')}
@@ -1698,7 +1698,7 @@ export function ChatInput({
                       <DropdownMenu.Item
                         key={policy}
                         onSelect={() => { void handleSecurityPolicyChange(policy); }}
-                        className="mx-1 flex cursor-default items-start justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-black/5 dark:focus:bg-white/10"
+                        className="mx-1 flex cursor-default items-start justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                       >
                         <div className="min-w-0">
                           <div className="font-medium text-foreground">{policyLabelMap[policy]}</div>
@@ -1813,7 +1813,7 @@ function AgentPickerItem({
       onClick={onSelect}
       className={cn(
         'flex w-full flex-col items-start rounded-xl px-3 py-2 text-left transition-colors',
-        selected ? 'bg-primary/10 text-foreground' : 'hover:bg-black/5 dark:hover:bg-white/5',
+        selected ? 'bg-primary/10 text-foreground' : 'surface-hover',
       )}
     >
       <span className="text-[14px] font-medium text-foreground">{agent.name}</span>
@@ -1862,7 +1862,7 @@ function SkillPickerItem({
       onClick={onSelect}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors',
-        selected ? 'bg-black/5 dark:bg-white/[0.08]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.03]',
+        selected ? 'surface-muted text-foreground' : 'surface-hover',
       )}
     >
       <span className={cn(

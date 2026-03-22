@@ -924,7 +924,7 @@ function FileCard({ file }: { file: AttachedFileMeta }) {
     <div 
       className={cn(
         "flex items-center gap-2 rounded-full border border-primary/15 bg-primary/8 px-3 py-2 min-w-[180px] max-w-[250px]",
-        file.filePath && "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+        file.filePath && "surface-hover cursor-pointer transition-colors"
       )}
       onClick={handleOpen}
       title={file.filePath ? "Open file" : undefined}
@@ -1149,7 +1149,7 @@ function ToolCard({
             {input != null && (
               <div className="space-y-1">
                 <div className="font-medium uppercase tracking-wide opacity-70">Input</div>
-                <pre className="w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-black/5 px-2 py-2 dark:bg-white/5 font-mono">
+                <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
                   {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
                 </pre>
               </div>
@@ -1157,7 +1157,7 @@ function ToolCard({
             {result && (
               <div className="space-y-1">
                 <div className="font-medium uppercase tracking-wide opacity-70">Result</div>
-                <pre className="w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-black/5 px-2 py-2 dark:bg-white/5 font-mono">
+                <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
                   {result}
                 </pre>
               </div>

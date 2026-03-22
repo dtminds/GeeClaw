@@ -487,7 +487,7 @@ function AppSettingsPanel({
               </div>
 
               {showLogs && (
-                <div className="mt-4 rounded-lg border border-border bg-black/10 p-4 dark:bg-black/40">
+                <div className="surface-muted-strong mt-4 rounded-lg border border-border p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-sm font-medium">{t('gateway.appLogs')}</p>
                     <div className="flex gap-2">

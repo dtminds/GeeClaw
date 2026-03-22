@@ -51,7 +51,7 @@ function AgentFallbackDialog(props: {
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-4">
+    <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4">
       <Card className="modal-card-surface w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden">
         <CardHeader className="relative pb-2 shrink-0">
           <CardTitle className="modal-title">{t('agentModels.dialog.title')}</CardTitle>
@@ -84,7 +84,7 @@ function AgentFallbackDialog(props: {
               value={fallbacksText}
               onChange={(event) => setFallbacksText(event.target.value)}
               placeholder={t('agentModels.dialog.fallbacksPlaceholder')}
-              className="modal-field-surface min-h-32 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 shadow-sm"
+              className="modal-field-surface field-focus-ring min-h-32 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none shadow-sm"
             />
             <p className="text-[12px] text-muted-foreground">
               {t('agentModels.dialog.fallbacksHelp')}
@@ -104,7 +104,7 @@ function AgentFallbackDialog(props: {
                     {provider.modelRefs.map((modelRef) => (
                       <code
                         key={modelRef}
-                        className="rounded-lg bg-black/5 px-2.5 py-1 text-[12px] text-foreground dark:bg-white/5"
+                        className="surface-muted rounded-lg px-2.5 py-1 text-[12px] text-foreground"
                       >
                         {modelRef}
                       </code>
@@ -175,7 +175,7 @@ export function ModelsSettingsSection() {
 
   return (
     <div className="flex min-h-0 flex-col gap-8">
-      <Card className="bg-black/5 dark:bg-white/5 border border-transparent rounded-3xl shadow-none">
+      <Card className="surface-muted rounded-3xl border border-transparent shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-2xl font-normal tracking-tight">
             <Settings2 className="h-5 w-5" />
@@ -213,7 +213,7 @@ export function ModelsSettingsSection() {
                 <Button
                   variant="outline"
                   onClick={() => void loadSnapshot()}
-                  className="rounded-full px-5 h-9 border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+                  className="surface-hover rounded-full border-black/10 bg-transparent px-5 h-9 dark:border-white/10"
                 >
                   {t('agentModels.refresh')}
                 </Button>

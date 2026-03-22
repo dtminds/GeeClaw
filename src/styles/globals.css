@@ -397,6 +397,55 @@
     background: color-mix(in oklab, var(--primary) 90%, black 10%);
   }
 
+  .surface-muted {
+    background: color-mix(in srgb, var(--muted) 72%, transparent);
+  }
+
+  .dark .surface-muted {
+    background: color-mix(in srgb, var(--muted) 84%, transparent);
+  }
+
+  .surface-muted-strong {
+    background: color-mix(in srgb, var(--muted) 88%, transparent);
+  }
+
+  .dark .surface-muted-strong {
+    background: color-mix(in srgb, var(--muted) 94%, transparent);
+  }
+
+  .surface-hover:hover {
+    background: color-mix(in srgb, var(--accent) 78%, transparent);
+    color: var(--foreground);
+  }
+
+  .dark .surface-hover:hover {
+    background: color-mix(in srgb, var(--accent) 88%, transparent);
+  }
+
+  .surface-hover-strong:hover {
+    background: color-mix(in srgb, var(--accent) 92%, transparent);
+    color: var(--foreground);
+  }
+
+  .dark .surface-hover-strong:hover {
+    background: color-mix(in srgb, var(--accent) 96%, transparent);
+  }
+
+  .field-focus-ring:focus,
+  .field-focus-ring:focus-visible {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 34%, transparent);
+  }
+
+  .overlay-backdrop {
+    background: color-mix(in srgb, var(--foreground) 32%, transparent);
+  }
+
+  .separator-subtle {
+    background: color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
   .sidebar-item-active {
     background: rgba(255, 255, 255, 0.92);
     color: var(--foreground);

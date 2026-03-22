@@ -284,7 +284,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="overlay-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <Card className="modal-card-surface w-full max-w-5xl max-h-[90vh] flex flex-col rounded-3xl overflow-hidden border shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <CardHeader className="flex flex-row items-start justify-between pb-2 shrink-0 px-6 pt-5">
           <div>
@@ -307,7 +307,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                   placeholder={t('dialog.taskNamePlaceholder')}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+                  className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40"
                 />
               </div>
 
@@ -317,7 +317,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                 <select
                   value={agentId}
                   onChange={(e) => setAgentId(e.target.value)}
-                  className="modal-field-surface w-full h-[44px] rounded-xl text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm transition-all text-foreground bg-transparent border border-input"
+                  className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
                 >
                   <option value="">{t('dialog.agentDefault')}</option>
                   {agents.map((a) => (
@@ -335,7 +335,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={10}
-                  className="modal-field-surface rounded-xl font-mono text-[13px] focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40 resize-none"
+                  className="modal-field-surface field-focus-ring rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40 resize-none"
                 />
               </div>
 
@@ -367,7 +367,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           "justify-start h-10 rounded-xl font-medium text-[13px] transition-all",
                           schedule === preset.value
                             ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                            : "modal-field-surface hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground"
+                            : "modal-field-surface surface-hover text-foreground/80"
                         )}
                       >
                         <Timer className="h-4 w-4 mr-2 opacity-70" />
@@ -380,7 +380,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                     placeholder={t('dialog.cronPlaceholder')}
                     value={customSchedule}
                     onChange={(e) => setCustomSchedule(e.target.value)}
-                    className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40"
                   />
                 )}
                 <div className="flex items-center justify-between">
@@ -392,7 +392,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() => setUseCustom(!useCustom)}
-                    className="text-[12px] h-7 px-2 text-foreground/60 hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-lg"
+                    className="surface-hover h-7 rounded-lg px-2 text-[12px] text-foreground/60"
                   >
                     {useCustom ? t('dialog.usePresets') : t('dialog.useCustomCron')}
                   </Button>
@@ -414,7 +414,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         "justify-start h-10 rounded-xl font-medium text-[13px] transition-all",
                         deliveryMode === mode
                           ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                          : "modal-field-surface hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground"
+                          : "modal-field-surface surface-hover text-foreground/80"
                       )}
                     >
                       {t(`dialog.deliveryMode_${mode}`)}
@@ -428,7 +428,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                       <select
                         value={deliveryChannel}
                         onChange={(e) => { setDeliveryChannel(e.target.value); setDeliveryTo(''); }}
-                        className="modal-field-surface w-full h-[44px] rounded-xl text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm transition-all text-foreground bg-transparent border border-input"
+                        className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
                       >
                         <option value="">{t('dialog.deliveryChannelPlaceholder')}</option>
                         {channels.map((ch) => (
@@ -446,7 +446,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           value={deliveryTo}
                           onChange={(e) => setDeliveryTo(e.target.value)}
                           onFocus={() => setShowToSuggestions(true)}
-                          className="modal-field-surface w-full h-[44px] rounded-xl font-mono text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40 border border-input"
+                          className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input px-3 font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus:outline-none"
                         />
                         {showToSuggestions && (() => {
                           const filtered = sessions.filter((s) =>
@@ -741,7 +741,7 @@ export function Cron() {
               variant="outline"
               onClick={fetchJobs}
               disabled={!isGatewayRunning}
-              className="h-9 text-[13px] font-medium rounded-full px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 shadow-none text-foreground/80 hover:text-foreground transition-colors"
+              className="surface-hover h-9 rounded-full border-black/10 bg-transparent px-4 text-[13px] font-medium text-foreground/80 shadow-none transition-colors dark:border-white/10"
             >
               <RefreshCw className="h-3.5 w-3.5 mr-2" />
               {t('refresh')}
@@ -802,7 +802,7 @@ export function Cron() {
 
           {/* Jobs List */}
           {jobs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-black/5 dark:bg-white/5 rounded-3xl border border-transparent border-dashed">
+            <div className="surface-muted flex flex-col items-center justify-center rounded-3xl border border-transparent border-dashed py-20 text-muted-foreground">
               <Clock className="h-10 w-10 mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2 text-foreground">{t('empty.title')}</h3>
               <p className="text-[14px] text-center mb-6 max-w-md">
