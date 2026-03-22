@@ -227,7 +227,13 @@
 
 @layer components {
   .app-shell {
-    background: var(--app-shell);
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 92%, white 8%) 100%);
+  }
+
+  .dark .app-shell {
+    background:
+      linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 88%, black 12%) 100%);
   }
 
   .app-titlebar {
@@ -238,7 +244,6 @@
   .app-sidebar {
     background:
       linear-gradient(180deg, var(--app-sidebar) 0%, color-mix(in oklab, var(--app-sidebar) 92%, white 8%) 100%);
-    border-color: color-mix(in srgb, var(--app-line) 25%, transparent);
   }
 
   .dark .app-sidebar {
@@ -247,6 +252,9 @@
   }
 
   .app-canvas {
+    border-radius: 18px 0 0 18px;
+    box-shadow: -5px 0 10px -4px rgba(20, 37, 44, 0.04);
+    border-left: 1px solid color-mix(in srgb, var(--app-line) 25%, transparent);
     background:
       linear-gradient(180deg, var(--app-canvas) 0%, color-mix(in oklab, var(--app-canvas) 97%, var(--app-sidebar) 3%) 100%);
   }

@@ -214,7 +214,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'app-sidebar flex shrink-0 flex-col border-r transition-all duration-300',
+        'app-sidebar flex shrink-0 flex-col transition-all duration-300',
         sidebarCollapsed ? 'w-12' : 'w-56'
       )}
     >
