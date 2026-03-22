@@ -291,9 +291,18 @@
   }
 
   .dark .modal-card-surface {
-    background: color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%);
-    border-color: color-mix(in srgb, var(--app-line) 50%, transparent);
-    box-shadow: 0 30px 72px -40px rgba(0, 0, 0, 0.62);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--card) 76%, white 24%) 0%,
+        color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%) 100%
+      );
+    border-color: color-mix(in srgb, white 18%, var(--app-line) 82%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 24px 56px -28px rgba(0, 0, 0, 0.72),
+      0 42px 96px -46px rgba(0, 0, 0, 0.82),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .modal-section-surface {
@@ -440,6 +449,10 @@
 
   .overlay-backdrop {
     background: color-mix(in srgb, var(--foreground) 32%, transparent);
+  }
+
+  .dark .overlay-backdrop {
+    background: color-mix(in srgb, black 58%, transparent);
   }
 
   .separator-subtle {
