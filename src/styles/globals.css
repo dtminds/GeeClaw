@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import './themes.css';
 @plugin "@tailwindcss/typography";
 
 /* Scan streamdown dist for Tailwind classes used internally */
@@ -25,6 +24,15 @@
 
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -122,6 +130,12 @@
     --accent-foreground: hsl(208, 24%, 22%);
     --destructive: hsl(4, 72%, 54%);
     --destructive-foreground: hsl(210, 40%, 98%);
+    --success: #198754;
+    --success-foreground: #f4fbf6;
+    --warning: #b26a00;
+    --warning-foreground: #fff8eb;
+    --info: #0f63be;
+    --info-foreground: #f3f9ff;
     --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
     --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
     --ring: hsl(205, 41%, 28%);
@@ -168,6 +182,12 @@
     --accent-foreground: hsl(210, 40%, 98%);
     --destructive: hsl(0, 62.8%, 30.6%);
     --destructive-foreground: hsl(210, 40%, 98%);
+    --success: #6dd9a4;
+    --success-foreground: #0d2418;
+    --warning: #ffcc73;
+    --warning-foreground: #342100;
+    --info: #81b7f0;
+    --info-foreground: #12263d;
     --border: color-mix(in oklab, var(--accent) 92%, var(--foreground));
     --input: color-mix(in oklab, var(--accent) 90%, var(--foreground));
     --ring: hsl(224.3, 76.3%, 48%);
@@ -365,16 +385,16 @@
     height: 2.625rem;
     border-radius: 9999px;
     border: 1px solid transparent;
-    background: #0a84ff;
+    background: var(--primary);
     padding-inline: 1.5rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: white;
-    box-shadow: 0 12px 30px -20px rgba(10, 132, 255, 0.72);
+    color: var(--primary-foreground);
+    box-shadow: 0 12px 30px -20px color-mix(in srgb, var(--primary) 72%, transparent);
   }
 
   .modal-primary-button:hover {
-    background: #007aff;
+    background: color-mix(in oklab, var(--primary) 90%, black 10%);
   }
 
   .sidebar-item-active {

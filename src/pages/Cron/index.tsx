@@ -366,7 +366,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         className={cn(
                           "justify-start h-10 rounded-xl font-medium text-[13px] transition-all",
                           schedule === preset.value
-                            ? "bg-[#0a84ff] hover:bg-[#007aff] text-white shadow-sm border-transparent"
+                            ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                             : "modal-field-surface hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground"
                         )}
                       >
@@ -413,7 +413,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                       className={cn(
                         "justify-start h-10 rounded-xl font-medium text-[13px] transition-all",
                         deliveryMode === mode
-                          ? "bg-[#0a84ff] hover:bg-[#007aff] text-white shadow-sm border-transparent"
+                          ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                           : "modal-field-surface hover:bg-black/5 dark:hover:bg-white/5 text-foreground/80 hover:text-foreground"
                       )}
                     >

@@ -3,7 +3,7 @@
  * Handles routing and global providers
  */
 import { Routes, Route, Navigate, useNavigate, useLocation, type Location } from 'react-router-dom';
-import { Component, useEffect } from 'react';
+import { Component, useEffect, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import i18n from './i18n';
@@ -24,6 +24,7 @@ import { useSettingsStore } from './stores/settings';
 import { useBootstrapStore } from './stores/bootstrap';
 import { applyGatewayTransportPreference } from './lib/api-client';
 import { isSettingsModalPath } from './lib/settings-modal';
+import { applyColorTheme } from '@/theme/color-themes';
 
 
 /**
@@ -102,6 +103,10 @@ function App() {
   const language = useSettingsStore((state) => state.language);
   const bootstrapPhase = useBootstrapStore((state) => state.phase);
   const initBootstrap = useBootstrapStore((state) => state.init);
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => (
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  ));
+  const effectiveTheme = theme === 'system' ? systemTheme : theme;
 
   useEffect(() => {
     initSettings();
@@ -118,6 +123,24 @@ function App() {
   useEffect(() => {
     void initBootstrap();
   }, [initBootstrap]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = (event?: MediaQueryListEvent) => {
+      const prefersDark = event ? event.matches : mediaQuery.matches;
+      setSystemTheme(prefersDark ? 'dark' : 'light');
+    };
+
+    updateSystemTheme();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateSystemTheme);
+      return () => mediaQuery.removeEventListener('change', updateSystemTheme);
+    }
+
+    mediaQuery.addListener(updateSystemTheme);
+    return () => mediaQuery.removeListener(updateSystemTheme);
+  }, []);
 
   // Listen for navigation events from main process
   useEffect(() => {
@@ -141,23 +164,9 @@ function App() {
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
-
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-      root.classList.add(systemTheme);
-    } else {
-      root.classList.add(theme);
-    }
-
-    // Apply color theme
-    if (colorTheme && colorTheme !== 'standard') {
-      root.setAttribute('data-color-theme', colorTheme);
-    } else {
-      root.removeAttribute('data-color-theme');
-    }
-  }, [theme, colorTheme]);
+    root.classList.add(effectiveTheme);
+    applyColorTheme(root, colorTheme, effectiveTheme);
+  }, [colorTheme, effectiveTheme]);
 
   useEffect(() => {
     applyGatewayTransportPreference();

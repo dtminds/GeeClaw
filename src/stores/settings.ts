@@ -6,11 +6,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
+import { DEFAULT_COLOR_THEME_ID, type ColorTheme } from '@/theme/color-themes';
 
 type Theme = 'light' | 'dark' | 'system';
-export type ColorTheme = 'standard' | 'ink' | 'ocean' | 'forest' | 'vintage' | 'neon' | 'citrus' | 'dusk' | 'minimal' | 'vitality' | 'nature' | 'art';
 type UpdateChannel = 'stable' | 'beta' | 'dev';
 export type SecurityPolicy = 'moderate' | 'strict' | 'fullAccess';
+export type { ColorTheme } from '@/theme/color-themes';
 
 interface SettingsState {
   // General
@@ -76,7 +77,7 @@ interface SettingsState {
 
 const defaultSettings = {
   theme: 'system' as Theme,
-  colorTheme: 'standard' as ColorTheme,
+  colorTheme: DEFAULT_COLOR_THEME_ID,
   language: 'zh',
   startMinimized: false,
   launchAtStartup: false,
@@ -172,7 +173,7 @@ export const useSettingsStore = create<SettingsState>()(
           delete nextState.openclawRuntimeSource;
         }
         if (version < 4) {
-          nextState.colorTheme = 'standard';
+          nextState.colorTheme = DEFAULT_COLOR_THEME_ID;
         }
         if (version < 5) {
           nextState.workspaceOnly = false;

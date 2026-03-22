@@ -741,14 +741,14 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
             <div className="space-y-4">
               {/* Existing config hint */}
               {isExistingConfig && (
-                <div className="bg-[#eeece3] dark:bg-[#151514] text-foreground/80 font-medium p-4 rounded-2xl text-[13.5px] flex items-center gap-2.5 shadow-sm border border-black/5 dark:border-white/5">
-                  <CheckCircle className="h-4 w-4 shrink-0 text-blue-500" />
+                <div className="modal-section-surface flex items-center gap-2.5 rounded-2xl border p-4 text-[13.5px] font-medium text-foreground/80 shadow-sm">
+                  <CheckCircle className="text-info h-4 w-4 shrink-0" />
                   <span>{t('dialog.existingHint')}</span>
                 </div>
               )}
 
               {/* Instructions */}
-              <div className="bg-[#eeece3] dark:bg-[#151514] p-5 rounded-2xl space-y-3 shadow-sm border border-black/5 dark:border-white/5">
+              <div className="modal-section-surface space-y-3 rounded-2xl border p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-[14px] text-foreground/80">{t('dialog.howToConnect')}</p>
                   <Button
@@ -777,7 +777,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   placeholder={t('dialog.channelNamePlaceholder', { name: meta?.name })}
                   value={channelName}
                   onChange={(e) => setChannelName(e.target.value)}
-                  className="h-[44px] rounded-xl font-mono text-[13px] bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+                  className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
                 />
               </div>
 
@@ -795,11 +795,11 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
 
               {/* Validation Results */}
               {validationResult && (
-                <div className={`p-4 rounded-2xl text-[13.5px] shadow-sm border border-black/5 dark:border-white/5 ${validationResult.valid ? 'bg-[#eeece3] dark:bg-[#151514] text-foreground/80' : 'bg-destructive/10 text-destructive'
+                <div className={`rounded-2xl border p-4 text-[13.5px] shadow-sm ${validationResult.valid ? 'modal-section-surface text-foreground/80' : 'bg-destructive/10 text-destructive'
                   }`}>
                   <div className="flex items-start gap-2.5">
                     {validationResult.valid ? (
-                      <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-green-500" />
+                      <CheckCircle className="text-success h-4 w-4 mt-0.5 shrink-0" />
                     ) : (
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                     )}
@@ -815,14 +815,14 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                         </ul>
                       )}
                       {validationResult.valid && validationResult.warnings.length > 0 && (
-                        <div className="mt-1 text-green-600 dark:text-green-500 space-y-0.5 font-medium">
+                        <div className="text-success mt-1 space-y-0.5 font-medium">
                           {validationResult.warnings.map((info, i) => (
                             <p key={i} className="text-[13px]">{info}</p>
                           ))}
                         </div>
                       )}
                       {!validationResult.valid && validationResult.warnings.length > 0 && (
-                        <div className="mt-2 text-yellow-600 dark:text-yellow-500 font-medium">
+                        <div className="text-warning mt-2 font-medium">
                           <p className="font-bold text-[12px] uppercase mb-1">{t('dialog.warnings')}</p>
                           <ul className="list-disc list-inside space-y-0.5">
                             {validationResult.warnings.map((warn, i) => (
@@ -864,7 +864,7 @@ function AddChannelDialog({ selectedType, onSelectType, onClose, onChannelAdded 
                   <Button
                     onClick={handleConnect}
                     disabled={connecting || !isFormValid()}
-                    className="rounded-full px-6 h-[42px] text-[13px] font-semibold bg-[#0a84ff] hover:bg-[#007aff] text-white shadow-sm border border-transparent transition-all"
+                    className="h-[42px] rounded-full border border-transparent bg-primary px-6 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
                   >
                     {connecting ? (
                       <>
@@ -918,7 +918,7 @@ function ConfigField({ field, value, onChange, showSecret, onToggleSecret }: Con
           placeholder={field.placeholder ? t(field.placeholder.replace('channels:', '')) : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-[44px] rounded-xl font-mono text-[13px] bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40"
+          className="modal-field-surface h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
         />
         {isPassword && (
           <Button
@@ -926,7 +926,7 @@ function ConfigField({ field, value, onChange, showSecret, onToggleSecret }: Con
             variant="outline"
             size="icon"
             onClick={onToggleSecret}
-            className="h-[44px] w-[44px] rounded-xl bg-[#eeece3] dark:bg-[#151514] border-black/10 dark:border-white/10 text-muted-foreground hover:text-foreground shrink-0 shadow-sm"
+            className="modal-field-surface h-[44px] w-[44px] shrink-0 rounded-xl text-muted-foreground shadow-sm hover:text-foreground"
           >
             {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>

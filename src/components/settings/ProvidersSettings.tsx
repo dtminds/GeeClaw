@@ -201,7 +201,10 @@ export function ProvidersSettings() {
           <p className="text-[13px] text-center mb-6 max-w-sm">
             {t('aiProviders.empty.desc')}
           </p>
-          <Button onClick={() => setShowAddDialog(true)} className="rounded-full px-6 h-10 bg-[#0a84ff] hover:bg-[#007aff] text-white">
+          <Button
+            onClick={() => setShowAddDialog(true)}
+            className="rounded-full border border-transparent bg-primary px-6 text-primary-foreground shadow-sm hover:bg-primary/90 h-10"
+          >
             <Plus className="h-4 w-4 mr-2" />
             {t('aiProviders.empty.cta')}
           </Button>
