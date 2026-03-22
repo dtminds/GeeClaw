@@ -86,6 +86,56 @@ export async function handleSkillRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/marketplace/featured' && req.method === 'GET') {
+    try {
+      sendJson(res, 200, {
+        success: true,
+        result: await ctx.clawHubService.getFeaturedSkills(),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/marketplace/categories' && req.method === 'GET') {
+    try {
+      sendJson(res, 200, {
+        success: true,
+        result: await ctx.clawHubService.getCategoryList(),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/marketplace/category-skills' && req.method === 'GET') {
+    try {
+      const category = url.searchParams.get('category') || '';
+      const page = parseInt(url.searchParams.get('page') || '1', 10);
+      const pageSize = parseInt(url.searchParams.get('pageSize') || '24', 10);
+      const keyword = url.searchParams.get('keyword') || '';
+      const sortBy = url.searchParams.get('sortBy') || 'score';
+      const order = url.searchParams.get('order') || 'desc';
+
+      sendJson(res, 200, {
+        success: true,
+        result: await ctx.clawHubService.fetchCategorySkills({
+          category,
+          page,
+          pageSize,
+          keyword,
+          sortBy,
+          order,
+        }),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
   if (url.pathname === '/api/clawhub/install' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ slug: string; version?: string; force?: boolean }>(req);

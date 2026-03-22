@@ -5,8 +5,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  AiCloudIcon,
   CodesandboxIcon,
   Download05Icon,
+  LaptopCheckIcon,
   SoftwareLicenseIcon,
   StarIcon,
 } from '@hugeicons/core-free-icons';
@@ -732,6 +734,10 @@ export function Skills() {
     marketplaceLoading,
     marketplaceError,
     fetchMarketplaceCatalog,
+    fetchCategorySkills,
+    categorySkills,
+    categorySkillsLoading,
+    categorySkillsTotal,
     installSkill,
     uninstallSkill,
     installing
@@ -927,41 +933,69 @@ export function Skills() {
   }, [t]);
 
   const marketplaceSections = [
-    { key: 'featured', label: t('marketplace.featured', '精选'), count: marketplaceCatalog?.featured.length || 0 },
-    ...Object.entries(marketplaceCatalog?.categories || {}).map(([key, slugs]) => ({
-      key,
-      label: key,
-      count: slugs.length,
+    { key: 'featured', label: t('marketplace.featured', '精选') },
+    { key: 'all', label: t('marketplace.all', '全部') },
+    ...(marketplaceCatalog?.categoryList || []).map((cat) => ({
+      key: cat.id,
+      label: cat.name,
     })),
   ];
   const effectiveMarketplaceSection = marketplaceSections.some((section) => section.key === marketplaceSection)
     ? marketplaceSection
     : 'featured';
 
+  // Fetch category skills when a non-featured section is selected or when page/query changes
+  useEffect(() => {
+    if (activeTab !== 'marketplace' || effectiveMarketplaceSection === 'featured') {
+      return;
+    }
+    // For 'all' section, pass empty category; for specific categories, pass the category id
+    const categoryId = effectiveMarketplaceSection === 'all' ? '' : effectiveMarketplaceSection;
+    void fetchCategorySkills(categoryId, marketplacePage, marketplaceQuery);
+  }, [activeTab, effectiveMarketplaceSection, marketplacePage, marketplaceQuery, fetchCategorySkills]);
+
+  // For featured: use the catalog skills; for categories and 'all': use API-fetched categorySkills
+  const isFeaturedSection = effectiveMarketplaceSection === 'featured';
   const marketplaceSkillMap = new Map((marketplaceCatalog?.skills || []).map((skill) => [skill.slug, skill]));
-  const marketplaceBaseSlugs = effectiveMarketplaceSection === 'featured'
-    ? (marketplaceCatalog?.featured || [])
-    : (marketplaceCatalog?.categories?.[effectiveMarketplaceSection] || []);
-  const marketplaceBaseSkills = marketplaceBaseSlugs
-    .map((slug) => marketplaceSkillMap.get(slug))
-    .filter((skill): skill is MarketplaceSkill => Boolean(skill));
-  const normalizedMarketplaceQuery = marketplaceQuery.trim().toLowerCase();
-  const marketplaceFilteredSkills = !normalizedMarketplaceQuery
-    ? marketplaceBaseSkills
-    : marketplaceBaseSkills.filter((skill) =>
-      skill.slug.toLowerCase().includes(normalizedMarketplaceQuery)
-      || skill.name.toLowerCase().includes(normalizedMarketplaceQuery)
-      || skill.description.toLowerCase().includes(normalizedMarketplaceQuery)
-      || (skill.author || '').toLowerCase().includes(normalizedMarketplaceQuery)
-      || (skill.tags || []).some((tag) => tag.toLowerCase().includes(normalizedMarketplaceQuery))
+
+  let marketplaceVisibleSkills: MarketplaceSkill[];
+  let marketplaceTotalPages: number;
+  let safeMarketplacePage: number;
+  let marketplacePageStart: number;
+  let marketplaceFilteredSkillsCount: number;
+
+  if (isFeaturedSection) {
+    // Featured: client-side filtering from catalog.skills
+    const featuredSlugs = marketplaceCatalog?.featured || [];
+    const featuredBaseSkills = featuredSlugs
+      .map((slug) => marketplaceSkillMap.get(slug))
+      .filter((skill): skill is MarketplaceSkill => Boolean(skill));
+    const normalizedMarketplaceQuery = marketplaceQuery.trim().toLowerCase();
+    const filteredSkills = !normalizedMarketplaceQuery
+      ? featuredBaseSkills
+      : featuredBaseSkills.filter((skill) =>
+        skill.slug.toLowerCase().includes(normalizedMarketplaceQuery)
+        || skill.name.toLowerCase().includes(normalizedMarketplaceQuery)
+        || skill.description.toLowerCase().includes(normalizedMarketplaceQuery)
+        || (skill.author || '').toLowerCase().includes(normalizedMarketplaceQuery)
+        || (skill.tags || []).some((tag) => tag.toLowerCase().includes(normalizedMarketplaceQuery))
+      );
+    marketplaceFilteredSkillsCount = filteredSkills.length;
+    marketplaceTotalPages = Math.max(1, Math.ceil(filteredSkills.length / MARKETPLACE_PAGE_SIZE));
+    safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
+    marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
+    marketplaceVisibleSkills = filteredSkills.slice(
+      marketplacePageStart,
+      marketplacePageStart + MARKETPLACE_PAGE_SIZE,
     );
-  const marketplaceTotalPages = Math.max(1, Math.ceil(marketplaceFilteredSkills.length / MARKETPLACE_PAGE_SIZE));
-  const safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
-  const marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
-  const marketplaceVisibleSkills = marketplaceFilteredSkills.slice(
-    marketplacePageStart,
-    marketplacePageStart + MARKETPLACE_PAGE_SIZE,
-  );
+  } else {
+    // Category or All: server-side pagination from API
+    marketplaceVisibleSkills = categorySkills;
+    marketplaceFilteredSkillsCount = categorySkillsTotal;
+    marketplaceTotalPages = Math.max(1, Math.ceil(categorySkillsTotal / MARKETPLACE_PAGE_SIZE));
+    safeMarketplacePage = Math.min(marketplacePage, marketplaceTotalPages);
+    marketplacePageStart = (safeMarketplacePage - 1) * MARKETPLACE_PAGE_SIZE;
+  }
 
   // Handle uninstall
   const handleUninstall = useCallback(async (slug: string) => {
@@ -1051,7 +1085,7 @@ export function Skills() {
               variant="outline"
               size="icon"
               onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills()}
-              disabled={activeTab === 'all' ? !isGatewayRunning : marketplaceLoading}
+              disabled={activeTab === 'all' ? !isGatewayRunning : (marketplaceLoading || categorySkillsLoading)}
               className="surface-hover ml-1 h-8 w-8 rounded-md border-black/10 bg-transparent text-muted-foreground shadow-none dark:border-white/10"
               title="Refresh"
             >
@@ -1071,23 +1105,21 @@ export function Skills() {
         )}
 
         {/* Sub Navigation and Actions */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4 shrink-0 gap-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 text-[14px]">
-            <div className="flex items-center gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 shrink-0 gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 text-[14px]">
+            {/* Segment Control: Installed / Marketplace */}
+            <div className="inline-flex w-fit items-center rounded-full border border-border/60 bg-muted/40 p-1 gap-0.5">
               <button
                 onClick={() => { setActiveTab('all'); setSelectedSource('all'); }}
                 className={cn(
-                  'relative pb-2 font-medium transition-colors flex items-center gap-1.5',
+                  'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all',
                   activeTab === 'all'
-                    ? 'text-foreground'
+                    ? 'bg-foreground text-background shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
+                <HugeiconsIcon icon={LaptopCheckIcon} className="w-4" />
                 {t('filter.allSkills')}
-                <span className="text-[12px] font-normal opacity-70">{sourceStats.all}</span>
-                {activeTab === 'all' && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
-                )}
               </button>
               <button
                 onClick={() => {
@@ -1095,22 +1127,20 @@ export function Skills() {
                   setMarketplacePage(1);
                 }}
                 className={cn(
-                  'relative pb-2 font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all',
                   activeTab === 'marketplace'
-                    ? 'text-foreground'
+                    ? 'bg-foreground text-background shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {t('marketplace.title')}
-                {activeTab === 'marketplace' && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
-                )}
+                <HugeiconsIcon icon={AiCloudIcon} className="w-4" /> {t('marketplace.title')}
               </button>
             </div>
 
-            <div className="flex items-center flex-wrap gap-4">
+            {/* Sub-tabs: underline style */}
+            <div className="flex items-center flex-wrap gap-6 border-b border-black/5 dark:border-white/5 px-4">
               {activeTab === 'all' && (
-                <div className="flex flex-wrap items-center gap-2">
+                <>
                   {installedFilters.map((filter) => {
                     const active = selectedSource === filter.key;
                     return (
@@ -1119,21 +1149,24 @@ export function Skills() {
                         type="button"
                         onClick={() => setSelectedSource(filter.key)}
                         className={cn(
-                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          'relative pb-2 text-[14px] font-medium transition-colors',
                           active
-                            ? 'bg-foreground text-background'
-                            : 'surface-hover text-foreground/70',
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {filter.label}
-                        <span className="ml-1.5 opacity-70">{filter.count}</span>
+                        <span className="ml-1 text-[12px] font-normal opacity-60">{filter.count}</span>
+                        {active && (
+                          <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
+                        )}
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
               {activeTab === 'marketplace' && (
-                <div className="flex flex-wrap items-center gap-2">
+                <>
                   {marketplaceSections.map((section) => {
                     const active = effectiveMarketplaceSection === section.key;
                     return (
@@ -1145,18 +1178,20 @@ export function Skills() {
                           setMarketplacePage(1);
                         }}
                         className={cn(
-                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          'relative pb-2 text-[14px] font-medium transition-colors',
                           active
-                            ? 'bg-foreground text-background'
-                            : 'surface-hover text-foreground/70',
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {section.label}
-                        <span className="ml-1.5 opacity-70">{section.count}</span>
+                        {active && (
+                          <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
+                        )}
                       </button>
                     );
                   })}
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -1285,14 +1320,12 @@ export function Skills() {
                   </div>
                 )}
                 
-                {marketplaceLoading && !marketplaceCatalog && (
+                {(marketplaceLoading && !marketplaceCatalog) || (categorySkillsLoading && !isFeaturedSection) ? (
                   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                     <LoadingSpinner size="lg" />
                     <p className="mt-4 text-sm">{t('marketplace.loading', 'Loading marketplace...')}</p>
                   </div>
-                )}
-
-                {!marketplaceLoading && marketplaceVisibleSkills.length > 0 ? (
+                ) : marketplaceVisibleSkills.length > 0 ? (
                   <>
                   {marketplaceVisibleSkills.map((skill) => {
                     const isInstalled = skills.some(s => s.id === skill.slug || s.name === skill.name);
@@ -1376,8 +1409,8 @@ export function Skills() {
                       <div className="text-[12px] text-muted-foreground">
                         {t('marketplace.pagination.summary', {
                           from: marketplacePageStart + 1,
-                          to: Math.min(marketplacePageStart + MARKETPLACE_PAGE_SIZE, marketplaceFilteredSkills.length),
-                          count: marketplaceFilteredSkills.length,
+                          to: Math.min(marketplacePageStart + MARKETPLACE_PAGE_SIZE, marketplaceFilteredSkillsCount),
+                          count: marketplaceFilteredSkillsCount,
                           defaultValue: '{{from}}-{{to}} / {{count}}',
                         })}
                       </div>
@@ -1410,7 +1443,7 @@ export function Skills() {
                   )}
                   </>
                 ) : (
-                  !marketplaceLoading && marketplaceCatalog && (
+                  !marketplaceLoading && !categorySkillsLoading && marketplaceCatalog && (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                       <HugeiconsIcon icon={CodesandboxIcon} size={40} strokeWidth={1.8} className="mb-4 opacity-50" />
                       <p>{marketplaceQuery ? t('marketplace.noResults') : t('marketplace.emptyPrompt')}</p>

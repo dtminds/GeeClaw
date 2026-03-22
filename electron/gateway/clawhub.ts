@@ -42,6 +42,30 @@ export interface ClawHubSkillResult {
     installs?: number;
     tags?: string[];
     featured?: boolean;
+    category?: string;
+    description_zh?: string;
+    ownerName?: string;
+    score?: number;
+    updated_at?: number;
+}
+
+export interface ClawHubCategoryInfo {
+    id: string;
+    name: string;
+}
+
+export interface ClawHubCategorySkillsParams {
+    page?: number;
+    pageSize?: number;
+    sortBy?: string;
+    order?: string;
+    category: string;
+    keyword?: string;
+}
+
+export interface ClawHubCategorySkillsResult {
+    skills: ClawHubSkillResult[];
+    total: number;
 }
 
 export interface ClawHubInstalledSkillResult {
@@ -642,6 +666,160 @@ export class ClawHubService {
 
     async getCatalog(): Promise<ClawHubCatalogResult> {
         return this.getMarketplaceCatalog();
+    }
+
+    /**
+     * Get featured skills from top.json
+     */
+    async getFeaturedSkills(): Promise<ClawHubSkillResult[]> {
+        const topJsonPath = path.join(getResourcesDir(), 'skills', 'top.json');
+        if (!fs.existsSync(topJsonPath)) {
+            console.warn('top.json not found at:', topJsonPath);
+            return [];
+        }
+        try {
+            const raw = await fs.promises.readFile(topJsonPath, 'utf-8');
+            const parsed = JSON.parse(raw) as Array<{
+                slug: string;
+                name?: string;
+                description?: string;
+                description_zh?: string;
+                version?: string;
+                homepage?: string;
+                ownerName?: string;
+                downloads?: number;
+                stars?: number;
+                installs?: number;
+                score?: number;
+                tags?: string[];
+                category?: string;
+                updated_at?: number;
+            }>;
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+            return parsed.map((skill) => ({
+                slug: skill.slug,
+                name: skill.name || skill.slug,
+                description: skill.description_zh || skill.description || '',
+                version: skill.version || 'latest',
+                homepage: skill.homepage,
+                author: skill.ownerName,
+                downloads: skill.downloads,
+                stars: skill.stars,
+                installs: skill.installs,
+                tags: Array.isArray(skill.tags) ? skill.tags : [],
+                category: skill.category,
+                description_zh: skill.description_zh,
+                ownerName: skill.ownerName,
+                score: skill.score,
+                updated_at: skill.updated_at,
+            }));
+        } catch (error) {
+            console.error('Failed to read top.json:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get category list from category.json
+     */
+    async getCategoryList(): Promise<ClawHubCategoryInfo[]> {
+        const categoryJsonPath = path.join(getResourcesDir(), 'skills', 'category.json');
+        if (!fs.existsSync(categoryJsonPath)) {
+            console.warn('category.json not found at:', categoryJsonPath);
+            return [];
+        }
+        try {
+            const raw = await fs.promises.readFile(categoryJsonPath, 'utf-8');
+            const parsed = JSON.parse(raw) as Array<{ id: string; name: string }>;
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+            return parsed.map((cat) => ({ id: cat.id, name: cat.name }));
+        } catch (error) {
+            console.error('Failed to read category.json:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch skills for a category from the remote API
+     */
+    async fetchCategorySkills(params: ClawHubCategorySkillsParams): Promise<ClawHubCategorySkillsResult> {
+        const {
+            page = 1,
+            pageSize = 24,
+            sortBy = 'score',
+            order = 'desc',
+            category,
+            keyword = '',
+        } = params;
+
+        const url = new URL('https://lightmake.site/api/skills');
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('pageSize', String(pageSize));
+        url.searchParams.set('sortBy', sortBy);
+        url.searchParams.set('order', order);
+        url.searchParams.set('category', category);
+        url.searchParams.set('keyword', keyword);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch category skills: HTTP ${response.status}`);
+        }
+
+        const json = (await response.json()) as {
+            code: number;
+            message: string;
+            data: {
+                skills: Array<{
+                    slug: string;
+                    name?: string;
+                    description?: string;
+                    description_zh?: string;
+                    version?: string;
+                    homepage?: string;
+                    ownerName?: string;
+                    downloads?: number;
+                    stars?: number;
+                    installs?: number;
+                    score?: number;
+                    tags?: string[] | null;
+                    category?: string;
+                    updated_at?: number;
+                }>;
+                total: number;
+            };
+        };
+
+        if (json.code !== 0) {
+            throw new Error(`API error: ${json.message}`);
+        }
+
+        const skills: ClawHubSkillResult[] = (json.data.skills || []).map((skill) => ({
+            slug: skill.slug,
+            name: skill.name || skill.slug,
+            description: skill.description_zh || skill.description || '',
+            version: skill.version || 'latest',
+            homepage: skill.homepage,
+            author: skill.ownerName,
+            downloads: skill.downloads,
+            stars: skill.stars,
+            installs: skill.installs,
+            tags: Array.isArray(skill.tags) ? skill.tags : [],
+            category: skill.category,
+            description_zh: skill.description_zh,
+            ownerName: skill.ownerName,
+            score: skill.score,
+            updated_at: skill.updated_at,
+        }));
+
+        return { skills, total: json.data.total || 0 };
     }
 
     async getSkillHubStatus(): Promise<SkillHubStatusResult> {
