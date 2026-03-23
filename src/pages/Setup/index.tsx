@@ -123,6 +123,22 @@ function getProtocolBaseUrlPlaceholder(
   return 'https://api.example.com/v1';
 }
 
+function isArkCodePlanMode(
+  providerId: string | null | undefined,
+  baseUrl: string | undefined,
+  modelId: string | undefined,
+  codePlanPresetBaseUrl?: string,
+  codePlanPresetModelId?: string,
+): boolean {
+  return (
+    providerId === 'ark'
+    && Boolean(codePlanPresetBaseUrl)
+    && Boolean(codePlanPresetModelId)
+    && (baseUrl || '').trim() === codePlanPresetBaseUrl
+    && (modelId || '').trim() === codePlanPresetModelId
+  );
+}
+
 // NOTE: Channel types moved to Settings > Channels page
 // NOTE: Skill bundles moved to Settings > Skills page - auto-install essential skills during setup
 
@@ -730,6 +746,7 @@ export function ProviderContent({
   const providerMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [authMode, setAuthMode] = useState<'oauth' | 'apikey'>('oauth');
+  const [arkMode, setArkMode] = useState<'apikey' | 'codeplan'>('apikey');
 
   // OAuth Flow State
   const [oauthFlowing, setOauthFlowing] = useState(false);
@@ -909,9 +926,20 @@ export function ProviderContent({
           onApiKeyChange(storedKey || '');
 
           const info = providerOptions.find((p) => p.id === selectedProvider);
-          setBaseUrl(savedProvider?.baseUrl || info?.defaultBaseUrl || '');
+          const nextBaseUrl = savedProvider?.baseUrl || info?.defaultBaseUrl || '';
+          const nextModelId = savedProvider?.model || info?.defaultModelId || '';
+          setBaseUrl(nextBaseUrl);
           setApiProtocol(savedProvider?.apiProtocol || 'openai-completions');
-          setModelId(savedProvider?.model || info?.defaultModelId || '');
+          setModelId(nextModelId);
+          setArkMode(
+            isArkCodePlanMode(
+              selectedProvider,
+              nextBaseUrl,
+              nextModelId,
+              info?.codePlanPresetBaseUrl,
+              info?.codePlanPresetModelId,
+            ) ? 'codeplan' : 'apikey'
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -947,11 +975,20 @@ export function ProviderContent({
 
   const selectedProviderData = providerOptions.find((p) => p.id === selectedProvider);
   const providerDocsUrl = getProviderDocsUrl(selectedProviderData, i18n.language);
+  const effectiveProviderDocsUrl = selectedProvider === 'ark' && arkMode === 'codeplan'
+    ? (selectedProviderData?.codePlanDocsUrl || providerDocsUrl)
+    : providerDocsUrl;
   const selectedProviderIconUrl = selectedProviderData
     ? getProviderIconUrl(selectedProviderData.id)
     : undefined;
   const showBaseUrlField = selectedProviderData?.showBaseUrl ?? false;
   const showModelIdField = shouldShowProviderModelId(selectedProviderData, devModeUnlocked);
+  const codePlanPreset = selectedProviderData?.codePlanPresetBaseUrl && selectedProviderData?.codePlanPresetModelId
+    ? {
+        baseUrl: selectedProviderData.codePlanPresetBaseUrl,
+        modelId: selectedProviderData.codePlanPresetModelId,
+      }
+    : null;
   const requiresKey = selectedProviderData?.requiresApiKey ?? false;
   const isOAuth = selectedProviderData?.isOAuth ?? false;
   const supportsApiKey = selectedProviderData?.supportsApiKey ?? false;
@@ -1107,6 +1144,7 @@ export function ProviderContent({
     setKeyValid(null);
     setProviderMenuOpen(false);
     setAuthMode('oauth');
+    setArkMode('apikey');
   };
 
   return (
@@ -1115,9 +1153,9 @@ export function ProviderContent({
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <Label>{t('provider.label')}</Label>
-          {selectedProvider && providerDocsUrl && (
+          {selectedProvider && effectiveProviderDocsUrl && (
             <a
-              href={providerDocsUrl}
+              href={effectiveProviderDocsUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-info inline-flex items-center gap-1 text-[13px] font-medium hover:opacity-80"
@@ -1213,6 +1251,68 @@ export function ProviderContent({
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
+          {codePlanPreset && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label>{t('provider.codePlanPreset')}</Label>
+                {selectedProviderData?.codePlanDocsUrl && (
+                  <a
+                    href={selectedProviderData.codePlanDocsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-info inline-flex items-center gap-1 text-[13px] font-medium hover:opacity-80"
+                  >
+                    {t('provider.codePlanDoc')}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+              <div className="flex gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArkMode('apikey');
+                    setBaseUrl(selectedProviderData?.defaultBaseUrl || '');
+                    if (modelId.trim() === codePlanPreset.modelId) {
+                      setModelId(selectedProviderData?.defaultModelId || '');
+                    }
+                    onConfiguredChange(false);
+                  }}
+                  className={cn(
+                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    arkMode === 'apikey'
+                      ? 'bg-primary/10 border-primary/30 font-medium'
+                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {t('settings:aiProviders.authModes.apiKey')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArkMode('codeplan');
+                    setBaseUrl(codePlanPreset.baseUrl);
+                    setModelId(codePlanPreset.modelId);
+                    onConfiguredChange(false);
+                  }}
+                  className={cn(
+                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    arkMode === 'codeplan'
+                      ? 'bg-primary/10 border-primary/30 font-medium'
+                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {t('provider.codePlanMode')}
+                </button>
+              </div>
+              {arkMode === 'codeplan' && (
+                <p className="text-xs text-muted-foreground">
+                  {t('provider.codePlanPresetDesc')}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Base URL field (for siliconflow, ollama, custom) */}
           {showBaseUrlField && (
             <div className="space-y-2">
