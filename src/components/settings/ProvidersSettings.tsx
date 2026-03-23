@@ -167,9 +167,18 @@ export function ProvidersSettings() {
       await removeAccount(providerId);
       toast.success(t('aiProviders.toast.deleted'));
     } catch (error) {
-      toast.error(`${t('aiProviders.toast.failedDelete')}: ${error}`);
+      const message = String(error);
+      if (message.includes('BLOCKED_BY_FALLBACK:')) {
+        const refs = message.split('BLOCKED_BY_FALLBACK:')[1] ?? '';
+        toast.error(t('aiProviders.toast.blockedByFallback', { refs }), {
+          duration: 6000,
+        });
+      } else {
+        toast.error(`${t('aiProviders.toast.failedDelete')}: ${error}`);
+      }
     }
   };
+
 
   const handleSetDefault = async (providerId: string) => {
     try {

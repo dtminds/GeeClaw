@@ -162,6 +162,7 @@
       "failedAdd": "添加提供商失败",
       "deleted": "提供商已删除",
       "failedDelete": "删除提供商失败",
+      "blockedByFallback": "该提供商的模型（{{refs}}）仍配置在备用模型中，请先从备用模型配置中移除再删除",
       "defaultUpdated": "默认提供商已更新",
       "failedDefault": "设置默认失败",
       "updated": "提供商已更新",

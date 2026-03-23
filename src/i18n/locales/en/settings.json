@@ -162,6 +162,7 @@
       "failedAdd": "Failed to add provider",
       "deleted": "Provider deleted",
       "failedDelete": "Failed to delete provider",
+      "blockedByFallback": "Cannot delete: model(s) {{refs}} from this provider are configured as Agent Fallbacks. Please remove them from Model Settings first.",
       "defaultUpdated": "Default provider updated",
       "failedDefault": "Failed to set default",
       "updated": "Provider updated",
