@@ -5,6 +5,9 @@ import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getOpenClawConfigDir } from './paths';
 import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
+const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
+const MANAGED_AGENT_MAX_CONCURRENT = 3;
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath, constants.F_OK);
@@ -50,23 +53,51 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
     let changed = false;
 
     const managedWorkspaceDir = join(getOpenClawConfigDir(), 'workspace');
-    const agentsForWorkspace = (
+    const agentsForDefaults = (
       config.agents && typeof config.agents === 'object'
         ? (config.agents as Record<string, unknown>)
         : {}
     );
-    const defaultsForWorkspace = (
-      agentsForWorkspace.defaults && typeof agentsForWorkspace.defaults === 'object'
-        ? { ...(agentsForWorkspace.defaults as Record<string, unknown>) }
+    const defaults = (
+      agentsForDefaults.defaults && typeof agentsForDefaults.defaults === 'object'
+        ? { ...(agentsForDefaults.defaults as Record<string, unknown>) }
         : {}
     );
-    if (defaultsForWorkspace.workspace !== managedWorkspaceDir) {
+    const heartbeat = (
+      defaults.heartbeat && typeof defaults.heartbeat === 'object' && !Array.isArray(defaults.heartbeat)
+        ? { ...(defaults.heartbeat as Record<string, unknown>) }
+        : {}
+    );
+    let agentDefaultsChanged = false;
+
+    if (defaults.workspace !== managedWorkspaceDir) {
       console.log(
-        `[sanitize] Restoring agents.defaults.workspace: "${String(defaultsForWorkspace.workspace)}" -> "${managedWorkspaceDir}"`,
+        `[sanitize] Restoring agents.defaults.workspace: "${String(defaults.workspace)}" -> "${managedWorkspaceDir}"`,
       );
-      defaultsForWorkspace.workspace = managedWorkspaceDir;
-      agentsForWorkspace.defaults = defaultsForWorkspace;
-      config.agents = agentsForWorkspace;
+      defaults.workspace = managedWorkspaceDir;
+      agentDefaultsChanged = true;
+    }
+
+    if (heartbeat.every !== MANAGED_AGENT_HEARTBEAT_EVERY) {
+      console.log(
+        `[sanitize] Restoring agents.defaults.heartbeat.every: "${String(heartbeat.every)}" -> "${MANAGED_AGENT_HEARTBEAT_EVERY}"`,
+      );
+      heartbeat.every = MANAGED_AGENT_HEARTBEAT_EVERY;
+      defaults.heartbeat = heartbeat;
+      agentDefaultsChanged = true;
+    }
+
+    if (defaults.maxConcurrent !== MANAGED_AGENT_MAX_CONCURRENT) {
+      console.log(
+        `[sanitize] Restoring agents.defaults.maxConcurrent: "${String(defaults.maxConcurrent)}" -> "${MANAGED_AGENT_MAX_CONCURRENT}"`,
+      );
+      defaults.maxConcurrent = MANAGED_AGENT_MAX_CONCURRENT;
+      agentDefaultsChanged = true;
+    }
+
+    if (agentDefaultsChanged) {
+      agentsForDefaults.defaults = defaults;
+      config.agents = agentsForDefaults;
       changed = true;
     }
 

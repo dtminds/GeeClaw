@@ -397,11 +397,13 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   });
 });
 
-describe('sanitizeOpenClawConfig (workspace path guard)', () => {
+describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
   const MANAGED_WORKSPACE = '/managed/state/.openclaw-geeclaw/workspace';
+  const MANAGED_HEARTBEAT_EVERY = '2h';
+  const MANAGED_MAX_CONCURRENT = 3;
 
   /**
-   * Standalone mirror of the workspace guard logic added to sanitizeOpenClawConfig.
+   * Standalone mirror of the managed agent defaults guard logic added to sanitizeOpenClawConfig.
    * Operates on a real temp file, matching the existing test helper pattern.
    */
   async function sanitizeWorkspace(filePath: string, managedWorkspaceDir: string): Promise<boolean> {
@@ -425,8 +427,32 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
         ? { ...(agentsForWorkspace.defaults as Record<string, unknown>) }
         : {}
     );
+    const heartbeat = (
+      defaultsForWorkspace.heartbeat &&
+      typeof defaultsForWorkspace.heartbeat === 'object' &&
+      !Array.isArray(defaultsForWorkspace.heartbeat)
+        ? { ...(defaultsForWorkspace.heartbeat as Record<string, unknown>) }
+        : {}
+    );
+    let agentDefaultsModified = false;
+
     if (defaultsForWorkspace.workspace !== managedWorkspaceDir) {
       defaultsForWorkspace.workspace = managedWorkspaceDir;
+      agentDefaultsModified = true;
+    }
+
+    if (heartbeat.every !== MANAGED_HEARTBEAT_EVERY) {
+      heartbeat.every = MANAGED_HEARTBEAT_EVERY;
+      defaultsForWorkspace.heartbeat = heartbeat;
+      agentDefaultsModified = true;
+    }
+
+    if (defaultsForWorkspace.maxConcurrent !== MANAGED_MAX_CONCURRENT) {
+      defaultsForWorkspace.maxConcurrent = MANAGED_MAX_CONCURRENT;
+      agentDefaultsModified = true;
+    }
+
+    if (agentDefaultsModified) {
       agentsForWorkspace.defaults = defaultsForWorkspace;
       config.agents = agentsForWorkspace;
       modified = true;
@@ -438,11 +464,16 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
     return modified;
   }
 
-  it('restores a wrong workspace path to the managed path', async () => {
+  it('restores wrong managed agent defaults while preserving other settings', async () => {
     await writeConfig({
       agents: {
         defaults: {
           workspace: '/wrong/path/workspace',
+          heartbeat: {
+            every: '30m',
+            jitter: '5m',
+          },
+          maxConcurrent: 1,
           model: { primary: 'openai/gpt-4' },
         },
       },
@@ -454,11 +485,15 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
     const result = await readConfig();
     const defaults = ((result.agents as Record<string, unknown>).defaults as Record<string, unknown>);
     expect(defaults.workspace).toBe(MANAGED_WORKSPACE);
-    // Other fields in defaults should be preserved
+    expect(defaults.maxConcurrent).toBe(MANAGED_MAX_CONCURRENT);
+    expect(defaults.heartbeat).toEqual({
+      every: MANAGED_HEARTBEAT_EVERY,
+      jitter: '5m',
+    });
     expect(defaults.model).toEqual({ primary: 'openai/gpt-4' });
   });
 
-  it('creates agents.defaults.workspace when the key is absent', async () => {
+  it('creates missing managed agent defaults when keys are absent', async () => {
     await writeConfig({
       agents: {
         defaults: {
@@ -473,6 +508,8 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
     const result = await readConfig();
     const defaults = ((result.agents as Record<string, unknown>).defaults as Record<string, unknown>);
     expect(defaults.workspace).toBe(MANAGED_WORKSPACE);
+    expect(defaults.maxConcurrent).toBe(MANAGED_MAX_CONCURRENT);
+    expect(defaults.heartbeat).toEqual({ every: MANAGED_HEARTBEAT_EVERY });
   });
 
   it('creates the full agents.defaults structure when agents section is absent', async () => {
@@ -484,15 +521,21 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
     const result = await readConfig();
     const defaults = ((result.agents as Record<string, unknown>).defaults as Record<string, unknown>);
     expect(defaults.workspace).toBe(MANAGED_WORKSPACE);
-    // Unrelated sections untouched
+    expect(defaults.maxConcurrent).toBe(MANAGED_MAX_CONCURRENT);
+    expect(defaults.heartbeat).toEqual({ every: MANAGED_HEARTBEAT_EVERY });
     expect(result.gateway).toEqual({ mode: 'local' });
   });
 
-  it('does nothing when workspace is already the managed path', async () => {
+  it('does nothing when managed agent defaults are already correct', async () => {
     await writeConfig({
       agents: {
         defaults: {
           workspace: MANAGED_WORKSPACE,
+          heartbeat: {
+            every: MANAGED_HEARTBEAT_EVERY,
+            jitter: '5m',
+          },
+          maxConcurrent: MANAGED_MAX_CONCURRENT,
           model: { primary: 'openai/gpt-4' },
         },
       },
@@ -504,5 +547,10 @@ describe('sanitizeOpenClawConfig (workspace path guard)', () => {
     const result = await readConfig();
     const defaults = ((result.agents as Record<string, unknown>).defaults as Record<string, unknown>);
     expect(defaults.workspace).toBe(MANAGED_WORKSPACE);
+    expect(defaults.maxConcurrent).toBe(MANAGED_MAX_CONCURRENT);
+    expect(defaults.heartbeat).toEqual({
+      every: MANAGED_HEARTBEAT_EVERY,
+      jitter: '5m',
+    });
   });
 });
