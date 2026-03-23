@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.0.3-dev.1",
+    "version": "0.9.0-dev",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",

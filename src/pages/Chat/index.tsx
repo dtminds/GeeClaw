@@ -247,7 +247,7 @@ export function Chat() {
               <button
                 type="button"
                 onClick={scrollToBottomAndFollow}
-                className="absolute bottom-6 right-8 inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-background/95 text-foreground shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-background dark:border-white/10"
+                className="absolute bottom-6 right-8 inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-background/95 text-foreground shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-background dark:border-white/10"
                 aria-label={t('common:actions.scrollToBottom', 'Scroll to bottom')}
                 title={t('common:actions.scrollToBottom', 'Scroll to bottom')}
               >

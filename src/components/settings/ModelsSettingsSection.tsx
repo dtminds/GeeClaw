@@ -176,13 +176,13 @@ export function ModelsSettingsSection() {
   return (
     <div className="flex min-h-0 flex-col gap-8">
       <Card className="surface-muted rounded-3xl border border-transparent shadow-none">
-        <CardHeader className="pb-3">
+        <CardHeader className="p-0 pb-3">
           <CardTitle className="flex items-center gap-2 text-2xl font-normal tracking-tight">
             <Settings2 className="h-5 w-5" />
             {t('agentModels.title')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-0">
           {loading || !snapshot ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />

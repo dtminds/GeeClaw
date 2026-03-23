@@ -52,6 +52,8 @@ import { invokeIpc } from '@/lib/api-client';
 import { useSettingsStore } from '@/stores/settings';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
+import { AiSettingIcon, Delete02Icon, PinIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 
 function getProtocolBaseUrlPlaceholder(
   apiProtocol: ProviderAccount['apiProtocol'],
@@ -181,10 +183,10 @@ export function ProvidersSettings() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl text-foreground font-normal tracking-tight">
+        <h2 className="text-2xl text-foreground font-normal tracking-tight">
           {t('aiProviders.title', 'AI Providers')}
         </h2>
-        <Button onClick={() => setShowAddDialog(true)} className="surface-hover-strong rounded-full border border-transparent px-5 h-9 text-foreground shadow-none font-medium text-[13px]">
+        <Button onClick={() => setShowAddDialog(true)} className="rounded-full px-5 h-9 shadow-none font-medium text-[13px]">
           <Plus className="h-4 w-4 mr-2" />
           {t('aiProviders.add')}
         </Button>
@@ -402,7 +404,7 @@ function ProviderCard({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className={cn("h-[42px] w-[42px] shrink-0 flex items-center justify-center text-foreground border border-black/5 dark:border-white/10 rounded-full shadow-sm group-hover:scale-105 transition-transform", isDefault ? "surface-muted" : "bg-white dark:bg-[#1a1a19]")}>
+          <div className={cn("h-[42px] w-[42px] shrink-0 flex items-center justify-center text-foreground rounded-full group-hover:scale-105 transition-transform", isDefault ? "surface-muted" : "bg-white dark:bg-[#1a1a19]")}>
             {getProviderIconUrl(account.vendorId) ? (
               <img src={getProviderIconUrl(account.vendorId)} alt={typeInfo?.name || account.vendorId} className={cn('h-5 w-5', shouldInvertInDark(account.vendorId) && 'dark:invert')} />
             ) : (
@@ -412,12 +414,6 @@ function ProviderCard({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[15px]">{account.label}</span>
-              {isDefault && (
-                <span className="flex items-center gap-1 rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info">
-                  <Check className="h-3 w-3" />
-                  Default
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-[13px] text-muted-foreground">
               <span className="capitalize">{vendor?.name || account.vendorId}</span>
@@ -445,35 +441,40 @@ function ProviderCard({
         </div>
 
         {!isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {!isDefault && (
+          <div className="flex items-center gap-1 transition-opacity">
+            {isDefault ? 
+              <span className="flex items-center gap-1 rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info">
+                <Check className="h-3 w-3" />
+                默认提供商
+              </span>
+            :
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground shadow-sm hover:bg-card hover:text-info"
+                className="h-8 w-8 rounded-full text-muted-foreground hover:bg-card hover:text-info"
                 onClick={onSetDefault}
                 title={t('aiProviders.card.setDefault')}
               >
-                <Check className="h-4 w-4" />
+                <HugeiconsIcon icon={PinIcon} className="h-4 w-4" />
               </Button>
-            )}
+            }
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-[#1a1a19] shadow-sm"
+              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-[#1a1a19]"
               onClick={onEdit}
               title={t('aiProviders.card.editKey')}
             >
-              <Edit className="h-4 w-4" />
+              <HugeiconsIcon icon={AiSettingIcon} className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-white dark:hover:bg-[#1a1a19] shadow-sm"
+              className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-white dark:hover:bg-[#1a1a19]"
               onClick={onDelete}
               title={t('aiProviders.card.delete')}
             >
-              <Trash2 className="h-4 w-4" />
+              <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
             </Button>
           </div>
         )}
@@ -927,7 +928,7 @@ function AddProviderDialog({
                   }}
                     className="surface-hover rounded-2xl border border-black/5 p-4 text-center transition-colors group dark:border-white/5"
                 >
-                  <div className="modal-field-surface h-12 w-12 mx-auto mb-3 flex items-center justify-center rounded-xl shadow-sm border group-hover:scale-105 transition-transform">
+                  <div className="modal-field-surface h-12 w-12 mx-auto mb-3 flex items-center justify-center rounded-xl group-hover:scale-105 transition-transform">
                     {getProviderIconUrl(type.id) ? (
                       <img src={getProviderIconUrl(type.id)} alt={type.name} className={cn('h-6 w-6', shouldInvertInDark(type.id) && 'dark:invert')} />
                     ) : (
