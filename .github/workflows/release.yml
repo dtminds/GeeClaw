@@ -339,7 +339,7 @@ jobs:
           cat > $HOME/.ossutilconfig << EOF
           [Credentials]
           language=EN
-          endpoint=oss-cn-hangzhou.aliyuncs.com
+          endpoint=oss-cn-shanghai.aliyuncs.com
           accessKeyID=${OSS_ACCESS_KEY_ID}
           accessKeySecret=${OSS_ACCESS_KEY_SECRET}
           EOF
