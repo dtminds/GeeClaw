@@ -19,6 +19,13 @@ import { ensureGeeClawContext, repairGeeClawOnlyBootstrapFiles } from '../utils/
 import { isQuitting, setQuitting } from './app-state';
 import { applyProxySettings } from './proxy';
 import { getSetting } from '../utils/store';
+import { acquireProcessInstanceFileLock } from './process-instance-lock';
+import {
+  createQuitLifecycleState,
+  markQuitCleanupCompleted,
+  requestQuitLifecycleAction,
+} from './quit-lifecycle';
+import { createSignalQuitHandler } from './signal-quit';
 import {
   ensureBuiltinSkillsInstalled,
   ensurePreinstalledSkillsInstalled,
@@ -61,10 +68,37 @@ if (process.platform === 'linux') {
 // Without this, two instances each spawn their own gateway process on the
 // same port, then each treats the other's gateway as "orphaned" and kills
 // it — creating an infinite kill/restart loop on Windows.
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
+const gotElectronLock = app.requestSingleInstanceLock();
+if (!gotElectronLock) {
+  console.info('[GeeClaw] Another instance already holds the single-instance lock; exiting duplicate process');
+  app.exit(0);
 }
+let releaseProcessInstanceFileLock: () => void = () => {};
+let gotFileLock = true;
+if (gotElectronLock) {
+  try {
+    const fileLock = acquireProcessInstanceFileLock({
+      userDataDir: app.getPath('userData'),
+      lockName: 'geeclaw',
+    });
+    gotFileLock = fileLock.acquired;
+    releaseProcessInstanceFileLock = fileLock.release;
+    if (!fileLock.acquired) {
+      const ownerDescriptor = fileLock.ownerPid
+        ? `${fileLock.ownerFormat ?? 'legacy'} pid=${fileLock.ownerPid}`
+        : fileLock.ownerFormat === 'unknown'
+          ? 'unknown lock format/content'
+          : 'unknown owner';
+      console.info(
+        `[GeeClaw] Another instance already holds process lock (${fileLock.lockPath}, ${ownerDescriptor}); exiting duplicate process`,
+      );
+      app.exit(0);
+    }
+  } catch (error) {
+    console.warn('[GeeClaw] Failed to acquire process instance file lock; continuing with Electron single-instance lock only', error);
+  }
+}
+const gotTheLock = gotElectronLock && gotFileLock;
 
 // Global references
 let mainWindow: BrowserWindow | null = null;
@@ -73,6 +107,7 @@ const clawHubService = new ClawHubService();
 const hostEventBus = new HostEventBus();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
+const quitLifecycleState = createQuitLifecycleState();
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
   try {
@@ -189,7 +224,7 @@ async function initialize(): Promise<void> {
   logger.init();
   logger.info('=== GeeClaw Application Starting ===');
   logger.debug(
-    `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}`
+    `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}, pid=${process.pid}, ppid=${process.ppid}`
   );
 
   // Warm up network optimization (non-blocking)
@@ -380,50 +415,117 @@ async function initialize(): Promise<void> {
 
 }
 
-// When a second instance is launched, focus the existing window instead.
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  }
-});
+if (gotTheLock) {
+  const requestQuitOnSignal = createSignalQuitHandler({
+    logInfo: (message) => logger.info(message),
+    requestQuit: () => app.quit(),
+  });
 
-// Application lifecycle
-app.whenReady().then(() => {
-  initialize();
+  process.on('exit', () => {
+    releaseProcessInstanceFileLock();
+  });
 
-  // Register activate handler AFTER app is ready to prevent
-  // "Cannot create BrowserWindow before app is ready" on macOS.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow();
-    } else if (mainWindow && !mainWindow.isDestroyed()) {
-      // On macOS, clicking the dock icon should show the window if it's hidden
+  process.once('SIGINT', () => requestQuitOnSignal('SIGINT'));
+  process.once('SIGTERM', () => requestQuitOnSignal('SIGTERM'));
+
+  app.on('will-quit', () => {
+    releaseProcessInstanceFileLock();
+  });
+
+  // When a second instance is launched, focus the existing window instead.
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
     }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  // Application lifecycle
+  app.whenReady().then(() => {
+    initialize();
 
-app.on('before-quit', () => {
-  setQuitting();
-  hostEventBus.closeAll();
-  hostApiServer?.close();
-  // Fire-and-forget: do not await gatewayManager.stop() here.
-  // Awaiting inside before-quit can stall Electron's quit sequence.
-  // On app quit, detach from externally managed Gateways without sending
-  // a shutdown RPC. Only GeeClaw-owned processes should be terminated.
-  void gatewayManager.stop({ shutdownExternal: false }).catch((err) => {
-    logger.warn('gatewayManager.stop() error during quit:', err);
+    // Register activate handler AFTER app is ready to prevent
+    // "Cannot create BrowserWindow before app is ready" on macOS.
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow();
+      } else if (mainWindow && !mainWindow.isDestroyed()) {
+        // On macOS, clicking the dock icon should show the window if it's hidden
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
   });
-});
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+
+  app.on('before-quit', (event) => {
+    setQuitting();
+    const action = requestQuitLifecycleAction(quitLifecycleState);
+    if (action === 'allow-quit') {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (action === 'cleanup-in-progress') {
+      logger.debug('Quit requested while cleanup already in progress; waiting for shutdown task to finish');
+      return;
+    }
+
+    hostEventBus.closeAll();
+    hostApiServer?.close();
+
+    const stopPromise = gatewayManager.stop({ shutdownExternal: false }).catch((error) => {
+      logger.warn('gatewayManager.stop() error during quit:', error);
+    });
+    const timeoutPromise = new Promise<'timeout'>((resolve) => {
+      setTimeout(() => resolve('timeout'), 5000);
+    });
+
+    void Promise.race([stopPromise.then(() => 'stopped' as const), timeoutPromise]).then((result) => {
+      if (result === 'timeout') {
+        logger.warn('Gateway shutdown timed out during app quit; proceeding with forced quit');
+        void gatewayManager.forceTerminateOwnedProcessForQuit().then((terminated) => {
+          if (terminated) {
+            logger.warn('Forced gateway process termination completed after quit timeout');
+          }
+        }).catch((error) => {
+          logger.warn('Forced gateway termination failed after quit timeout:', error);
+        });
+      }
+      markQuitCleanupCompleted(quitLifecycleState);
+      app.quit();
+    });
+  });
+
+  const emergencyGatewayCleanup = (reason: string, error: unknown): void => {
+    logger.error(`${reason}:`, error);
+    try {
+      void gatewayManager.stop({ shutdownExternal: false }).catch(() => {
+        // Ignore cleanup failures on crash paths.
+      });
+    } catch {
+      // Ignore cleanup failures on crash paths.
+    }
+    setTimeout(() => {
+      process.exit(1);
+    }, 3000).unref();
+  };
+
+  process.on('uncaughtException', (error) => {
+    emergencyGatewayCleanup('Uncaught exception in main process', error);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    emergencyGatewayCleanup('Unhandled promise rejection in main process', reason);
+  });
+}
 
 // Export for testing
 export { mainWindow, gatewayManager };

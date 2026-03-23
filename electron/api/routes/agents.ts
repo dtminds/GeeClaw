@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { exec } from 'child_process';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { promisify } from 'util';
 import {
   assignChannelToAgent,
   clearChannelBinding,
@@ -17,12 +19,98 @@ import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 import { getOpenClawConfigDir } from '../../utils/paths';
 
+const execAsync = promisify(exec);
+
 function scheduleGatewayReload(ctx: HostApiContext, reason: string): void {
   if (ctx.gatewayManager.getStatus().state !== 'stopped') {
     ctx.gatewayManager.debouncedReload();
     return;
   }
   void reason;
+}
+
+/**
+ * Force a full Gateway process restart after agent deletion.
+ *
+ * An in-process reload is not sufficient here because channel plugins may
+ * keep long-lived connections for accounts that were removed from config.
+ */
+export async function restartGatewayForAgentDeletion(ctx: HostApiContext): Promise<void> {
+  const status = ctx.gatewayManager.getStatus();
+  if (status.state === 'stopped') {
+    return;
+  }
+
+  try {
+    const pid = status.pid;
+    const port = status.port;
+    console.log('[agents] Triggering Gateway restart (kill+respawn) after agent deletion', { pid, port });
+
+    if (pid) {
+      try {
+        if (process.platform === 'win32') {
+          await execAsync(`taskkill /F /PID ${pid} /T`);
+        } else {
+          process.kill(pid, 'SIGTERM');
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          try {
+            process.kill(pid, 0);
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            // Process already exited.
+          }
+        }
+      } catch {
+        // Process is already gone.
+      }
+    } else {
+      try {
+        if (process.platform === 'darwin' || process.platform === 'linux') {
+          const { stdout } = await execAsync(`lsof -t -i :${port} -sTCP:LISTEN`);
+          const pids = stdout.trim().split('\n').filter(Boolean);
+          for (const listenerPid of pids) {
+            try {
+              process.kill(parseInt(listenerPid, 10), 'SIGTERM');
+            } catch {
+              // Ignore listeners that have already exited.
+            }
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          for (const listenerPid of pids) {
+            try {
+              process.kill(parseInt(listenerPid, 10), 'SIGKILL');
+            } catch {
+              // Ignore listeners that have already exited.
+            }
+          }
+        } else if (process.platform === 'win32') {
+          const { stdout } = await execAsync(`netstat -ano | findstr :${port}`);
+          const lines = stdout.trim().split('\n');
+          const pids = new Set<string>();
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 5 && parts[1].endsWith(`:${port}`) && parts[3] === 'LISTENING') {
+              pids.add(parts[4]);
+            }
+          }
+          for (const listenerPid of pids) {
+            try {
+              await execAsync(`taskkill /F /PID ${listenerPid} /T`);
+            } catch {
+              // Ignore listeners that have already exited.
+            }
+          }
+        }
+      } catch {
+        // Listener may already be gone.
+      }
+    }
+
+    await ctx.gatewayManager.restart();
+    console.log('[agents] Gateway restart completed after agent deletion');
+  } catch (error) {
+    console.warn('[agents] Gateway restart after agent deletion failed:', error);
+  }
 }
 
 export async function handleAgentRoutes(
@@ -121,7 +209,7 @@ export async function handleAgentRoutes(
       try {
         const agentId = decodeURIComponent(parts[0]);
         const snapshot = await deleteAgentConfig(agentId);
-        scheduleGatewayReload(ctx, 'delete-agent');
+        await restartGatewayForAgentDeletion(ctx);
         sendJson(res, 200, { success: true, ...snapshot });
       } catch (error) {
         sendJson(res, 500, { success: false, error: String(error) });

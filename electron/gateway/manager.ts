@@ -266,8 +266,11 @@ export class GatewayManager extends EventEmitter {
           await this.connect(port, externalToken);
         },
         onConnectedToExistingGateway: () => {
-          this.ownsProcess = false;
-          this.setStatus({ pid: undefined });
+          const isOwnProcess = this.process?.pid != null && this.ownsProcess;
+          if (!isOwnProcess) {
+            this.ownsProcess = false;
+            this.setStatus({ pid: undefined });
+          }
           this.startHealthCheck();
         },
         waitForPortFree: async (port) => {
@@ -403,6 +406,25 @@ export class GatewayManager extends EventEmitter {
 
     this.restartController.resetDeferredRestart();
     this.setStatus({ state: 'stopped', error: undefined, pid: undefined, connectedAt: undefined, uptime: undefined });
+  }
+
+  /**
+   * Best-effort emergency cleanup for app-quit timeout paths.
+   * Only terminates a process this manager still owns.
+   */
+  async forceTerminateOwnedProcessForQuit(): Promise<boolean> {
+    if (!this.process || !this.ownsProcess) {
+      return false;
+    }
+
+    const child = this.process;
+    await terminateOwnedGatewayProcess(child);
+    if (this.process === child) {
+      this.process = null;
+    }
+    this.ownsProcess = false;
+    this.setStatus({ pid: undefined });
+    return true;
   }
 
   /**
@@ -685,6 +707,7 @@ export class GatewayManager extends EventEmitter {
 
     this.process = child;
     this.ownsProcess = true;
+    logger.debug(`Gateway manager now owns process pid=${child.pid ?? 'unknown'}`);
     this.lastSpawnSummary = lastSpawnSummary;
   }
 
