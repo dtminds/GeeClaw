@@ -29,39 +29,56 @@ export function warmupManagedPythonReadiness(): void {
 }
 
 export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess): Promise<void> {
-  let exited = false;
+  const terminateWindowsProcessTree = async (pid: number): Promise<void> => {
+    const cp = await import('child_process');
+    await new Promise<void>((resolve) => {
+      cp.exec(`taskkill /F /PID ${pid} /T`, { timeout: 5000, windowsHide: true }, () => resolve());
+    });
+  };
 
   await new Promise<void>((resolve) => {
+    let exited = false;
+
     child.once('exit', () => {
       exited = true;
+      clearTimeout(timeout);
       resolve();
     });
 
     const pid = child.pid;
     logger.info(`Sending kill to Gateway process (pid=${pid ?? 'unknown'})`);
-    try {
-      child.kill();
-    } catch {
-      // ignore if already exited
+
+    if (process.platform === 'win32' && pid) {
+      void terminateWindowsProcessTree(pid).catch((error) => {
+        logger.warn(`Windows process-tree kill failed for Gateway pid=${pid}:`, error);
+      });
+    } else {
+      try {
+        child.kill();
+      } catch {
+        // ignore if already exited
+      }
     }
 
     const timeout = setTimeout(() => {
       if (!exited) {
         logger.warn(`Gateway did not exit in time, force-killing (pid=${pid ?? 'unknown'})`);
         if (pid) {
-          try {
-            process.kill(pid, 'SIGKILL');
-          } catch {
-            // ignore
+          if (process.platform === 'win32') {
+            void terminateWindowsProcessTree(pid).catch((error) => {
+              logger.warn(`Forced Windows process-tree kill failed for Gateway pid=${pid}:`, error);
+            });
+          } else {
+            try {
+              process.kill(pid, 'SIGKILL');
+            } catch {
+              // ignore
+            }
           }
         }
       }
       resolve();
     }, 5000);
-
-    child.once('exit', () => {
-      clearTimeout(timeout);
-    });
   });
 }
 
@@ -215,6 +232,9 @@ export async function findExistingGatewayProcess(options: {
     if (foreignPids.length > 0) {
       if (terminateForeignProcess) {
         await terminateOrphanedProcessIds(port, foreignPids);
+        if (process.platform === 'win32') {
+          await waitForPortFree(port, 10000);
+        }
         return null;
       }
 

@@ -235,6 +235,17 @@ GeeClaw employs a **dual-process architecture** with a unified host API layer. T
 - **Secure Storage**: API keys and sensitive data leverage the operating system's native secure storage mechanisms
 - **CORS-Safe by Design**: Local HTTP access is proxied by Main, preventing renderer-side CORS issues
 
+### Process Model & Gateway Troubleshooting
+
+- GeeClaw is an Electron app, so **one app instance normally appears as multiple OS processes** (main/renderer/zygote/utility). This is expected.
+- Single-instance protection uses Electron's lock plus a local process-file lock fallback, preventing duplicate launches in environments where desktop IPC or the session bus is unstable.
+- During rolling upgrades, mixed old/new app versions can still produce asymmetric protection behavior. For best reliability, upgrade all desktop clients to the same version.
+- The OpenClaw Gateway listener should still be **single-owner**: only one process should listen on `127.0.0.1:28788`.
+- To verify the active listener:
+  - macOS/Linux: `lsof -nP -iTCP:28788 -sTCP:LISTEN`
+  - Windows (PowerShell): `Get-NetTCPConnection -LocalPort 28788 -State Listen`
+- Clicking the window close button (`X`) hides GeeClaw to tray; it does **not** fully quit the app. Use tray menu **Quit GeeClaw** for a complete shutdown.
+
 ---
 
 ## Use Cases
