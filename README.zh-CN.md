@@ -146,7 +146,7 @@ pnpm dev
 > Moonshot（Kimi）说明：GeeClaw 默认保持开启 Kimi 的 web search。  
 > 当配置 Moonshot 后，GeeClaw 也会将 OpenClaw 配置中的 Kimi web search 同步到中国区端点（`https://api.moonshot.cn/v1`）。
 
-GeeClaw 会自行管理 OpenClaw 运行时和状态目录。首次启动时，在完成登录态检查后，会先改写 `~/.openclaw-geeclaw/openclaw.json`，确保 `agents.defaults.workspace` 指向 `~/.openclaw-geeclaw/workspace`，然后执行 `openclaw.mjs --profile geeclaw setup` 初始化该 profile，随后再以 `openclaw.mjs --profile geeclaw gateway --port 28788` 启动网关。若你之前已有 `~/.openclaw` 旧数据或 `~/Library/LaunchAgents/ai.openclaw.gateway.plist`，GeeClaw 会保留它们，不会删除或改写系统级安装。
+GeeClaw 会自行管理 OpenClaw 运行时和状态目录。首次启动时，在完成登录态检查后，会先改写 `~/.openclaw-geeclaw/openclaw.json`，确保 `agents.defaults.workspace` 指向 `~/.openclaw-geeclaw/workspace`、`agents.defaults.heartbeat.every` 固定为 `"2h"`、`agents.defaults.maxConcurrent` 固定为 `3`，然后执行 `openclaw.mjs --profile geeclaw setup` 初始化该 profile，随后再以 `openclaw.mjs --profile geeclaw gateway --port 28788` 启动网关。若你之前已有 `~/.openclaw` 旧数据或 `~/Library/LaunchAgents/ai.openclaw.gateway.plist`，GeeClaw 会保留它们，不会删除或改写系统级安装。
 
 你可以在 **设置 → 安全** 中查看当前托管的 OpenClaw 状态目录；GeeClaw 会将 `openclaw.json -> tools.fs.workspaceOnly` 固定校验为 `false`，该页面负责控制 `tools` 下的 deny / exec / elevated 安全策略。这些安全配置都会持久化到应用 store，并在启动时重新校验回写到 `openclaw.json`。
 

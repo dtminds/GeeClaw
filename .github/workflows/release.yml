@@ -8,10 +8,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 1.0.0)'
-        required: true
 
 permissions:
   contents: write
@@ -25,8 +21,10 @@ jobs:
             platform: mac
           - os: windows-latest
             platform: win
-          - os: ubuntu-latest
-            platform: linux
+          # Temporarily disable Linux release builds.
+          # Restore by uncommenting the entry below.
+          # - os: ubuntu-latest
+          #   platform: linux
 
     runs-on: ${{ matrix.os }}
     
@@ -35,6 +33,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate package version matches tag
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "PACKAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+              echo "::error::Tag version v${TAG_VERSION} does not match package.json version ${VERSION}."
+              exit 1
+            fi
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -68,9 +80,11 @@ jobs:
         if: matrix.platform == 'win'
         run: pnpm run uv:download:win
 
-      - name: Download uv binaries for Linux
-        if: matrix.platform == 'linux'
-        run: pnpm run uv:download:linux
+      # Temporarily disable Linux release builds.
+      # Restore by uncommenting the step below.
+      # - name: Download uv binaries for Linux
+      #   if: matrix.platform == 'linux'
+      #   run: pnpm run uv:download:linux
 
       # macOS specific steps
       # --publish never: prevent electron-builder from auto-publishing to GitHub.
@@ -87,21 +101,22 @@ jobs:
         run: |
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
-          pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --mac --publish never
+          pnpm run package:mac
 
       # Windows specific steps
       - name: Build Windows
         if: matrix.platform == 'win'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --win --publish never
+        run: pnpm run package:win
 
-      # Linux specific steps
-      - name: Build Linux
-        if: matrix.platform == 'linux'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --linux --publish never
+      # Temporarily disable Linux release builds.
+      # Restore by uncommenting the step below.
+      # - name: Build Linux
+      #   if: matrix.platform == 'linux'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: pnpm run package:linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -181,13 +196,6 @@ jobs:
             - **Installer (x64)**: `GeeClaw-*-win-x64.exe`
             - **Installer (ARM64)**: `GeeClaw-*-win-arm64.exe`
             
-            #### Linux
-            - **AppImage (x64)**: `GeeClaw-*-linux-x86_64.AppImage` (Universal format, recommended)
-            - **AppImage (ARM64)**: `GeeClaw-*-linux-arm64.AppImage`
-            - **Debian/Ubuntu (x64)**: `GeeClaw-*-linux-amd64.deb`
-            - **Debian/Ubuntu (ARM64)**: `GeeClaw-*-linux-arm64.deb`
-            - **RPM (x64)**: `GeeClaw-*-linux-x86_64.rpm`
-            
             ### 📝 Release Notes
             
             See the auto-generated release notes below for detailed changes.
@@ -196,9 +204,6 @@ jobs:
             
             - **macOS**: On first launch, you may see "cannot verify developer". Go to System Preferences → Security & Privacy to allow the app to run
             - **Windows**: SmartScreen may block the app. Click "More info" → "Run anyway" to proceed
-            - **Linux AppImage**: First run `chmod +x GeeClaw-*.AppImage` to add execute permission. On Ubuntu 22.04 you may also need `sudo apt install libfuse2`; on Ubuntu 24.04 use `sudo apt install libfuse2t64`
-            - **Linux .deb (Ubuntu 24.04)**: If installation fails due to missing dependencies, use `sudo apt install libgtk-3-0t64 libnotify4t64 libxss1t64` before installing
-            
             ---
             
             💬 Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)
@@ -220,6 +225,7 @@ jobs:
   upload-oss:
     needs: release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Checkout code
@@ -232,11 +238,15 @@ jobs:
 
       - name: Extract version and channel
         id: version
+        shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF#refs/tags/}"
+          EXPECTED_TAG="v${VERSION}"
+
+          if [[ "${TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "::error::Tag ${TAG} does not match package.json version ${VERSION}."
+            exit 1
           fi
 
           # Detect channel from semver prerelease tag
@@ -287,7 +297,10 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.version.outputs.channel }}"
-          BASE_URL="https://oss.intelli-spectrum.com/${CHANNEL}"
+          BASE_URL="https://geeclaw.dtminds.com/${CHANNEL}"
+
+          # Temporarily disable Linux release metadata.
+          # Restore the Linux download entries in the jq payload below when Linux releases resume.
 
           jq -n \
             --arg version "$VERSION" \
@@ -307,13 +320,6 @@ jobs:
                 win: {
                   x64: ($base + "/GeeClaw-" + $version + "-win-x64.exe"),
                   arm64: ($base + "/GeeClaw-" + $version + "-win-arm64.exe")
-                },
-                linux: {
-                  deb_amd64: ($base + "/GeeClaw-" + $version + "-linux-amd64.deb"),
-                  deb_arm64: ($base + "/GeeClaw-" + $version + "-linux-arm64.deb"),
-                  appimage_x64: ($base + "/GeeClaw-" + $version + "-linux-x86_64.AppImage"),
-                  appimage_arm64: ($base + "/GeeClaw-" + $version + "-linux-arm64.AppImage"),
-                  rpm_x64: ($base + "/GeeClaw-" + $version + "-linux-x86_64.rpm")
                 }
               },
               changelog: $changelog
@@ -340,20 +346,34 @@ jobs:
 
           ossutil --version
 
-      - name: "Upload to OSS: {channel}/ (overwrite)"
+      - name: "Upload to OSS: {channel}/ artifacts"
         run: |
           CHANNEL="${{ steps.version.outputs.channel }}"
-
-          # Only clean the current channel's directory — never touch other channels
-          ossutil rm -r -f oss://valuecell-clawx/${CHANNEL}/ || true
-
-          # Upload all files with no-cache so clients always get the freshest version
-          ossutil cp -r -f \
-            --meta="Cache-Control:no-cache,no-store,must-revalidate" \
-            staging/${CHANNEL}/ \
-            oss://valuecell-clawx/${CHANNEL}/
+          find "staging/${CHANNEL}" -maxdepth 1 -type f \
+            ! -name "*.yml" \
+            ! -name "release-info.json" | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:public,max-age=31536000,immutable" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${filename}"
+            done
 
           echo "Uploaded to ${CHANNEL}/"
+
+      - name: "Upload to OSS: {channel}/ metadata"
+        run: |
+          CHANNEL="${{ steps.version.outputs.channel }}"
+          find "staging/${CHANNEL}" -maxdepth 1 -type f \
+            \( -name "*.yml" -o -name "release-info.json" \) | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:no-cache,no-store,must-revalidate" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${filename}"
+            done
+
+          echo "Uploaded channel metadata to ${CHANNEL}/"
 
       - name: "Upload to OSS: releases/vX.Y.Z/ (archive)"
         run: |
@@ -362,7 +382,7 @@ jobs:
           # Upload to permanent archive (long cache, immutable)
           ossutil cp -r \
             staging/releases/${TAG}/ \
-            oss://valuecell-clawx/releases/${TAG}/ \
+            oss://xingyun-ai/releases/${TAG}/ \
             --meta "Cache-Control:public,max-age=31536000,immutable"
 
           echo "Uploaded to releases/${TAG}/"
@@ -373,15 +393,15 @@ jobs:
           CHANNEL="${{ steps.version.outputs.channel }}"
 
           echo "=== ${CHANNEL}/ ==="
-          ossutil ls oss://valuecell-clawx/${CHANNEL}/ --short
+          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short
 
           echo ""
           echo "=== releases/${TAG}/ ==="
-          ossutil ls oss://valuecell-clawx/releases/${TAG}/ --short
+          ossutil ls oss://xingyun-ai/releases/${TAG}/ --short
 
           echo ""
           echo "=== Verify release-info.json ==="
-          ossutil cp oss://valuecell-clawx/${CHANNEL}/release-info.json /tmp/release-info.json -f
+          ossutil cp oss://xingyun-ai/${CHANNEL}/release-info.json /tmp/release-info.json -f
           jq . /tmp/release-info.json
 
           echo ""
@@ -392,7 +412,7 @@ jobs:
             YML_PREFIX="${CHANNEL}"
           fi
           echo "electron-updater expects ${YML_PREFIX}-mac.yml, ${YML_PREFIX}.yml, etc. in ${CHANNEL}/:"
-          ossutil ls oss://valuecell-clawx/${CHANNEL}/ --short | grep "${YML_PREFIX}.*\\.yml" || echo "(none found)"
+          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short | grep "${YML_PREFIX}.*\\.yml" || echo "(none found)"
           
           echo ""
           echo "All files uploaded and verified successfully!"
@@ -416,14 +436,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
           IS_PRERELEASE_CHANNEL=false
 
-          if [[ "$TAG" == *"alpha"* ]] || [[ "$TAG" == *"beta"* ]]; then
+          if [[ "${VERSION}" == *-* ]]; then
             IS_PRERELEASE_CHANNEL=true
           fi
 
           if [ "$IS_PRERELEASE_CHANNEL" = "true" ]; then
-            echo "Tag $TAG is an alpha/beta release — keeping as pre-release."
+            echo "Tag $TAG is a prerelease — keeping as pre-release."
           else
             echo "Promoting $TAG from pre-release to latest release..."
             gh release edit "$TAG" \

@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.9.0-dev",
+    "version": "0.9.0-test.0",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
@@ -40,13 +40,12 @@
         "node:download:win": "zx scripts/download-bundled-node.mjs --platform=win",
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win",
         "icons": "zx scripts/generate-icons.mjs",
-        "package": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder",
-        "package:mac": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --mac",
-        "package:mac:unsigned": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --mac --config.mac.identity=null",
-        "package:mac:dir": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --mac --arm64 --dir --config.mac.identity=null",
-        "package:win": "pnpm run prep:win-binaries && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --win",
-        "package:linux": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --linux",
-        "release": "pnpm run uv:download && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder --publish always",
+        "package": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
+        "package:mac": "pnpm run package && electron-builder --mac --publish never",
+        "package:win": "pnpm run prep:win-binaries && pnpm run package && electron-builder --win --publish never",
+        "package:linux": "pnpm run package && electron-builder --linux --publish never",
+        "package:mac:dir": "pnpm run package && electron-builder --mac --arm64 --dir --config.mac.identity=null",
+        "release": "pnpm run uv:download && pnpm run package && electron-builder --publish always",
         "version:patch": "pnpm version patch",
         "version:minor": "pnpm version minor",
         "version:major": "pnpm version major",

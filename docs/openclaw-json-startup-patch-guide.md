@@ -173,6 +173,8 @@ Main file:
 Responsibilities:
 
 - restore `agents.defaults.workspace`
+- restore `agents.defaults.heartbeat.every`
+- restore `agents.defaults.maxConcurrent`
 - remove invalid `skills.enabled` or `skills.disabled` root keys
 - remove stale plugin load paths
 - ensure `commands.restart = true`

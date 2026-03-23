@@ -159,7 +159,7 @@ describe('buildGatewayForkEnv', () => {
 });
 
 describe('prepareGatewayLaunchContext', () => {
-  it('rewrites agents.defaults.workspace into the managed state dir before rerunning setup', async () => {
+  it('rewrites managed agent defaults into the managed state dir before rerunning setup', async () => {
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
     const configPath = join(openclawConfigDir, 'openclaw.json');
     const managedWorkspaceDir = join(openclawConfigDir, 'workspace');
@@ -169,6 +169,11 @@ describe('prepareGatewayLaunchContext', () => {
       agents: {
         defaults: {
           workspace: '/Users/test/.openclaw/workspace-geeclaw',
+          heartbeat: {
+            every: '30m',
+            jitter: '5m',
+          },
+          maxConcurrent: 1,
           model: {
             primary: 'openrouter/model',
             fallbacks: [],
@@ -191,10 +196,21 @@ describe('prepareGatewayLaunchContext', () => {
           if (event === 'exit') {
             queueMicrotask(() => {
               const config = JSON.parse(readFileSync(configPath, 'utf-8')) as {
-                agents?: { defaults?: { workspace?: string } };
+                agents?: {
+                  defaults?: {
+                    workspace?: string;
+                    heartbeat?: { every?: string; jitter?: string };
+                    maxConcurrent?: number;
+                  };
+                };
                 gateway?: { port?: number };
               };
               expect(config.agents?.defaults?.workspace).toBe(managedWorkspaceDir);
+              expect(config.agents?.defaults?.heartbeat).toEqual({
+                every: '2h',
+                jitter: '5m',
+              });
+              expect(config.agents?.defaults?.maxConcurrent).toBe(3);
               expect(config.gateway?.port).toBe(28788);
               expect(options.env.OPENCLAW_CONFIG_PATH).toBe(configPath);
               expect(options.env.OPENCLAW_STATE_DIR).toBe(openclawConfigDir);

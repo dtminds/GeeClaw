@@ -32,6 +32,8 @@ import { logger } from '../utils/logger';
 import { prependPathEntry, setPathEnvValue } from '../utils/env-path';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
+const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
+const MANAGED_AGENT_MAX_CONCURRENT = 3;
 
 export interface GatewayLaunchContext {
   appSettings: Awaited<ReturnType<typeof getAllSettings>>;
@@ -105,8 +107,16 @@ async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPo
       ? { ...(agents.defaults as Record<string, unknown>) }
       : {}
   ) as Record<string, unknown>;
+  const heartbeat = (
+    defaults.heartbeat && typeof defaults.heartbeat === 'object' && !Array.isArray(defaults.heartbeat)
+      ? { ...(defaults.heartbeat as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
 
   defaults.workspace = workspaceDir;
+  heartbeat.every = MANAGED_AGENT_HEARTBEAT_EVERY;
+  defaults.heartbeat = heartbeat;
+  defaults.maxConcurrent = MANAGED_AGENT_MAX_CONCURRENT;
   agents.defaults = defaults;
   config.agents = agents;
 
