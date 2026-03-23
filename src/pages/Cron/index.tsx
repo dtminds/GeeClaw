@@ -39,7 +39,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { formatRelativeTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CronJob, CronJobCreateInput, CronDeliveryMode, ScheduleType } from '@/types/cron';
-import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelType } from '@/types/channel';
+import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } from '@/types/channel';
 import { useChannelsStore } from '@/stores/channels';
 import { useAgentsStore } from '@/stores/agents';
 import { hostApiFetch } from '@/lib/host-api';
@@ -58,6 +58,28 @@ const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
   { key: 'weeklyMon', value: '0 9 * * 1', type: 'weekly' },
   { key: 'monthly1st', value: '0 9 1 * *', type: 'monthly' },
 ];
+
+const CRON_DISABLED_DELIVERY_CHANNELS = new Set<ChannelType>(['openclaw-weixin']);
+
+type CronDeliveryChannelOption = {
+  id: string;
+  type: ChannelType;
+  name: string;
+  disabled: boolean;
+};
+
+export function getCronDeliveryChannelOptions(
+  channels: Pick<ChannelGroup, 'id' | 'type' | 'name' | 'accounts'>[],
+): CronDeliveryChannelOption[] {
+  return channels
+    .filter((channel) => channel.accounts.some((account) => account.enabled))
+    .map((channel) => ({
+      id: channel.id,
+      type: channel.type,
+      name: channel.name,
+      disabled: CRON_DISABLED_DELIVERY_CHANNELS.has(channel.type),
+    }));
+}
 
 // Parse cron schedule to human-readable format
 // Handles both plain cron strings and Gateway CronSchedule objects:
@@ -192,6 +214,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const [saving, setSaving] = useState(false);
   const { channels, fetchChannels } = useChannelsStore();
   const { agents, defaultAgentId, fetchAgents } = useAgentsStore();
+  const deliveryChannelOptions = getCronDeliveryChannelOptions(channels);
 
   type SessionCandidate = { sessionKey: string; label: string; channel: string; to: string; accountId: string; chatType?: string };
   const [sessions, setSessions] = useState<SessionCandidate[]>([]);
@@ -431,9 +454,9 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
                       >
                         <option value="">{t('dialog.deliveryChannelPlaceholder')}</option>
-                        {channels.map((ch) => (
-                          <option key={ch.id} value={ch.type}>
-                            {CHANNEL_ICONS[ch.type as ChannelType]} {CHANNEL_NAMES[ch.type as ChannelType] || ch.name}
+                        {deliveryChannelOptions.map((ch) => (
+                          <option key={ch.id} value={ch.type} disabled={ch.disabled}>
+                            {CHANNEL_ICONS[ch.type]} {CHANNEL_NAMES[ch.type] || ch.name}
                           </option>
                         ))}
                       </select>
