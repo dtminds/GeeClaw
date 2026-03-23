@@ -6,8 +6,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus,
-  Trash2,
-  Edit,
   Eye,
   EyeOff,
   Check,
@@ -167,9 +165,18 @@ export function ProvidersSettings() {
       await removeAccount(providerId);
       toast.success(t('aiProviders.toast.deleted'));
     } catch (error) {
-      toast.error(`${t('aiProviders.toast.failedDelete')}: ${error}`);
+      const message = String(error);
+      if (message.includes('BLOCKED_BY_FALLBACK:')) {
+        const refs = message.split('BLOCKED_BY_FALLBACK:')[1] ?? '';
+        toast.error(t('aiProviders.toast.blockedByFallback', { refs }), {
+          duration: 6000,
+        });
+      } else {
+        toast.error(`${t('aiProviders.toast.failedDelete')}: ${error}`);
+      }
     }
   };
+
 
   const handleSetDefault = async (providerId: string) => {
     try {
@@ -310,6 +317,8 @@ function ProviderCard({
   const [showKey, setShowKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const typeInfo = PROVIDER_TYPE_INFO.find((t) => t.id === account.vendorId);
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
@@ -428,7 +437,6 @@ function ProviderCard({
                   </span>
                 </>
               )}
-              <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
               <span className="flex items-center gap-1">
                 {status?.hasKey ? (
                   <><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> {t('aiProviders.card.configured')}</>
@@ -442,7 +450,7 @@ function ProviderCard({
 
         {!isEditing && (
           <div className="flex items-center gap-1 transition-opacity">
-            {isDefault ? 
+            {isDefault ?
               <span className="flex items-center gap-1 rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info">
                 <Check className="h-3 w-3" />
                 默认提供商
@@ -470,15 +478,58 @@ function ProviderCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-white dark:hover:bg-[#1a1a19]"
-              onClick={onDelete}
-              title={t('aiProviders.card.delete')}
+              disabled={isDefault}
+              className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-white dark:hover:bg-[#1a1a19] disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => setConfirmingDelete(true)}
+              title={isDefault ? t('aiProviders.card.deleteDisabledDefault') : t('aiProviders.card.delete')}
             >
               <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
             </Button>
           </div>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {confirmingDelete && createPortal(
+        <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="modal-card-surface w-full max-w-sm rounded-3xl border shadow-2xl p-6 flex flex-col gap-4">
+            <div>
+              <p className="modal-title text-[17px]">{t('aiProviders.card.deleteConfirmTitle')}</p>
+              <p className="modal-description mt-1">
+                {t('aiProviders.card.deleteConfirmDesc', { name: account.label })}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="modal-secondary-button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+              >
+                {t('aiProviders.dialog.cancel')}
+              </button>
+              <button
+                type="button"
+                className="rounded-full px-5 h-9 text-[13px] font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await onDelete();
+                  } finally {
+                    setDeleting(false);
+                    setConfirmingDelete(false);
+                  }
+                }}
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}
+                {t('aiProviders.card.deleteConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {isEditing && (
         <div className="space-y-4 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
