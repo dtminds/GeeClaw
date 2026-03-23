@@ -21,8 +21,10 @@ jobs:
             platform: mac
           - os: windows-latest
             platform: win
-          - os: ubuntu-latest
-            platform: linux
+          # Temporarily disable Linux release builds.
+          # Restore by uncommenting the entry below.
+          # - os: ubuntu-latest
+          #   platform: linux
 
     runs-on: ${{ matrix.os }}
     
@@ -78,9 +80,11 @@ jobs:
         if: matrix.platform == 'win'
         run: pnpm run uv:download:win
 
-      - name: Download uv binaries for Linux
-        if: matrix.platform == 'linux'
-        run: pnpm run uv:download:linux
+      # Temporarily disable Linux release builds.
+      # Restore by uncommenting the step below.
+      # - name: Download uv binaries for Linux
+      #   if: matrix.platform == 'linux'
+      #   run: pnpm run uv:download:linux
 
       # macOS specific steps
       # --publish never: prevent electron-builder from auto-publishing to GitHub.
@@ -106,12 +110,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run package:win
 
-      # Linux specific steps
-      - name: Build Linux
-        if: matrix.platform == 'linux'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run package:linux
+      # Temporarily disable Linux release builds.
+      # Restore by uncommenting the step below.
+      # - name: Build Linux
+      #   if: matrix.platform == 'linux'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: pnpm run package:linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -191,13 +196,6 @@ jobs:
             - **Installer (x64)**: `GeeClaw-*-win-x64.exe`
             - **Installer (ARM64)**: `GeeClaw-*-win-arm64.exe`
             
-            #### Linux
-            - **AppImage (x64)**: `GeeClaw-*-linux-x86_64.AppImage` (Universal format, recommended)
-            - **AppImage (ARM64)**: `GeeClaw-*-linux-arm64.AppImage`
-            - **Debian/Ubuntu (x64)**: `GeeClaw-*-linux-amd64.deb`
-            - **Debian/Ubuntu (ARM64)**: `GeeClaw-*-linux-arm64.deb`
-            - **RPM (x64)**: `GeeClaw-*-linux-x86_64.rpm`
-            
             ### 📝 Release Notes
             
             See the auto-generated release notes below for detailed changes.
@@ -206,9 +204,6 @@ jobs:
             
             - **macOS**: On first launch, you may see "cannot verify developer". Go to System Preferences → Security & Privacy to allow the app to run
             - **Windows**: SmartScreen may block the app. Click "More info" → "Run anyway" to proceed
-            - **Linux AppImage**: First run `chmod +x GeeClaw-*.AppImage` to add execute permission. On Ubuntu 22.04 you may also need `sudo apt install libfuse2`; on Ubuntu 24.04 use `sudo apt install libfuse2t64`
-            - **Linux .deb (Ubuntu 24.04)**: If installation fails due to missing dependencies, use `sudo apt install libgtk-3-0t64 libnotify4t64 libxss1t64` before installing
-            
             ---
             
             💬 Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)
@@ -304,6 +299,9 @@ jobs:
           CHANNEL="${{ steps.version.outputs.channel }}"
           BASE_URL="https://geeclaw.dtminds.com/${CHANNEL}"
 
+          # Temporarily disable Linux release metadata.
+          # Restore the Linux download entries in the jq payload below when Linux releases resume.
+
           jq -n \
             --arg version "$VERSION" \
             --arg channel "$CHANNEL" \
@@ -322,13 +320,6 @@ jobs:
                 win: {
                   x64: ($base + "/GeeClaw-" + $version + "-win-x64.exe"),
                   arm64: ($base + "/GeeClaw-" + $version + "-win-arm64.exe")
-                },
-                linux: {
-                  deb_amd64: ($base + "/GeeClaw-" + $version + "-linux-amd64.deb"),
-                  deb_arm64: ($base + "/GeeClaw-" + $version + "-linux-arm64.deb"),
-                  appimage_x64: ($base + "/GeeClaw-" + $version + "-linux-x86_64.AppImage"),
-                  appimage_arm64: ($base + "/GeeClaw-" + $version + "-linux-arm64.AppImage"),
-                  rpm_x64: ($base + "/GeeClaw-" + $version + "-linux-x86_64.rpm")
                 }
               },
               changelog: $changelog
