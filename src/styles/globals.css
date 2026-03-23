@@ -257,7 +257,7 @@
   }
 
   .app-titlebar {
-    background: var(--app-canvas);
+    background: transparent;
     border-color: color-mix(in srgb, var(--app-line) 70%, transparent);
   }
 
@@ -292,11 +292,9 @@
 
   .dark .modal-card-surface {
     background:
-      linear-gradient(
-        180deg,
+      linear-gradient(180deg,
         color-mix(in oklab, var(--card) 76%, white 24%) 0%,
-        color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%) 100%
-      );
+        color-mix(in oklab, var(--card) 88%, var(--app-sidebar) 12%) 100%);
     border-color: color-mix(in srgb, white 18%, var(--app-line) 82%);
     box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.08),

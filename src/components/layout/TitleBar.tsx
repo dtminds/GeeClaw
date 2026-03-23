@@ -13,7 +13,7 @@ const isMac = window.electron?.platform === 'darwin';
 export function TitleBar() {
   if (isMac) {
     // macOS: just a drag region, traffic lights are native
-    return <div className="app-titlebar drag-region h-10 shrink-0 border-b" />;
+    return <div className="app-titlebar drag-region h-10 shrink-0" />;
   }
 
   return <WindowsTitleBar />;
