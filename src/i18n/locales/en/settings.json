@@ -155,7 +155,11 @@
       "fallbacks_other": "Fallbacks ({{count}}): {{names}}",
       "setDefault": "Set as default",
       "editKey": "Edit API key",
-      "delete": "Delete provider"
+      "delete": "Delete provider",
+      "deleteDisabledDefault": "Default provider cannot be deleted. Please set another provider as default first",
+      "deleteConfirmTitle": "Confirm provider deletion",
+      "deleteConfirmDesc": "This will delete \"{{name}}\" and all its configurations, including API keys. This action cannot be undone.",
+      "deleteConfirm": "Delete Provider"
     },
     "toast": {
       "added": "Provider added successfully",
