@@ -203,6 +203,7 @@
       "title": "Configure Agent Fallbacks",
       "desc": "Fallback models are agent-level settings. Every entry must already exist under one of the configured providers below.",
       "fallbacksLabel": "Fallback Model Refs",
+      "fallbacksEmpty": "Click a model below to add it as a fallback",
       "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeekai/kimi-k2.5",
       "fallbacksHelp": "Use one full model ref per line, for example provider/model-id.",
       "available": "Available Provider Models",

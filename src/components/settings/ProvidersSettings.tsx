@@ -428,7 +428,6 @@ function ProviderCard({
                   </span>
                 </>
               )}
-              <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
               <span className="flex items-center gap-1">
                 {status?.hasKey ? (
                   <><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> {t('aiProviders.card.configured')}</>

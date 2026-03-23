@@ -203,6 +203,7 @@
       "title": "配置 Agent Fallback",
       "desc": "Fallback 是 Agent 级别配置。这里填写的每一项都必须已经定义在下方某个 provider 的模型列表中。",
       "fallbacksLabel": "Fallback 模型引用",
+      "fallbacksEmpty": "请从下方可用模型中点击选择",
       "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeekai/kimi-k2.5",
       "fallbacksHelp": "每行一个完整 model ref，例如 provider/model-id。",
       "available": "当前可用模型",

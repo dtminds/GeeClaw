@@ -2,12 +2,12 @@
  * Models settings section
  * Lives inside the settings modal workspace.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, Settings2, X } from 'lucide-react';
+import { Check, Loader2, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
+
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { trackUiEvent } from '@/lib/telemetry';
 import { hostApiFetch } from '@/lib/host-api';
@@ -27,15 +27,6 @@ interface AgentDefaultModelSnapshot {
   availableModels: AvailableProviderModelGroup[];
 }
 
-function normalizeModelRefs(value: string): string[] {
-  return Array.from(new Set(
-    value
-      .split('\n')
-      .map((entry) => entry.trim())
-      .filter(Boolean),
-  ));
-}
-
 function AgentFallbackDialog(props: {
   snapshot: AgentDefaultModelSnapshot;
   saving: boolean;
@@ -43,12 +34,13 @@ function AgentFallbackDialog(props: {
   onSave: (fallbacks: string[]) => Promise<void>;
 }) {
   const { t } = useTranslation('settings');
-  const [fallbacksText, setFallbacksText] = useState(() => props.snapshot.fallbacks.join('\n'));
+  const [fallbacks, setFallbacks] = useState<string[]>(() => [...props.snapshot.fallbacks]);
 
-  const normalizedFallbacks = useMemo(
-    () => normalizeModelRefs(fallbacksText),
-    [fallbacksText],
-  );
+  const toggleModel = (modelRef: string) => {
+    setFallbacks((prev) =>
+      prev.includes(modelRef) ? prev.filter((m) => m !== modelRef) : [...prev, modelRef],
+    );
+  };
 
   return createPortal(
     <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4">
@@ -75,22 +67,34 @@ function AgentFallbackDialog(props: {
             </p>
           </div>
 
-          <div className="modal-section-surface space-y-2 rounded-2xl border p-4">
-            <Label htmlFor="agent-fallbacks" className="text-[14px] font-bold text-foreground/80">
-              {t('agentModels.dialog.fallbacksLabel')}
-            </Label>
-            <textarea
-              id="agent-fallbacks"
-              value={fallbacksText}
-              onChange={(event) => setFallbacksText(event.target.value)}
-              placeholder={t('agentModels.dialog.fallbacksPlaceholder')}
-              className="modal-field-surface field-focus-ring min-h-32 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none shadow-sm"
-            />
-            <p className="text-[12px] text-muted-foreground">
-              {t('agentModels.dialog.fallbacksHelp')}
-            </p>
+          {/* Selected fallback tags */}
+          <div className="modal-section-surface space-y-3 rounded-2xl border p-4">
+            <p className="text-[14px] font-bold text-foreground/80">{t('agentModels.dialog.fallbacksLabel')}</p>
+            <div className="min-h-10 flex flex-wrap gap-2">
+              {fallbacks.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground self-center">{t('agentModels.dialog.fallbacksEmpty')}</p>
+              ) : (
+                fallbacks.map((modelRef) => (
+                  <span
+                    key={modelRef}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-black/5 pl-3 pr-1.5 py-1 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/10"
+                  >
+                    {modelRef}
+                    <button
+                      type="button"
+                      onClick={() => toggleModel(modelRef)}
+                      className="flex items-center justify-center rounded-full w-4 h-4 hover:bg-black/10 dark:hover:bg-white/20 transition-colors"
+                      aria-label={`Remove ${modelRef}`}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
           </div>
 
+          {/* Available models — click to add */}
           <div className="modal-section-surface space-y-3 rounded-2xl border p-4">
             <div>
               <p className="text-[14px] font-bold text-foreground/80">{t('agentModels.dialog.available')}</p>
@@ -101,14 +105,26 @@ function AgentFallbackDialog(props: {
                 <div key={provider.providerId} className="modal-field-surface rounded-xl border p-3 shadow-sm">
                   <p className="text-[13px] font-semibold text-foreground">{provider.providerName}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {provider.modelRefs.map((modelRef) => (
-                      <code
-                        key={modelRef}
-                        className="surface-muted rounded-lg px-2.5 py-1 text-[12px] text-foreground"
-                      >
-                        {modelRef}
-                      </code>
-                    ))}
+                    {provider.modelRefs.map((modelRef) => {
+                      const selected = fallbacks.includes(modelRef);
+                      return (
+                        <button
+                          key={modelRef}
+                          type="button"
+                          onClick={() => toggleModel(modelRef)}
+                          className={[
+                            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[12px] transition-colors',
+                            selected
+                              ? 'bg-black/90 text-white dark:bg-white dark:text-black'
+                              : 'surface-muted text-foreground hover:bg-black/10 dark:hover:bg-white/10',
+                          ].join(' ')}
+                          aria-pressed={selected}
+                        >
+                          {selected && <Check className="h-3 w-3 shrink-0" />}
+                          {modelRef}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -117,7 +133,7 @@ function AgentFallbackDialog(props: {
 
           <div className="modal-footer">
             <Button
-              onClick={() => void props.onSave(normalizedFallbacks)}
+              onClick={() => void props.onSave(fallbacks)}
               className="modal-primary-button px-8"
               disabled={props.saving}
             >
@@ -176,11 +192,28 @@ export function ModelsSettingsSection() {
   return (
     <div className="flex min-h-0 flex-col gap-8">
       <Card className="surface-muted rounded-3xl border border-transparent shadow-none">
-        <CardHeader className="p-0 pb-3">
+        <CardHeader className="p-0 pb-3 flex flex-row items-center justify-between gap-4">
           <CardTitle className="flex items-center gap-2 text-2xl font-normal tracking-tight">
             <Settings2 className="h-5 w-5" />
             {t('agentModels.title')}
           </CardTitle>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button
+              onClick={() => setShowFallbackDialog(true)}
+              disabled={loading || !snapshot}
+              className="rounded-full px-5 h-9 bg-black/90 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-white/90"
+            >
+              {t('agentModels.configureFallbacks')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void loadSnapshot()}
+              disabled={loading}
+              className="surface-hover rounded-full border-black/10 bg-transparent px-5 h-9 dark:border-white/10"
+            >
+              {t('agentModels.refresh')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4 px-0">
           {loading || !snapshot ? (
@@ -203,21 +236,7 @@ export function ModelsSettingsSection() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => setShowFallbackDialog(true)}
-                  className="rounded-full px-5 h-9 bg-black/90 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-white/90"
-                >
-                  {t('agentModels.configureFallbacks')}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void loadSnapshot()}
-                  className="surface-hover rounded-full border-black/10 bg-transparent px-5 h-9 dark:border-white/10"
-                >
-                  {t('agentModels.refresh')}
-                </Button>
-              </div>
+
               <p className="text-[12px] text-muted-foreground">
                 {t('agentModels.primaryHelp')}
               </p>
