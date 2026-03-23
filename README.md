@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-MacOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
+  <img src="https://img.shields.io/badge/platform-MacOS%20%7C%20Windows-blue" alt="Platform" />
   <img src="https://img.shields.io/badge/electron-40+-47848F?logo=electron" alt="Electron" />
   <img src="https://img.shields.io/badge/react-19-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/github/downloads/dtminds/GeeClaw/total?color=%23027DEB" alt="Downloads" />
@@ -37,8 +37,6 @@
 **GeeClaw** bridges the gap between powerful AI agents and everyday users. Built on top of [OpenClaw](https://github.com/OpenClaw), it transforms command-line AI orchestration into an accessible, beautiful desktop experience—no terminal required.
 
 Whether you're automating workflows, managing AI-powered channels, or scheduling intelligent tasks, GeeClaw provides the interface you need to harness AI agents effectively.
-
-GeeClaw comes pre-configured with best-practice model providers and natively supports Windows as well as multi-language settings. The app provides a dedicated **Dashboard** workspace in the sidebar, including gateway/channel overviews, quick actions, and an inspiration plaza for common AI task ideas. Inspiration cards can open a detail dialog and jump straight into the default agent chat with the recommended prompt prefilled, while app preferences, Models, and Channels stay centralized in the **Settings** modal workspace. You can still fine-tune gateway-related advanced configurations via **Settings → OpenClaw → Advanced → Developer Mode**.
 
 ---
 
@@ -73,31 +71,21 @@ Communicate with AI agents through a modern chat experience. The sidebar now fol
 
 ### 📡 Multi-Channel Management
 Configure and monitor multiple AI channels from the dedicated Channels workspace in the sidebar. Each channel can now host multiple accounts, and every account can be routed to a different agent with an explicit default account per channel type. The desktop app includes bundled plugin support for DingTalk, WeCom, Weixin, QQ Bot, and the official Feishu/Lark OpenClaw plugin.
-At startup, GeeClaw now writes those bundled channel plugins into `openclaw.json.plugins.load.paths` from the app's own resources directory, so they no longer depend on mirrored copies under `~/.openclaw-geeclaw/extensions`.
-GeeClaw also supports an always-enabled bundled plugin policy on startup. Current protected plugin: `lossless-claw`, which is auto-corrected into `plugins.allow`, `plugins.entries.lossless-claw`, and `plugins.slots.contextEngine`, including `enabled: true`, `config.dbPath` pointing at GeeClaw's managed OpenClaw config directory (`<openclaw-config-dir>/lcm.db`), `contextEngine: "lossless-claw"`, and its guarded session-pattern config defaults.
-For WeCom, the channel dialog now supports QR-based one-click binding: scan and the app auto-fills/saves `botId` + `secret` directly.
-For Weixin, GeeClaw bundles the official `@tencent-weixin/openclaw-weixin` plugin and follows its QR-only login flow. After scan/confirmation, the plugin token is stored in GeeClaw's managed OpenClaw state directory under `openclaw-weixin/accounts*.json`, while channel config itself only keeps account-level routing/display settings.
 
 ### ⏰ Cron-Based Automation
 Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock without manual intervention.
-Each task also includes a dedicated run-history view with a breadcrumb/back header, a left-side execution list, and a right-side read-only message transcript so you can inspect recent cron runs without mixing them into the main agent chat list.
 
 ### 🧩 Extensible Skill System
 Extend your AI agents with pre-built skills. Browse, install, and manage skills through the integrated skill panel—no package managers required.
 On fresh installs, the marketplace can now detect whether the China-optimized `skillhub` CLI is available and offer a one-click guided install that uses GeeClaw's bundled `uv` + managed Python runtime. If `skillhub` is unavailable, GeeClaw automatically falls back to the bundled `clawhub` installer.
-GeeClaw also pre-bundles full document-processing skills (`pdf`, `xlsx`, `docx`, `pptx`), deploys them automatically to the managed skills directory (default `~/.openclaw-geeclaw/skills`) on startup, and enables them by default on first install. Additional bundled skills (`find-skills`, `self-improving-agent`, `tavily-search`, `brave-web-search`, `bocha-skill`) are also enabled by default; if required API keys are missing, OpenClaw will surface configuration errors in runtime.
-The Skills page can display skills discovered from multiple OpenClaw sources (managed dir, workspace, and extra skill dirs), and now shows each skill's actual location so you can open the real folder directly.
-When startup discovery finds a new skill key that is not yet present in `openclaw.json`, GeeClaw writes that newly discovered skill into `skills.entries` with `enabled: false` by default. Explicit user skill toggles are also persisted in the app settings store and replayed back into `openclaw.json` before Gateway launch, so manually enabled skills stay enabled across restarts without making brand-new `.agents` skills auto-enable.
-GeeClaw also enforces an always-enabled policy list on every startup (cold/hot). Current protected skills: `pdf`, `xlsx`, `docx`, `pptx`. They are auto-corrected to `enabled: true` in `openclaw.json` and cannot be disabled from the Skills page.
 
 Environment variables for bundled search skills:
 - `BRAVE_SEARCH_API_KEY` for `brave-web-search`
 - `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
 - `BOCHA_API_KEY` for `bocha-skill`
-- `find-skills` and `self-improving-agent` do not require API keys
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic, GeekAI, and more) with credentials stored securely in your system's native keychain. Provider settings focus on base config plus model catalogs, while agent-level primary and fallback models are configured independently.
+Connect to multiple AI providers (OpenAI, Anthropic, GeekAI, and more) with credentials stored securely in your system's native keychain.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
@@ -180,52 +168,8 @@ Notes:
 
 ## Architecture
 
-GeeClaw employs a **dual-process architecture** with a unified host API layer. The renderer talks to a single client abstraction, while Electron Main owns protocol selection and process lifecycle:
+GeeClaw employs a **dual-process architecture** with a unified host API layer. The renderer talks to a single client abstraction, while Electron Main owns protocol selection and process lifecycle.
 
-```┌─────────────────────────────────────────────────────────────────┐
-│                       GeeClaw Desktop App                         │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              Electron Main Process                          │  │
-│  │  • Window & application lifecycle management               │  │
-│  │  • Gateway process supervision                              │  │
-│  │  • System integration (tray, notifications, keychain)       │  │
-│  │  • Auto-update orchestration                                │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                              │                                    │
-│                              │ IPC (authoritative control plane)  │
-│                              ▼                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              React Renderer Process                         │  │
-│  │  • Modern component-based UI (React 19)                     │  │
-│  │  • State management with Zustand                            │  │
-│  │  • Unified host-api/api-client calls                        │  │
-│  │  • Rich Markdown rendering                                  │  │
-│  └────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ Main-owned transport strategy
-                               │ (WS first, HTTP then IPC fallback)
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                Host API & Main Process Proxies                  │
-│                                                                  │
-│  • hostapi:fetch (Main proxy, avoids CORS in dev/prod)          │
-│  • gateway:httpProxy (Renderer never calls Gateway HTTP direct)  │
-│  • Unified error mapping & retry/backoff                         │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ WS / HTTP / IPC fallback
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     OpenClaw Gateway                             │
-│                                                                  │
-│  • AI agent runtime and orchestration                           │
-│  • Message channel management                                    │
-│  • Skill/plugin execution environment                           │
-│  • Provider abstraction layer                                    │
-└─────────────────────────────────────────────────────────────────┘
-```
 ### Design Principles
 
 - **Process Isolation**: The AI runtime operates in a separate process, ensuring UI responsiveness even during heavy computation

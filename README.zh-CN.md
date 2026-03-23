@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-MacOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
+  <img src="https://img.shields.io/badge/platform-MacOS%20%7C%20Windows-blue" alt="Platform" />
   <img src="https://img.shields.io/badge/electron-40+-47848F?logo=electron" alt="Electron" />
   <img src="https://img.shields.io/badge/react-19-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/github/downloads/dtminds/GeeClaw/total?color=%23027DEB" alt="Downloads" />
@@ -37,8 +37,6 @@
 **GeeClaw** 是连接强大 AI 智能体与普通用户之间的桥梁。基于 [OpenClaw](https://github.com/OpenClaw) 构建，它将命令行式的 AI 编排转变为易用、美观的桌面体验——无需使用终端。
 
 无论是自动化工作流、连接通讯软件，还是调度智能定时任务，GeeClaw 都能提供高效易用的图形界面，帮助你充分发挥 AI 智能体的能力。
-
-GeeClaw 预置了最佳实践的模型供应商配置，原生支持 Windows 平台以及多语言设置。应用在侧边栏中提供了独立的 **仪表盘** 工作区，集中展示网关/频道概览、快捷操作，以及用于发现常见 AI 任务玩法的灵感广场。灵感卡片现在支持打开详情弹窗，并一键跳转到默认 Agent 对话页且自动预填推荐 prompt，同时将通用设置、Models 与 Channels 统一收纳到 **设置** 弹窗工作区中；当然，你也可以继续通过 **设置 → OpenClaw → 高级 → 开发者模式** 来进行网关相关的精细高级配置。
 
 ---
 
@@ -73,31 +71,21 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 
 ### 📡 多频道管理
 在侧边栏的独立频道工作区中统一配置和监控多个 AI 频道。现在单个 Channel 下可以配置多个账号，并且每个账号都可以单独路由到不同 Agent，同时保留可切换的默认账号。桌面端已内置钉钉、企业微信、微信、QQ Bot，以及飞书/Lark 官方 OpenClaw 插件的打包与安装支持。
-应用启动时，GeeClaw 会把这些内置频道插件以 `plugins.load.paths` 的形式写入 `openclaw.json`，直接从应用资源目录加载，不再依赖 `~/.openclaw-geeclaw/extensions` 里的镜像副本。
-GeeClaw 也支持“启动时强制启用”的内置插件策略。当前受保护插件为 `lossless-claw`，启动时会自动补入 `plugins.allow`，并校正 `plugins.entries.lossless-claw` 与 `plugins.slots.contextEngine`，包括 `enabled: true`、指向 GeeClaw 托管 OpenClaw 配置目录的 `config.dbPath`（`<openclaw-config-dir>/lcm.db`）、`contextEngine: "lossless-claw"`，以及受保护的 session pattern 默认配置。
-企业微信在频道配置弹窗中新增了“扫码一键绑定”：扫码后会自动回填并保存 `botId` 与 `secret`。
-微信频道内置的是官方 `@tencent-weixin/openclaw-weixin` 插件，并严格遵循其“仅扫码登录”的接入方式。扫码确认后，插件 token 会写入 GeeClaw 托管的 OpenClaw 状态目录下 `openclaw-weixin/accounts*.json`，而频道配置本身只保留账号级别的路由与展示设置。
 
 ### ⏰ 定时任务自动化
 调度 AI 任务自动执行。定义触发器、设置时间间隔，让 AI 智能体 7×24 小时不间断工作。
-每个任务现在还提供独立的“运行记录”页面，顶部带返回与 breadcrumb，下方左侧展示执行历史，右侧展示只读消息记录，便于排查最近的定时任务运行，而不会把这些记录混入主智能体会话列表。
 
 ### 🧩 可扩展技能系统
 通过预构建的技能扩展 AI 智能体的能力。在集成的技能面板中浏览、安装和管理技能——无需包管理器。
 对于全新安装环境，技能市场现在会检测是否已具备国内优化的 `skillhub` CLI，并提供一键引导安装；安装过程复用 GeeClaw 自带的 `uv` 与托管 Python 运行时。若 `skillhub` 不可用，GeeClaw 会自动回退到内置的 `clawhub` 安装器。
-GeeClaw 还会内置预装完整的文档处理技能（`pdf`、`xlsx`、`docx`、`pptx`），在启动时自动部署到托管技能目录（默认 `~/.openclaw-geeclaw/skills`），并在首次安装时默认启用。额外预装技能（`find-skills`、`self-improving-agent`、`tavily-search`、`brave-web-search`、`bocha-skill`）也会默认启用；若缺少必需的 API Key，OpenClaw 会在运行时给出配置错误提示。
-Skills 页面可展示来自多个 OpenClaw 来源的技能（托管目录、workspace、额外技能目录），并显示每个技能的实际路径，便于直接打开真实安装位置。
-当启动阶段扫描到新的 skill key，且该 key 尚未出现在 `openclaw.json` 中时，GeeClaw 会把这个新发现技能写入 `skills.entries`，并默认设置为 `enabled: false`。同时，用户手动开关过的技能状态会额外持久化到应用 settings store，并在 Gateway 启动前回放回 `openclaw.json`，这样手动开启的技能能跨重启保留，而全新的 `.agents` 技能也不会被自动启用。
-GeeClaw 还会在每次启动（冷启动/热启动）校验“强制启用技能列表”。当前受保护技能：`pdf`、`xlsx`、`docx`、`pptx`。这些技能会被自动修正为 `enabled: true`，并且在 Skills 页面不可禁用。
 
 重点搜索技能所需环境变量：
 - `BRAVE_SEARCH_API_KEY`：用于 `brave-web-search`
 - `TAVILY_API_KEY`：用于 `tavily-search`（上游运行时也可能支持 OAuth）
 - `BOCHA_API_KEY`：用于 `bocha-skill`
-- `find-skills` 与 `self-improving-agent` 不需要 API Key
 
 ### 🔐 安全的供应商集成
-连接多个 AI 供应商（OpenAI、Anthropic、GeekAI 等），凭证安全存储在系统原生密钥链中。Provider 设置只负责基础连接信息和模型目录，Agent 级别的 primary / fallback 模型会单独配置。
+连接多个 AI 供应商（OpenAI、Anthropic、GeekAI 等），凭证安全存储在系统原生密钥链中。
 
 ### 🌙 自适应主题
 支持浅色模式、深色模式或跟随系统主题。GeeClaw 自动适应你的偏好设置。
@@ -146,9 +134,7 @@ pnpm dev
 > Moonshot（Kimi）说明：GeeClaw 默认保持开启 Kimi 的 web search。  
 > 当配置 Moonshot 后，GeeClaw 也会将 OpenClaw 配置中的 Kimi web search 同步到中国区端点（`https://api.moonshot.cn/v1`）。
 
-GeeClaw 会自行管理 OpenClaw 运行时和状态目录。首次启动时，在完成登录态检查后，会先改写 `~/.openclaw-geeclaw/openclaw.json`，确保 `agents.defaults.workspace` 指向 `~/.openclaw-geeclaw/workspace`、`agents.defaults.heartbeat.every` 固定为 `"2h"`、`agents.defaults.maxConcurrent` 固定为 `3`，然后执行 `openclaw.mjs --profile geeclaw setup` 初始化该 profile，随后再以 `openclaw.mjs --profile geeclaw gateway --port 28788` 启动网关。若你之前已有 `~/.openclaw` 旧数据或 `~/Library/LaunchAgents/ai.openclaw.gateway.plist`，GeeClaw 会保留它们，不会删除或改写系统级安装。
-
-你可以在 **设置 → 安全** 中查看当前托管的 OpenClaw 状态目录；GeeClaw 会将 `openclaw.json -> tools.fs.workspaceOnly` 固定校验为 `false`，该页面负责控制 `tools` 下的 deny / exec / elevated 安全策略。这些安全配置都会持久化到应用 store，并在启动时重新校验回写到 `openclaw.json`。
+GeeClaw 会自行管理 OpenClaw 运行时和状态目录。首次启动时，在完成登录态检查后，会先改写 `~/.openclaw-geeclaw/openclaw.json`，安全配置都会持久化到应用 store，并在启动时重新校验回写到 `openclaw.json`。
 
 ### 代理设置
 
@@ -180,52 +166,8 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 
 ## 系统架构
 
-GeeClaw 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用统一客户端抽象，协议选择与进程生命周期由 Electron 主进程统一管理：
+GeeClaw 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用统一客户端抽象，协议选择与进程生命周期由 Electron 主进程统一管理。
 
-```┌─────────────────────────────────────────────────────────────────┐
-│                        GeeClaw 桌面应用                             │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              Electron 主进程                                 │  │
-│  │  • 窗口与应用生命周期管理                                      │  │
-│  │  • 网关进程监控                                               │  │
-│  │  • 系统集成（托盘、通知、密钥链）                                │  │
-│  │  • 自动更新编排                                               │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                              │                                    │
-│                              │ IPC（权威控制面）                    │
-│                              ▼                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              React 渲染进程                                   │  │
-│  │  • 现代组件化 UI（React 19）                                   │  │
-│  │  • Zustand 状态管理                                           │  │
-│  │  • 统一 host-api/api-client 调用                               │  │
-│  │  • Markdown 富文本渲染                                        │  │
-│  └────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ 主进程统一传输策略
-                               │（WS 优先，HTTP 次之，IPC 回退）
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  Host API 与主进程代理层                          │
-│                                                                  │
-│  • hostapi:fetch（主进程代理，规避开发/生产 CORS）                │
-│  • gateway:httpProxy（渲染进程不直连 Gateway HTTP）               │
-│  • 统一错误映射与重试/退避策略                                     │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ WS / HTTP / IPC 回退
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     OpenClaw 网关                                 │
-│                                                                  │
-│  • AI 智能体运行时与编排                                          │
-│  • 消息频道管理                                                   │
-│  • 技能/插件执行环境                                              │
-│  • 供应商抽象层                                                   │
-└─────────────────────────────────────────────────────────────────┘
-```
 ### 设计原则
 
 - **进程隔离**：AI 运行时在独立进程中运行，确保即使在高负载计算期间 UI 也能保持响应

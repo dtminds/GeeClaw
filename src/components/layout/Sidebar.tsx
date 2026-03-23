@@ -455,11 +455,7 @@ export function Sidebar() {
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 dark:hover:bg-white/6">
                 <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
-                  {sessionStatus === 'authenticated' ? (
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      {(sessionAccount?.displayName || sessionAccount?.nickName || 'G').slice(0, 1).toUpperCase()}
-                    </span>
-                  ) : null}
+                  <span className="absolute inset-0 flex items-center justify-center">G</span>
                 </div>
                 <p className="truncate text-[13px] font-medium text-foreground">
                   {t('sidebar.login', '登录')}
