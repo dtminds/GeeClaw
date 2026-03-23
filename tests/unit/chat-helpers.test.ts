@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   hasEquivalentFinalAssistantMessage,
   stripRenderedPrefixFromStreamingText,
-} from '@/stores/chat/helpers';
-import type { RawMessage } from '@/stores/chat/types';
+  type RawMessage,
+} from '@/stores/chat';
 
 describe('chat helper dedupe', () => {
   it('matches equivalent assistant finals by text and timestamp when ids differ', () => {

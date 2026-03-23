@@ -244,7 +244,7 @@ function createEmptyToolRuntimeState() {
   };
 }
 
-function hasEquivalentFinalAssistantMessage(
+export function hasEquivalentFinalAssistantMessage(
   messages: RawMessage[],
   candidate: RawMessage,
   candidateId?: string,
@@ -271,7 +271,7 @@ function hasEquivalentFinalAssistantMessage(
   });
 }
 
-function stripRenderedPrefixFromStreamingText(
+export function stripRenderedPrefixFromStreamingText(
   fullText: string,
   streamSegments: Array<{ text: string; ts: number }>,
 ): string {
@@ -389,18 +389,41 @@ function saveImageCache(cache: Map<string, AttachedFileMeta>): void {
 }
 
 const _imageCache = loadImageCache();
+const HIDDEN_ATTACHMENT_FILE_NAMES = new Set(['skill.md', 'agent.md', 'memory.md', 'soul.md']);
 
-function limitAttachedFilesForMessage(
+function normalizeAttachmentFileName(value: string): string {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) return '';
+  return normalizedValue.split(/[\\/]/).pop()?.toLowerCase() || '';
+}
+
+function shouldHideAttachmentFile(file: Pick<AttachedFileMeta, 'fileName' | 'filePath'>): boolean {
+  const filePathName = normalizeAttachmentFileName(file.filePath || '');
+  if (filePathName && HIDDEN_ATTACHMENT_FILE_NAMES.has(filePathName)) {
+    return true;
+  }
+
+  const fileName = normalizeAttachmentFileName(file.fileName || '');
+  return !!fileName && HIDDEN_ATTACHMENT_FILE_NAMES.has(fileName);
+}
+
+export function limitAttachedFilesForMessage(
   files: AttachedFileMeta[],
   hiddenCount = 0,
 ): { files: AttachedFileMeta[]; hiddenCount: number } {
-  if (files.length <= MAX_MESSAGE_ATTACHMENTS) {
-    return { files, hiddenCount };
+  const visibleFiles = files.filter((file) => !shouldHideAttachmentFile(file));
+  const hiddenByReservedNameCount = files.length - visibleFiles.length;
+
+  if (visibleFiles.length <= MAX_MESSAGE_ATTACHMENTS) {
+    return {
+      files: visibleFiles,
+      hiddenCount: hiddenCount + hiddenByReservedNameCount,
+    };
   }
 
   return {
-    files: files.slice(0, MAX_MESSAGE_ATTACHMENTS),
-    hiddenCount: hiddenCount + (files.length - MAX_MESSAGE_ATTACHMENTS),
+    files: visibleFiles.slice(0, MAX_MESSAGE_ATTACHMENTS),
+    hiddenCount: hiddenCount + hiddenByReservedNameCount + (visibleFiles.length - MAX_MESSAGE_ATTACHMENTS),
   };
 }
 
@@ -791,7 +814,7 @@ function mimeFromExtension(filePath: string): string {
  * Detects absolute paths (Unix: / or ~/, Windows: C:\ etc.) ending with common file extensions.
  * Handles both image and non-image files, consistent with channel push message behavior.
  */
-function extractRawFilePaths(text: string): Array<{ filePath: string; mimeType: string }> {
+export function extractRawFilePaths(text: string): Array<{ filePath: string; mimeType: string }> {
   const refs: Array<{ filePath: string; mimeType: string }> = [];
   const seen = new Set<string>();
   const exts = 'htm?l|png|jpe?g|gif|webp|bmp|avif|svg|pdf|docx?|xlsx?|pptx?|txt|csv|md|rtf|epub|zip|tar|gz|rar|7z|mp3|wav|ogg|aac|flac|m4a|mp4|mov|avi|mkv|webm|m4v';
@@ -882,7 +905,7 @@ function makeAttachedFile(ref: { filePath: string; mimeType: string }): Attached
  *   - [media attached: path (mime) | path] text patterns in tool result output
  *   - Raw file paths in tool result text
  */
-function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] {
+export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] {
   const next = [...messages];
   const pending: AttachedFileMeta[] = [];
 
@@ -972,7 +995,7 @@ function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] {
  *   2. Raw image file paths typed in message text (e.g. /Users/.../image.png)
  * Uses local cache for previews when available; missing previews are loaded async.
  */
-function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
+export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
   return messages.map((msg, idx) => {
     // Only process user and assistant messages; skip if already enriched
     if ((msg.role !== 'user' && msg.role !== 'assistant') || msg._attachedFiles) return msg;
@@ -999,7 +1022,7 @@ function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
         const prev = messages[i];
         if (!prev) break;
         if (prev.role === 'user') {
-          const prevText = getMessageText(prev.content);
+          const prevText = renderSkillMarkersAsPlainText(getMessageText(prev.content));
           for (const ref of extractRawFilePaths(prevText)) {
             if (!mediaRefPaths.has(ref.filePath) && !seenPaths.has(ref.filePath)) {
               seenPaths.add(ref.filePath);
@@ -1053,7 +1076,7 @@ export async function hydrateHistoryMessagesForDisplay(rawMessages: RawMessage[]
  * _attachedFiles with null previews. Updates messages in-place and triggers re-render.
  * Handles both [media attached: ...] patterns and raw filePath entries.
  */
-async function loadMissingPreviews(messages: RawMessage[]): Promise<boolean> {
+export async function loadMissingPreviews(messages: RawMessage[]): Promise<boolean> {
   // Collect all image paths that need previews
   const needPreview: Array<{ filePath: string; mimeType: string }> = [];
   const seenPaths = new Set<string>();

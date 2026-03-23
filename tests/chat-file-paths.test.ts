@@ -1,11 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+const hostApiFetchMock = vi.fn();
+
+vi.mock('@/lib/host-api', () => ({
+  hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
+}));
+
 import {
+  enrichWithCachedImages,
   enrichWithToolResultFiles,
   extractRawFilePaths,
   limitAttachedFilesForMessage,
   loadMissingPreviews,
-} from '@/stores/chat/helpers';
-import type { RawMessage } from '@/stores/chat/types';
+  prepareHistoryMessagesForDisplay,
+  type RawMessage,
+} from '@/stores/chat';
 
 describe('chat file path extraction', () => {
   it('still extracts absolute file paths from prose', () => {
@@ -76,7 +84,7 @@ describe('chat file path extraction', () => {
   });
 
   it('filters attached files whose paths do not exist', async () => {
-    vi.mocked(window.electron.ipcRenderer.invoke).mockResolvedValue({
+    hostApiFetchMock.mockResolvedValue({
       '/path/to/slide-01.jpg': { exists: false, preview: null, fileSize: 0 },
     });
 
@@ -101,7 +109,7 @@ describe('chat file path extraction', () => {
   });
 
   it('keeps attached files whose paths exist', async () => {
-    vi.mocked(window.electron.ipcRenderer.invoke).mockResolvedValue({
+    hostApiFetchMock.mockResolvedValue({
       '/tmp/exports/slide-01.jpg': {
         exists: true,
         preview: 'data:image/jpeg;base64,abc',
@@ -151,5 +159,63 @@ describe('chat file path extraction', () => {
     expect(limited.hiddenCount).toBe(51);
     expect(limited.files[0]?.fileName).toBe('file-0.txt');
     expect(limited.files[8]?.fileName).toBe('file-8.txt');
+  });
+
+  it('does not create file cards from skill marker paths in the previous user message', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'user',
+        content: '[[use skill: find-skills (/Users/lsave/.openclaw-geeclaw/skills/find-skills/SKILL.md)]]',
+      },
+      {
+        role: 'assistant',
+        content: '我已经读取完毕。',
+      },
+    ];
+
+    const enriched = enrichWithCachedImages(messages);
+
+    expect(enriched[1]?._attachedFiles).toBeUndefined();
+  });
+
+  it('does not create runtime file cards from skill marker paths in history preparation', () => {
+    const messages = [
+      {
+        role: 'user',
+        content: '[[use skill: find-skills (/Users/lsave/.openclaw-geeclaw/skills/find-skills/SKILL.md)]]',
+      },
+      {
+        role: 'assistant',
+        content: '我已经读取完毕。',
+      },
+    ] as RawMessage[];
+
+    const prepared = prepareHistoryMessagesForDisplay(messages);
+
+    expect(prepared[1]?._attachedFiles).toBeUndefined();
+  });
+
+  it('hides reserved attachment marker files regardless of case', () => {
+    const files = [
+      {
+        fileName: 'SKILL.md',
+        mimeType: 'text/markdown',
+        fileSize: 12,
+        preview: null,
+        filePath: '/tmp/SKILL.md',
+      },
+      {
+        fileName: 'report.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 34,
+        preview: null,
+        filePath: '/tmp/report.pdf',
+      },
+    ];
+
+    const limited = limitAttachedFilesForMessage(files);
+
+    expect(limited.files).toEqual([files[1]]);
+    expect(limited.hiddenCount).toBe(1);
   });
 });
