@@ -1,4 +1,4 @@
-appId: app.geeclaw.desktop
+appId: app.dtminds.geeclaw
 productName: GeeClaw
 copyright: Copyright © 2026 GeeClaw
 compression: maximum
@@ -24,10 +24,6 @@ extraResources:
       - "!icons/*.svg"
       - "!bin/**"
       - "!screenshot/**"
-  - from: src/assets/skills/
-    to: resources/skills/
-    filter:
-      - "skills.json"
   # OpenClaw package (node_modules copied separately by afterPack hook
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
@@ -56,7 +52,7 @@ npmRebuild: false
 # Fallback: GitHub Releases (backup, used when OSS is unavailable)
 publish:
   - provider: generic
-    url: https://oss.intelli-spectrum.com/latest
+    url: https://geeclaw.dtminds.com/latest
     useMultipleRangeRequest: false
   - provider: github
     owner: dtminds

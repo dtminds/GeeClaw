@@ -3,8 +3,8 @@
  * Handles automatic application updates using electron-updater
  *
  * Update providers are configured in electron-builder.yml (OSS primary, GitHub fallback).
- * For prerelease channels (alpha, beta), the feed URL is overridden at runtime
- * to point at the channel-specific OSS directory (e.g. /alpha/, /beta/).
+ * For prerelease channels, the feed URL is overridden at runtime
+ * to point at the channel-specific OSS directory (e.g. /alpha/, /beta/, /rc/).
  */
 import { BrowserWindow, app, ipcMain } from 'electron';
 import { createRequire } from 'node:module';
@@ -14,7 +14,7 @@ import { setQuitting } from './app-state';
 import type { UpdateInfo, ProgressInfo, UpdateDownloadedEvent } from 'electron-updater';
 
 /** Base CDN URL (without trailing channel path) */
-const OSS_BASE_URL = 'https://oss.intelli-spectrum.com';
+const OSS_BASE_URL = 'https://geeclaw.dtminds.com';
 const require = createRequire(__filename);
 
 type AutoUpdaterType = typeof import('electron-updater').autoUpdater;
@@ -82,8 +82,8 @@ export class AppUpdater extends EventEmitter {
       debug: (msg: string) => logger.debug('[Updater]', msg),
     };
 
-    // Override feed URL for prerelease channels so that
-    // alpha -> /alpha/alpha-mac.yml, beta -> /beta/beta-mac.yml, etc.
+    // Override feed URL so each channel resolves against its own CDN directory.
+    // Examples: latest -> /latest/latest-mac.yml, beta -> /beta/beta-mac.yml.
     const version = app.getVersion();
     const channel = detectChannel(version);
     const feedUrl = `${OSS_BASE_URL}/${channel}`;

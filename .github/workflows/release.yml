@@ -8,10 +8,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 1.0.0)'
-        required: true
 
 permissions:
   contents: write
@@ -35,6 +31,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate package version matches tag
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "PACKAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+              echo "::error::Tag version v${TAG_VERSION} does not match package.json version ${VERSION}."
+              exit 1
+            fi
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -87,21 +97,21 @@ jobs:
         run: |
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
-          pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --mac --publish never
+          pnpm run package:mac
 
       # Windows specific steps
       - name: Build Windows
         if: matrix.platform == 'win'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --win --publish never
+        run: pnpm run package:win
 
       # Linux specific steps
       - name: Build Linux
         if: matrix.platform == 'linux'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && pnpm exec electron-builder --linux --publish never
+        run: pnpm run package:linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -220,6 +230,7 @@ jobs:
   upload-oss:
     needs: release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Checkout code
@@ -232,11 +243,15 @@ jobs:
 
       - name: Extract version and channel
         id: version
+        shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF#refs/tags/}"
+          EXPECTED_TAG="v${VERSION}"
+
+          if [[ "${TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "::error::Tag ${TAG} does not match package.json version ${VERSION}."
+            exit 1
           fi
 
           # Detect channel from semver prerelease tag
@@ -287,7 +302,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.version.outputs.channel }}"
-          BASE_URL="https://oss.intelli-spectrum.com/${CHANNEL}"
+          BASE_URL="https://geeclaw.dtminds.com/${CHANNEL}"
 
           jq -n \
             --arg version "$VERSION" \
@@ -340,20 +355,34 @@ jobs:
 
           ossutil --version
 
-      - name: "Upload to OSS: {channel}/ (overwrite)"
+      - name: "Upload to OSS: {channel}/ artifacts"
         run: |
           CHANNEL="${{ steps.version.outputs.channel }}"
-
-          # Only clean the current channel's directory — never touch other channels
-          ossutil rm -r -f oss://valuecell-clawx/${CHANNEL}/ || true
-
-          # Upload all files with no-cache so clients always get the freshest version
-          ossutil cp -r -f \
-            --meta="Cache-Control:no-cache,no-store,must-revalidate" \
-            staging/${CHANNEL}/ \
-            oss://valuecell-clawx/${CHANNEL}/
+          find "staging/${CHANNEL}" -maxdepth 1 -type f \
+            ! -name "*.yml" \
+            ! -name "release-info.json" | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:public,max-age=31536000,immutable" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${filename}"
+            done
 
           echo "Uploaded to ${CHANNEL}/"
+
+      - name: "Upload to OSS: {channel}/ metadata"
+        run: |
+          CHANNEL="${{ steps.version.outputs.channel }}"
+          find "staging/${CHANNEL}" -maxdepth 1 -type f \
+            \( -name "*.yml" -o -name "release-info.json" \) | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:no-cache,no-store,must-revalidate" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${filename}"
+            done
+
+          echo "Uploaded channel metadata to ${CHANNEL}/"
 
       - name: "Upload to OSS: releases/vX.Y.Z/ (archive)"
         run: |
@@ -362,7 +391,7 @@ jobs:
           # Upload to permanent archive (long cache, immutable)
           ossutil cp -r \
             staging/releases/${TAG}/ \
-            oss://valuecell-clawx/releases/${TAG}/ \
+            oss://xingyun-ai/releases/${TAG}/ \
             --meta "Cache-Control:public,max-age=31536000,immutable"
 
           echo "Uploaded to releases/${TAG}/"
@@ -373,15 +402,15 @@ jobs:
           CHANNEL="${{ steps.version.outputs.channel }}"
 
           echo "=== ${CHANNEL}/ ==="
-          ossutil ls oss://valuecell-clawx/${CHANNEL}/ --short
+          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short
 
           echo ""
           echo "=== releases/${TAG}/ ==="
-          ossutil ls oss://valuecell-clawx/releases/${TAG}/ --short
+          ossutil ls oss://xingyun-ai/releases/${TAG}/ --short
 
           echo ""
           echo "=== Verify release-info.json ==="
-          ossutil cp oss://valuecell-clawx/${CHANNEL}/release-info.json /tmp/release-info.json -f
+          ossutil cp oss://xingyun-ai/${CHANNEL}/release-info.json /tmp/release-info.json -f
           jq . /tmp/release-info.json
 
           echo ""
@@ -392,7 +421,7 @@ jobs:
             YML_PREFIX="${CHANNEL}"
           fi
           echo "electron-updater expects ${YML_PREFIX}-mac.yml, ${YML_PREFIX}.yml, etc. in ${CHANNEL}/:"
-          ossutil ls oss://valuecell-clawx/${CHANNEL}/ --short | grep "${YML_PREFIX}.*\\.yml" || echo "(none found)"
+          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short | grep "${YML_PREFIX}.*\\.yml" || echo "(none found)"
           
           echo ""
           echo "All files uploaded and verified successfully!"
@@ -416,14 +445,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
           IS_PRERELEASE_CHANNEL=false
 
-          if [[ "$TAG" == *"alpha"* ]] || [[ "$TAG" == *"beta"* ]]; then
+          if [[ "${VERSION}" == *-* ]]; then
             IS_PRERELEASE_CHANNEL=true
           fi
 
           if [ "$IS_PRERELEASE_CHANNEL" = "true" ]; then
-            echo "Tag $TAG is an alpha/beta release — keeping as pre-release."
+            echo "Tag $TAG is a prerelease — keeping as pre-release."
           else
             echo "Promoting $TAG from pre-release to latest release..."
             gh release edit "$TAG" \
