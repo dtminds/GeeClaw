@@ -694,8 +694,12 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
             break;
           }
           if (request.action === 'get') {
-            const payload = request.payload as { key?: keyof AppSettings } | [keyof AppSettings] | undefined;
-            const key = Array.isArray(payload) ? payload[0] : payload?.key;
+            const payload = request.payload as { key?: keyof AppSettings } | [keyof AppSettings] | keyof AppSettings | undefined;
+            const key = typeof payload === 'string'
+              ? payload
+              : Array.isArray(payload)
+                ? payload[0]
+                : payload?.key;
             if (!key) throw new Error('Invalid settings.get payload');
             data = await getSetting(key);
             break;

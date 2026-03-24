@@ -64,6 +64,9 @@ publish:
     owner: dtminds
     repo: GeeClaw
 
+releaseInfo:
+  releaseNotesFile: resources/release-notes.md
+
 # macOS Configuration
 mac:
   extraResources:
