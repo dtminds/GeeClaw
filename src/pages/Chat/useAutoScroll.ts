@@ -50,16 +50,6 @@ export interface UseAutoScrollReturn {
   isAutoScrollEnabled: boolean;
   /** Scroll to the bottom and re-enable auto-follow. */
   scrollToBottomAndFollow: () => void;
-  /** Event handlers to spread onto the scroll container element. */
-  containerEventHandlers: {
-    onScroll: () => void;
-    onWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
-    onPointerDown: () => void;
-    onTouchStart: (e: React.TouchEvent<HTMLDivElement>) => void;
-    onTouchMove: (e: React.TouchEvent<HTMLDivElement>) => void;
-    onTouchEnd: () => void;
-    onTouchCancel: () => void;
-  };
 }
 
 // ── Hook ─────────────────────────────────────────────────────────
@@ -96,6 +86,9 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
 
   /** rAF id for the continuous follow loop active during streaming. */
   const activeFollowLoopFrameRef = useRef<number | null>(null);
+
+  /** rAF id used to throttle scroll-position sampling to once per frame. */
+  const scrollMeasureFrameRef = useRef<number | null>(null);
 
   /**
    * True while the pointer (mouse button) is held down inside the scroll container.
@@ -144,6 +137,10 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     if (scrollReleaseFrameRef.current !== null) {
       cancelAnimationFrame(scrollReleaseFrameRef.current);
       scrollReleaseFrameRef.current = null;
+    }
+    if (scrollMeasureFrameRef.current !== null) {
+      cancelAnimationFrame(scrollMeasureFrameRef.current);
+      scrollMeasureFrameRef.current = null;
     }
     if (scheduledFollowFrameRef.current !== null) {
       cancelAnimationFrame(scheduledFollowFrameRef.current);
@@ -198,7 +195,9 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
 
   // ── Event handlers (stable refs via useCallback) ─────────────
 
-  const handleScroll = useCallback(() => {
+  const measureScrollPosition = useCallback(() => {
+    scrollMeasureFrameRef.current = null;
+
     const container = containerRef.current;
     if (!container) return;
 
@@ -226,7 +225,14 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     setFollowEnabled(false);
   }, [isNearBottom, setFollowEnabled]);
 
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+  const queueScrollMeasurement = useCallback(() => {
+    if (scrollMeasureFrameRef.current !== null) return;
+    scrollMeasureFrameRef.current = requestAnimationFrame(() => {
+      measureScrollPosition();
+    });
+  }, [measureScrollPosition]);
+
+  const handleWheel = useCallback((event: WheelEvent) => {
     if (event.deltaY < 0 && isAutoScrollEnabledRef.current) {
       setFollowEnabled(false);
     }
@@ -236,11 +242,11 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     pointerScrollActiveRef.current = true;
   }, []);
 
-  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = useCallback((event: TouchEvent) => {
     touchYRef.current = event.touches[0]?.clientY ?? null;
   }, []);
 
-  const handleTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchMove = useCallback((event: TouchEvent) => {
     const nextTouchY = event.touches[0]?.clientY;
     const previousTouchY = touchYRef.current;
     touchYRef.current = nextTouchY ?? null;
@@ -269,6 +275,29 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
   useEffect(() => () => {
     cancelQueuedFollow();
   }, [cancelQueuedFollow]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('scroll', queueScrollMeasurement, { passive: true });
+    container.addEventListener('wheel', handleWheel, { passive: true });
+    container.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', queueScrollMeasurement);
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [handlePointerDown, handleTouchEnd, handleTouchMove, handleTouchStart, handleWheel, queueScrollMeasurement]);
 
   // Clear the pointer-active flag when the pointer is released anywhere in the window.
   useEffect(() => {
@@ -375,14 +404,5 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     innerRef,
     isAutoScrollEnabled,
     scrollToBottomAndFollow,
-    containerEventHandlers: {
-      onScroll: handleScroll,
-      onWheel: handleWheel,
-      onPointerDown: handlePointerDown,
-      onTouchStart: handleTouchStart,
-      onTouchMove: handleTouchMove,
-      onTouchEnd: handleTouchEnd,
-      onTouchCancel: handleTouchEnd,
-    },
   };
 }

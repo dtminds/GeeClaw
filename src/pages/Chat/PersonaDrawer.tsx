@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Check,
   FileText,
@@ -193,49 +193,66 @@ export function PersonaDrawer({
     },
   }), [t]);
 
+  const applyPersonaResponse = useCallback((response: PersonaResponse) => {
+    const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
+    const matchedTemplate = SOUL_TEMPLATES.find((template) => (
+      template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
+    ));
+
+    setSnapshot(response);
+    setDrafts({
+      identity: response.files.identity.content,
+      master: response.files.master.content,
+      soul: response.files.soul.content,
+      memory: response.files.memory.content,
+    });
+    setSoulTemplateId(matchedTemplate?.id ?? 'custom');
+    setCustomSoulDraft(matchedTemplate ? '' : response.files.soul.content);
+  }, []);
+
+  const loadPersona = useCallback(async (targetAgentId: string) => {
+    return await hostApiFetch<PersonaResponse>(
+      `/api/agents/${encodeURIComponent(targetAgentId)}/persona`,
+    );
+  }, []);
+
   useEffect(() => {
     if (!open || !agentId) return;
 
     let cancelled = false;
-    setLoading(true);
     setError(null);
     setActiveTab('identity');
 
-    void (async () => {
-      try {
-        const response = await hostApiFetch<PersonaResponse>(
-          `/api/agents/${encodeURIComponent(agentId)}/persona`,
-        );
-        if (cancelled) return;
+    if (snapshot?.agentId === agentId) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
-        const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
-        const matchedTemplate = SOUL_TEMPLATES.find((template) => (
-          template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
-        ));
+    setLoading(true);
 
-        setSnapshot(response);
-        setDrafts({
-          identity: response.files.identity.content,
-          master: response.files.master.content,
-          soul: response.files.soul.content,
-          memory: response.files.memory.content,
-        });
-        setSoulTemplateId(matchedTemplate?.id ?? 'custom');
-        setCustomSoulDraft(matchedTemplate ? '' : response.files.soul.content);
-      } catch (err) {
-        if (cancelled) return;
-        setError(toUserMessage(err));
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+    const frameId = window.requestAnimationFrame(() => {
+      void (async () => {
+        try {
+          const response = await loadPersona(agentId);
+          if (cancelled) return;
+          applyPersonaResponse(response);
+        } catch (err) {
+          if (cancelled) return;
+          setError(toUserMessage(err));
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
-      }
-    })();
+      })();
+    });
 
     return () => {
       cancelled = true;
+      window.cancelAnimationFrame(frameId);
     };
-  }, [open, agentId]);
+  }, [agentId, applyPersonaResponse, loadPersona, open, snapshot?.agentId]);
 
   const hasChanges = useMemo(() => {
     if (!snapshot) return false;
@@ -247,22 +264,8 @@ export function PersonaDrawer({
     setLoading(true);
     setError(null);
     try {
-      const response = await hostApiFetch<PersonaResponse>(
-        `/api/agents/${encodeURIComponent(agentId)}/persona`,
-      );
-      const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
-      const matchedTemplate = SOUL_TEMPLATES.find((template) => (
-        template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
-      ));
-      setSnapshot(response);
-      setDrafts({
-        identity: response.files.identity.content,
-        master: response.files.master.content,
-        soul: response.files.soul.content,
-        memory: response.files.memory.content,
-      });
-      setSoulTemplateId(matchedTemplate?.id ?? 'custom');
-      setCustomSoulDraft(matchedTemplate ? '' : response.files.soul.content);
+      const response = await loadPersona(agentId);
+      applyPersonaResponse(response);
     } catch (err) {
       setError(toUserMessage(err));
     } finally {
@@ -428,10 +431,12 @@ export function PersonaDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet modal={false} open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="app-canvas flex w-full flex-col border-l border-black/10 bg-[#fcfbf8] p-0 shadow-[0_28px_80px_-44px_rgba(21,42,51,0.35)] dark:border-white/10 dark:bg-background sm:max-w-[780px]"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        className="app-canvas flex w-full flex-col border-l border-black/10 bg-[#fcfbf8] p-0 shadow-[0_28px_80px_-44px_rgba(21,42,51,0.35)] will-change-transform [contain:layout_paint_style] data-[state=closed]:duration-200 data-[state=open]:duration-200 dark:border-white/10 dark:bg-background sm:max-w-[780px]"
       >
         <div className="px-4 pb-0 pt-3">
           <div className="flex items-start justify-between gap-4">

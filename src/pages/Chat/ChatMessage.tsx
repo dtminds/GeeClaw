@@ -3,14 +3,15 @@
  * Renders user / assistant / system / toolresult messages
  * with markdown, thinking sections, images, and tool cards.
  */
-import { useState, useCallback, useEffect, memo } from 'react';
-import { Copy, Check, ChevronDown, ChevronRight, X, FolderOpen, ZoomIn } from 'lucide-react';
-import { Streamdown, defaultRemarkPlugins } from 'streamdown';
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo, type CSSProperties } from 'react';
+import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, X, FolderOpen, ZoomIn } from 'lucide-react';
+import { Streamdown, defaultRemarkPlugins, type LinkSafetyModalProps } from 'streamdown';
 import { code } from '@streamdown/code';
 import { mermaid } from '@streamdown/mermaid';
 import { math } from '@streamdown/math';
 import { cjk } from '@streamdown/cjk';
 import remarkBreaks from 'remark-breaks';
+import spinners from 'unicode-animations';
 import 'katex/dist/katex.min.css';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -34,22 +35,6 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import * as Popover from '@radix-ui/react-popover';
-import spinners from 'unicode-animations';
-
-function useSpinner(enabled: boolean, loaderName: keyof typeof spinners = 'braille') {
-  const [frameIndex, setFrameIndex] = useState(0);
-  const loader = spinners[loaderName];
-
-  useEffect(() => {
-    if (!enabled) return;
-    const interval = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % loader.frames.length);
-    }, loader.interval);
-    return () => clearInterval(interval);
-  }, [enabled, loader.frames.length, loader.interval]);
-
-  return enabled ? loader.frames[frameIndex] : loader.frames[0];
-}
 
 interface ChatMessageProps {
   message: RawMessage;
@@ -74,6 +59,115 @@ const STREAMDOWN_ANIMATION = {
   duration: 200,
   easing: 'ease-out' as const,
 };
+
+const STREAMDOWN_PLUGINS = {
+  code,
+  mermaid,
+  math,
+  cjk,
+} as const;
+
+const STREAMDOWN_REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkBreaks];
+
+const MESSAGE_VISIBILITY_STYLE: CSSProperties = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '320px',
+};
+
+const STREAMDOWN_LINK_SAFETY = {
+  enabled: true,
+  renderModal: (props: LinkSafetyModalProps) => <ExternalLinkSafetyModal {...props} />,
+} as const;
+
+type SpinnerName = keyof typeof spinners;
+
+type SpinnerStore = {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => string;
+  getServerSnapshot: () => string;
+};
+
+const spinnerStores = new Map<SpinnerName, SpinnerStore>();
+
+function createSpinnerStore(loaderName: SpinnerName): SpinnerStore {
+  const loader = spinners[loaderName];
+  let frameIndex = 0;
+  let intervalId: number | null = null;
+  const listeners = new Set<() => void>();
+
+  const getServerSnapshot = () => loader.frames[0] ?? '';
+  const getSnapshot = () => loader.frames[frameIndex] ?? getServerSnapshot();
+
+  const emitChange = () => {
+    listeners.forEach((listener) => listener());
+  };
+
+  const stop = () => {
+    if (intervalId !== null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+      frameIndex = 0;
+    }
+  };
+
+  const start = () => {
+    if (typeof window === 'undefined' || intervalId !== null) {
+      return;
+    }
+
+    intervalId = window.setInterval(() => {
+      frameIndex = (frameIndex + 1) % loader.frames.length;
+      emitChange();
+    }, loader.interval);
+  };
+
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      if (listeners.size === 1) {
+        start();
+      }
+
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          stop();
+        }
+      };
+    },
+    getSnapshot,
+    getServerSnapshot,
+  };
+}
+
+function getSpinnerStore(loaderName: SpinnerName): SpinnerStore {
+  let store = spinnerStores.get(loaderName);
+  if (!store) {
+    store = createSpinnerStore(loaderName);
+    spinnerStores.set(loaderName, store);
+  }
+  return store;
+}
+
+const UnicodeSpinner = memo(function UnicodeSpinner({
+  className,
+  loaderName = 'braille',
+}: {
+  className?: string;
+  loaderName?: SpinnerName;
+}) {
+  const store = getSpinnerStore(loaderName);
+  const frame = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('inline-flex shrink-0 items-center justify-center font-mono leading-none', className)}
+    >
+      {frame}
+    </span>
+  );
+});
 
 /** Resolve an ExtractedImage to a displayable src string, or null if not possible. */
 function imageSrc(img: ExtractedImage): string | null {
@@ -139,6 +233,10 @@ function looksLikeToolErrorText(text: string | undefined): boolean {
   if (!trimmed) return false;
   return /^(error|failed?|exception|traceback|invalid|denied|unauthorized|forbidden|not found|错误|失败|异常|未找到|无权限|拒绝访问)\b/i.test(trimmed);
 }
+
+const EMPTY_ATTACHMENTS: AttachedFileMeta[] = [];
+const EMPTY_ASSISTANT_CONTENT_PARTS: AssistantContentPart[] = [];
+const EMPTY_TOOL_DISPLAY_STATUSES: ToolDisplayStatus[] = [];
 
 const COMMON_TOOL_NAME_MAP_ZH: Record<string, string> = {
   read: '读取文件',
@@ -360,18 +458,34 @@ function getInlineToolResultStatus(block: ContentBlock, resultText: string): 'ru
   return 'completed';
 }
 
-function findMatchingToolStatus(toolStatuses: ToolDisplayStatus[], id?: string, name?: string): ToolDisplayStatus | undefined {
-  for (let index = toolStatuses.length - 1; index >= 0; index -= 1) {
-    const tool = toolStatuses[index];
+type ToolStatusLookup = {
+  byId: Map<string, ToolDisplayStatus>;
+  byName: Map<string, ToolDisplayStatus>;
+};
+
+function buildToolStatusLookup(toolStatuses: ToolDisplayStatus[]): ToolStatusLookup {
+  const byId = new Map<string, ToolDisplayStatus>();
+  const byName = new Map<string, ToolDisplayStatus>();
+
+  for (const tool of toolStatuses) {
     if (!tool) continue;
-    if (id && (tool.toolCallId === id || tool.id === id)) {
-      return tool;
-    }
-    if (name && tool.name === name) {
-      return tool;
+    if (tool.id) byId.set(tool.id, tool);
+    if (tool.toolCallId) byId.set(tool.toolCallId, tool);
+    if (tool.name) byName.set(tool.name, tool);
+  }
+
+  return { byId, byName };
+}
+
+function findMatchingToolStatus(toolStatusLookup: ToolStatusLookup, id?: string, name?: string): ToolDisplayStatus | undefined {
+  if (id) {
+    const statusById = toolStatusLookup.byId.get(id);
+    if (statusById) {
+      return statusById;
     }
   }
-  return undefined;
+
+  return name ? toolStatusLookup.byName.get(name) : undefined;
 }
 
 function buildAssistantContentParts(
@@ -380,6 +494,7 @@ function buildAssistantContentParts(
   showToolCalls: boolean,
   toolStatuses: ToolDisplayStatus[] = [],
 ): AssistantContentPart[] {
+  const toolStatusLookup = buildToolStatusLookup(toolStatuses);
   const content = Array.isArray(message.content) ? message.content as ContentBlock[] : null;
 
   // OpenAI-compatible streams may expose text/tool_calls separately rather than
@@ -397,7 +512,7 @@ function buildAssistantContentParts(
       parts.push({ type: 'text', text });
     }
     for (const tool of tools) {
-      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
       if (showToolCalls) {
         parts.push({
           type: 'tool',
@@ -441,7 +556,7 @@ function buildAssistantContentParts(
     if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
       flushTextBuffer();
       if (showToolCalls) {
-        const toolStatus = findMatchingToolStatus(toolStatuses, block.id, block.name);
+        const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
         parts.push({
           type: 'tool',
           id: block.id || block.name,
@@ -485,7 +600,7 @@ function buildAssistantContentParts(
         return part.name === tool.name;
       });
       if (alreadyRendered) continue;
-      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
       parts.push({
         type: 'tool',
         id: tool.id || tool.name,
@@ -501,6 +616,45 @@ function buildAssistantContentParts(
   return parts;
 }
 
+function getAssistantDisplayText(parts: AssistantContentPart[]): string {
+  if (parts.length === 0) {
+    return '';
+  }
+
+  const textParts: string[] = [];
+  for (const part of parts) {
+    if (part.type === 'text' && part.text.trim()) {
+      textParts.push(part.text);
+    }
+  }
+
+  return textParts.join('\n\n').trim();
+}
+
+function areMessagesEquivalent(prevMessage: RawMessage, nextMessage: RawMessage): boolean {
+  return prevMessage === nextMessage || (
+    prevMessage.role === nextMessage.role
+    && prevMessage.id === nextMessage.id
+    && prevMessage.timestamp === nextMessage.timestamp
+    && prevMessage.content === nextMessage.content
+    && prevMessage.senderLabel === nextMessage.senderLabel
+    && prevMessage.toolCallId === nextMessage.toolCallId
+    && prevMessage.toolName === nextMessage.toolName
+    && prevMessage.details === nextMessage.details
+    && prevMessage.isError === nextMessage.isError
+    && prevMessage._attachedFiles === nextMessage._attachedFiles
+    && prevMessage._hiddenAttachmentCount === nextMessage._hiddenAttachmentCount
+    && prevMessage._toolStatuses === nextMessage._toolStatuses
+  );
+}
+
+function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
+  return prevProps.showThinking === nextProps.showThinking
+    && prevProps.showToolCalls === nextProps.showToolCalls
+    && prevProps.isStreaming === nextProps.isStreaming
+    && areMessagesEquivalent(prevProps.message, nextProps.message);
+}
+
 export const ChatMessage = memo(function ChatMessage({
   message,
   showThinking,
@@ -510,16 +664,24 @@ export const ChatMessage = memo(function ChatMessage({
   const isUser = message.role === 'user';
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   const isToolResult = role === 'toolresult' || role === 'tool_result';
-  const text = extractText(message);
-  const hasText = text.trim().length > 0;
-  const images = extractImages(message);
-  const effectiveToolStatuses = !isUser ? (message._toolStatuses || []) : [];
-  const assistantContentParts = !isUser
-    ? buildAssistantContentParts(message, showThinking, showToolCalls, effectiveToolStatuses)
-    : [];
-  const hasAssistantText = assistantContentParts.some((part) => part.type === 'text');
+  const images = useMemo(() => extractImages(message), [message]);
+  const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
+  const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
+  const assistantContentParts = useMemo(
+    () => (isUser
+      ? EMPTY_ASSISTANT_CONTENT_PARTS
+      : buildAssistantContentParts(message, showThinking, showToolCalls, effectiveToolStatuses)),
+    [effectiveToolStatuses, isUser, message, showThinking, showToolCalls],
+  );
+  const assistantText = useMemo(
+    () => (isUser ? '' : getAssistantDisplayText(assistantContentParts)),
+    [assistantContentParts, isUser],
+  );
+  const text = isUser ? userText : assistantText;
+  const hasText = text.length > 0;
+  const hasAssistantText = assistantText.length > 0;
 
-  const attachedFiles = message._attachedFiles || [];
+  const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
 
@@ -530,6 +692,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <div
+      style={MESSAGE_VISIBILITY_STYLE}
       className={cn(
         'flex gap-3 group',
         isUser ? 'flex-row-reverse' : 'flex-row',
@@ -716,7 +879,7 @@ export const ChatMessage = memo(function ChatMessage({
       )}
     </div>
   );
-});
+}, areChatMessagePropsEqual);
 
 function formatDuration(durationMs?: number): string | null {
   if (!durationMs || !Number.isFinite(durationMs)) return null;
@@ -756,7 +919,7 @@ function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: numb
   }, [text]);
 
   return (
-    <div className="flex w-full flex-wrap items-center justify-start gap-x-4 gap-y-1.5 opacity-0 transition-opacity duration-200 select-none group-hover:opacity-100">
+    <div className="flex w-full flex-wrap items-center justify-start gap-x-4 gap-y-1.5 select-none">
       <span className="text-xs text-muted-foreground">
         {timestamp ? formatTimestamp(timestamp) : ''}
       </span>
@@ -783,6 +946,154 @@ function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: numb
 
 // ── Message Bubble ──────────────────────────────────────────────
 
+function ExternalLinkSafetyModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  url,
+}: LinkSafetyModalProps) {
+  const { i18n } = useTranslation('chat');
+  const isZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
+  const [copied, setCopied] = useState(false);
+  const copyResetTimerRef = useRef<number | null>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+
+  const title = isZh ? '打开外部链接？' : 'Open external link?';
+  const description = isZh ? '你即将访问一个外部网站。' : "You're about to visit an external website.";
+  const destinationLabel = isZh ? '目标地址' : 'Destination';
+  const closeLabel = isZh ? '关闭' : 'Close';
+  const copyLabel = copied ? (isZh ? '已复制' : 'Copied') : (isZh ? '复制链接' : 'Copy link');
+  const openLabel = isZh ? '打开链接' : 'Open link';
+
+  const handleClose = useCallback(() => {
+    if (copyResetTimerRef.current !== null) {
+      window.clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = null;
+    }
+    setCopied(false);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    openButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleClose, isOpen]);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) {
+      window.clearTimeout(copyResetTimerRef.current);
+    }
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      if (copyResetTimerRef.current !== null) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy external link', error);
+      toast.error(isZh ? '复制链接失败' : 'Failed to copy link');
+    }
+  }, [isZh, url]);
+
+  const handleOpen = useCallback(() => {
+    onConfirm();
+    handleClose();
+  }, [handleClose, onConfirm]);
+
+  if (!isOpen || typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[140] flex items-center justify-center overflow-y-auto bg-[rgba(9,14,20,0.54)] p-4 backdrop-blur-sm md:p-5"
+      onClick={handleClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="external-link-dialog-title"
+    >
+      <div
+        className="modal-card-surface relative flex w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] flex-col gap-5 rounded-3xl border p-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="modal-close-button absolute right-4 top-4 -mr-2 -mt-2"
+          onClick={handleClose}
+          title={closeLabel}
+          aria-label={closeLabel}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+
+        <div className="flex items-start gap-3 pr-10">
+          <div className="modal-field-surface flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-primary">
+            <ExternalLink className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="external-link-dialog-title" className="modal-title text-[1.25rem]">
+              {title}
+            </h2>
+            <p className="modal-description">
+              {description}
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-section-surface rounded-2xl border p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
+            {destinationLabel}
+          </div>
+          <div className="mt-2 break-all text-sm font-medium text-foreground" title={url}>
+            {url}
+          </div>
+        </div>
+
+        <div className="modal-footer pt-0">
+          <button
+            type="button"
+            className="modal-secondary-button inline-flex min-w-0 flex-1 items-center justify-center gap-2"
+            onClick={handleCopy}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            <span>{copyLabel}</span>
+          </button>
+          <button
+            ref={openButtonRef}
+            type="button"
+            className="modal-primary-button inline-flex min-w-0 flex-1 items-center justify-center gap-2"
+            onClick={handleOpen}
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span>{openLabel}</span>
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function MessageBubble({
   text,
   isUser,
@@ -792,7 +1103,7 @@ function MessageBubble({
   isUser: boolean;
   isStreaming: boolean;
 }) {
-  const skillSegments = isUser ? parseSkillMarkerSegments(text) : [];
+  const skillSegments = useMemo(() => (isUser ? parseSkillMarkerSegments(text) : []), [isUser, text]);
 
   return (
     <div
@@ -825,17 +1136,14 @@ function MessageBubble({
           )}
         </div>
       ) : (
-        <div className="chat-markdown prose dark:prose-invert max-w-none [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-4 [&_ol]:ps-4 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
+        <div className="chat-markdown prose dark:prose-invert max-w-none [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
           <Streamdown
-            animated={STREAMDOWN_ANIMATION}
+            mode={isStreaming ? undefined : 'static'}
+            animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
             isAnimating={isStreaming}
-            plugins={{
-              code: code,
-              mermaid: mermaid,
-              math: math,
-              cjk: cjk,
-            }}
-            remarkPlugins={[...Object.values(defaultRemarkPlugins), remarkBreaks]}
+            plugins={STREAMDOWN_PLUGINS}
+            remarkPlugins={STREAMDOWN_REMARK_PLUGINS}
+            linkSafety={STREAMDOWN_LINK_SAFETY}
           >
             {text}
           </Streamdown>
@@ -850,7 +1158,6 @@ function MessageBubble({
 
 function ThinkingBlock({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const loadingFrame = useSpinner(isStreaming, 'braille');
 
   return (
     <div className="w-full text-sm">
@@ -859,7 +1166,7 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
         onClick={() => setExpanded(!expanded)}
       >
         <span className='flex h-4 w-4 shrink-0 items-center justify-center rounded-full' aria-hidden="true">
-          {isStreaming ? loadingFrame : <HugeiconsIcon icon={AiBrain01Icon} className="h-3.5 w-3.5" />}
+          {isStreaming ? <UnicodeSpinner className="w-4 text-[13px]" /> : <HugeiconsIcon icon={AiBrain01Icon} className="h-3.5 w-3.5" />}
         </span>
         <span
           className={cn(
@@ -878,7 +1185,7 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
               mode={isStreaming ? undefined : 'static'}
               animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
               isAnimating={isStreaming}
-              remarkPlugins={[...Object.values(defaultRemarkPlugins), remarkBreaks]}
+              remarkPlugins={STREAMDOWN_REMARK_PLUGINS}
             >
               {content}
             </Streamdown>
@@ -960,7 +1267,7 @@ function ImageThumbnail({
       className="relative w-36 h-36 rounded-xl border overflow-hidden bg-muted group/img cursor-zoom-in"
       onClick={onPreview}
     >
-      <img src={src} alt={fileName} className="w-full h-full object-cover" />
+      <img src={src} alt={fileName} className="w-full h-full object-cover" loading="lazy" decoding="async" />
       <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/25 transition-colors flex items-center justify-center">
         <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow" />
       </div>
@@ -991,7 +1298,7 @@ function ImagePreviewCard({
       className="relative flex h-[8rem] w-[8rem] items-center justify-center rounded-lg border overflow-hidden bg-muted/20 p-1 group/img cursor-zoom-in"
       onClick={onPreview}
     >
-      <img src={src} alt={fileName} className="block h-full w-full rounded-md object-contain" />
+      <img src={src} alt={fileName} className="block h-full w-full rounded-md object-contain" loading="lazy" decoding="async" />
       <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center">
         <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow" />
       </div>
@@ -1094,15 +1401,22 @@ function ToolCard({
 }) {
   const { i18n } = useTranslation('chat');
   const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
+  const [open, setOpen] = useState(false);
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
-  
-  const displayName = getToolDisplayName(name, input, preferZh);
-  const loadingFrame = useSpinner(isRunning, 'braille');
+  const displayName = useMemo(() => getToolDisplayName(name, input, preferZh), [input, name, preferZh]);
+  const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
+  const formattedInput = useMemo(() => {
+    if (!open || input == null) {
+      return null;
+    }
+
+    return typeof input === 'string' ? input : JSON.stringify(input, null, 2);
+  }, [input, open]);
 
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <div
         className={cn(
           'group/tool relative flex min-w-0 max-w-[30rem] flex-col overflow-hidden rounded-lg text-sm transition-colors mb-1',
@@ -1122,8 +1436,8 @@ function ToolCard({
                 isError && 'text-destructive',
               )}
             >
-              {isRunning && <span className="font-mono text-base leading-none shrink-0 text-center inline-flex items-center justify-center w-4">{loadingFrame}</span>}
-              {!isRunning && !isError && <HugeiconsIcon icon={getToolDisplayIcon(name, input)} className="h-4 w-4 shrink-0" />}
+              {isRunning && <UnicodeSpinner className="w-4 text-[13px]" />}
+              {!isRunning && !isError && <HugeiconsIcon icon={toolIcon} className="h-4 w-4 shrink-0" />}
               {isError && <HugeiconsIcon icon={AlertCircleIcon} className="h-4 w-4 shrink-0" />}
             </span>
             <span 
@@ -1139,31 +1453,33 @@ function ToolCard({
           </button>
         </Popover.Trigger>
         
-        <Popover.Portal>
-          <Popover.Content 
-            align="start" 
-            side="bottom" 
-            sideOffset={4}
-            className="z-50 max-w-[600px] max-h-64 space-y-2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-[0_10px_20px_0_rgba(28,28,32,0.1)] outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 px-3 py-2 text-xs overscroll-contain"
-          >
-            {input != null && (
-              <div className="space-y-1">
-                <div className="font-medium uppercase tracking-wide opacity-70">Input</div>
-                <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
-                  {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
-                </pre>
-              </div>
-            )}
-            {result && (
-              <div className="space-y-1">
-                <div className="font-medium uppercase tracking-wide opacity-70">Result</div>
-                <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
-                  {result}
-                </pre>
-              </div>
-            )}
-          </Popover.Content>
-        </Popover.Portal>
+        {open && (
+          <Popover.Portal>
+            <Popover.Content 
+              align="start" 
+              side="bottom" 
+              sideOffset={4}
+              className="z-50 max-w-[600px] max-h-64 space-y-2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-[0_10px_20px_0_rgba(28,28,32,0.1)] outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 px-3 py-2 text-xs overscroll-contain"
+            >
+              {formattedInput && (
+                <div className="space-y-1">
+                  <div className="font-medium uppercase tracking-wide opacity-70">Input</div>
+                  <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
+                    {formattedInput}
+                  </pre>
+                </div>
+              )}
+              {result && (
+                <div className="space-y-1">
+                  <div className="font-medium uppercase tracking-wide opacity-70">Result</div>
+                  <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
+                    {result}
+                  </pre>
+                </div>
+              )}
+            </Popover.Content>
+          </Popover.Portal>
+        )}
       </div>
     </Popover.Root>
   );

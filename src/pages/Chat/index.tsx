@@ -11,10 +11,10 @@ import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { ChatMessage } from './ChatMessage';
 import { ChatInput, type FileAttachment } from './ChatInput';
 import { ChatToolbar } from './ChatToolbar';
 import { ChatSessionsPanel } from './ChatSessionsPanel';
+import { ChatMessagesViewport } from './ChatMessagesViewport';
 import { useAutoScroll } from './useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -125,7 +125,6 @@ export function Chat() {
     innerRef,
     isAutoScrollEnabled,
     scrollToBottomAndFollow,
-    containerEventHandlers,
   } = useAutoScroll({
     sessionId: autoScrollSessionId,
     sending: isStreamingActive,
@@ -203,45 +202,45 @@ export function Chat() {
           <div className="relative flex-1 min-h-0">
             <div
               ref={containerRef}
-              {...containerEventHandlers}
               className="flex h-full min-h-0 overflow-y-auto px-4 py-4"
-              style={{
-                maskImage: 'linear-gradient(to bottom, transparent, black 1.5rem, black calc(100% - 1.5rem), transparent)',
-                WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 1.5rem, black calc(100% - 1.5rem), transparent)'
-              }}
             >
-              <div ref={innerRef} className="max-w-4xl mx-auto w-full space-y-2 px-4">
-                {loading && !isStreamingActive ? (
+              {loading && !isStreamingActive ? (
+                <div ref={innerRef} className="max-w-4xl mx-auto w-full px-4">
                   <div className="flex h-[60vh] items-center justify-center">
                     <LoadingSpinner size="lg" />
                   </div>
-                ) : isEmpty ? (
+                </div>
+              ) : isEmpty ? (
+                <div ref={innerRef} className="max-w-4xl mx-auto w-full px-4">
                   <WelcomeScreen />
-                ) : (
-                  <>
-                    {chatItems.map((item) => (
-                      <ChatMessage
-                        key={item.key}
-                        message={item.message}
-                        showThinking={showThinking}
-                        showToolCalls={showToolCalls}
-                        isStreaming={item.isStreaming}
-                      />
-                    ))}
+                </div>
+              ) : (
+                <ChatMessagesViewport
+                  items={chatItems}
+                  containerRef={containerRef}
+                  innerRef={innerRef}
+                  showThinking={showThinking}
+                  showToolCalls={showToolCalls}
+                  footer={(
+                    <>
+                      {sending && pendingFinal && !hasLiveText && (
+                        <ActivityIndicator phase="tool_processing" />
+                      )}
 
-                    {sending && pendingFinal && !hasLiveText && (
-                      <ActivityIndicator phase="tool_processing" />
-                    )}
+                      {sending && !pendingFinal && !hasAnyStreamContent && (
+                        <TypingIndicator />
+                      )}
 
-                    {sending && !pendingFinal && !hasAnyStreamContent && (
-                      <TypingIndicator />
-                    )}
-
-                    <div aria-hidden="true" className="h-4 shrink-0" />
-                  </>
-                )}
-              </div>
+                      <div aria-hidden="true" className="h-4 shrink-0" />
+                    </>
+                  )}
+                />
+              )}
             </div>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-background via-background/92 to-transparent"
+            />
 
             {!isEmpty && !isAutoScrollEnabled && (
               <button
