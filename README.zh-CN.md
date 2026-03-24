@@ -162,6 +162,14 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - 如果启用了 Telegram，GeeClaw 还会把代理同步到 OpenClaw 的 Telegram 频道配置中。
 - 在 Windows 打包版本中，内置的 `openclaw` CLI/TUI 会通过随包分发的 `node.exe` 入口运行，以保证终端输入行为稳定。
 
+### OpenCLI Browser Bridge 检查
+
+GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill / exec 环境使用。打开 **设置 → OpenCLI** 可以：
+
+- 检查内置 OpenCLI 运行时是否存在
+- 运行 `opencli doctor`，查看 daemon 和 Browser Bridge 扩展的连通状态
+- 在 Chrome 未连通时，直接打开内置扩展目录或跳转到上游安装说明
+
 ---
 
 ## 系统架构

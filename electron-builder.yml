@@ -23,11 +23,15 @@ extraResources:
       - "!icons/*.md"
       - "!icons/*.svg"
       - "!bin/**"
+      - "!cli/**"
+      - "!managed-bin/**"
       - "!screenshot/**"
   # OpenClaw package (node_modules copied separately by afterPack hook
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
     to: openclaw/
+  - from: build/opencli/
+    to: opencli/
   - from: build/preinstalled-skills/
     to: resources/preinstalled-skills/
   # NOTE: OpenClaw plugin mirrors are copied by the afterPack hook
@@ -63,8 +67,8 @@ mac:
   extraResources:
     - from: resources/bin/darwin-${arch}
       to: bin
-    - from: resources/cli/posix/
-      to: cli/
+    - from: resources/managed-bin/posix/
+      to: managed-bin/
   category: public.app-category.productivity
   icon: resources/icons/icon.icns
   target:
@@ -110,8 +114,8 @@ win:
   extraResources:
     - from: resources/bin/win32-${arch}
       to: bin
-    - from: resources/cli/win32/
-      to: cli/
+    - from: resources/managed-bin/win32/
+      to: managed-bin/
   icon: resources/icons/icon.ico
   target:
     - target: nsis
@@ -140,8 +144,8 @@ linux:
   extraResources:
     - from: resources/bin/linux-${arch}
       to: bin
-    - from: resources/cli/posix/
-      to: cli/
+    - from: resources/managed-bin/posix/
+      to: managed-bin/
   icon: resources/icons
   target:
     - target: AppImage

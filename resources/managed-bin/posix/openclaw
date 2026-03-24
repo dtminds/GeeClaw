@@ -12,14 +12,14 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
 
 if [ "$(uname)" = "Darwin" ]; then
-  # macOS: <App>.app/Contents/Resources/cli/openclaw
-  # SCRIPT_DIR = .../Contents/Resources/cli
+  # macOS: <App>.app/Contents/Resources/managed-bin/openclaw
+  # SCRIPT_DIR = .../Contents/Resources/managed-bin
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   ELECTRON="$CONTENTS_DIR/MacOS/GeeClaw"
   CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"
 else
-  # Linux: /opt/GeeClaw/resources/cli/openclaw
-  # SCRIPT_DIR = .../resources/cli
+  # Linux: /opt/GeeClaw/resources/managed-bin/openclaw
+  # SCRIPT_DIR = .../resources/managed-bin
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   ELECTRON="$INSTALL_DIR/geeclaw"
   CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"

@@ -16,6 +16,7 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { getOpenClawDir, getOpenClawEntryPath } from './paths';
 import { logger } from './logger';
+import { getManagedCommandWrapperPath } from './managed-bin';
 
 // ── Quoting helpers ──────────────────────────────────────────────────────────
 
@@ -58,13 +59,15 @@ function getBundledOpenClawCliCommand(): string {
   }
 
   if (app.isPackaged) {
-    if (platform === 'win32') {
-      const cliDir = join(process.resourcesPath, 'cli');
-      const cmdPath = join(cliDir, 'openclaw.cmd');
-      if (existsSync(cmdPath)) {
-        return `& ${quoteForPowerShell(cmdPath)}`;
+    const wrapperPath = getPackagedCliWrapperPath();
+    if (wrapperPath) {
+      if (platform === 'win32') {
+        return `& ${quoteForPowerShell(wrapperPath)}`;
       }
+      return quoteForPosix(wrapperPath);
+    }
 
+    if (platform === 'win32') {
       const bundledNode = getPackagedWindowsNodePath();
       if (bundledNode) {
         return `& ${quoteForPowerShell(bundledNode)} ${quoteForPowerShell(entryPath)}`;
@@ -93,17 +96,7 @@ export async function getOpenClawCliCommand(): Promise<string> {
 
 function getPackagedCliWrapperPath(): string | null {
   if (!app.isPackaged) return null;
-  const platform = process.platform;
-
-  if (platform === 'darwin' || platform === 'linux') {
-    const wrapper = join(process.resourcesPath, 'cli', 'openclaw');
-    return existsSync(wrapper) ? wrapper : null;
-  }
-  if (platform === 'win32') {
-    const wrapper = join(process.resourcesPath, 'cli', 'openclaw.cmd');
-    return existsSync(wrapper) ? wrapper : null;
-  }
-  return null;
+  return getManagedCommandWrapperPath('openclaw');
 }
 
 // function getWindowsPowerShellPath(): string {

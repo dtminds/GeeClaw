@@ -3,7 +3,8 @@
   "subtitle": "配置您的 GeeClaw 体验",
   "nav": {
     "general": "通用",
-    "gateway": "OpenClaw"
+    "gateway": "OpenClaw",
+    "opencli": "OpenCLI"
   },
   "safety": {
     "navTitle": "安全",
@@ -262,6 +263,69 @@
     "proxyRestartNote": "保存后会立即重新应用 Electron 网络代理，并自动重启 Gateway。",
     "proxySaved": "代理设置已保存",
     "proxySaveFailed": "保存代理设置失败"
+  },
+  "opencli": {
+    "title": "OpenCLI",
+    "description": "复用你的浏览器登录态，把任何网站变成能够让 AI 调用的命令行",
+    "refresh": "刷新状态",
+    "loadFailed": "加载 OpenCLI 状态失败",
+    "runtime": {
+      "title": "内置运行时",
+      "description": "GeeClaw 已经帮你准备好 OpenCLI，只需要确认当前环境是否可用。",
+      "present": "运行时就绪",
+      "missing": "运行时缺失",
+      "version": "版本",
+      "doctor": "状态",
+      "binaryPath": "运行时路径",
+      "emptyPath": "未找到内置 OpenCLI 运行时",
+      "command": "启动命令",
+      "emptyCommand": "命令不可用",
+      "unknown": "未知"
+    },
+    "doctor": {
+      "title": "环境检查",
+      "description": "GeeClaw 会自动检查 OpenCLI 后台服务和 Chrome 浏览器插件是否已经准备好。",
+      "healthy": "状态正常",
+      "unhealthy": "需要处理",
+      "daemon": "后台服务",
+      "extension": "Chrome浏览器插件",
+      "connectivity": "连通状态",
+      "issuesTitle": "Doctor 报告的问题",
+      "rawOutput": "查看原始 doctor 输出"
+    },
+    "extension": {
+      "title": "Chrome浏览器插件",
+      "description": "如果插件还没有连通，请先下载最新扩展包，再按下面步骤安装到 Chrome。",
+      "folder": "内置扩展目录",
+      "empty": "扩展目录不可用",
+      "opening": "打开中...",
+      "openFolder": "打开目录",
+      "openFailed": "打开扩展目录失败",
+      "bundleMissing": "当前构建未包含内置 Browser Bridge 扩展。请重新打包 GeeClaw，或从 OpenCLI Releases 下载扩展。",
+      "step1": "1. 点击上方按钮，下载最新的扩展安装包 `opencli-extension.zip`。",
+      "step2": "2. 解压后打开 Chrome，访问 chrome://extensions，并打开右上角的“开发者模式”。",
+      "step3": "3. 点击“加载已解压的扩展程序”，选择刚刚解压出来的扩展文件夹。",
+      "step4": "4. 等 Chrome 显示 OpenCLI 扩展已启用后，回到这里刷新状态。"
+    },
+    "actions": {
+      "copyPath": "复制路径",
+      "copyCommand": "复制命令",
+      "downloadExtension": "下载插件安装包",
+      "openGuide": "打开安装说明"
+    },
+    "status": {
+      "checking": "检测中...",
+      "connected": "已连接",
+      "missing": "缺失",
+      "unknown": "未知",
+      "notConnected": "未连接",
+      "failed": "失败"
+    },
+    "toast": {
+      "pathCopied": "路径已复制",
+      "commandCopied": "命令已复制",
+      "copyFailed": "复制失败"
+    }
   },
   "updates": {
     "title": "更新",

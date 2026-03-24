@@ -1,6 +1,6 @@
 import type { Location } from 'react-router-dom';
 
-export type SettingsModalSection = 'appearance' | 'models' | 'safety' | 'gateway' | 'general';
+export type SettingsModalSection = 'appearance' | 'models' | 'safety' | 'gateway' | 'opencli' | 'general';
 
 type SettingsLocationState = {
   backgroundLocation?: Location;
@@ -25,6 +25,7 @@ export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/appearance')) return 'appearance';
   if (pathname.startsWith('/settings/safety')) return 'safety';
   if (pathname.startsWith('/settings/gateway')) return 'gateway';
+  if (pathname.startsWith('/settings/opencli')) return 'opencli';
   if (pathname.startsWith('/settings/general')) return 'general';
   if (pathname.startsWith('/settings/app')) return 'appearance';
   if (pathname.startsWith('/settings/models')) return 'models';

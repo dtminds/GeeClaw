@@ -164,6 +164,14 @@ Notes:
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
 - On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
 
+### OpenCLI Browser Bridge Check
+
+GeeClaw also ships a bundled `opencli` runtime for skill/exec environments that rely on OpenCLI. Open **Settings → OpenCLI** to:
+
+- verify that the bundled OpenCLI runtime is present
+- run `opencli doctor` and inspect daemon / Browser Bridge connectivity
+- open the bundled Browser Bridge extension folder or jump to the upstream install guide when Chrome is not connected
+
 ---
 
 ## Architecture
