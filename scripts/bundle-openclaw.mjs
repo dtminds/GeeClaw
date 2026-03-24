@@ -17,17 +17,12 @@
  */
 
 import 'zx/globals';
+import windowsPaths from './lib/windows-paths.cjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
-
-// On Windows, pnpm virtual store paths can exceed MAX_PATH (260 chars).
-function normWin(p) {
-  if (process.platform !== 'win32') return p;
-  if (p.startsWith('\\\\?\\')) return p;
-  return '\\\\?\\' + p.replace(/\//g, '\\');
-}
+const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
 
 echo`📦 Bundling openclaw for electron-builder...`;
 
@@ -38,7 +33,7 @@ if (!fs.existsSync(openclawLink)) {
   process.exit(1);
 }
 
-const openclawReal = fs.realpathSync(normWin(openclawLink));
+const openclawReal = realpathCompat(openclawLink);
 echo`   openclaw resolved: ${openclawReal}`;
 
 // 2. Clean and create output directory
@@ -158,7 +153,7 @@ while (queue.length > 0) {
 
     let realPath;
     try {
-      realPath = fs.realpathSync(normWin(fullPath));
+      realPath = realpathCompat(fullPath);
     } catch {
       continue; // broken symlink, skip
     }

@@ -20,23 +20,14 @@ import 'zx/globals';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import windowsPaths from './lib/windows-paths.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT_ROOT = path.join(ROOT, 'build', 'openclaw-plugins');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
 const LOCAL_PLUGIN_ROOT = path.join(ROOT, 'plugins', 'openclaw');
-
-// On Windows, pnpm virtual store paths can exceed MAX_PATH (260 chars).
-// Adding \\?\ prefix bypasses the limit for Win32 fs calls.
-// Node.js 18.17+ also handles this transparently when LongPathsEnabled=1,
-// but this is an extra safety net for build machines where the registry key
-// may not be set yet.
-function normWin(p) {
-  if (process.platform !== 'win32') return p;
-  if (p.startsWith('\\\\?\\')) return p;
-  return '\\\\?\\' + p.replace(/\//g, '\\');
-}
+const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
 
 const PLUGINS = [
   { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
@@ -153,7 +144,7 @@ function collectPackageDependencyGraph(packageRoot, { skipPkg } = {}) {
 
       let realPath;
       try {
-        realPath = fs.realpathSync(normWin(fullPath));
+        realPath = realpathCompat(fullPath);
       } catch {
         continue;
       }
@@ -237,7 +228,7 @@ function bundleLocalPlugin({ pluginId, sourcePath }) {
             throw new Error(`Missing dependency "${depName}" for local plugin "${pluginId}". Run pnpm install first.`);
           }
           const depCollected = collectPackageDependencyGraph(depRoot, { skipPkg: depName });
-          collected.set(fs.realpathSync(normWin(depRoot)), depName);
+          collected.set(realpathCompat(depRoot), depName);
           for (const [realPath, pkgName] of depCollected) {
             collected.set(realPath, pkgName);
           }
@@ -247,7 +238,7 @@ function bundleLocalPlugin({ pluginId, sourcePath }) {
           if (!fs.existsSync(depRoot)) {
             throw new Error(`Missing dependency "${depName}" for local plugin "${pluginId}". Run pnpm install first.`);
           }
-          collected.set(fs.realpathSync(normWin(depRoot)), depName);
+          collected.set(realpathCompat(depRoot), depName);
         }
         const { copiedCount, skippedDupes } = copyCollectedDependencies(outputDir, collected);
         echo`   📚 ${pluginId}: copied ${copiedCount} runtime deps (skipped dupes: ${skippedDupes})`;
@@ -276,7 +267,7 @@ function bundleOnePlugin({ npmName, pluginId, sourcePath }) {
     throw new Error(`Missing dependency "${npmName}". Run pnpm install first.`);
   }
 
-  const realPluginPath = fs.realpathSync(normWin(pkgPath));
+  const realPluginPath = realpathCompat(pkgPath);
   const outputDir = path.join(OUTPUT_ROOT, pluginId);
 
   echo`📦 Bundling plugin ${npmName} -> ${outputDir}`;
