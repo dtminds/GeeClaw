@@ -1,5 +1,4 @@
-import { app, utilityProcess } from 'electron';
-import path from 'path';
+import { utilityProcess } from 'electron';
 import { existsSync } from 'fs';
 import WebSocket from 'ws';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';

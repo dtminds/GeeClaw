@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { app } from 'electron';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import {

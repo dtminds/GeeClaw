@@ -420,7 +420,6 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   const mode = app.isPackaged ? 'packaged' : 'dev';
 
-  const platform = process.platform;
   const baseProcessEnv = process.env as Record<string, string | undefined>;
   const pathEntries = getBundledPathEntries();
   const binPathExists = pathEntries.length > 0;

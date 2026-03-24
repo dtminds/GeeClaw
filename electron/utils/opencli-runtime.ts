@@ -9,6 +9,7 @@ import { getBundledPathEntries, getManagedCommandWrapperPath } from './managed-b
 const OPENCLI_RELEASES_URL = 'https://github.com/jackwener/opencli/releases';
 const OPENCLI_README_URL = 'https://github.com/jackwener/opencli/blob/main/README.zh-CN.md';
 const DEFAULT_DOCTOR_TIMEOUT_MS = 20_000;
+const ANSI_ESCAPE_PREFIX = String.fromCharCode(27);
 
 export interface OpenCliDoctorStatus {
   ok: boolean;
@@ -56,7 +57,7 @@ function quoteForPowerShell(value: string): string {
 }
 
 function stripAnsi(value: string): string {
-  return value.replace(/\u001B\[[0-9;]*[A-Za-z]/g, '');
+  return value.replace(new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;]*[A-Za-z]`, 'g'), '');
 }
 
 function getOpenCliRuntimeDir(): string {
