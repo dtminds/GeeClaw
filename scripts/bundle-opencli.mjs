@@ -20,6 +20,9 @@ const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'opencli');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
 const OPENCLI_LINK = path.join(NODE_MODULES, '@jackwener', 'opencli');
+// Keep the bundled runtime compatible with older Electron Node runtimes that
+// still support ESM top-level await but do not parse logical assignment syntax.
+const OPENCLI_RUNTIME_TARGET = 'node14.8';
 const { realpathCompat } = windowsPaths;
 
 function walkTsFiles(dir) {
@@ -136,6 +139,34 @@ function writeRuntimeCompatShims(outputDir) {
   );
 }
 
+function assertNoUnsupportedSyntax(outputDir) {
+  const patterns = [/\?\?=/, /\|\|=/, /&&=/];
+  const pending = [outputDir];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        pending.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile() || !/\.m?js$/i.test(entry.name)) {
+        continue;
+      }
+
+      const source = fs.readFileSync(fullPath, 'utf8');
+      if (patterns.some((pattern) => pattern.test(source))) {
+        throw new Error(`Unsupported logical assignment syntax remained in ${fullPath}`);
+      }
+    }
+  }
+}
+
 echo`📦 Bundling opencli for electron-builder...`;
 
 if (!fs.existsSync(OPENCLI_LINK)) {
@@ -178,7 +209,7 @@ await build({
   outdir: distDir,
   outbase: srcDir,
   platform: 'node',
-  target: 'node20',
+  target: OPENCLI_RUNTIME_TARGET,
   format: 'esm',
   splitting: true,
   bundle: true,
@@ -200,5 +231,6 @@ if (fs.existsSync(externalCliRegistry)) {
 
 echo`   Writing runtime compatibility shims...`;
 writeRuntimeCompatShims(OUTPUT);
+assertNoUnsupportedSyntax(distDir);
 
 echo`✅ OpenCLI bundle ready at ${OUTPUT}`;
