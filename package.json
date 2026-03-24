@@ -54,6 +54,7 @@
     "dependencies": {
         "@hugeicons/core-free-icons": "^3.1.1",
         "@hugeicons/react": "^1.1.4",
+        "@jackwener/opencli": "github:jackwener/opencli",
         "@radix-ui/react-popover": "^1.1.15",
         "@streamdown/cjk": "^1.0.3",
         "@streamdown/code": "^1.1.1",

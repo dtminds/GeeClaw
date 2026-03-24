@@ -49,6 +49,14 @@
       "autoEnable": true
     },
     {
+      "slug": "opencli",
+      "repo": "jackwener/opencli",
+      "repoPath": "./",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
       "slug": "xiaohongshu-cli",
       "repo": "jackwener/xiaohongshu-cli",
       "repoPath": "./",
@@ -68,22 +76,6 @@
       "slug": "bilibili-cli",
       "repo": "jackwener/bilibili-cli",
       "repoPath": "./",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": true
-    },
-    {
-      "slug": "multi-search-engine",
-      "repo": "lsave/gc-bundle-skills",
-      "repoPath": "multi-search-engine",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": true
-    },
-    {
-      "slug": "night-owl-shrimp",
-      "repo": "lsave/gc-bundle-skills",
-      "repoPath": "night-owl-shrimp",
       "ref": "main",
       "version": "main",
       "autoEnable": true

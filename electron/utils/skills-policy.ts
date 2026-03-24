@@ -17,8 +17,6 @@ export const ALWAYS_ENABLED_SKILL_KEYS = [
   'weibo-cli',
   'bilibili-cli',
   'schedule-skill',
-  'night-owl-shrimp',
-  'multi-search-engine',
   'weather',
   'healthcheck',
   'mcporter',
