@@ -1,16 +1,3 @@
-# GeeClaw Release Notes
+# 更新说明
 
-Replace this file before packaging a release.
-
-## Highlights
-
-- Describe the most important user-visible improvements here.
-- Keep the list short and scannable for the in-app update dialog.
-
-## Fixes
-
-- Call out important bug fixes or regressions that were resolved.
-
-## Notes
-
-- Mention migrations, behavior changes, or anything users should know after updating.
+- 问题修复&体验优化
