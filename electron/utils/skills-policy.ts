@@ -14,8 +14,6 @@ export const ALWAYS_ENABLED_SKILL_KEYS = [
   'docx',
   'pptx',
   'xiaohongshu-cli',
-  'weibo-cli',
-  'bilibili-cli',
   'schedule-skill',
   'weather',
   'healthcheck',

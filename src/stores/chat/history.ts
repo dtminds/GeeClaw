@@ -152,7 +152,8 @@ function mimeFromExtension(filePath: string): string {
 /**
  * Extract raw file paths from message text.
  * Detects absolute paths (Unix: / or ~/, Windows: C:\ etc.) ending with common file extensions.
- * Handles both image and non-image files, consistent with channel push message behavior.
+ * Handles both image and non-image files, including browser-style `MEDIA:/abs/path.ext`
+ * refs from tool outputs, consistent with channel push message behavior.
  */
 export function extractRawFilePaths(text: string): Array<{ filePath: string; mimeType: string }> {
   const refs: Array<{ filePath: string; mimeType: string }> = [];
@@ -160,7 +161,10 @@ export function extractRawFilePaths(text: string): Array<{ filePath: string; mim
   const exts = 'htm?l|png|jpe?g|gif|webp|bmp|avif|svg|pdf|docx?|xlsx?|pptx?|txt|csv|md|rtf|epub|zip|tar|gz|rar|7z|mp3|wav|ogg|aac|flac|m4a|mp4|mov|avi|mkv|webm|m4v';
   const unixRegex = new RegExp(`(?<![\\w./:])((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
   const winRegex = new RegExp(`(?<![\\w])([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
-  for (const regex of [unixRegex, winRegex]) {
+  const mediaUnixRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
+  const mediaWinRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
+
+  for (const regex of [unixRegex, winRegex, mediaUnixRegex, mediaWinRegex]) {
     let match: RegExpExecArray | null;
     while ((match = regex.exec(text)) !== null) {
       const filePath = match[1];

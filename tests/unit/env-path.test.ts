@@ -21,6 +21,10 @@ describe('env-path', () => {
     env: Record<string, string | undefined>,
     entry: string,
   ) => { env: Record<string, string | undefined>; path: string };
+  let prependPathEntries: (
+    env: Record<string, string | undefined>,
+    entries: string[],
+  ) => { env: Record<string, string | undefined>; path: string };
 
   beforeEach(async () => {
     const mod = await import('@electron/utils/env-path');
@@ -28,6 +32,7 @@ describe('env-path', () => {
     getPathEnvValue = mod.getPathEnvValue;
     setPathEnvValue = mod.setPathEnvValue;
     prependPathEntry = mod.prependPathEntry;
+    prependPathEntries = mod.prependPathEntries;
   });
 
   it('prefers Path key on Windows', () => {
@@ -69,5 +74,15 @@ describe('env-path', () => {
     const next = prependPathEntry({ PATH: '/usr/bin:/bin' }, '/opt/geeclaw/bin');
     expect(next.path).toBe('/opt/geeclaw/bin:/usr/bin:/bin');
     expect(next.env.PATH).toBe('/opt/geeclaw/bin:/usr/bin:/bin');
+  });
+
+  it('prepends multiple entries while preserving caller priority', () => {
+    setPlatform('linux');
+    const next = prependPathEntries(
+      { PATH: '/usr/bin:/bin' },
+      ['/opt/geeclaw/managed-bin', '/opt/geeclaw/bin'],
+    );
+    expect(next.path).toBe('/opt/geeclaw/managed-bin:/opt/geeclaw/bin:/usr/bin:/bin');
+    expect(next.env.PATH).toBe('/opt/geeclaw/managed-bin:/opt/geeclaw/bin:/usr/bin:/bin');
   });
 });

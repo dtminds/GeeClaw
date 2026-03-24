@@ -21,6 +21,14 @@ describe('chat file path extraction', () => {
     expect(refs.map((ref) => ref.filePath)).toEqual(['/path/to/slide-01.jpg']);
   });
 
+  it('extracts MEDIA-prefixed file paths from tool output', () => {
+    const refs = extractRawFilePaths('Saved browser screenshot to MEDIA:/path/to/slide-01.jpg');
+    expect(refs).toEqual([{
+      filePath: '/path/to/slide-01.jpg',
+      mimeType: 'image/jpeg',
+    }]);
+  });
+
   it('does not turn exec find output into attachments', () => {
     const messages: RawMessage[] = [
       {
@@ -80,6 +88,40 @@ describe('chat file path extraction', () => {
       fileSize: 0,
       preview: null,
       filePath: '/tmp/exports/report.pdf',
+    }]);
+  });
+
+  it('keeps MEDIA-prefixed tool output attachments for non-scan tools', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-browser',
+          name: 'browser',
+          input: { action: 'screenshot' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-browser',
+        toolName: 'browser',
+        content: 'Saved screenshot to MEDIA:/Users/lsave/.openclaw-geeclaw/media/browser/68e838f0-cc70-42ea-b567-062d4aa9e397.jpg',
+      },
+      {
+        role: 'assistant',
+        content: 'Done.',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages);
+
+    expect(enriched[2]?._attachedFiles).toEqual([{
+      fileName: '68e838f0-cc70-42ea-b567-062d4aa9e397.jpg',
+      mimeType: 'image/jpeg',
+      fileSize: 0,
+      preview: null,
+      filePath: '/Users/lsave/.openclaw-geeclaw/media/browser/68e838f0-cc70-42ea-b567-062d4aa9e397.jpg',
     }]);
   });
 

@@ -57,3 +57,25 @@ export function prependPathEntry(
     path: nextPath,
   };
 }
+
+export function prependPathEntries(
+  env: EnvMap,
+  entries: string[],
+): { env: EnvMap; path: string } {
+  let currentEnv = { ...env };
+  let currentPath = getPathEnvValue(currentEnv);
+
+  for (const entry of [...entries].reverse()) {
+    if (!entry) {
+      continue;
+    }
+    const next = prependPathEntry(currentEnv, entry);
+    currentEnv = next.env;
+    currentPath = next.path;
+  }
+
+  return {
+    env: currentEnv,
+    path: currentPath,
+  };
+}

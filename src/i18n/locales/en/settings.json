@@ -3,7 +3,9 @@
   "subtitle": "Configure your GeeClaw experience",
   "nav": {
     "general": "General",
-    "gateway": "OpenClaw"
+    "gateway": "OpenClaw",
+    "opencli": "OpenCLI",
+    "mcp": "MCP"
   },
   "safety": {
     "navTitle": "Safety",
@@ -262,6 +264,103 @@
     "proxyRestartNote": "Saving reapplies Electron networking and restarts the Gateway immediately.",
     "proxySaved": "Proxy settings saved",
     "proxySaveFailed": "Failed to save proxy settings"
+  },
+  "opencli": {
+    "title": "OpenCLI",
+    "description": "Reuse your browser login and turn almost any website into a command line tool your AI can call.",
+    "refresh": "Refresh Status",
+    "loadFailed": "Failed to load OpenCLI status",
+    "runtime": {
+      "title": "Bundled Runtime",
+      "description": "GeeClaw has already prepared OpenCLI for you. You only need to confirm that the current environment is ready.",
+      "present": "Runtime Ready",
+      "missing": "Runtime Missing",
+      "version": "Version",
+      "doctor": "Status",
+      "binaryPath": "Runtime Path",
+      "emptyPath": "No bundled OpenCLI runtime found",
+      "command": "Launch Command",
+      "emptyCommand": "Command unavailable",
+      "unknown": "Unknown"
+    },
+    "doctor": {
+      "title": "Environment Check",
+      "description": "GeeClaw checks whether the OpenCLI background service and Chrome extension are ready to use.",
+      "healthy": "Healthy",
+      "unhealthy": "Needs Attention",
+      "daemon": "Background Service",
+      "extension": "Chrome Extension",
+      "connectivity": "Connectivity",
+      "issuesTitle": "Doctor Reported Issues",
+      "rawOutput": "Show raw doctor output"
+    },
+    "extension": {
+      "title": "Chrome Extension",
+      "description": "If the extension is not connected yet, download the latest package and install it into Chrome.",
+      "folder": "Bundled Extension Folder",
+      "empty": "Extension folder unavailable",
+      "opening": "Opening...",
+      "openFolder": "Open Folder",
+      "openFailed": "Failed to open extension folder",
+      "bundleMissing": "This build does not contain the bundled Browser Bridge extension. Rebuild GeeClaw or download the extension from OpenCLI Releases.",
+      "step1": "1. Click the button above to download the latest `opencli-extension.zip` package.",
+      "step2": "2. Unzip it, then open Chrome and visit chrome://extensions with Developer mode enabled.",
+      "step3": "3. Click \"Load unpacked\" and choose the extracted extension folder.",
+      "step4": "4. Come back here and refresh after Chrome shows the OpenCLI extension as enabled."
+    },
+    "actions": {
+      "copyPath": "Copy Path",
+      "copyCommand": "Copy Command",
+      "downloadExtension": "Download Extension Package",
+      "openGuide": "Open Setup Guide"
+    },
+    "status": {
+      "checking": "Checking...",
+      "connected": "Connected",
+      "missing": "Missing",
+      "unknown": "Unknown",
+      "notConnected": "Not Connected",
+      "failed": "Failed"
+    },
+    "toast": {
+      "pathCopied": "Path copied",
+      "commandCopied": "Command copied",
+      "copyFailed": "Copy failed"
+    }
+  },
+  "mcp": {
+    "title": "MCP",
+    "description": "Check whether mcporter is installed in the standard way on your system so GeeClaw and other tools can share the same MCP runtime.",
+    "refresh": "Refresh Status",
+    "loadFailed": "Failed to load MCP status",
+    "health": {
+      "title": "mcporter Health Check",
+      "description": "GeeClaw first looks for mcporter on your system PATH, and uses the bundled environment when it is not installed."
+    },
+    "system": {
+      "title": "System",
+      "present": "Installed",
+      "missing": "Missing",
+      "version": "Version",
+      "path": "Path",
+      "emptyPath": "No mcporter command was found on your system PATH",
+      "unknown": "Unknown"
+    },
+    "bundled": {
+      "title": "GeeClaw Bundled",
+      "present": "Ready",
+      "missing": "Missing",
+      "version": "Version"
+    },
+    "install": {
+      "title": "Install Guide",
+      "description": "mcporter is not available on your system PATH yet. Install it with one of the standard methods below so GeeClaw and your terminal can use the same command.",
+      "step1": "1. To try it first without installing, run:",
+      "step2": "2. To add it as a dependency in the current project, run:",
+      "step3": "3. To make the command directly available in your shell, open the official installation guide and choose the method that matches your platform.",
+      "guide": "Open Official Install Guide",
+      "repo": "Open Project Page"
+    }
   },
   "updates": {
     "title": "Updates",

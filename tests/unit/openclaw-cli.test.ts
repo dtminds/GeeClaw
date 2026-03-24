@@ -81,11 +81,11 @@ describe('getOpenClawCliCommand (Windows packaged)', () => {
 
   it('prefers openclaw.cmd when the packaged wrapper exists', async () => {
     mockExistsSync.mockImplementation((p: string) =>
-      /[\\/]cli[\\/]openclaw\.cmd$/i.test(p) || /[\\/]bin[\\/]node\.exe$/i.test(p),
+      /[\\/]managed-bin[\\/]openclaw\.cmd$/i.test(p) || /[\\/]bin[\\/]node\.exe$/i.test(p),
     );
     const { getOpenClawCliCommand } = await import('@electron/utils/openclaw-cli');
     await expect(getOpenClawCliCommand()).resolves.toBe(
-      "& 'C:\\Program Files\\GeeClaw\\resources/cli/openclaw.cmd'",
+      "& 'C:\\Program Files\\GeeClaw\\resources/managed-bin/openclaw.cmd'",
     );
   });
 
@@ -135,5 +135,14 @@ describe('getOpenClawCliCommand (non-Windows packaged)', () => {
     expect(command).toContain(process.execPath);
     expect(command).toContain('/opt/geeclaw/resources/openclaw/openclaw.mjs');
     expect(command).not.toContain('/usr/local/bin/openclaw');
+  });
+
+  it('prefers the managed-bin wrapper when present', async () => {
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/opt/geeclaw/resources/openclaw/openclaw.mjs'
+      || value === '/opt/geeclaw/resources/managed-bin/openclaw'
+    ));
+    const { getOpenClawCliCommand } = await import('@electron/utils/openclaw-cli');
+    await expect(getOpenClawCliCommand()).resolves.toBe('"/opt/geeclaw/resources/managed-bin/openclaw"');
   });
 });

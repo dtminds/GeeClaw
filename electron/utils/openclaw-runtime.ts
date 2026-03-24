@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { app } from 'electron';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import {
@@ -12,6 +12,7 @@ import {
   isOpenClawPresent,
 } from './paths';
 import { logger } from './logger';
+import { getManagedBinDir } from './managed-bin';
 
 const execFileAsync = promisify(execFile);
 
@@ -66,9 +67,9 @@ function getRejectedSystemRuntimeRoots(): string[] {
     roots.add(normalizeExistingPath(bundledDir));
   }
 
-  const packagedCliDir = join(process.resourcesPath, 'cli');
-  if (existsSync(packagedCliDir)) {
-    roots.add(normalizeExistingPath(packagedCliDir));
+  const managedBinDir = getManagedBinDir();
+  if (existsSync(managedBinDir)) {
+    roots.add(normalizeExistingPath(managedBinDir));
   }
 
   return [...roots];

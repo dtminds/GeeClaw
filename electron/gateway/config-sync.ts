@@ -29,7 +29,8 @@ import {
   MANAGED_OPENCLAW_PROFILE,
 } from '../utils/openclaw-managed-profile';
 import { logger } from '../utils/logger';
-import { prependPathEntry, setPathEnvValue } from '../utils/env-path';
+import { prependPathEntries, setPathEnvValue } from '../utils/env-path';
+import { getBundledPathEntries } from '../utils/managed-bin';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
@@ -419,17 +420,10 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   const mode = app.isPackaged ? 'packaged' : 'dev';
 
-  const platform = process.platform;
-  const arch = process.arch;
-  const target = `${platform}-${arch}`;
-  const binPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'bin')
-    : path.join(process.cwd(), 'resources', 'bin', target);
-  const binPathExists = existsSync(binPath);
   const baseProcessEnv = process.env as Record<string, string | undefined>;
-  const finalPath = binPathExists
-    ? prependPathEntry(baseProcessEnv, binPath).path
-    : baseProcessEnv.PATH || baseProcessEnv.Path || '';
+  const pathEntries = getBundledPathEntries();
+  const binPathExists = pathEntries.length > 0;
+  const finalPath = prependPathEntries(baseProcessEnv, pathEntries).path;
 
   const appSettings = await getAllSettings();
   const uvEnv = await getUvMirrorEnv();

@@ -84,6 +84,8 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 - `TAVILY_API_KEY`：用于 `tavily-search`（上游运行时也可能支持 OAuth）
 - `BOCHA_API_KEY`：用于 `bocha-skill`
 
+打包版本也会把托管的 `opencli` 与 `mcporter` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
+
 ### 🔐 安全的供应商集成
 连接多个 AI 供应商（OpenAI、Anthropic、GeekAI 等），凭证安全存储在系统原生密钥链中。
 
@@ -161,6 +163,18 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - 保存代理设置后，Electron 网络层会立即重新应用代理，并自动重启 Gateway。
 - 如果启用了 Telegram，GeeClaw 还会把代理同步到 OpenClaw 的 Telegram 频道配置中。
 - 在 Windows 打包版本中，内置的 `openclaw` CLI/TUI 会通过随包分发的 `node.exe` 入口运行，以保证终端输入行为稳定。
+
+### OpenCLI Browser Bridge 检查
+
+GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill / exec 环境使用。打开 **设置 → OpenCLI** 可以：
+
+- 检查内置 OpenCLI 运行时是否存在
+- 运行 `opencli doctor`，查看 daemon 和 Browser Bridge 扩展的连通状态
+- 在 Chrome 未连通时，直接下载 Chrome 插件包或跳转到上游安装说明
+
+### MCP Runtime 检查
+
+打开 **设置 → MCP** 可以查看系统 PATH 中是否已经按标准方式安装 `mcporter`。如果 GeeClaw 还没有检测到标准安装，页面会引导你打开官方安装说明，同时也会显示内置兜底运行时是否可用。
 
 ---
 
@@ -256,6 +270,8 @@ pnpm test                 # 运行单元测试
 
 # 构建与打包
 pnpm run build:vite       # 仅构建前端
+pnpm run bundle:opencli   # 重新生成内置 opencli 运行时
+pnpm run bundle:mcporter  # 重新生成内置 mcporter 运行时
 pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包

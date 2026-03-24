@@ -8,6 +8,7 @@ import { handleSettingsRoutes } from './routes/settings';
 import { handleProviderRoutes } from './routes/providers';
 import { handleChannelRoutes } from './routes/channels';
 import { handleLogRoutes } from './routes/logs';
+import { handleOpenCliRoutes } from './routes/opencli';
 import { handleUsageRoutes } from './routes/usage';
 import { handleSkillRoutes } from './routes/skills';
 import { handleFileRoutes } from './routes/files';
@@ -16,6 +17,7 @@ import { handleSessionRoutes } from './routes/sessions';
 import { handleCronRoutes } from './routes/cron';
 import { handleDesktopSessionRoutes } from './routes/desktop-sessions';
 import { handleAgentRoutes } from './routes/agents';
+import { handleMcpRoutes } from './routes/mcp';
 import { sendJson } from './route-utils';
 
 type RouteHandler = (
@@ -31,6 +33,8 @@ const routeHandlers: RouteHandler[] = [
   handleSettingsRoutes,
   handleProviderRoutes,
   handleChannelRoutes,
+  handleOpenCliRoutes,
+  handleMcpRoutes,
   handleSkillRoutes,
   handleFileRoutes,
   handleAuthSessionRoutes,

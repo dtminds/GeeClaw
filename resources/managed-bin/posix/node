@@ -1,0 +1,67 @@
+#!/bin/sh
+# Node runtime shim — managed by GeeClaw
+# Prefer a real system Node.js when available; otherwise fall back to the
+# packaged GeeClaw Electron binary running in Node mode.
+
+SCRIPT="$0"
+while [ -L "$SCRIPT" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
+  SCRIPT="$(readlink "$SCRIPT")"
+  [ "${SCRIPT#/}" = "$SCRIPT" ] && SCRIPT="$SCRIPT_DIR/$SCRIPT"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
+PROJECT_ROOT="$(cd -P "$SCRIPT_DIR/../../.." 2>/dev/null && pwd)"
+
+find_system_node() {
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node /bin/node; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  OLD_IFS=$IFS
+  IFS=:
+  for entry in $PATH; do
+    [ -n "$entry" ] || continue
+    [ "$entry" = "$SCRIPT_DIR" ] && continue
+    candidate="$entry/node"
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      IFS=$OLD_IFS
+      return 0
+    fi
+  done
+  IFS=$OLD_IFS
+
+  return 1
+}
+
+SYSTEM_NODE="$(find_system_node)"
+if [ -n "$SYSTEM_NODE" ]; then
+  exec "$SYSTEM_NODE" "$@"
+fi
+
+if [ "$(uname)" = "Darwin" ]; then
+  if [ -f "$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then
+    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+  else
+    CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    ELECTRON="$CONTENTS_DIR/MacOS/GeeClaw"
+  fi
+else
+  if [ -f "$PROJECT_ROOT/node_modules/electron/dist/electron" ]; then
+    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/electron"
+  else
+    INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    ELECTRON="$INSTALL_DIR/geeclaw"
+  fi
+fi
+
+if [ ! -f "$ELECTRON" ]; then
+  echo "Error: GeeClaw executable not found at $ELECTRON" >&2
+  echo "Install Node.js or reinstall GeeClaw." >&2
+  exit 1
+fi
+
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$@"
