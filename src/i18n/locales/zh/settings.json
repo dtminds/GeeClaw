@@ -394,7 +394,7 @@
     "help": "开启自动更新后，更新将自动下载并安装。",
     "dialog": {
       "title": "GeeClaw {{version}} 已可更新",
-      "description": "启动时检测到了新版本。你可以先查看更新日志，再决定立即更新、稍后再说，或跳过这个版本。",
+      "description": "发现新版本",
       "published": "发布于 {{value}}",
       "empty": "本次更新没有附带发布日志。",
       "progress": "正在下载更新... {{percent}}%",

@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { useSettingsStore } from './settings';
 import { invokeIpc } from '@/lib/api-client';
+import { getDevDebugUpdateScenario } from '@/lib/update-debug';
 
 export interface ReleaseNoteInfo {
   version?: string;
@@ -101,7 +102,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     }
 
     try {
-      const skippedVersions = await invokeIpc<string[]>('settings:get', 'skippedVersions');
+      const skippedVersions = await invokeIpc<string[]>('settings:get', { key: 'skippedVersions' });
       set({ skippedVersions: Array.isArray(skippedVersions) ? skippedVersions : [] });
     } catch (error) {
       console.error('Failed to get skipped versions:', error);
@@ -134,6 +135,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
 
     // Apply persisted settings from the settings store
     const { autoCheckUpdate, autoDownloadUpdate } = useSettingsStore.getState();
+    const debugScenario = getDevDebugUpdateScenario();
 
     // Sync auto-download preference to the main process
     if (autoDownloadUpdate) {
@@ -141,7 +143,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     }
 
     // Auto-check for updates on startup (respects user toggle)
-    if (autoCheckUpdate) {
+    if (autoCheckUpdate && !debugScenario) {
       setTimeout(() => {
         get().checkForUpdates().catch(() => {});
       }, 10000);

@@ -394,7 +394,7 @@
     "help": "When auto-update is enabled, updates are downloaded and installed automatically.",
     "dialog": {
       "title": "GeeClaw {{version}} is ready",
-      "description": "A new version was found during startup. Review the release notes, download the update, or skip this version.",
+      "description": "New version available.",
       "published": "Published {{value}}",
       "empty": "Release notes were not included with this update.",
       "progress": "Downloading update... {{percent}}%",

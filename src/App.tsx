@@ -27,6 +27,7 @@ import { applyGatewayTransportPreference } from './lib/api-client';
 import { isSettingsModalPath } from './lib/settings-modal';
 import { applyColorTheme } from '@/theme/color-themes';
 import { UpdateAnnouncementDialog } from '@/components/update/UpdateAnnouncementDialog';
+import { getDevDebugUpdateScenario } from '@/lib/update-debug';
 
 
 /**
@@ -118,6 +119,21 @@ function App() {
       await initSettings();
       if (!cancelled) {
         await initUpdate();
+      }
+      if (!cancelled) {
+        const debugScenario = getDevDebugUpdateScenario();
+        if (debugScenario) {
+          useUpdateStore.setState((state) => ({
+            ...state,
+            status: debugScenario.status,
+            updateInfo: debugScenario.updateInfo,
+            progress: debugScenario.progress,
+            error: null,
+            autoInstallCountdown: debugScenario.autoInstallCountdown,
+            skippedVersions: debugScenario.skippedVersions ?? state.skippedVersions,
+            dismissedAnnouncementVersion: debugScenario.dismissedAnnouncementVersion ?? null,
+          }));
+        }
       }
     })();
 
