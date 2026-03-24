@@ -6,7 +6,7 @@
  * Files are staged to disk via IPC — only lightweight path references
  * are sent with the message (no base64 over WebSocket).
  */
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { EditorContent, Node as TiptapNode, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -653,7 +653,7 @@ const SkillToken = TiptapNode.create({
 
 // ── Component ────────────────────────────────────────────────────
 
-export function ChatInput({
+export const ChatInput = memo(function ChatInput({
   onSend,
   onStop,
   disabled = false,
@@ -662,6 +662,7 @@ export function ChatInput({
   isEmpty = false,
 }: ChatInputProps) {
   const { t } = useTranslation('chat');
+  const tRef = useRef(t);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [targetAgentId, setTargetAgentId] = useState<string | null>(null);
   const [editorFocused, setEditorFocused] = useState(false);
@@ -696,13 +697,13 @@ export function ChatInput({
   const refreshProviderSnapshot = useProviderStore((s) => s.refreshProviderSnapshot);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
-  const messages = useChatStore((s) => s.messages);
   const pendingComposerSeed = useChatStore((s) => s.pendingComposerSeed);
   const consumePendingComposerSeed = useChatStore((s) => s.consumePendingComposerSeed);
-  const currentSessionTokenInfo = useChatStore((s) => (
-    s.currentSessionKey ? s.sessionTokenInfoByKey[s.currentSessionKey] ?? null : null
-  ));
   const currentSecurityPolicy = safetySettings?.securityPolicy ?? 'moderate';
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   const setTargetAgentIdState = useCallback((value: string | null) => {
     targetAgentIdRef.current = value;
@@ -731,6 +732,7 @@ export function ChatInput({
 
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     extensions: [
       StarterKit.configure({
         blockquote: false,
@@ -777,7 +779,7 @@ export function ChatInput({
 
         const currentSlashQuery = extractSlashSkillQueryFromState(_view.state as SlashQueryState);
         const currentSkillPickerVisible = currentSlashQuery !== null && !skillPickerDismissedRef.current;
-        const currentFilteredSlashItems = getVisibleSlashItems(availableSlashItemsRef.current, currentSlashQuery, t);
+        const currentFilteredSlashItems = getVisibleSlashItems(availableSlashItemsRef.current, currentSlashQuery, tRef.current);
         const boundedIndex = currentFilteredSlashItems.length === 0
           ? 0
           : Math.min(highlightedSkillIndexRef.current, currentFilteredSlashItems.length - 1);
@@ -836,7 +838,7 @@ export function ChatInput({
     onBlur: () => {
       setEditorFocused(false);
     },
-  });
+  }, []);
 
   useEffect(() => {
     if (!editor) return;
@@ -1370,15 +1372,6 @@ export function ChatInput({
   }, [stageBufferFiles]);
 
   const editorIsEmpty = editorText.trim().length === 0;
-  const contextOccupancy = useMemo(() => {
-    const latestReliableAssistantMessage = findRecentAssistantMessageWithReliableUsage(messages);
-    return getContextOccupancyInfo(latestReliableAssistantMessage, currentSessionTokenInfo?.contextTokens);
-  }, [currentSessionTokenInfo?.contextTokens, messages]);
-  const showContextOccupancy = true;
-  const occupancyPercentLabel = `${contextOccupancy.percent < 10 ? contextOccupancy.percent.toFixed(1) : Math.round(contextOccupancy.percent)}%`;
-  const donutRadius = 10;
-  const donutCircumference = 2 * Math.PI * donutRadius;
-  const donutOffset = donutCircumference * (1 - contextOccupancy.percent / 100);
   const policyLabelMap: Record<SecurityPolicy, string> = {
     moderate: t('composer.safety.policyOptions.moderate.label'),
     strict: t('composer.safety.policyOptions.strict.label'),
@@ -1472,7 +1465,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className={`rounded-[20px] border border-border/60 bg-popover/95 px-1 py-1.5 transition-[border-color,box-shadow] shadow-[0_12px_30px_-12px_rgba(28,28,32,0.18)] backdrop-blur ${dragOver ? 'border-primary/80' : 'focus-within:border-primary/25'}`}>
+        <div className={`rounded-[20px] border border-border/60 bg-popover/98 px-1 py-1.5 transition-[border-color,box-shadow] shadow-[0_12px_30px_-12px_rgba(28,28,32,0.18)] ${dragOver ? 'border-primary/80' : 'focus-within:border-primary/25'}`}>
           <div className="relative">
             {skillPickerVisible && (
               <div className="absolute bottom-full left-0 right-0 z-20 mb-4 overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card">
@@ -1715,69 +1708,7 @@ export function ChatInput({
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
             </div>
-            {showContextOccupancy && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex h-5 w-5 items-center justify-center text-foreground/55 transition-transform duration-200 hover:scale-[1.06]"
-                    aria-label={t('composer.contextUsage.ariaLabel', { percent: occupancyPercentLabel })}
-                  >
-                    <svg viewBox="0 0 28 28" className="h-4.5 w-4.5 -rotate-90">
-                      <circle
-                        cx="14"
-                        cy="14"
-                        r={donutRadius}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        className="text-black/10 dark:text-white/12"
-                      />
-                      <circle
-                        cx="14"
-                        cy="14"
-                        r={donutRadius}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeDasharray={donutCircumference}
-                        strokeDashoffset={donutOffset}
-                        className="text-primary transition-all duration-300"
-                      />
-                    </svg>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs whitespace-normal text-xs leading-5">
-                  <div className="space-y-1.5">
-                    <div className="font-medium text-foreground">{t('composer.contextUsage.tooltipTitle')}</div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>{t('composer.contextUsage.lastRoundTotal')}</span>
-                      <span className="font-medium text-foreground">{formatTokenCount(contextOccupancy.lastRoundTotalTokens)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>{t('composer.contextUsage.cache')}</span>
-                      <span className="font-medium text-foreground">{formatTokenCount(contextOccupancy.cacheTokens)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>{t('composer.contextUsage.limit')}</span>
-                      <span className="font-medium text-foreground">
-                        {typeof contextOccupancy.contextLimitTokens === 'number'
-                          ? formatTokenCount(contextOccupancy.contextLimitTokens)
-                          : t('composer.contextUsage.unknown')}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>{t('composer.contextUsage.ratio')}</span>
-                      <span className="font-medium text-foreground">{occupancyPercentLabel}</span>
-                    </div>
-                    {currentSessionTokenInfo?.totalTokensFresh === false && (
-                      <div className="pt-1 text-muted-foreground">{t('composer.contextUsage.stale')}</div>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <ContextOccupancyIndicator />
             {hasFailedAttachments && (
               <Button
                 variant="link"
@@ -1796,7 +1727,93 @@ export function ChatInput({
       </div>
     </div>
   );
-}
+});
+
+ChatInput.displayName = 'ChatInput';
+
+const ContextOccupancyIndicator = memo(function ContextOccupancyIndicator() {
+  const { t } = useTranslation('chat');
+  const messages = useChatStore((s) => s.messages);
+  const currentSessionTokenInfo = useChatStore((s) => (
+    s.currentSessionKey ? s.sessionTokenInfoByKey[s.currentSessionKey] ?? null : null
+  ));
+
+  const contextOccupancy = useMemo(() => {
+    const latestReliableAssistantMessage = findRecentAssistantMessageWithReliableUsage(messages);
+    return getContextOccupancyInfo(latestReliableAssistantMessage, currentSessionTokenInfo?.contextTokens);
+  }, [currentSessionTokenInfo?.contextTokens, messages]);
+
+  const occupancyPercentLabel = `${contextOccupancy.percent < 10 ? contextOccupancy.percent.toFixed(1) : Math.round(contextOccupancy.percent)}%`;
+  const donutRadius = 10;
+  const donutCircumference = 2 * Math.PI * donutRadius;
+  const donutOffset = donutCircumference * (1 - contextOccupancy.percent / 100);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-5 w-5 items-center justify-center text-foreground/55 transition-transform duration-200 hover:scale-[1.06]"
+          aria-label={t('composer.contextUsage.ariaLabel', { percent: occupancyPercentLabel })}
+        >
+          <svg viewBox="0 0 28 28" className="h-4.5 w-4.5 -rotate-90">
+            <circle
+              cx="14"
+              cy="14"
+              r={donutRadius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              className="text-black/10 dark:text-white/12"
+            />
+            <circle
+              cx="14"
+              cy="14"
+              r={donutRadius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeDasharray={donutCircumference}
+              strokeDashoffset={donutOffset}
+              className="text-primary transition-all duration-300"
+            />
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs whitespace-normal text-xs leading-5">
+        <div className="space-y-1.5">
+          <div className="font-medium text-foreground">{t('composer.contextUsage.tooltipTitle')}</div>
+          <div className="flex items-center justify-between gap-4">
+            <span>{t('composer.contextUsage.lastRoundTotal')}</span>
+            <span className="font-medium text-foreground">{formatTokenCount(contextOccupancy.lastRoundTotalTokens)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span>{t('composer.contextUsage.cache')}</span>
+            <span className="font-medium text-foreground">{formatTokenCount(contextOccupancy.cacheTokens)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span>{t('composer.contextUsage.limit')}</span>
+            <span className="font-medium text-foreground">
+              {typeof contextOccupancy.contextLimitTokens === 'number'
+                ? formatTokenCount(contextOccupancy.contextLimitTokens)
+                : t('composer.contextUsage.unknown')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span>{t('composer.contextUsage.ratio')}</span>
+            <span className="font-medium text-foreground">{occupancyPercentLabel}</span>
+          </div>
+          {currentSessionTokenInfo?.totalTokensFresh === false && (
+            <div className="pt-1 text-muted-foreground">{t('composer.contextUsage.stale')}</div>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+
+ContextOccupancyIndicator.displayName = 'ContextOccupancyIndicator';
 
 function AgentPickerItem({
   agent,
