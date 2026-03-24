@@ -6,10 +6,16 @@ import { create } from 'zustand';
 import { useSettingsStore } from './settings';
 import { invokeIpc } from '@/lib/api-client';
 
+export interface ReleaseNoteInfo {
+  version?: string;
+  note?: string | null;
+}
+
 export interface UpdateInfo {
   version: string;
   releaseDate?: string;
-  releaseNotes?: string | null;
+  releaseName?: string | null;
+  releaseNotes?: string | ReleaseNoteInfo[] | null;
 }
 
 export interface ProgressInfo {
@@ -38,6 +44,8 @@ interface UpdateState {
   isInitialized: boolean;
   /** Seconds remaining before auto-install, or null if inactive. */
   autoInstallCountdown: number | null;
+  skippedVersions: string[];
+  dismissedAnnouncementVersion: string | null;
 
   // Actions
   init: () => Promise<void>;
@@ -45,6 +53,8 @@ interface UpdateState {
   downloadUpdate: () => Promise<void>;
   installUpdate: () => void;
   cancelAutoInstall: () => Promise<void>;
+  dismissAnnouncement: (version?: string | null) => void;
+  skipVersion: (version?: string | null) => Promise<void>;
   setChannel: (channel: 'stable' | 'beta' | 'dev') => Promise<void>;
   setAutoDownload: (enable: boolean) => Promise<void>;
   clearError: () => void;
@@ -58,6 +68,8 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   error: null,
   isInitialized: false,
   autoInstallCountdown: null,
+  skippedVersions: [],
+  dismissedAnnouncementVersion: null,
 
   init: async () => {
     if (get().isInitialized) return;
@@ -88,6 +100,13 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
       console.error('Failed to get update status:', error);
     }
 
+    try {
+      const skippedVersions = await invokeIpc<string[]>('settings:get', 'skippedVersions');
+      set({ skippedVersions: Array.isArray(skippedVersions) ? skippedVersions : [] });
+    } catch (error) {
+      console.error('Failed to get skipped versions:', error);
+    }
+
     // Listen for update events
     // Single source of truth: listen only to update:status-changed
     // (sent by AppUpdater.updateStatus() in the main process)
@@ -98,12 +117,12 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
         progress?: ProgressInfo;
         error?: string;
       };
-      set({
+      set((state) => ({
         status: status.status,
-        updateInfo: status.info || null,
-        progress: status.progress || null,
-        error: status.error || null,
-      });
+        updateInfo: status.info === undefined ? state.updateInfo : (status.info || null),
+        progress: status.progress === undefined ? state.progress : (status.progress || null),
+        error: status.error === undefined ? state.error : (status.error || null),
+      }));
     });
 
     window.electron.ipcRenderer.on('update:auto-install-countdown', (data) => {
@@ -148,12 +167,13 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
       };
       
       if (result.status) {
-        set({
-          status: result.status.status,
-          updateInfo: result.status.info || null,
-          progress: result.status.progress || null,
-          error: result.status.error || null,
-        });
+        const nextStatus = result.status;
+        set((state) => ({
+          status: nextStatus.status,
+          updateInfo: nextStatus.info === undefined ? state.updateInfo : (nextStatus.info || null),
+          progress: nextStatus.progress === undefined ? state.progress : (nextStatus.progress || null),
+          error: nextStatus.error === undefined ? state.error : (nextStatus.error || null),
+        }));
       } else if (!result.success) {
         set({ status: 'error', error: result.error || 'Failed to check for updates' });
       }
@@ -195,6 +215,29 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
       await invokeIpc('update:cancelAutoInstall');
     } catch (error) {
       console.error('Failed to cancel auto-install:', error);
+    }
+  },
+
+  dismissAnnouncement: (version) => {
+    const targetVersion = version ?? get().updateInfo?.version ?? null;
+    if (!targetVersion) return;
+    set({ dismissedAnnouncementVersion: targetVersion });
+  },
+
+  skipVersion: async (version) => {
+    const targetVersion = version ?? get().updateInfo?.version ?? null;
+    if (!targetVersion) return;
+
+    const nextSkippedVersions = Array.from(new Set([...get().skippedVersions, targetVersion]));
+    set({
+      skippedVersions: nextSkippedVersions,
+      dismissedAnnouncementVersion: targetVersion,
+    });
+
+    try {
+      await invokeIpc('settings:set', 'skippedVersions', nextSkippedVersions);
+    } catch (error) {
+      console.error('Failed to persist skipped versions:', error);
     }
   },
 

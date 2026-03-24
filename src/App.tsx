@@ -21,10 +21,12 @@ import { Setup } from './pages/Setup';
 import { Startup } from './pages/Startup';
 import { GatewaySessions } from './pages/GatewaySessions';
 import { useSettingsStore } from './stores/settings';
+import { useUpdateStore } from './stores/update';
 import { useBootstrapStore } from './stores/bootstrap';
 import { applyGatewayTransportPreference } from './lib/api-client';
 import { isSettingsModalPath } from './lib/settings-modal';
 import { applyColorTheme } from '@/theme/color-themes';
+import { UpdateAnnouncementDialog } from '@/components/update/UpdateAnnouncementDialog';
 
 
 /**
@@ -98,6 +100,7 @@ function App() {
   const backgroundLocation = routeState?.backgroundLocation;
   const showSettingsOverlay = !!backgroundLocation && isSettingsModalPath(location.pathname);
   const initSettings = useSettingsStore((state) => state.init);
+  const initUpdate = useUpdateStore((state) => state.init);
   const theme = useSettingsStore((state) => state.theme);
   const colorTheme = useSettingsStore((state) => state.colorTheme);
   const language = useSettingsStore((state) => state.language);
@@ -109,8 +112,19 @@ function App() {
   const effectiveTheme = theme === 'system' ? systemTheme : theme;
 
   useEffect(() => {
-    initSettings();
-  }, [initSettings]);
+    let cancelled = false;
+
+    void (async () => {
+      await initSettings();
+      if (!cancelled) {
+        await initUpdate();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initSettings, initUpdate]);
 
   // Sync i18n language with persisted settings on mount
   useEffect(() => {
@@ -223,6 +237,7 @@ function App() {
           closeButton
           style={{ zIndex: 99999 }}
         />
+        <UpdateAnnouncementDialog />
       </TooltipProvider>
     </ErrorBoundary>
   );

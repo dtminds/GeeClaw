@@ -2,11 +2,14 @@
  * Update Settings Component
  * Displays update status and allows manual update checking/installation
  */
-import { useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { Download, RefreshCw, Loader2, Rocket, XCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useUpdateStore } from '@/stores/update';
+import { type ReleaseNoteInfo, useUpdateStore } from '@/stores/update';
 import { useTranslation } from 'react-i18next';
 
 function formatBytes(bytes: number): string {
@@ -15,6 +18,20 @@ function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function stringifyReleaseNotes(releaseNotes: string | ReleaseNoteInfo[] | null | undefined): string {
+  if (!releaseNotes) return '';
+  if (typeof releaseNotes === 'string') return releaseNotes;
+
+  return releaseNotes
+    .map((entry) => {
+      const note = entry.note?.trim();
+      if (!note) return '';
+      return entry.version ? `### ${entry.version}\n\n${note}` : note;
+    })
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 export function UpdateSettings() {
@@ -27,18 +44,13 @@ export function UpdateSettings() {
     error,
     isInitialized,
     autoInstallCountdown,
-    init,
     checkForUpdates,
     downloadUpdate,
     installUpdate,
     cancelAutoInstall,
     clearError,
   } = useUpdateStore();
-
-  // Initialize on mount
-  useEffect(() => {
-    init();
-  }, [init]);
+  const releaseNotes = stringifyReleaseNotes(updateInfo?.releaseNotes);
 
   const handleCheckForUpdates = useCallback(async () => {
     clearError();
@@ -191,10 +203,12 @@ export function UpdateSettings() {
               </p>
             )}
           </div>
-          {updateInfo.releaseNotes && (
-            <div className="text-sm text-muted-foreground prose prose-sm max-w-none">
+          {releaseNotes && (
+            <div className="prose prose-sm max-w-none text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">{t('updates.whatsNew')}</p>
-              <p className="whitespace-pre-wrap">{updateInfo.releaseNotes}</p>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                {releaseNotes}
+              </ReactMarkdown>
             </div>
           )}
         </div>

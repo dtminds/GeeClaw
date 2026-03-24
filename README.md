@@ -283,6 +283,10 @@ pnpm package:win          # Package for Windows
 pnpm package:linux        # Package for Linux
 ```
 
+### Release Notes For Auto-Update
+
+Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
+
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The
 directory must include `openclaw.plugin.json`; if the plugin has runtime

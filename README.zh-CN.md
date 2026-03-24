@@ -281,6 +281,10 @@ pnpm package:win          # 为 Windows 打包
 pnpm package:linux        # 为 Linux 打包
 ```
 
+### 自动更新发布日志
+
+准备打包发布前，请先更新 [`resources/release-notes.md`](resources/release-notes.md)。`electron-builder` 会把这份 Markdown 写入自动更新元数据，GeeClaw 检测到新版本时就能在启动弹窗里直接显示更新日志。
+
 未发布到 npm 的 OpenClaw plugin 也可以直接放到
 `plugins/openclaw/<plugin-id>/` 下参与打包，而不需要安装到应用顶层
 `node_modules/`。目录里至少要有 `openclaw.plugin.json`；如果 plugin 有运行时

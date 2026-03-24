@@ -206,9 +206,27 @@ export const useSettingsStore = create<SettingsState>()(
       setProxyHttpsServer: (proxyHttpsServer) => set({ proxyHttpsServer }),
       setProxyAllServer: (proxyAllServer) => set({ proxyAllServer }),
       setProxyBypassRules: (proxyBypassRules) => set({ proxyBypassRules }),
-      setUpdateChannel: (updateChannel) => set({ updateChannel }),
-      setAutoCheckUpdate: (autoCheckUpdate) => set({ autoCheckUpdate }),
-      setAutoDownloadUpdate: (autoDownloadUpdate) => set({ autoDownloadUpdate }),
+      setUpdateChannel: (updateChannel) => {
+        set({ updateChannel });
+        void hostApiFetch('/api/settings/updateChannel', {
+          method: 'PUT',
+          body: JSON.stringify({ value: updateChannel }),
+        }).catch(() => {});
+      },
+      setAutoCheckUpdate: (autoCheckUpdate) => {
+        set({ autoCheckUpdate });
+        void hostApiFetch('/api/settings/autoCheckUpdate', {
+          method: 'PUT',
+          body: JSON.stringify({ value: autoCheckUpdate }),
+        }).catch(() => {});
+      },
+      setAutoDownloadUpdate: (autoDownloadUpdate) => {
+        set({ autoDownloadUpdate });
+        void hostApiFetch('/api/settings/autoDownloadUpdate', {
+          method: 'PUT',
+          body: JSON.stringify({ value: autoDownloadUpdate }),
+        }).catch(() => {});
+      },
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setChatSessionsPanelCollapsed: (chatSessionsPanelCollapsed) => set({ chatSessionsPanelCollapsed }),
       setDevModeUnlocked: (devModeUnlocked) => set({ devModeUnlocked }),
