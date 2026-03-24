@@ -92,6 +92,12 @@ function maybeRealpath(candidatePath: string): string {
   }
 }
 
+const MANAGED_BUNDLED_PLUGIN_ROOT_PATTERNS = [
+  '/openclaw-plugins',
+  '/build/openclaw-plugins',
+  '/plugins/openclaw',
+] as const;
+
 function hasPluginManifest(candidatePath: string): boolean {
   return existsSync(join(candidatePath, 'openclaw.plugin.json'));
 }
@@ -167,7 +173,11 @@ function resolveBundledPluginSource(
 }
 
 function isManagedBundledPluginPath(pathEntry: string): boolean {
-  const normalized = pathEntry.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalized = pathEntry.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+  if (MANAGED_BUNDLED_PLUGIN_ROOT_PATTERNS.some((pattern) => normalized.endsWith(pattern))) {
+    return true;
+  }
 
   return ALL_BUNDLED_PLUGINS.some((plugin) => {
     if (!normalized.endsWith(`/${plugin.pluginId}`)) {
@@ -175,8 +185,7 @@ function isManagedBundledPluginPath(pathEntry: string): boolean {
     }
 
     return (
-      normalized.includes('/openclaw-plugins/') ||
-      normalized.includes('/build/openclaw-plugins/') ||
+      MANAGED_BUNDLED_PLUGIN_ROOT_PATTERNS.some((pattern) => normalized.includes(`${pattern}/`)) ||
       normalized.includes('/node_modules/') ||
       normalized.includes('/extensions/')
     );

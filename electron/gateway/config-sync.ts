@@ -14,7 +14,12 @@ import { buildProxyEnv, resolveProxySettings } from '../utils/proxy';
 import { syncProxyConfigToOpenClaw } from '../utils/openclaw-proxy';
 import { syncAllProviderRuntimeConfigToOpenClaw } from '../services/providers/provider-runtime-sync';
 import { syncAllAgentConfigToOpenClaw } from "../services/agents/agent-runtime-sync";
-import { ensureAlwaysEnabledSkillsConfigured, syncExplicitSkillTogglesToOpenClaw } from '../utils/skill-config';
+import {
+  ensureAlwaysEnabledSkillsConfigured,
+  migrateManagedPreinstalledSkillsToBundledSource,
+  syncExplicitSkillTogglesToOpenClaw,
+  syncPreinstalledSkillLoadPathsToOpenClaw,
+} from '../utils/skill-config';
 import { sanitizeOpenClawConfig } from '../utils/openclaw-config-sanitize';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import {
@@ -298,6 +303,18 @@ export async function syncGatewayConfigBeforeLaunch(
     await syncBundledPluginLoadPathsToOpenClaw();
   } catch (err) {
     logger.warn('Failed to sync bundled plugin load paths to openclaw.json:', err);
+  }
+
+  try {
+    await syncPreinstalledSkillLoadPathsToOpenClaw();
+  } catch (err) {
+    logger.warn('Failed to sync bundled skill load paths to openclaw.json:', err);
+  }
+
+  try {
+    await migrateManagedPreinstalledSkillsToBundledSource();
+  } catch (err) {
+    logger.warn('Failed to migrate managed preinstalled skills to bundled sources:', err);
   }
 
   try {

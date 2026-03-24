@@ -176,6 +176,37 @@ describe('reconcileBundledPluginLoadPaths', () => {
     expect((config.plugins as { installs?: Record<string, unknown> }).installs).toBeUndefined();
   });
 
+  it('replaces historical managed bundled plugin root paths from other environments', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'plugin-install-'));
+    tempDirs.push(rootDir);
+
+    const { appRoot, bundledPluginsRoot } = createBundledPluginMirrorFixture(rootDir);
+    const { reconcileBundledPluginLoadPaths } = await import('@electron/utils/plugin-install');
+    const config = {
+      plugins: {
+        load: {
+          paths: [
+            '/Applications/GeeClaw.app/Contents/Resources/openclaw-plugins',
+            '/Applications/GeeClaw.app/Contents/Resources/app.asar.unpacked/openclaw-plugins',
+            '/tmp/geeclaw-dev/plugins/openclaw',
+            '/custom/plugins/keep-me',
+          ],
+        },
+      },
+    };
+
+    const reconcileResult = reconcileBundledPluginLoadPaths(config, {
+      appPath: appRoot,
+      cwd: rootDir,
+    });
+
+    expect(reconcileResult.warnings).toEqual([]);
+    expect((config.plugins as { load?: { paths?: string[] } }).load?.paths).toEqual([
+      '/custom/plugins/keep-me',
+      bundledPluginsRoot,
+    ]);
+  });
+
   it('forces always-enabled bundled plugins on during startup reconciliation', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'plugin-install-'));
     tempDirs.push(rootDir);

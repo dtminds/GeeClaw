@@ -78,6 +78,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 ### 🧩 可扩展技能系统
 通过预构建的技能扩展 AI 智能体的能力。在集成的技能面板中浏览、安装和管理技能——无需包管理器。
 对于全新安装环境，技能市场现在会检测是否已具备国内优化的 `skillhub` CLI，并提供一键引导安装；安装过程复用 GeeClaw 自带的 `uv` 与托管 Python 运行时。若 `skillhub` 不可用，GeeClaw 会自动回退到内置的 `clawhub` 安装器。
+打包进应用的预装 skills 现在会通过 `skills.load.extraDirs` 直接从应用内目录加载，因此应用升级时可以同步刷新这些 skills，而不再复制一份托管副本到 `~/.openclaw-geeclaw/skills`。
 
 重点搜索技能所需环境变量：
 - `BRAVE_SEARCH_API_KEY`：用于 `brave-web-search`

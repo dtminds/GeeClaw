@@ -5,7 +5,7 @@
  *
  * All file I/O uses async fs/promises to avoid blocking the main thread.
  */
-import { readFile, writeFile, cp, mkdir } from 'fs/promises';
+import { readFile, rm, cp, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { getOpenClawDir, getOpenClawConfigDir, getResourcesDir } from './paths';
@@ -43,20 +43,48 @@ interface PreinstalledManifest {
     skills?: PreinstalledSkillSpec[];
 }
 
-interface PreinstalledLockEntry {
-    slug: string;
-    version?: string;
-}
-
-interface PreinstalledLockFile {
-    skills?: PreinstalledLockEntry[];
-}
-
 interface PreinstalledMarker {
     source: 'geeclaw-preinstalled';
     slug: string;
     version: string;
     installedAt: string;
+}
+
+function dedupePaths(paths: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (const path of paths) {
+        if (!path || seen.has(path)) {
+            continue;
+        }
+        seen.add(path);
+        result.push(path);
+    }
+
+    return result;
+}
+
+function getCurrentSkillExtraDirs(skills: Record<string, unknown>): string[] {
+    if (skills.load && typeof skills.load === 'object' && !Array.isArray(skills.load)) {
+        const loadObject = skills.load as Record<string, unknown>;
+        if (Array.isArray(loadObject.extraDirs)) {
+            return loadObject.extraDirs.filter((entry): entry is string => typeof entry === 'string');
+        }
+    }
+
+    return [];
+}
+
+function isManagedPreinstalledSkillExtraDir(pathEntry: string): boolean {
+    const normalized = pathEntry.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    return (
+        normalized.includes('/resources/preinstalled-skills')
+        || normalized.includes('/resources/skills')
+        || normalized.includes('/contents/resources/skills')
+        || normalized.includes('/build/preinstalled-skills')
+        || normalized.includes('/app.asar.unpacked/')
+    );
 }
 
 /**
@@ -69,31 +97,6 @@ async function readConfig(): Promise<OpenClawConfig> {
         console.error('Failed to read openclaw config:', err);
         return {};
     }
-}
-
-async function setSkillsEnabled(skillKeys: string[], enabled: boolean): Promise<void> {
-    if (skillKeys.length === 0) {
-        return;
-    }
-
-    await mutateOpenClawConfigDocument<void>((config) => {
-        const skillConfig = config as OpenClawConfig;
-        if (!skillConfig.skills) {
-            skillConfig.skills = {};
-        }
-        if (!skillConfig.skills.entries) {
-            skillConfig.skills.entries = {};
-        }
-
-        let changed = false;
-        for (const skillKey of skillKeys) {
-            const entry = skillConfig.skills.entries[skillKey] || {};
-            const nextChanged = applySkillEnabledState(skillConfig.skills.entries, skillKey, entry, enabled);
-            changed = changed || nextChanged;
-        }
-
-        return { changed, result: undefined };
-    });
 }
 
 function applySkillEnabledState(
@@ -448,39 +451,15 @@ async function readPreinstalledManifest(): Promise<PreinstalledSkillSpec[]> {
 
 function resolvePreinstalledSkillsSourceRoot(): string | null {
     const candidates = [
+        join(getResourcesDir(), '..', 'skills'),
+        join(getResourcesDir(), 'skills'),
         join(getResourcesDir(), 'preinstalled-skills'),
         join(process.cwd(), 'build', 'preinstalled-skills'),
         join(__dirname, '../../build/preinstalled-skills'),
     ];
 
-    const root = candidates.find((dir) => existsSync(dir));
+    const root = candidates.find((dir) => existsSync(join(dir, '.preinstalled-lock.json')));
     return root || null;
-}
-
-async function readPreinstalledLockVersions(sourceRoot: string): Promise<Map<string, string>> {
-    const lockPath = join(sourceRoot, '.preinstalled-lock.json');
-    if (!existsSync(lockPath)) {
-        return new Map();
-    }
-
-    try {
-        const raw = await readFile(lockPath, 'utf-8');
-        const parsed = JSON.parse(raw) as PreinstalledLockFile;
-        const versions = new Map<string, string>();
-
-        for (const entry of parsed.skills || []) {
-            const slug = entry.slug?.trim();
-            const version = entry.version?.trim();
-            if (slug && version) {
-                versions.set(slug, version);
-            }
-        }
-
-        return versions;
-    } catch (error) {
-        logger.warn('Failed to read preinstalled-skills lock file:', error);
-        return new Map();
-    }
 }
 
 async function tryReadMarker(markerPath: string): Promise<PreinstalledMarker | null> {
@@ -500,7 +479,53 @@ async function tryReadMarker(markerPath: string): Promise<PreinstalledMarker | n
     }
 }
 
-export async function ensurePreinstalledSkillsInstalled(): Promise<void> {
+export function reconcilePreinstalledSkillLoadPaths(
+    config: Record<string, unknown>,
+    options: {
+        preinstalledSkills: PreinstalledSkillSpec[];
+        sourceRoot: string | null;
+    },
+): { changed: boolean } {
+    const { preinstalledSkills, sourceRoot } = options;
+    if (preinstalledSkills.length === 0 || !sourceRoot) {
+        return { changed: false };
+    }
+
+    let changed = false;
+    const skills = (
+        config.skills && typeof config.skills === 'object' && !Array.isArray(config.skills)
+            ? config.skills as Record<string, unknown>
+            : {}
+    );
+    const existingExtraDirs = getCurrentSkillExtraDirs(skills);
+    const preservedExtraDirs = existingExtraDirs.filter((entry) => !isManagedPreinstalledSkillExtraDir(entry));
+    const nextExtraDirs = dedupePaths([...preservedExtraDirs, sourceRoot]);
+
+    if (!config.skills || config.skills !== skills) {
+        config.skills = skills;
+        changed = true;
+    }
+
+    const nextLoadObject = (
+        skills.load && typeof skills.load === 'object' && !Array.isArray(skills.load)
+            ? { ...(skills.load as Record<string, unknown>) }
+            : {}
+    );
+    nextLoadObject.extraDirs = nextExtraDirs;
+
+    if (
+        JSON.stringify(existingExtraDirs) !== JSON.stringify(nextExtraDirs)
+        || !skills.load
+        || Array.isArray(skills.load)
+    ) {
+        skills.load = nextLoadObject;
+        changed = true;
+    }
+
+    return { changed };
+}
+
+export async function syncPreinstalledSkillLoadPathsToOpenClaw(): Promise<void> {
     const skills = await readPreinstalledManifest();
     if (skills.length === 0) {
         return;
@@ -508,69 +533,53 @@ export async function ensurePreinstalledSkillsInstalled(): Promise<void> {
 
     const sourceRoot = resolvePreinstalledSkillsSourceRoot();
     if (!sourceRoot) {
-        logger.warn('Preinstalled skills source root not found; skipping preinstall.');
+        logger.warn('Preinstalled skills source root not found; skipping bundled skill load-path sync.');
         return;
     }
 
-    const lockVersions = await readPreinstalledLockVersions(sourceRoot);
-    const targetRoot = join(getOpenClawConfigDir(), 'skills');
-    await mkdir(targetRoot, { recursive: true });
-    const toEnable: string[] = [];
+    await mutateOpenClawConfigDocument<void>((config) => {
+        const { changed } = reconcilePreinstalledSkillLoadPaths(config, {
+            preinstalledSkills: skills,
+            sourceRoot,
+        });
+        return { changed, result: undefined };
+    });
+}
 
+export async function migrateManagedPreinstalledSkillsToBundledSource(): Promise<void> {
+    const skills = await readPreinstalledManifest();
+    if (skills.length === 0) {
+        return;
+    }
+
+    const sourceRoot = resolvePreinstalledSkillsSourceRoot();
+    if (!sourceRoot) {
+        logger.warn('Preinstalled skills source root not found; skipping managed-copy migration.');
+        return;
+    }
+
+    const targetRoot = join(getOpenClawConfigDir(), 'skills');
     for (const spec of skills) {
         const sourceDir = join(sourceRoot, spec.slug);
         const sourceManifest = join(sourceDir, 'SKILL.md');
         if (!existsSync(sourceManifest)) {
-            logger.warn(`Preinstalled skill source missing SKILL.md, skipping: ${sourceDir}`);
+            logger.warn(`Preinstalled skill source missing SKILL.md, keeping managed copy if present: ${sourceDir}`);
             continue;
         }
 
         const targetDir = join(targetRoot, spec.slug);
-        const targetManifest = join(targetDir, 'SKILL.md');
         const markerPath = join(targetDir, PREINSTALLED_MARKER_NAME);
-        const desiredVersion = lockVersions.get(spec.slug)
-            || (spec.version || 'unknown').trim()
-            || 'unknown';
         const marker = await tryReadMarker(markerPath);
 
-        if (existsSync(targetManifest)) {
-            if (!marker) {
-                logger.info(`Skipping user-managed skill: ${spec.slug}`);
-                continue;
-            }
-            if (marker.version === desiredVersion) {
-                continue;
-            }
-            logger.info(
-                `Skipping preinstalled skill update for ${spec.slug} (local marker version=${marker.version}, desired=${desiredVersion})`,
-            );
+        if (!marker || marker.source !== 'geeclaw-preinstalled') {
             continue;
         }
 
         try {
-            await mkdir(targetDir, { recursive: true });
-            await cp(sourceDir, targetDir, { recursive: true, force: true });
-            const markerPayload: PreinstalledMarker = {
-                source: 'geeclaw-preinstalled',
-                slug: spec.slug,
-                version: desiredVersion,
-                installedAt: new Date().toISOString(),
-            };
-            await writeFile(markerPath, `${JSON.stringify(markerPayload, null, 2)}\n`, 'utf-8');
-            if (spec.autoEnable) {
-                toEnable.push(spec.slug);
-            }
-            logger.info(`Installed preinstalled skill: ${spec.slug} -> ${targetDir}`);
+            await rm(targetDir, { recursive: true, force: true });
+            logger.info(`Migrated preinstalled skill to bundled app source: ${spec.slug}`);
         } catch (error) {
-            logger.warn(`Failed to install preinstalled skill ${spec.slug}:`, error);
-        }
-    }
-
-    if (toEnable.length > 0) {
-        try {
-            await setSkillsEnabled(toEnable, true);
-        } catch (error) {
-            logger.warn('Failed to auto-enable preinstalled skills:', error);
+            logger.warn(`Failed to migrate managed preinstalled skill ${spec.slug}:`, error);
         }
     }
 }

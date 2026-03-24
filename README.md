@@ -78,6 +78,7 @@ Schedule AI tasks to run automatically. Define triggers, set intervals, and let 
 ### 🧩 Extensible Skill System
 Extend your AI agents with pre-built skills. Browse, install, and manage skills through the integrated skill panel—no package managers required.
 On fresh installs, the marketplace can now detect whether the China-optimized `skillhub` CLI is available and offer a one-click guided install that uses GeeClaw's bundled `uv` + managed Python runtime. If `skillhub` is unavailable, GeeClaw automatically falls back to the bundled `clawhub` installer.
+Packaged preinstalled skills are now loaded directly from the app bundle via `skills.load.extraDirs`, so app updates can refresh those skills without copying managed duplicates into `~/.openclaw-geeclaw/skills`.
 
 Environment variables for bundled search skills:
 - `BRAVE_SEARCH_API_KEY` for `brave-web-search`

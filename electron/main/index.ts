@@ -28,7 +28,6 @@ import {
 import { createSignalQuitHandler } from './signal-quit';
 import {
   ensureBuiltinSkillsInstalled,
-  ensurePreinstalledSkillsInstalled,
   ensureSkillEntriesDefaultDisabled,
 } from '../utils/skill-config';
 import { startHostApiServer } from '../api/server';
@@ -304,10 +303,6 @@ async function initialize(): Promise<void> {
   // to GeeClaw's managed OpenClaw state so they are immediately available.
   void ensureBuiltinSkillsInstalled().catch((error) => {
     logger.warn('Failed to install built-in skills:', error);
-  });
-
-  void ensurePreinstalledSkillsInstalled().catch((error) => {
-    logger.warn('Failed to install preinstalled skills:', error);
   });
 
   // Bridge gateway and host-side events before any auto-start logic runs, so
