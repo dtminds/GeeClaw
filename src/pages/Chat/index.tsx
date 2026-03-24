@@ -4,7 +4,7 @@
  * via gateway:rpc IPC. Session selector, thinking toggle, and refresh
  * are in the toolbar; messages render with markdown + streaming.
  */
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
@@ -133,10 +133,10 @@ export function Chat() {
     loading,
   });
 
-  const handleSend = (text: string, attachments?: FileAttachment[], targetAgentId?: string | null) => {
+  const handleSend = useCallback((text: string, attachments?: FileAttachment[], targetAgentId?: string | null) => {
     scrollToBottomAndFollow();
     sendMessage(text, attachments, targetAgentId);
-  };
+  }, [scrollToBottomAndFollow, sendMessage]);
 
   // Load data when gateway is running.
   // When the store already holds messages for this session (i.e. the user
