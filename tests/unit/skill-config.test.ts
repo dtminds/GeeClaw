@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -283,5 +283,166 @@ describe('skill config sync', () => {
     expect(config.skills?.entries?.['enabled-skill']).toBeUndefined();
     expect(config.skills?.entries?.['configured-enabled-skill']).toEqual({ apiKey: 'abc' });
     expect(config.skills?.entries?.['disabled-skill']).toEqual({ enabled: false });
+  });
+
+  it('syncs bundled preinstalled skill roots into skills.load.extraDirs', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    const resourcesDir = join(homeDir, 'resources');
+    const preinstalledRoot = join(resourcesDir, '..', 'skills');
+    const staleBundledRoot = '/Applications/Old/GeeClaw.app/Contents/Resources/resources/preinstalled-skills';
+
+    mkdirSync(join(preinstalledRoot, 'pdf'), { recursive: true });
+    mkdirSync(join(resourcesDir, 'skills'), { recursive: true });
+    writeFileSync(join(resourcesDir, 'skills', 'preinstalled-manifest.json'), JSON.stringify({
+      skills: [{ slug: 'pdf', autoEnable: true }],
+    }, null, 2), 'utf8');
+    writeFileSync(join(preinstalledRoot, '.preinstalled-lock.json'), JSON.stringify({
+      skills: [{ slug: 'pdf', version: 'test-version' }],
+    }, null, 2), 'utf8');
+    writeFileSync(join(preinstalledRoot, 'pdf', 'SKILL.md'), '# PDF\n', 'utf8');
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+
+    vi.doMock('@electron/utils/paths', async () => {
+      const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
+      return {
+        ...actual,
+        getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+        getResourcesDir: () => resourcesDir,
+      };
+    });
+
+    vi.doMock('@electron/utils/store', () => ({
+      getExplicitSkillToggles: async () => ({
+        enabledSkills: [],
+        disabledSkills: [],
+      }),
+      setExplicitSkillToggle: vi.fn(),
+    }));
+
+    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configPath = join(configDir, 'openclaw.json');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify({
+      skills: {
+        load: {
+          extraDirs: [
+            '/custom/shared-skills',
+            staleBundledRoot,
+          ],
+          watch: true,
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { syncPreinstalledSkillLoadPathsToOpenClaw } = await import('@electron/utils/skill-config');
+    await syncPreinstalledSkillLoadPathsToOpenClaw();
+
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      skills?: {
+        load?: {
+          extraDirs?: string[];
+          watch?: boolean;
+        };
+      };
+    };
+
+    expect(config.skills?.load?.extraDirs).toEqual([
+      '/custom/shared-skills',
+      preinstalledRoot,
+    ]);
+    expect(config.skills?.load?.watch).toBe(true);
+  });
+
+  it('migrates legacy managed preinstalled skill copies to bundled app sources', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    const resourcesDir = join(homeDir, 'resources');
+    const preinstalledRoot = join(resourcesDir, '..', 'skills');
+
+    mkdirSync(join(resourcesDir, 'skills'), { recursive: true });
+    mkdirSync(join(preinstalledRoot, 'pdf'), { recursive: true });
+    writeFileSync(join(resourcesDir, 'skills', 'preinstalled-manifest.json'), JSON.stringify({
+      skills: [{ slug: 'pdf', autoEnable: true }],
+    }, null, 2), 'utf8');
+    writeFileSync(join(preinstalledRoot, '.preinstalled-lock.json'), JSON.stringify({
+      skills: [{ slug: 'pdf', version: 'test-version' }],
+    }, null, 2), 'utf8');
+    writeFileSync(join(preinstalledRoot, 'pdf', 'SKILL.md'), '# PDF\n', 'utf8');
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+
+    vi.doMock('@electron/utils/paths', async () => {
+      const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
+      return {
+        ...actual,
+        getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+        getResourcesDir: () => resourcesDir,
+      };
+    });
+
+    vi.doMock('@electron/utils/store', () => ({
+      getExplicitSkillToggles: async () => ({
+        enabledSkills: [],
+        disabledSkills: [],
+      }),
+      setExplicitSkillToggle: vi.fn(),
+    }));
+
+    const managedSkillsDir = join(homeDir, '.openclaw-geeclaw', 'skills');
+    const migratedSkillDir = join(managedSkillsDir, 'pdf');
+    const userSkillDir = join(managedSkillsDir, 'custom-skill');
+
+    mkdirSync(migratedSkillDir, { recursive: true });
+    mkdirSync(userSkillDir, { recursive: true });
+    writeFileSync(join(migratedSkillDir, 'SKILL.md'), '# Old PDF\n', 'utf8');
+    writeFileSync(join(migratedSkillDir, '.geeclaw-preinstalled.json'), JSON.stringify({
+      source: 'geeclaw-preinstalled',
+      slug: 'pdf',
+      version: 'old-version',
+      installedAt: '2026-03-24T00:00:00.000Z',
+    }, null, 2), 'utf8');
+    writeFileSync(join(userSkillDir, 'SKILL.md'), '# Custom Skill\n', 'utf8');
+
+    const { migrateManagedPreinstalledSkillsToBundledSource } = await import('@electron/utils/skill-config');
+    await migrateManagedPreinstalledSkillsToBundledSource();
+
+    expect(existsSync(migratedSkillDir)).toBe(false);
+    expect(existsSync(userSkillDir)).toBe(true);
   });
 });

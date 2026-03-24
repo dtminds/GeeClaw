@@ -35,7 +35,7 @@ extraResources:
   - from: build/mcporter/
     to: mcporter/
   - from: build/preinstalled-skills/
-    to: resources/preinstalled-skills/
+    to: skills/
   # NOTE: OpenClaw plugin mirrors are copied by the afterPack hook
   # (after-pack.cjs) from build/openclaw-plugins/ when available, with a
   # node_modules fallback for the built-in npm-backed plugins.

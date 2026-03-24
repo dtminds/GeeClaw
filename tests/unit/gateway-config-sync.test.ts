@@ -88,6 +88,13 @@ vi.mock('@electron/utils/openclaw-proxy', () => ({
 }));
 
 vi.mock('@electron/utils/skill-config', () => ({
+  syncPreinstalledSkillLoadPathsToOpenClaw: vi.fn(async () => {}),
+  migrateManagedPreinstalledSkillsToBundledSource: vi.fn(async () => {}),
+  syncExplicitSkillTogglesToOpenClaw: vi.fn(async () => ({
+    success: true,
+    enabled: [],
+    disabled: [],
+  })),
   ensureAlwaysEnabledSkillsConfigured: vi.fn(async () => ({
     success: true,
     updated: [],
