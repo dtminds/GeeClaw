@@ -333,30 +333,28 @@
     "description": "检查 mcporter 运行环境是否就绪",
     "refresh": "刷新状态",
     "loadFailed": "加载 MCP 状态失败",
+    "health": {
+      "title": "mcporter健康检测",
+      "description": "GeeClaw 会优先识别系统 PATH 里的 mcporter，如未安装将使用内置的环境"
+    },
     "system": {
-      "title": "标准安装的 mcporter",
-      "description": "GeeClaw 会优先识别系统 PATH 里的 mcporter，不把内置运行时当作唯一依赖。",
-      "present": "已检测到",
-      "missing": "未检测到",
+      "title": "系统",
+      "present": "已安装",
+      "missing": "未安装",
       "version": "版本",
       "path": "路径",
       "emptyPath": "未检测到系统 PATH 中的 mcporter",
-      "unknown": "未知",
-      "detectedNote": "已检测到标准安装的 mcporter。GeeClaw 会优先复用它，方便你在终端、脚本和其他工具里共用同一套环境",
-      "missingNote": "未检测到系统安装的 mcporter。GeeClaw 将使用安装包附带的组件"
+      "unknown": "未知"
     },
     "bundled": {
-      "title": "GeeClaw 内置兜底",
-      "description": "即使你还没标准安装 mcporter，GeeClaw 也可以保留一份内置运行时作为兼容兜底",
-      "present": "内置可用",
-      "missing": "内置缺失",
-      "version": "内置版本",
-      "path": "内置路径",
-      "emptyPath": "当前未找到内置 mcporter"
+      "title": "GeeClaw预置",
+      "present": "可用",
+      "missing": "缺失",
+      "version": "版本"
     },
     "install": {
-      "title": "推荐安装方式",
-      "description": "如果你希望终端、脚本和其他工具也能直接使用 mcporter，建议按官方说明完成标准安装。",
+      "title": "安装引导",
+      "description": "当前系统 PATH 里还没有 mcporter。按下面方式安装后，GeeClaw 和终端都可以直接使用它。",
       "step1": "1. 想先试用时，可以在终端运行：",
       "step2": "2. 想把它作为当前项目依赖，可以运行：",
       "step3": "3. 想让系统命令行里直接可用，请打开官方安装说明，按你的平台选择合适方式。",

@@ -10,14 +10,45 @@ while [ -L "$SCRIPT" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
 
-if [ "$(uname)" = "Darwin" ]; then
+PROJECT_ROOT="$(cd -P "$SCRIPT_DIR/../../.." 2>/dev/null && pwd)"
+
+bin_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "x64" ;;
+    arm64|aarch64) echo "arm64" ;;
+    *) uname -m ;;
+  esac
+}
+
+PATH_PREFIX="$SCRIPT_DIR"
+
+if [ -f "$PROJECT_ROOT/build/opencli/dist/main.js" ]; then
+  CLI="$PROJECT_ROOT/build/opencli/dist/main.js"
+  if [ "$(uname)" = "Darwin" ]; then
+    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+  else
+    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/electron"
+  fi
+  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
+  if [ -d "$DEV_BUNDLED_BIN" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
+  fi
+elif [ "$(uname)" = "Darwin" ]; then
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   ELECTRON="$CONTENTS_DIR/MacOS/GeeClaw"
   CLI="$CONTENTS_DIR/Resources/opencli/dist/main.js"
+  BUNDLED_BIN="$CONTENTS_DIR/Resources/bin"
+  if [ -d "$BUNDLED_BIN" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
+  fi
 else
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   ELECTRON="$INSTALL_DIR/geeclaw"
   CLI="$INSTALL_DIR/resources/opencli/dist/main.js"
+  BUNDLED_BIN="$INSTALL_DIR/resources/bin"
+  if [ -d "$BUNDLED_BIN" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
+  fi
 fi
 
 if [ ! -f "$ELECTRON" ]; then
@@ -38,4 +69,5 @@ case "$1" in
 esac
 
 export OPENCLI_EMBEDDED_IN="GeeClaw"
+export PATH="$PATH_PREFIX${PATH:+:$PATH}"
 ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

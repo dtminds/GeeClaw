@@ -80,16 +80,16 @@ function StatusBadge({
 function ValueCard({
   label,
   value,
+  mono = false,
 }: {
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
-    <div className="modal-field-surface rounded-2xl border p-4">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/80">
-        {label}
-      </p>
-      <p className="mt-2 break-all font-mono text-sm text-foreground">
+    <div className="rounded-2xl border border-black/8 bg-background/55 px-4 py-3 dark:border-white/10 dark:bg-black/10">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className={`mt-2 break-all text-sm text-foreground ${mono ? 'font-mono' : 'font-medium'}`}>
         {value}
       </p>
     </div>
@@ -156,39 +156,55 @@ export function McpSettingsSection() {
 
       <section className="modal-section-surface rounded-3xl border p-5">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{t('mcp.system.title')}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('mcp.system.description')}</p>
-            </div>
-            <StatusBadge
-              status={systemInstalled}
-              trueLabel={t('mcp.system.present')}
-              falseLabel={t('mcp.system.missing')}
-              unknownLabel={t('opencli.status.checking')}
-            />
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{t('mcp.health.title')}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t('mcp.health.description')}</p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <ValueCard
-              label={t('mcp.system.version')}
-              value={loading ? t('common:status.loading') : (status?.system.version || t('mcp.system.unknown'))}
-            />
-            <ValueCard
-              label={t('mcp.system.path')}
-              value={loading ? t('common:status.loading') : (status?.system.path || t('mcp.system.emptyPath'))}
-            />
-          </div>
+            <div className="modal-field-surface rounded-2xl border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h4 className="text-base font-semibold text-foreground">{t('mcp.system.title')}</h4>
+                <StatusBadge
+                  status={systemInstalled}
+                  trueLabel={t('mcp.system.present')}
+                  falseLabel={t('mcp.system.missing')}
+                  unknownLabel={t('opencli.status.checking')}
+                />
+              </div>
 
-          {status?.system.exists ? (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-              {t('mcp.system.detectedNote')}
+              <div className="mt-4 grid gap-3">
+                <ValueCard
+                  label={t('mcp.system.version')}
+                  value={loading ? t('common:status.loading') : (status?.system.version || t('mcp.system.unknown'))}
+                />
+                <ValueCard
+                  label={t('mcp.system.path')}
+                  value={loading ? t('common:status.loading') : (status?.system.path || t('mcp.system.emptyPath'))}
+                  mono
+                />
+              </div>
             </div>
-          ) : (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-              {t('mcp.system.missingNote')}
+
+            <div className="modal-field-surface rounded-2xl border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h4 className="text-base font-semibold text-foreground">{t('mcp.bundled.title')}</h4>
+                <StatusBadge
+                  status={bundledInstalled}
+                  trueLabel={t('mcp.bundled.present')}
+                  falseLabel={t('mcp.bundled.missing')}
+                  unknownLabel={t('opencli.status.checking')}
+                />
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <ValueCard
+                  label={t('mcp.bundled.version')}
+                  value={loading ? t('common:status.loading') : (status?.bundled.version || t('mcp.system.unknown'))}
+                />
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </section>
 
@@ -232,34 +248,6 @@ export function McpSettingsSection() {
           </div>
         </section>
       )}
-
-      <section className="modal-section-surface rounded-3xl border p-5">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{t('mcp.bundled.title')}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('mcp.bundled.description')}</p>
-            </div>
-            <StatusBadge
-              status={bundledInstalled}
-              trueLabel={t('mcp.bundled.present')}
-              falseLabel={t('mcp.bundled.missing')}
-              unknownLabel={t('opencli.status.checking')}
-            />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ValueCard
-              label={t('mcp.bundled.version')}
-              value={loading ? t('common:status.loading') : (status?.bundled.version || t('mcp.system.unknown'))}
-            />
-            <ValueCard
-              label={t('mcp.bundled.path')}
-              value={loading ? t('common:status.loading') : (status?.bundled.path || t('mcp.bundled.emptyPath'))}
-            />
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

@@ -333,30 +333,28 @@
     "description": "Check whether mcporter is installed in the standard way on your system so GeeClaw and other tools can share the same MCP runtime.",
     "refresh": "Refresh Status",
     "loadFailed": "Failed to load MCP status",
+    "health": {
+      "title": "mcporter Health Check",
+      "description": "GeeClaw first looks for mcporter on your system PATH, and uses the bundled environment when it is not installed."
+    },
     "system": {
-      "title": "Standard mcporter Install",
-      "description": "GeeClaw prefers a mcporter command available on your system PATH instead of relying only on the bundled runtime.",
-      "present": "Detected",
+      "title": "System",
+      "present": "Installed",
       "missing": "Missing",
       "version": "Version",
       "path": "Path",
       "emptyPath": "No mcporter command was found on your system PATH",
-      "unknown": "Unknown",
-      "detectedNote": "A standard mcporter install was detected. GeeClaw can reuse it first so your terminal, scripts, and other tools all share the same environment.",
-      "missingNote": "No standard mcporter install was detected yet. GeeClaw can still keep a bundled fallback, but an official install is recommended if you want the command available outside the app too."
+      "unknown": "Unknown"
     },
     "bundled": {
-      "title": "GeeClaw Bundled Fallback",
-      "description": "Even if mcporter is not installed the standard way yet, GeeClaw can still keep a bundled runtime as a compatibility fallback.",
-      "present": "Bundled Ready",
-      "missing": "Bundled Missing",
-      "version": "Bundled Version",
-      "path": "Bundled Path",
-      "emptyPath": "No bundled mcporter runtime was found"
+      "title": "GeeClaw Bundled",
+      "present": "Ready",
+      "missing": "Missing",
+      "version": "Version"
     },
     "install": {
-      "title": "Recommended Install Paths",
-      "description": "If you want mcporter to be available to your terminal, scripts, and other tools, follow the official install flow.",
+      "title": "Install Guide",
+      "description": "mcporter is not available on your system PATH yet. Install it with one of the standard methods below so GeeClaw and your terminal can use the same command.",
       "step1": "1. To try it first without installing, run:",
       "step2": "2. To add it as a dependency in the current project, run:",
       "step3": "3. To make the command directly available in your shell, open the official installation guide and choose the method that matches your platform.",

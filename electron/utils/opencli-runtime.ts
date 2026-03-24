@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { logger } from './logger';
-import { getManagedCommandWrapperPath } from './managed-bin';
+import { prependPathEntries } from './env-path';
+import { getBundledPathEntries, getManagedCommandWrapperPath } from './managed-bin';
 
 const OPENCLI_RELEASES_URL = 'https://github.com/jackwener/opencli/releases';
 const OPENCLI_README_URL = 'https://github.com/jackwener/opencli/blob/main/README.zh-CN.md';
@@ -106,10 +107,14 @@ function resolveExecutionSpec(): OpenCliExecutionSpec | null {
     return null;
   }
 
-  const env: NodeJS.ProcessEnv = {
+  let env: NodeJS.ProcessEnv = {
     ...process.env,
     OPENCLI_EMBEDDED_IN: 'GeeClaw',
   };
+
+  if (app.isPackaged) {
+    env = prependPathEntries(env, getBundledPathEntries()).env as NodeJS.ProcessEnv;
+  }
 
   if (process.platform === 'win32') {
     const bundledNode = getPackagedWindowsNodePath();
