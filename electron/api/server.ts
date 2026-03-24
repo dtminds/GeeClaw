@@ -17,6 +17,7 @@ import { handleSessionRoutes } from './routes/sessions';
 import { handleCronRoutes } from './routes/cron';
 import { handleDesktopSessionRoutes } from './routes/desktop-sessions';
 import { handleAgentRoutes } from './routes/agents';
+import { handleMcpRoutes } from './routes/mcp';
 import { sendJson } from './route-utils';
 
 type RouteHandler = (
@@ -33,6 +34,7 @@ const routeHandlers: RouteHandler[] = [
   handleProviderRoutes,
   handleChannelRoutes,
   handleOpenCliRoutes,
+  handleMcpRoutes,
   handleSkillRoutes,
   handleFileRoutes,
   handleAuthSessionRoutes,
