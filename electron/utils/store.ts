@@ -22,6 +22,7 @@ function generateToken(): string {
 export interface AppSettings {
   // General
   theme: 'light' | 'dark' | 'system';
+  colorTheme: string;
   language: string;
   startMinimized: boolean;
   launchAtStartup: boolean;
@@ -63,6 +64,7 @@ export interface AppSettings {
 const defaults: AppSettings = {
   // General
   theme: 'system',
+  colorTheme: 'standard',
   language: 'zh',
   startMinimized: false,
   launchAtStartup: false,
