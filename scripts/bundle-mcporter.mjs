@@ -16,11 +16,13 @@
  */
 
 import 'zx/globals';
+import windowsPaths from './lib/windows-paths.cjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'mcporter');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
 const MCPORTER_LINK = path.join(NODE_MODULES, 'mcporter');
+const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
 
 const ROOT_FILES = ['package.json', 'README.md', 'LICENSE'];
 const ROOT_DIRS = ['dist', 'config'];
@@ -31,18 +33,6 @@ const SKIP_PACKAGES = new Set([
   'rolldown',
 ]);
 const SKIP_SCOPES = ['@rolldown/', '@types/'];
-
-function normWin(targetPath) {
-  if (process.platform !== 'win32') {
-    return targetPath;
-  }
-
-  if (targetPath.startsWith('\\\\?\\')) {
-    return targetPath;
-  }
-
-  return `\\\\?\\${targetPath.replace(/\//g, '\\')}`;
-}
 
 function copyRuntimeSubset(srcRoot, destRoot) {
   for (const fileName of ROOT_FILES) {
@@ -150,7 +140,7 @@ function collectDependencyClosure(packageRealPath, packageName) {
 
       let realPath;
       try {
-        realPath = fs.realpathSync(normWin(fullPath));
+        realPath = realpathCompat(fullPath);
       } catch {
         continue;
       }
@@ -321,7 +311,7 @@ if (!fs.existsSync(MCPORTER_LINK)) {
   process.exit(1);
 }
 
-const mcporterReal = fs.realpathSync(normWin(MCPORTER_LINK));
+const mcporterReal = realpathCompat(MCPORTER_LINK);
 const packageJson = readPkgJsonSafe(mcporterReal);
 const cliEntry = packageJson?.bin?.mcporter;
 

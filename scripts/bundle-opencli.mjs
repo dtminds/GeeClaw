@@ -14,11 +14,13 @@
 
 import 'zx/globals';
 import { build } from 'esbuild';
+import windowsPaths from './lib/windows-paths.cjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'opencli');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
 const OPENCLI_LINK = path.join(NODE_MODULES, '@jackwener', 'opencli');
+const { realpathCompat } = windowsPaths;
 
 function walkTsFiles(dir) {
   const entryPoints = [];
@@ -141,7 +143,7 @@ if (!fs.existsSync(OPENCLI_LINK)) {
   process.exit(1);
 }
 
-const opencliReal = fs.realpathSync(OPENCLI_LINK);
+const opencliReal = realpathCompat(OPENCLI_LINK);
 const srcDir = path.join(opencliReal, 'src');
 const distDir = path.join(OUTPUT, 'dist');
 const entryPoints = walkTsFiles(srcDir);

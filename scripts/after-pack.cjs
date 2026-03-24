@@ -19,18 +19,9 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, readdirSync, rmSync, statSync, mkdirSync, realpathSync } = require('fs');
+const { cpSync, existsSync, readdirSync, rmSync, statSync, mkdirSync } = require('fs');
 const { join, dirname, basename } = require('path');
-
-// On Windows, paths in pnpm's virtual store can exceed the default MAX_PATH
-// limit (260 chars). Node.js 18.17+ respects the system LongPathsEnabled
-// registry key, but as a safety net we normalize paths to use the \\?\ prefix
-// on Windows, which bypasses the limit unconditionally.
-function normWin(p) {
-  if (process.platform !== 'win32') return p;
-  if (p.startsWith('\\\\?\\')) return p;
-  return '\\\\?\\' + p.replace(/\//g, '\\');
-}
+const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 
 // ── Arch helpers ─────────────────────────────────────────────────────────────
 // electron-builder Arch enum: 0=ia32, 1=x64, 2=armv7l, 3=arm64, 4=universal
@@ -272,7 +263,7 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
   }
 
   let realPluginPath;
-  try { realPluginPath = realpathSync(normWin(pkgPath)); } catch { realPluginPath = pkgPath; }
+  try { realPluginPath = realpathCompat(pkgPath); } catch { realPluginPath = pkgPath; }
 
   // Copy plugin package itself
   if (existsSync(normWin(destDir))) rmSync(normWin(destDir), { recursive: true, force: true });
@@ -309,7 +300,7 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
       if (name === skipPkg) continue;
       if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
       let rp;
-      try { rp = realpathSync(normWin(fullPath)); } catch { continue; }
+      try { rp = realpathCompat(fullPath); } catch { continue; }
       if (collected.has(rp)) continue;
       collected.set(rp, name);
       const depVirtualNM = getVirtualStoreNodeModules(rp);
