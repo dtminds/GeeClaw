@@ -61,9 +61,9 @@ const SKILL_KEYWORD_RECOMMENDATION_RULES: SkillKeywordRecommendationRule[] = [
     keywords: ['excel', 'xlsx'],
   },
   {
-    id: 'xhs',
-    skillMatchers: ['xiaohongshu-cli'],
-    keywords: ['小红书'],
+    id: 'opencli',
+    skillMatchers: ['opencli'],
+    keywords: ['小红书', '知乎', 'B站', 'bilibili', '微博', 'tiktok', 'twitter'],
   },
 ];
 
