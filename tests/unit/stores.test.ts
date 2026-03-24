@@ -2,11 +2,21 @@
  * Zustand Stores Tests
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const hostApiFetchMock = vi.fn();
+
+vi.mock('@/lib/host-api', () => ({
+  hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
+}));
+
 import { useSettingsStore } from '@/stores/settings';
 import { useGatewayStore } from '@/stores/gateway';
 
 describe('Settings Store', () => {
   beforeEach(() => {
+    hostApiFetchMock.mockReset();
+    hostApiFetchMock.mockResolvedValue(undefined);
+
     // Reset store to default state
     useSettingsStore.setState({
       theme: 'system',
@@ -36,12 +46,58 @@ describe('Settings Store', () => {
     const { setTheme } = useSettingsStore.getState();
     setTheme('dark');
     expect(useSettingsStore.getState().theme).toBe('dark');
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/theme', {
+      method: 'PUT',
+      body: JSON.stringify({ value: 'dark' }),
+    });
   });
 
   it('should update color theme', () => {
     const { setColorTheme } = useSettingsStore.getState();
     setColorTheme('ocean');
     expect(useSettingsStore.getState().colorTheme).toBe('ocean');
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/colorTheme', {
+      method: 'PUT',
+      body: JSON.stringify({ value: 'ocean' }),
+    });
+  });
+
+  it('should backfill persisted appearance settings from renderer state during init', async () => {
+    hostApiFetchMock.mockResolvedValue(undefined);
+    hostApiFetchMock.mockResolvedValueOnce({
+      theme: 'system',
+      colorTheme: 'standard',
+      language: 'en',
+    });
+
+    useSettingsStore.setState({
+      theme: 'dark',
+      colorTheme: 'ocean',
+      language: 'en',
+      sidebarCollapsed: false,
+      devModeUnlocked: false,
+      gatewayAutoStart: true,
+      gatewayPort: 28788,
+      autoCheckUpdate: true,
+      autoDownloadUpdate: false,
+      startMinimized: false,
+      launchAtStartup: false,
+      updateChannel: 'stable',
+    });
+
+    await useSettingsStore.getState().init();
+
+    expect(useSettingsStore.getState().theme).toBe('dark');
+    expect(useSettingsStore.getState().colorTheme).toBe('ocean');
+    expect(hostApiFetchMock).toHaveBeenNthCalledWith(1, '/api/settings');
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/theme', {
+      method: 'PUT',
+      body: JSON.stringify({ value: 'dark' }),
+    });
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/colorTheme', {
+      method: 'PUT',
+      body: JSON.stringify({ value: 'ocean' }),
+    });
   });
   
   it('should toggle sidebar collapsed state', () => {

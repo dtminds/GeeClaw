@@ -100,6 +100,13 @@ const defaultSettings = {
   setupComplete: false,
 };
 
+function persistSettingValue(key: string, value: unknown): void {
+  void hostApiFetch(`/api/settings/${key}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  }).catch(() => {});
+}
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -108,9 +115,50 @@ export const useSettingsStore = create<SettingsState>()(
       init: async () => {
         try {
           const settings = await hostApiFetch<Partial<typeof defaultSettings>>('/api/settings');
-          set((state) => ({ ...state, ...settings }));
+          let themeToBackfill: Theme | null = null;
+          let colorThemeToBackfill: ColorTheme | null = null;
+
+          set((state) => {
+            const remoteTheme = settings.theme;
+            const remoteColorTheme = settings.colorTheme as ColorTheme | undefined;
+
+            const shouldBackfillTheme =
+              state.theme !== defaultSettings.theme
+              && (!remoteTheme || remoteTheme === defaultSettings.theme);
+            const shouldBackfillColorTheme =
+              state.colorTheme !== defaultSettings.colorTheme
+              && (!remoteColorTheme || remoteColorTheme === defaultSettings.colorTheme);
+
+            const nextTheme = shouldBackfillTheme
+              ? state.theme
+              : (remoteTheme ?? state.theme);
+            const nextColorTheme = shouldBackfillColorTheme
+              ? state.colorTheme
+              : (remoteColorTheme ?? state.colorTheme);
+
+            if (shouldBackfillTheme) {
+              themeToBackfill = nextTheme;
+            }
+            if (shouldBackfillColorTheme) {
+              colorThemeToBackfill = nextColorTheme;
+            }
+
+            return {
+              ...state,
+              ...settings,
+              theme: nextTheme,
+              colorTheme: nextColorTheme,
+            };
+          });
+
           if (settings.language) {
             i18n.changeLanguage(settings.language);
+          }
+          if (themeToBackfill) {
+            persistSettingValue('theme', themeToBackfill);
+          }
+          if (colorThemeToBackfill) {
+            persistSettingValue('colorTheme', colorThemeToBackfill);
           }
         } catch {
           // Keep renderer-persisted settings as a fallback when the main
@@ -118,8 +166,14 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
 
-      setTheme: (theme) => set({ theme }),
-      setColorTheme: (colorTheme) => set({ colorTheme }),
+      setTheme: (theme) => {
+        set({ theme });
+        persistSettingValue('theme', theme);
+      },
+      setColorTheme: (colorTheme) => {
+        set({ colorTheme });
+        persistSettingValue('colorTheme', colorTheme);
+      },
       setLanguage: (language) => {
         i18n.changeLanguage(language);
         set({ language });

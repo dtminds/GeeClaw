@@ -229,7 +229,7 @@ export function Setup() {
                       ? 'border-primary bg-primary text-primary-foreground'
                       : i === safeStepIndex
                         ? 'border-primary text-primary'
-                        : 'border-slate-600 text-slate-600'
+                        : 'border-border text-muted-foreground'
                   )}
                 >
                   {i < safeStepIndex ? (
@@ -242,7 +242,7 @@ export function Setup() {
                   <div
                     className={cn(
                       'h-0.5 w-8 transition-colors',
-                      i < safeStepIndex ? 'bg-primary' : 'bg-slate-600'
+                      i < safeStepIndex ? 'bg-primary' : 'bg-border'
                     )}
                   />
                 )}
@@ -262,11 +262,11 @@ export function Setup() {
           >
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold mb-2">{t(`steps.${step.id}.title`)}</h1>
-              <p className="text-slate-400">{t(`steps.${step.id}.description`)}</p>
+              <p className="text-muted-foreground">{t(`steps.${step.id}.description`)}</p>
             </div>
 
             {/* Step-specific content */}
-            <div className="rounded-xl bg-card text-card-foreground border shadow-sm p-8 mb-8">
+            <div className="modal-card-surface mb-8 rounded-3xl border p-8 text-card-foreground shadow-xl">
               {safeStepIndex === STEP.WELCOME && <WelcomeContent />}
               {safeStepIndex === STEP.RUNTIME && <RuntimeContent onStatusChange={setRuntimeChecksPassed} />}
               {safeStepIndex === STEP.PROVIDER && (
@@ -1148,7 +1148,7 @@ export function ProviderContent({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-foreground">
       {/* Provider selector — dropdown */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -1172,9 +1172,7 @@ export function ProviderContent({
             aria-expanded={providerMenuOpen}
             onClick={() => setProviderMenuOpen((open) => !open)}
             className={cn(
-              'w-full rounded-md border border-input bg-background px-3 py-2 text-sm',
-              'flex items-center justify-between gap-2',
-              'focus:outline-none focus:ring-2 focus:ring-ring'
+              'modal-field-surface field-focus-ring surface-hover flex w-full items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm text-foreground shadow-sm transition-colors'
             )}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -1203,7 +1201,7 @@ export function ProviderContent({
           {providerMenuOpen && (
             <div
               role="listbox"
-              className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-md max-h-64 overflow-auto"
+              className="modal-card-surface absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-2xl border p-1 text-foreground shadow-xl"
             >
               {providerOptions.map((p) => {
                 const iconUrl = getProviderIconUrl(p.id);
@@ -1217,9 +1215,8 @@ export function ProviderContent({
                     aria-selected={isSelected}
                     onClick={() => handleSelectProvider(p.id)}
                     className={cn(
-                      'w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2',
-                      'hover:bg-accent transition-colors',
-                      isSelected && 'bg-accent/60'
+                      'surface-hover flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-foreground transition-colors',
+                      isSelected && 'surface-muted-strong'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -1279,10 +1276,10 @@ export function ProviderContent({
                     onConfiguredChange(false);
                   }}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
                     arkMode === 'apikey'
-                      ? 'bg-primary/10 border-primary/30 font-medium'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
+                      : 'surface-hover border-transparent text-muted-foreground'
                   )}
                 >
                   {t('settings:aiProviders.authModes.apiKey')}
@@ -1296,10 +1293,10 @@ export function ProviderContent({
                     onConfiguredChange(false);
                   }}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
                     arkMode === 'codeplan'
-                      ? 'bg-primary/10 border-primary/30 font-medium'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
+                      : 'surface-hover border-transparent text-muted-foreground'
                   )}
                 >
                   {t('provider.codePlanMode')}
@@ -1327,7 +1324,7 @@ export function ProviderContent({
                   onConfiguredChange(false);
                 }}
                 autoComplete="off"
-                className="bg-background border-input"
+                className="modal-field-surface field-focus-ring h-[44px] rounded-xl border font-mono text-[13px] shadow-sm"
               />
             </div>
           )}
@@ -1346,7 +1343,7 @@ export function ProviderContent({
                   onConfiguredChange(false);
                 }}
                 autoComplete="off"
-                className="bg-background border-input"
+                className="modal-field-surface field-focus-ring h-[44px] rounded-xl border font-mono text-[13px] shadow-sm"
               />
               <p className="text-xs text-muted-foreground">
                 {t('provider.modelIdDesc')}
@@ -1365,10 +1362,10 @@ export function ProviderContent({
                     onConfiguredChange(false);
                   }}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
                     apiProtocol === 'openai-completions'
-                      ? 'bg-primary/10 border-primary/30 font-medium'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
+                      : 'surface-hover border-transparent text-muted-foreground'
                   )}
                 >
                   {t('provider.protocols.openaiCompletions')}
@@ -1380,10 +1377,10 @@ export function ProviderContent({
                     onConfiguredChange(false);
                   }}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
                     apiProtocol === 'openai-responses'
-                      ? 'bg-primary/10 border-primary/30 font-medium'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
+                      : 'surface-hover border-transparent text-muted-foreground'
                   )}
                 >
                   {t('provider.protocols.openaiResponses')}
@@ -1395,10 +1392,10 @@ export function ProviderContent({
                     onConfiguredChange(false);
                   }}
                   className={cn(
-                    'flex-1 py-2 px-3 rounded-lg border transition-colors',
+                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
                     apiProtocol === 'anthropic-messages'
-                      ? 'bg-primary/10 border-primary/30 font-medium'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
+                      : 'surface-hover border-transparent text-muted-foreground'
                   )}
                 >
                   {t('provider.protocols.anthropic')}
@@ -1409,12 +1406,12 @@ export function ProviderContent({
 
           {/* Auth mode toggle for providers supporting both */}
           {isOAuth && supportsApiKey && (
-            <div className="flex rounded-lg border overflow-hidden text-sm">
+            <div className="modal-field-surface flex gap-1 rounded-xl border p-1 text-sm shadow-sm">
               <button
                 onClick={() => setAuthMode('oauth')}
                 className={cn(
-                  'flex-1 py-2 px-3 transition-colors',
-                  authMode === 'oauth' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                  'flex-1 rounded-lg py-2 px-3 transition-colors',
+                  authMode === 'oauth' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
                 )}
               >
                 {t('settings:aiProviders.oauth.loginMode')}
@@ -1422,8 +1419,8 @@ export function ProviderContent({
               <button
                 onClick={() => setAuthMode('apikey')}
                 className={cn(
-                  'flex-1 py-2 px-3 transition-colors',
-                  authMode === 'apikey' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'
+                  'flex-1 rounded-lg py-2 px-3 transition-colors',
+                  authMode === 'apikey' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
                 )}
               >
                 {t('settings:aiProviders.oauth.apikeyMode')}
@@ -1447,7 +1444,7 @@ export function ProviderContent({
                     setKeyValid(null);
                   }}
                   autoComplete="off"
-                  className="pr-10 bg-background border-input"
+                  className="modal-field-surface field-focus-ring h-[44px] rounded-xl border pr-10 font-mono text-[13px] shadow-sm"
                 />
                 <button
                   type="button"
@@ -1464,13 +1461,13 @@ export function ProviderContent({
           {useOAuthFlow && (
             <div className="space-y-4 pt-2">
               <div className="rounded-lg border border-info/20 bg-info/10 p-4 text-center">
-                <p className="text-info-foreground mb-3 block text-sm">
+                <p className="mb-3 block text-sm text-info">
                   This provider requires signing in via your browser.
                 </p>
                 <Button
                   onClick={handleStartOAuth}
                   disabled={oauthFlowing}
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="modal-primary-button w-full"
                 >
                   {oauthFlowing ? (
                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Waiting...</>
@@ -1482,43 +1479,44 @@ export function ProviderContent({
 
               {/* OAuth Active State Modal / Inline View */}
               {oauthFlowing && (
-                <div className="mt-4 p-4 border rounded-xl bg-card relative overflow-hidden">
+                <div className="modal-field-surface relative mt-4 overflow-hidden rounded-2xl border p-5 shadow-sm">
                   {/* Background pulse effect */}
                   <div className="absolute inset-0 bg-primary/5 animate-pulse" />
 
-                  <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="relative z-10 flex flex-col items-center justify-center space-y-4 text-center">
                     {oauthError ? (
-                      <div className="text-red-400 space-y-2">
+                      <div className="space-y-2 text-destructive">
                         <XCircle className="h-8 w-8 mx-auto" />
                         <p className="font-medium">Authentication Failed</p>
                         <p className="text-sm opacity-80">{oauthError}</p>
-                        <Button variant="outline" size="sm" onClick={handleCancelOAuth} className="mt-2">
+                        <Button variant="outline" size="sm" onClick={handleCancelOAuth} className="modal-secondary-button mt-2">
                           Try Again
                         </Button>
                       </div>
                     ) : !oauthData ? (
                       <div className="space-y-3 py-4">
                         <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-                        <p className="text-sm text-muted-foreground animate-pulse">Requesting secure login code...</p>
+                        <p className="animate-pulse text-sm text-muted-foreground">Requesting secure login code...</p>
                       </div>
                     ) : (
                       <div className="space-y-4 w-full">
                         <div className="space-y-1">
-                          <h3 className="font-medium text-lg">Approve Login</h3>
-                          <div className="text-sm text-muted-foreground text-left mt-2 space-y-1">
+                          <h3 className="text-lg font-medium text-foreground">Approve Login</h3>
+                          <div className="surface-muted mt-2 space-y-1 rounded-xl p-4 text-left text-sm text-muted-foreground">
                             <p>1. Copy the authorization code below.</p>
                             <p>2. Open the login page in your browser.</p>
                             <p>3. Paste the code to approve access.</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-center gap-2 p-3 bg-background border rounded-lg">
-                          <code className="text-2xl font-mono tracking-widest font-bold text-primary">
+                        <div className="modal-section-surface flex items-center justify-center gap-2 rounded-xl border p-4 shadow-inner">
+                          <code className="text-2xl font-mono font-bold tracking-widest text-foreground">
                             {oauthData.userCode}
                           </code>
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="surface-hover-strong h-10 w-10 rounded-full"
                             onClick={() => {
                               navigator.clipboard.writeText(oauthData.userCode);
                               toast.success('Code copied to clipboard');
@@ -1530,19 +1528,19 @@ export function ProviderContent({
 
                         <Button
                           variant="secondary"
-                          className="w-full"
+                          className="modal-secondary-button w-full"
                           onClick={() => invokeIpc('shell:openExternal', oauthData.verificationUri)}
                         >
                           <ExternalLink className="h-4 w-4 mr-2" />
                           Open Login Page
                         </Button>
 
-                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                        <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin text-info" />
                           <span>Waiting for approval in browser...</span>
                         </div>
 
-                        <Button variant="ghost" size="sm" className="w-full mt-2" onClick={handleCancelOAuth}>
+                        <Button variant="ghost" size="sm" className="modal-secondary-button mt-2 w-full" onClick={handleCancelOAuth}>
                           Cancel
                         </Button>
                       </div>
@@ -1557,7 +1555,7 @@ export function ProviderContent({
           <Button
             onClick={handleValidateAndSave}
             disabled={!canSubmit || validating}
-            className={cn("w-full", useOAuthFlow && "hidden")}
+            className={cn("modal-primary-button w-full", useOAuthFlow && "hidden")}
           >
             {validating ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -1566,7 +1564,7 @@ export function ProviderContent({
           </Button>
 
           {keyValid !== null && (
-            <p className={cn('text-sm text-center', keyValid ? 'text-green-400' : 'text-red-400')}>
+            <p className={cn('text-center text-sm', keyValid ? 'text-success' : 'text-destructive')}>
               {keyValid ? `✓ ${t('provider.valid')}` : `✗ ${t('provider.invalid')}`}
             </p>
           )}
@@ -1748,7 +1746,7 @@ function InstallingContent({ skills, onComplete, onSkip }: InstallingContentProp
       )}
 
       {!errorMessage && (
-        <p className="text-sm text-slate-400 text-center">
+        <p className="text-center text-sm text-muted-foreground">
           {t('installing.wait')}
         </p>
       )}
