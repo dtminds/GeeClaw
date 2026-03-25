@@ -314,6 +314,12 @@ own `node_modules/`.
 
 We welcome contributions from the community. For local setup, validation commands, and project guardrails, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Additional maintainer and contributor docs:
+
+- [SUPPORT.md](SUPPORT.md) for issue routing and support expectations
+- [SECURITY.md](SECURITY.md) for vulnerability reporting
+- [docs/release-checklist.md](docs/release-checklist.md) for release prep
+
 Quick expectations for pull requests:
 
 - Follow the existing code style enforced by ESLint and TypeScript.

@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest an improvement for GeeClaw
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea.
+
+        The most useful requests explain the user problem first, then the proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What user need, frustration, or workflow gap is this request trying to solve?
+      placeholder: I want to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you would like to see.
+      placeholder: GeeClaw could ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds, rejected ideas, or related tools/features
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Setup / onboarding
+        - Chat
+        - Agents
+        - Channels
+        - Skills
+        - Cron / automation
+        - Settings / providers
+        - Packaging / release
+        - Docs / contributor experience
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Mockups, references, screenshots, or implementation notes

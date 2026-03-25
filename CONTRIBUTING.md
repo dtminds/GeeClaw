@@ -34,3 +34,9 @@ When opening a PR, please include:
 - screenshots or recordings for UI changes when helpful
 
 If you are unsure where a change belongs, start with a draft PR or issue. That is completely fine and often the fastest way for us to help.
+
+## Support And Security
+
+- Read [SUPPORT.md](SUPPORT.md) for issue routing and support expectations.
+- Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
+- Use [docs/release-checklist.md](docs/release-checklist.md) when preparing a public release.

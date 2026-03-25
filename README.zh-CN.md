@@ -312,6 +312,12 @@ pnpm package:linux        # 为 Linux 打包
 
 欢迎社区贡献各种改进。关于本地开发、校验命令和项目边界约束，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+补充的维护与协作文档：
+
+- [SUPPORT.md](SUPPORT.md)：问题分流与支持预期
+- [SECURITY.md](SECURITY.md)：安全漏洞提交流程
+- [docs/release-checklist.md](docs/release-checklist.md)：发布前检查清单
+
 Pull Request 的基本预期：
 
 - 遵循当前由 ESLint 和 TypeScript 约束的代码风格。
