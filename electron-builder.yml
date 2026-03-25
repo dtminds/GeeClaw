@@ -69,6 +69,8 @@ releaseInfo:
 
 # macOS Configuration
 mac:
+  binaries:
+    - Contents/Resources/bin/node
   extraResources:
     - from: resources/bin/darwin-${arch}
       to: bin

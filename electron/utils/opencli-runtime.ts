@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { logger } from './logger';
 import { prependPathEntries } from './env-path';
-import { getBundledPathEntries, getManagedCommandWrapperPath } from './managed-bin';
+import { getBundledNodePath, getBundledPathEntries, getManagedCommandWrapperPath } from './managed-bin';
 
 const OPENCLI_RELEASES_URL = 'https://github.com/jackwener/opencli/releases';
 const OPENCLI_README_URL = 'https://github.com/jackwener/opencli/blob/main/README.zh-CN.md';
@@ -94,14 +94,6 @@ function readOpenCliVersion(runtimeDir: string): string | null {
   }
 }
 
-function getPackagedWindowsNodePath(): string | null {
-  if (process.platform !== 'win32' || !app.isPackaged) {
-    return null;
-  }
-  const nodePath = join(process.resourcesPath, 'bin', 'node.exe');
-  return existsSync(nodePath) ? nodePath : null;
-}
-
 function resolveExecutionSpec(): OpenCliExecutionSpec | null {
   const entryPath = getOpenCliEntryPath();
   if (!existsSync(entryPath)) {
@@ -117,9 +109,9 @@ function resolveExecutionSpec(): OpenCliExecutionSpec | null {
     env = prependPathEntries(env, getBundledPathEntries()).env as NodeJS.ProcessEnv;
   }
 
-  if (process.platform === 'win32') {
-    const bundledNode = getPackagedWindowsNodePath();
-    if (bundledNode) {
+  const bundledNode = getBundledNodePath();
+  if (bundledNode) {
+    if (process.platform === 'win32') {
       return {
         command: bundledNode,
         argsPrefix: [entryPath],
@@ -127,6 +119,17 @@ function resolveExecutionSpec(): OpenCliExecutionSpec | null {
         displayCommand: `& ${quoteForPowerShell(bundledNode)} ${quoteForPowerShell(entryPath)}`,
       };
     }
+
+    return {
+      command: bundledNode,
+      argsPrefix: [entryPath],
+      env,
+      displayCommand: `${quoteForPosix(bundledNode)} ${quoteForPosix(entryPath)}`,
+    };
+  }
+
+  if (app.isPackaged && process.platform !== 'win32') {
+    return null;
   }
 
   if (process.versions.electron) {
@@ -160,7 +163,9 @@ async function runOpenCliCommand(
     return {
       output: '',
       exitCode: null,
-      error: 'OpenCLI runtime entry not found',
+      error: existsSync(getOpenCliEntryPath())
+        ? 'Bundled Node.js runtime not found for OpenCLI'
+        : 'OpenCLI runtime entry not found',
       durationMs: 0,
     };
   }

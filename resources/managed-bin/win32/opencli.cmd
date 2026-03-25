@@ -17,20 +17,29 @@ set OPENCLI_EMBEDDED_IN=GeeClaw
 set "NODE_EXE=%~dp0..\bin\node.exe"
 set "OPENCLI_ENTRY=%~dp0..\opencli\dist\main.js"
 
-set "_USE_BUNDLED_NODE=0"
-if exist "%NODE_EXE%" (
-    "%NODE_EXE%" -e "const [maj,min]=process.versions.node.split('.').map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)" >nul 2>&1
-    if not errorlevel 1 set "_USE_BUNDLED_NODE=1"
+if not exist "%OPENCLI_ENTRY%" (
+    echo Error: bundled opencli entry not found at %OPENCLI_ENTRY%
+    set "_EXIT=1"
+    goto finish
 )
 
-if "%_USE_BUNDLED_NODE%"=="1" (
-    "%NODE_EXE%" "%OPENCLI_ENTRY%" %*
-) else (
-    set ELECTRON_RUN_AS_NODE=1
-    "%~dp0..\..\GeeClaw.exe" "%OPENCLI_ENTRY%" %*
+if not exist "%NODE_EXE%" (
+    echo Error: bundled Node.js runtime not found at %NODE_EXE%
+    set "_EXIT=1"
+    goto finish
 )
+
+"%NODE_EXE%" -e "const [maj,min]=process.versions.node.split('.').map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)" >nul 2>&1
+if errorlevel 1 (
+    echo Error: bundled Node.js runtime at %NODE_EXE% is too old or failed to start
+    set "_EXIT=1"
+    goto finish
+)
+
+"%NODE_EXE%" "%OPENCLI_ENTRY%" %*
 set _EXIT=%ERRORLEVEL%
 
+:finish
 if defined _CP chcp %_CP% >nul 2>&1
 
 endlocal & exit /b %_EXIT%
