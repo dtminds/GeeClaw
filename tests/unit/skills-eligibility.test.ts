@@ -43,7 +43,7 @@ describe('skills store eligibility mapping', () => {
     hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
-    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
 
     const { useSkillsStore } = await import('@/stores/skills');
     await useSkillsStore.getState().fetchSkills();
@@ -96,7 +96,7 @@ describe('skills store eligibility mapping', () => {
     hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
-    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'] });
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'], hiddenSkillKeys: [] });
 
     const { useSkillsStore } = await import('@/stores/skills');
     await useSkillsStore.getState().fetchSkills();
@@ -126,7 +126,7 @@ describe('skills store eligibility mapping', () => {
     hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
-    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'] });
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'], hiddenSkillKeys: [] });
 
     const { useSkillsStore } = await import('@/stores/skills');
     await useSkillsStore.getState().fetchSkills();
@@ -136,5 +136,50 @@ describe('skills store eligibility mapping', () => {
 
     await expect(useSkillsStore.getState().disableSkill('pdf')).rejects.toThrow('Cannot disable core skill');
     expect(rpcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks manifest-hidden skills so UI layers can suppress them by default', async () => {
+    rpcMock.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'geeclaw-openclaw',
+        name: 'GeeClaw OpenClaw',
+        description: 'Internal bootstrap skill',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+        source: 'openclaw-extra',
+      }, {
+        skillKey: 'visible-skill',
+        name: 'Visible Skill',
+        description: 'Visible skill',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+        source: 'openclaw-extra',
+      }],
+    });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
+    hostApiFetchMock.mockResolvedValueOnce({});
+    hostApiFetchMock.mockResolvedValueOnce({
+      alwaysEnabledSkillKeys: [],
+      hiddenSkillKeys: ['geeclaw-openclaw'],
+    });
+
+    const { useSkillsStore } = await import('@/stores/skills');
+    await useSkillsStore.getState().fetchSkills();
+
+    expect(useSkillsStore.getState().skills).toEqual([
+      expect.objectContaining({
+        id: 'geeclaw-openclaw',
+        hidden: true,
+      }),
+      expect.objectContaining({
+        id: 'visible-skill',
+        hidden: false,
+      }),
+    ]);
   });
 });

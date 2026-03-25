@@ -47,7 +47,15 @@ type SkillUninstallTarget = string | {
 
 type SkillPolicyResult = {
   alwaysEnabledSkillKeys?: string[];
+  hiddenSkillKeys?: string[];
 };
+
+function isHiddenSkill(skillKeys: Array<string | undefined>, hiddenSkillSet: Set<string>): boolean {
+  return skillKeys.some((value) => {
+    const normalized = value?.trim();
+    return Boolean(normalized && hiddenSkillSet.has(normalized));
+  });
+}
 
 function hasMissingRequirements(missing?: SkillMissingRequirements): boolean {
   if (!missing) return false;
@@ -149,6 +157,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       const configResult = await hostApiFetch<Record<string, { apiKey?: string; env?: Record<string, string> }>>('/api/skills/configs');
       const policyResult = await hostApiFetch<SkillPolicyResult>('/api/skills/policy');
       const alwaysEnabledSkillSet = new Set((policyResult.alwaysEnabledSkillKeys || []).filter(Boolean));
+      const hiddenSkillSet = new Set((policyResult.hiddenSkillKeys || []).filter(Boolean));
 
       let combinedSkills: Skill[] = [];
       const currentSkills = get().skills;
@@ -165,6 +174,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
             || (s.eligible === false && !s.disabled);
           const eligible = !unavailableForEnable;
           const isCore = (s.bundled && s.always) || alwaysEnabledSkillSet.has(s.skillKey);
+          const hidden = isHiddenSkill([s.skillKey, s.slug], hiddenSkillSet);
 
           return {
             id: s.skillKey,
@@ -184,6 +194,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
             },
             isCore,
             isBundled: s.bundled,
+            hidden,
             source: s.source,
             baseDir: s.baseDir,
             filePath: s.filePath,
@@ -213,6 +224,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
           }
           const directConfig = configResult[cs.slug] || {};
           const isCore = alwaysEnabledSkillSet.has(cs.slug);
+          const hidden = isHiddenSkill([cs.slug], hiddenSkillSet);
           combinedSkills.push({
             id: cs.slug,
             slug: cs.slug,
@@ -228,6 +240,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
             config: directConfig,
             isCore,
             isBundled: false,
+            hidden,
             source: cs.source || 'openclaw-managed',
             baseDir: cs.baseDir,
             missing: undefined,

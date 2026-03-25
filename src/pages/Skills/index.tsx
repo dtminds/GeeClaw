@@ -838,7 +838,8 @@ export function Skills() {
 
   // Filter skills
   const safeSkills = Array.isArray(skills) ? skills : [];
-  const filteredSkills = safeSkills.filter((skill) => {
+  const visibleSkills = safeSkills.filter((skill) => skill.hidden !== true);
+  const filteredSkills = visibleSkills.filter((skill) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       query.length === 0 ||
@@ -862,17 +863,17 @@ export function Skills() {
   });
 
   const sourceStats = {
-    all: skills.length,
-    enabled: skills.filter((skill) => skill.enabled).length,
-    bundled: skills.filter((skill) => getInstalledSkillFilter(skill) === 'bundled').length,
-    openclawExtra: skills.filter((skill) => getInstalledSkillFilter(skill) === 'openclaw-extra').length,
-    openclawManaged: skills.filter((skill) => getInstalledSkillFilter(skill) === 'openclaw-managed').length,
-    personal: skills.filter((skill) => getInstalledSkillFilter(skill) === 'personal').length,
+    all: visibleSkills.length,
+    enabled: visibleSkills.filter((skill) => skill.enabled).length,
+    bundled: visibleSkills.filter((skill) => getInstalledSkillFilter(skill) === 'bundled').length,
+    openclawExtra: visibleSkills.filter((skill) => getInstalledSkillFilter(skill) === 'openclaw-extra').length,
+    openclawManaged: visibleSkills.filter((skill) => getInstalledSkillFilter(skill) === 'openclaw-managed').length,
+    personal: visibleSkills.filter((skill) => getInstalledSkillFilter(skill) === 'personal').length,
   };
 
   const installedFilters: Array<{ key: InstalledSkillFilter; label: string; count: number }> = [
-    { key: 'enabled', label: t('filter.enabled'), count: sourceStats.enabled },
     { key: 'all', label: t('filter.all'), count: sourceStats.all },
+    { key: 'enabled', label: t('filter.enabled'), count: sourceStats.enabled },
     { key: 'bundled', label: t('filter.builtIn'), count: sourceStats.bundled },
     { key: 'openclaw-extra', label: t('filter.openclawExtra'), count: sourceStats.openclawExtra },
     { key: 'openclaw-managed', label: t('filter.openclawManaged'), count: sourceStats.openclawManaged },

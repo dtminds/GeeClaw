@@ -6,7 +6,8 @@
       "repoPath": "geeclaw-openclaw",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": true,
+      "hidden": true
     },
     {
       "slug": "geeclaw-env",
@@ -14,7 +15,8 @@
       "repoPath": "geeclaw-env",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": true,
+      "hidden": true
     },
     {
       "slug": "content-factory",

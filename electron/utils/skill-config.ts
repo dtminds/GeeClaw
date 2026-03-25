@@ -37,6 +37,7 @@ interface PreinstalledSkillSpec {
     slug: string;
     version?: string;
     autoEnable?: boolean;
+    hidden?: boolean;
 }
 
 interface PreinstalledManifest {
@@ -460,6 +461,15 @@ async function readPreinstalledManifest(): Promise<PreinstalledSkillSpec[]> {
         logger.warn('Failed to read preinstalled-skills manifest:', error);
         return [];
     }
+}
+
+export async function getHiddenPreinstalledSkillKeys(): Promise<string[]> {
+    const skills = await readPreinstalledManifest();
+    return Array.from(new Set(
+        skills
+            .filter((skill) => skill.hidden === true && typeof skill.slug === 'string' && skill.slug.trim().length > 0)
+            .map((skill) => skill.slug.trim()),
+    ));
 }
 
 function resolvePreinstalledSkillsSourceRoot(): string | null {

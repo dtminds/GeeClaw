@@ -33,6 +33,7 @@ export interface Skill {
   config?: Record<string, unknown>;
   isCore?: boolean;
   isBundled?: boolean;
+  hidden?: boolean;
   dependencies?: string[];
   missing?: SkillMissingRequirements;
 }

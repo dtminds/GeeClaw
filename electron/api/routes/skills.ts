@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import {
   ensureSkillEntriesDefaultDisabled,
   getAllSkillConfigs,
+  getHiddenPreinstalledSkillKeys,
   updateSkillConfig,
 } from '../../utils/skill-config';
 import { getAlwaysEnabledSkillKeys } from '../../utils/skills-policy';
@@ -57,7 +58,10 @@ export async function handleSkillRoutes(
   }
 
   if (url.pathname === '/api/skills/policy' && req.method === 'GET') {
-    sendJson(res, 200, { alwaysEnabledSkillKeys: getAlwaysEnabledSkillKeys() });
+    sendJson(res, 200, {
+      alwaysEnabledSkillKeys: getAlwaysEnabledSkillKeys(),
+      hiddenSkillKeys: await getHiddenPreinstalledSkillKeys(),
+    });
     return true;
   }
 
