@@ -1,6 +1,110 @@
 {
   "skills": [
     {
+      "slug": "geeclaw-openclaw",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "geeclaw-openclaw",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "geeclaw-env",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "geeclaw-env",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "content-factory",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "content-factory",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "email-skill",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "email-skill",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "file-skill",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "file-skill",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "goal-tracker",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "goal-tracker",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "habit-tracker",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "habit-tracker",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "idea-validator",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "idea-validator",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "market-researcher",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "market-researcher",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "movie-advisor",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "movie-advisor",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "travel-planner",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "travel-planner",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "video-script",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "video-script",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "content-repurposer",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "content-repurposer",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
       "slug": "pdf",
       "repo": "anthropics/skills",
       "repoPath": "skills/pdf",
@@ -70,7 +174,7 @@
       "repoPath": "./",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "bilibili-cli",
@@ -78,7 +182,7 @@
       "repoPath": "./",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "schedule-skill",

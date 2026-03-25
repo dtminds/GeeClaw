@@ -21,6 +21,8 @@ export const ALWAYS_ENABLED_SKILL_KEYS = [
   'nano-pdf',
   'skill-creator',
   'summarize',
+  'geeclaw-env',
+  'geeclaw-openclaw',
 ] as const;
 
 const ALWAYS_ENABLED_SKILL_SET = new Set<string>(ALWAYS_ENABLED_SKILL_KEYS);

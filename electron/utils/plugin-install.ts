@@ -25,9 +25,10 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
   { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
   { pluginId: 'qmemory', npmName: 'qmemory', displayName: 'QMemory' },
+  { pluginId: 'cron-delivery-guard', npmName: 'cron-delivery-guard', displayName: 'Cron 投递降级守卫' },
 ];
 
-export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'qmemory'] as const;
+export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'qmemory', 'cron-delivery-guard'] as const;
 
 const ALWAYS_ENABLED_BUNDLED_PLUGIN_POLICIES: Record<string, {
   allowedConfigKeys?: string[];
