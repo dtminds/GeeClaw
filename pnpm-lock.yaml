@@ -80,8 +80,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@larksuite/openclaw-lark':
-        specifier: 2026.3.25
-        version: 2026.3.25(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))
+        specifier: 2026.3.18
+        version: 2026.3.18
       '@martian-engineering/lossless-claw':
         specifier: 0.4.0
         version: 0.4.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(openclaw@2026.3.13(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3)))(ws@8.19.0)(zod@4.3.6)
@@ -1314,8 +1314,8 @@ packages:
   '@kwsites/promise-deferred@1.1.1':
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
 
-  '@larksuite/openclaw-lark@2026.3.25':
-    resolution: {integrity: sha512-SkNm0vuBLL58FFIVaDZ4vmdgTYXPfnfAy1vP2h+j0jnw5V+VSTj6IEKUq1oFmfyw7fIztUw/5GaM/quuMuRjog==}
+  '@larksuite/openclaw-lark@2026.3.18':
+    resolution: {integrity: sha512-9qqO0a1HQ+2E9jvob/13jf1ZDfe39vzr7SgYFgtNc/ajv+jFaC7sweONyPZbiQ22CF+lIWb4FvSve74ev0Irnw==}
     hasBin: true
 
   '@larksuiteoapi/node-sdk@1.59.0':
@@ -9669,30 +9669,15 @@ snapshots:
   '@kwsites/promise-deferred@1.1.1':
     optional: true
 
-  '@larksuite/openclaw-lark@2026.3.25(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))':
+  '@larksuite/openclaw-lark@2026.3.18':
     dependencies:
       '@larksuiteoapi/node-sdk': 1.59.0
       '@sinclair/typebox': 0.34.48
       image-size: 2.0.2
-      openclaw: 2026.3.13(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))
       zod: 4.3.6
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - '@discordjs/opus'
-      - '@napi-rs/canvas'
-      - '@types/express'
-      - audio-decode
-      - aws-crt
       - bufferutil
-      - canvas
       - debug
-      - encoding
-      - ffmpeg-static
-      - jimp
-      - link-preview-js
-      - node-llama-cpp
-      - node-opus
-      - supports-color
       - utf-8-validate
 
   '@larksuiteoapi/node-sdk@1.59.0':
