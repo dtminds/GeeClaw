@@ -231,6 +231,15 @@ export async function ensureSkillEntriesDefaultDisabled(
 ): Promise<{ success: boolean; added: string[]; normalizedAlwaysEnabled: string[]; error?: string }> {
     try {
         const ignoredSources = new Set(['openclaw-managed', 'openclaw-workspace']);
+        const preinstalledSkills = await readPreinstalledManifest();
+        // `autoEnable` only affects the first-discovery default-disable pass for
+        // preinstalled skills loaded from openclaw-extra. It must not override
+        // explicit user toggles restored from settings or policy-enforced skills.
+        const autoEnabledPreinstalledSkillKeys = new Set(
+            preinstalledSkills
+                .filter((skill) => skill.autoEnable === true && typeof skill.slug === 'string' && skill.slug.trim().length > 0)
+                .map((skill) => skill.slug.trim()),
+        );
         const explicitToggles = await getExplicitSkillToggles();
         const explicitEnabledSkillKeys = new Set(explicitToggles.enabledSkills);
         const normalizedSkills = discoveredSkills
@@ -279,6 +288,10 @@ export async function ensureSkillEntriesDefaultDisabled(
                 }
 
                 if (source && ignoredSources.has(source)) {
+                    continue;
+                }
+
+                if (source === 'openclaw-extra' && autoEnabledPreinstalledSkillKeys.has(skillKey)) {
                     continue;
                 }
 

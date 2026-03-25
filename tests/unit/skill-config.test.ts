@@ -25,6 +25,14 @@ describe('skill config sync', () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
     tempDirs.push(homeDir);
     vi.resetModules();
+    const resourcesDir = join(homeDir, 'resources');
+    mkdirSync(join(resourcesDir, 'skills'), { recursive: true });
+    writeFileSync(join(resourcesDir, 'skills', 'preinstalled-manifest.json'), JSON.stringify({
+      skills: [
+        { slug: 'auto-enabled-extra-skill', autoEnable: true },
+        { slug: 'extra-skill', autoEnable: false },
+      ],
+    }, null, 2), 'utf8');
 
     vi.doMock('electron', () => ({
       app: {
@@ -48,6 +56,7 @@ describe('skill config sync', () => {
       return {
         ...actual,
         getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+        getResourcesDir: () => resourcesDir,
       };
     });
 
@@ -100,6 +109,7 @@ describe('skill config sync', () => {
       'new-skill',
       'policy-skill',
       { skillKey: 'managed-skill', source: 'openclaw-managed' },
+      { skillKey: 'auto-enabled-extra-skill', source: 'openclaw-extra' },
       { skillKey: 'extra-skill', source: 'openclaw-extra' },
       { skillKey: 'untoggled-personal-skill', source: 'agents-skills-personal' },
       { skillKey: 'enabled-personal-skill', source: 'agents-skills-personal' },
@@ -141,6 +151,7 @@ describe('skill config sync', () => {
     expect(config.skills?.entries?.['enabled-personal-skill']).toBeUndefined();
     expect(config.skills?.entries?.['policy-skill']).toBeUndefined();
     expect(config.skills?.entries?.['managed-skill']).toBeUndefined();
+    expect(config.skills?.entries?.['auto-enabled-extra-skill']).toBeUndefined();
     expect(config.skills?.entries?.['extra-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['personal-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['project-skill']?.enabled).toBe(false);
