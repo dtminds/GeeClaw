@@ -1,5 +1,9 @@
 @echo off
 setlocal
+set "STATE_DIR=%USERPROFILE%\.openclaw-geeclaw"
+set "CONFIG_PATH=%STATE_DIR%\openclaw.json"
+set "PROFILE_NAME=geeclaw"
+set "PROFILE_VALUE="
 
 if /i "%1"=="update" (
     echo openclaw is managed by GeeClaw ^(bundled version^).
@@ -15,7 +19,16 @@ rem on non-English Windows (e.g. Chinese CP936). Save the previous codepage to r
 for /f "tokens=2 delims=:." %%a in ('chcp') do set /a "_CP=%%a" 2>nul
 chcp 65001 >nul 2>&1
 
+call :inspect_profile %*
+if defined PROFILE_VALUE if /i not "%PROFILE_VALUE%"=="%PROFILE_NAME%" (
+    echo Error: GeeClaw wrapper only supports --profile %PROFILE_NAME% ^(got: %PROFILE_VALUE%^)
+    set "_EXIT=1"
+    goto finish
+)
+
 set OPENCLAW_EMBEDDED_IN=GeeClaw
+set "OPENCLAW_STATE_DIR=%STATE_DIR%"
+set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"
 set "NODE_EXE=%~dp0..\bin\node.exe"
 set "OPENCLAW_ENTRY=%~dp0..\openclaw\openclaw.mjs"
 
@@ -26,13 +39,39 @@ if exist "%NODE_EXE%" (
 )
 
 if "%_USE_BUNDLED_NODE%"=="1" (
-    "%NODE_EXE%" "%OPENCLAW_ENTRY%" %*
+    if defined PROFILE_VALUE (
+        "%NODE_EXE%" "%OPENCLAW_ENTRY%" %*
+    ) else (
+        "%NODE_EXE%" "%OPENCLAW_ENTRY%" --profile "%PROFILE_NAME%" %*
+    )
 ) else (
     set ELECTRON_RUN_AS_NODE=1
-    "%~dp0..\..\GeeClaw.exe" "%OPENCLAW_ENTRY%" %*
+    if defined PROFILE_VALUE (
+        "%~dp0..\..\GeeClaw.exe" "%OPENCLAW_ENTRY%" %*
+    ) else (
+        "%~dp0..\..\GeeClaw.exe" "%OPENCLAW_ENTRY%" --profile "%PROFILE_NAME%" %*
+    )
 )
 set _EXIT=%ERRORLEVEL%
 
+goto finish
+
+:inspect_profile
+if "%~1"=="" goto :eof
+if /i "%~1"=="--profile" (
+    set "PROFILE_VALUE=%~2"
+    goto :eof
+)
+set "ARG=%~1"
+setlocal enabledelayedexpansion
+if /i "!ARG:~0,10!"=="--profile=" (
+    endlocal & set "PROFILE_VALUE=%ARG:~10%" & goto :eof
+)
+endlocal
+shift
+goto inspect_profile
+
+:finish
 if defined _CP chcp %_CP% >nul 2>&1
 
 endlocal & exit /b %_EXIT%

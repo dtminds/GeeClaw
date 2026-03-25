@@ -164,6 +164,7 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - 保存代理设置后，Electron 网络层会立即重新应用代理，并自动重启 Gateway。
 - 如果启用了 Telegram，GeeClaw 还会把代理同步到 OpenClaw 的 Telegram 频道配置中。
 - 在 Windows 打包版本中，内置的 `openclaw` CLI/TUI 会通过随包分发的 `node.exe` 入口运行，以保证终端输入行为稳定。
+- GeeClaw 提供的 `openclaw` wrapper 还会固定 `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`、`OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`，并在未显式传入时自动补上 `--profile geeclaw`，确保终端里的行为与应用内托管运行时一致。
 
 ### OpenCLI Browser Bridge 检查
 

@@ -37,6 +37,7 @@ interface PreinstalledSkillSpec {
     slug: string;
     version?: string;
     autoEnable?: boolean;
+    hidden?: boolean;
 }
 
 interface PreinstalledManifest {
@@ -230,7 +231,16 @@ export async function ensureSkillEntriesDefaultDisabled(
     discoveredSkills: Array<string | DiscoveredSkillDescriptor>,
 ): Promise<{ success: boolean; added: string[]; normalizedAlwaysEnabled: string[]; error?: string }> {
     try {
-        const ignoredSources = new Set(['openclaw-managed', 'openclaw-extra', 'openclaw-workspace']);
+        const ignoredSources = new Set(['openclaw-managed', 'openclaw-workspace']);
+        const preinstalledSkills = await readPreinstalledManifest();
+        // `autoEnable` only affects the first-discovery default-disable pass for
+        // preinstalled skills loaded from openclaw-extra. It must not override
+        // explicit user toggles restored from settings or policy-enforced skills.
+        const autoEnabledPreinstalledSkillKeys = new Set(
+            preinstalledSkills
+                .filter((skill) => skill.autoEnable === true && typeof skill.slug === 'string' && skill.slug.trim().length > 0)
+                .map((skill) => skill.slug.trim()),
+        );
         const explicitToggles = await getExplicitSkillToggles();
         const explicitEnabledSkillKeys = new Set(explicitToggles.enabledSkills);
         const normalizedSkills = discoveredSkills
@@ -279,6 +289,10 @@ export async function ensureSkillEntriesDefaultDisabled(
                 }
 
                 if (source && ignoredSources.has(source)) {
+                    continue;
+                }
+
+                if (source === 'openclaw-extra' && autoEnabledPreinstalledSkillKeys.has(skillKey)) {
                     continue;
                 }
 
@@ -447,6 +461,15 @@ async function readPreinstalledManifest(): Promise<PreinstalledSkillSpec[]> {
         logger.warn('Failed to read preinstalled-skills manifest:', error);
         return [];
     }
+}
+
+export async function getHiddenPreinstalledSkillKeys(): Promise<string[]> {
+    const skills = await readPreinstalledManifest();
+    return Array.from(new Set(
+        skills
+            .filter((skill) => skill.hidden === true && typeof skill.slug === 'string' && skill.slug.trim().length > 0)
+            .map((skill) => skill.slug.trim()),
+    ));
 }
 
 function resolvePreinstalledSkillsSourceRoot(): string | null {

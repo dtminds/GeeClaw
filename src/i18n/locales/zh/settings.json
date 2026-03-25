@@ -439,7 +439,7 @@
     "tokenUnavailable": "令牌不可用",
     "tokenCopied": "网关令牌已复制",
     "cli": "OpenClaw CLI",
-    "cliDesc": "复制命令以运行 GeeClaw 内置 OpenClaw，无需修改 PATH。",
+    "cliDesc": "复制命令以 geeclaw 托管 profile 运行 GeeClaw 内置 OpenClaw，无需修改 PATH。",
     "cliPowershell": "PowerShell 命令。",
     "cmdUnavailable": "命令不可用",
     "cmdCopied": "CLI 命令已复制",

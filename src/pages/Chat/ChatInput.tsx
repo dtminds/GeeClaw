@@ -855,11 +855,16 @@ export const ChatInput = memo(function ChatInput({
     [agents, currentAgentId],
   );
 
-  const availableSkills = useMemo(
+  const resolvableSkills = useMemo(
     () => [...skills]
       .filter((skill) => skill.eligible !== false)
       .sort((a, b) => a.name.localeCompare(b.name)),
     [skills],
+  );
+
+  const availableSkills = useMemo(
+    () => resolvableSkills.filter((skill) => skill.hidden !== true),
+    [resolvableSkills],
   );
 
   const availableSlashItems = useMemo<SlashPickerItem[]>(
@@ -872,8 +877,8 @@ export const ChatInput = memo(function ChatInput({
   }, [availableSlashItems]);
 
   useEffect(() => {
-    availableSkillsRef.current = availableSkills;
-  }, [availableSkills]);
+    availableSkillsRef.current = resolvableSkills;
+  }, [resolvableSkills]);
 
   const typedMentionQuery = useMemo(
     () => (targetAgentId ? null : extractLeadingAgentMentionQuery(editorText)),
@@ -1423,7 +1428,7 @@ export const ChatInput = memo(function ChatInput({
       return;
     }
 
-    editor.commands.setContent(createComposerDocumentFromPlainText(pendingComposerSeed.text, availableSkills));
+    editor.commands.setContent(createComposerDocumentFromPlainText(pendingComposerSeed.text, resolvableSkills));
     setAttachments([]);
     setTargetAgentIdState(null);
     setSkillPickerDismissedState(false);
@@ -1434,7 +1439,7 @@ export const ChatInput = memo(function ChatInput({
   }, [
     consumePendingComposerSeed,
     editor,
-    availableSkills,
+    resolvableSkills,
     pendingComposerSeed,
     setHighlightedSkillIndexState,
     setSkillPickerDismissedState,
