@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
 
@@ -34,6 +35,8 @@ interface SessionStoreState {
   isInitialized: boolean;
   init: () => Promise<void>;
   loginWithWechat: () => Promise<void>;
+  submitInviteCode: (inviteCode: string) => Promise<void>;
+  skipInviteCode: () => Promise<void>;
   logout: () => Promise<void>;
   // Compatibility methods
   loginMock: () => Promise<void>;
@@ -71,6 +74,29 @@ function toUserFacingAuthMessage(error: unknown): string {
   const statusMatch = raw.match(/\((\d{3})\)/);
   const code = statusMatch?.[1] || 'unknown';
   return `登录失败（${code}），请稍后重试`;
+}
+
+function toUserFacingInviteCodeMessage(error: unknown): string {
+  const raw = toErrorMessage(error);
+  const normalized = raw.toLowerCase();
+  if (
+    normalized.includes('no active session')
+    || normalized.includes('invite session expired')
+    || normalized.includes('unauthorized')
+    || normalized.includes('(401)')
+  ) {
+    return i18n.t('setup:startup.needsInvite.errors.sessionExpired');
+  }
+  if (normalized.includes('invite code is required')) {
+    return i18n.t('setup:startup.needsInvite.errors.required');
+  }
+  if (normalized.includes('invalid invite code')) {
+    return i18n.t('setup:startup.needsInvite.errors.invalid');
+  }
+  if (raw.trim() && !normalized.startsWith('invite bind request failed') && raw !== 'Unknown session error') {
+    return raw;
+  }
+  return i18n.t('setup:startup.needsInvite.errors.generic');
 }
 
 function isLoginCanceledError(error: unknown): boolean {
@@ -138,6 +164,57 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  submitInviteCode: async (inviteCode) => {
+    const previous = get();
+    try {
+      console.info('[SessionStore(Renderer)] submitInviteCode -> requesting /api/session/invite-code');
+      const raw = await hostApiFetch<unknown>('/api/session/invite-code', {
+        method: 'POST',
+        body: JSON.stringify({ inviteCode }),
+      });
+      const session = parseSessionResponse(raw);
+      console.info('[SessionStore(Renderer)] submitInviteCode <-', {
+        status: session.status,
+        accountId: session.account?.id || null,
+        userStatus: session.account?.userStatus ?? null,
+      });
+      set({
+        status: session.status,
+        account: session.account,
+        isInitialized: true,
+      });
+    } catch (error) {
+      const message = toErrorMessage(error);
+      console.error('[SessionStore(Renderer)] submitInviteCode failed:', message);
+      await showAuthFailureNotice(toUserFacingInviteCodeMessage(error));
+      set({
+        status: previous.status,
+        account: previous.account,
+        isInitialized: true,
+      });
+      throw error;
+    }
+  },
+
+  skipInviteCode: async () => {
+    const current = get();
+    if (current.status !== 'authenticated' || !current.account) {
+      const error = new Error('No active session');
+      await showAuthFailureNotice(toUserFacingInviteCodeMessage(error));
+      throw error;
+    }
+
+    console.info('[SessionStore(Renderer)] skipInviteCode -> setting userStatus=1 locally');
+    set({
+      status: 'authenticated',
+      account: {
+        ...current.account,
+        userStatus: 1,
+      },
+      isInitialized: true,
+    });
   },
 
   logout: async () => {

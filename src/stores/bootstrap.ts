@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
-import { useSessionStore } from '@/stores/session';
+import { useSessionStore, type SessionAccount } from '@/stores/session';
 
 export type BootstrapPhase =
   | 'idle'
   | 'checking_session'
   | 'needs_login'
+  | 'needs_invite_code'
   | 'preparing'
   | 'needs_provider'
   | 'ready'
@@ -18,6 +19,8 @@ interface BootstrapStoreState {
   error: string | null;
   init: () => Promise<void>;
   loginAndContinue: () => Promise<void>;
+  submitInviteCodeAndContinue: (inviteCode: string) => Promise<void>;
+  skipInviteCodeAndContinue: () => Promise<void>;
   logoutToLogin: () => Promise<void>;
   continueAfterProvider: () => Promise<void>;
   retry: () => Promise<void>;
@@ -29,6 +32,10 @@ const GATEWAY_READY_TIMEOUT_MS = 45000;
 function isLoginCanceledError(error: unknown): boolean {
   const message = String(error).toLowerCase();
   return message.includes('login window was closed before completing wechat authentication');
+}
+
+function requiresInviteCode(account: SessionAccount | null | undefined): boolean {
+  return account?.userStatus === 0;
 }
 
 async function waitForGatewayRunning(timeoutMs = GATEWAY_READY_TIMEOUT_MS): Promise<void> {
@@ -128,6 +135,18 @@ async function continueBootstrap(set: (patch: Partial<BootstrapStoreState>) => v
   set({ phase: 'ready', error: null });
 }
 
+async function continueFromAuthenticatedSession(
+  set: (patch: Partial<BootstrapStoreState>) => void,
+): Promise<void> {
+  const session = useSessionStore.getState();
+  if (requiresInviteCode(session.account)) {
+    set({ phase: 'needs_invite_code', error: null });
+    return;
+  }
+
+  await continueBootstrap(set);
+}
+
 export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
   phase: 'idle',
   error: null,
@@ -152,7 +171,7 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
           set({ phase: 'needs_login', error: null });
           return;
         }
-        await continueBootstrap(set);
+        await continueFromAuthenticatedSession(set);
       } catch (error) {
         set({ phase: 'error', error: String(error) });
       } finally {
@@ -167,11 +186,47 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
     try {
       set({ phase: 'checking_session', error: null });
       await useSessionStore.getState().loginWithWechat();
-      await continueBootstrap(set);
+      await continueFromAuthenticatedSession(set);
     } catch (error) {
       const session = useSessionStore.getState();
       if (isLoginCanceledError(error) || session.status !== 'authenticated') {
         set({ phase: 'needs_login', error: null });
+        return;
+      }
+      set({ phase: 'error', error: String(error) });
+    }
+  },
+
+  submitInviteCodeAndContinue: async (inviteCode) => {
+    try {
+      await useSessionStore.getState().submitInviteCode(inviteCode);
+      await continueFromAuthenticatedSession(set);
+    } catch (error) {
+      const session = useSessionStore.getState();
+      if (session.status !== 'authenticated') {
+        set({ phase: 'needs_login', error: null });
+        return;
+      }
+      if (requiresInviteCode(session.account)) {
+        set({ phase: 'needs_invite_code', error: null });
+        return;
+      }
+      set({ phase: 'error', error: String(error) });
+    }
+  },
+
+  skipInviteCodeAndContinue: async () => {
+    try {
+      await useSessionStore.getState().skipInviteCode();
+      await continueFromAuthenticatedSession(set);
+    } catch (error) {
+      const session = useSessionStore.getState();
+      if (session.status !== 'authenticated') {
+        set({ phase: 'needs_login', error: null });
+        return;
+      }
+      if (requiresInviteCode(session.account)) {
+        set({ phase: 'needs_invite_code', error: null });
         return;
       }
       set({ phase: 'error', error: String(error) });
