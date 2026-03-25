@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.9.3-test.2",
+    "version": "0.9.3-test.3",
     "description": "GeeClaw - Graphical AI Assistant based on OpenClaw",
     "keywords": [
         "electron",
@@ -68,7 +68,7 @@
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win",
         "icons": "zx scripts/generate-icons.mjs",
         "package": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-opencli.mjs && zx scripts/bundle-mcporter.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
-        "package:mac": "pnpm run prep:mac-binaries && pnpm run package && electron-builder --mac --arm64 --dir --publish never",
+        "package:mac": "pnpm run prep:mac-binaries && pnpm run package && electron-builder --mac --publish never",
         "package:win": "pnpm run prep:win-binaries && pnpm run package && electron-builder --win --publish never",
         "package:linux": "pnpm run package && electron-builder --linux --publish never",
         "package:mac:dir": "pnpm run prep:mac-binaries && pnpm run package && electron-builder --mac --arm64 --dir --config.mac.identity=null",
