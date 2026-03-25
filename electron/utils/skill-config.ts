@@ -230,7 +230,7 @@ export async function ensureSkillEntriesDefaultDisabled(
     discoveredSkills: Array<string | DiscoveredSkillDescriptor>,
 ): Promise<{ success: boolean; added: string[]; normalizedAlwaysEnabled: string[]; error?: string }> {
     try {
-        const ignoredSources = new Set(['openclaw-managed', 'openclaw-extra', 'openclaw-workspace']);
+        const ignoredSources = new Set(['openclaw-managed', 'openclaw-workspace']);
         const explicitToggles = await getExplicitSkillToggles();
         const explicitEnabledSkillKeys = new Set(explicitToggles.enabledSkills);
         const normalizedSkills = discoveredSkills

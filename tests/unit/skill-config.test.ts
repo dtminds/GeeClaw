@@ -129,7 +129,7 @@ describe('skill config sync', () => {
     });
     expect(result).toEqual({
       success: true,
-      added: ['new-skill', 'untoggled-personal-skill', 'personal-skill', 'project-skill'],
+      added: ['new-skill', 'extra-skill', 'untoggled-personal-skill', 'personal-skill', 'project-skill'],
       normalizedAlwaysEnabled: [],
     });
     expect(config.agents?.defaults?.workspace).toBe('/managed/workspace');
@@ -141,7 +141,7 @@ describe('skill config sync', () => {
     expect(config.skills?.entries?.['enabled-personal-skill']).toBeUndefined();
     expect(config.skills?.entries?.['policy-skill']).toBeUndefined();
     expect(config.skills?.entries?.['managed-skill']).toBeUndefined();
-    expect(config.skills?.entries?.['extra-skill']).toBeUndefined();
+    expect(config.skills?.entries?.['extra-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['personal-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['project-skill']?.enabled).toBe(false);
     expect(config.commands?.restart).toBe(true);
