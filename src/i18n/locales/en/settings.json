@@ -439,7 +439,7 @@
     "tokenUnavailable": "Token unavailable",
     "tokenCopied": "Gateway token copied",
     "cli": "OpenClaw CLI",
-    "cliDesc": "Copy a command that runs GeeClaw's bundled OpenClaw without modifying PATH.",
+    "cliDesc": "Copy a command that runs GeeClaw's bundled OpenClaw with the managed geeclaw profile, without modifying PATH.",
     "cliPowershell": "PowerShell command.",
     "cmdUnavailable": "Command unavailable",
     "cmdCopied": "CLI command copied",

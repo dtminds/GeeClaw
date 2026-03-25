@@ -22,6 +22,9 @@ bin_arch() {
 }
 
 PATH_PREFIX="$SCRIPT_DIR"
+STATE_DIR="${HOME}/.openclaw-geeclaw"
+CONFIG_PATH="${STATE_DIR}/openclaw.json"
+PROFILE_NAME="geeclaw"
 
 if [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
   CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
@@ -75,6 +78,37 @@ case "$1" in
     ;;
 esac
 
+PROFILE_ARG=""
+PREV_WAS_PROFILE=0
+for arg in "$@"; do
+  if [ "$PREV_WAS_PROFILE" -eq 1 ]; then
+    PROFILE_ARG="$arg"
+    PREV_WAS_PROFILE=0
+    continue
+  fi
+
+  case "$arg" in
+    --profile)
+      PREV_WAS_PROFILE=1
+      ;;
+    --profile=*)
+      PROFILE_ARG="${arg#--profile=}"
+      ;;
+  esac
+done
+
+if [ -n "$PROFILE_ARG" ] && [ "$PROFILE_ARG" != "$PROFILE_NAME" ]; then
+  echo "Error: GeeClaw wrapper only supports --profile $PROFILE_NAME (got: $PROFILE_ARG)" >&2
+  exit 1
+fi
+
 export OPENCLAW_EMBEDDED_IN="GeeClaw"
+export OPENCLAW_STATE_DIR="$STATE_DIR"
+export OPENCLAW_CONFIG_PATH="$CONFIG_PATH"
 export PATH="$PATH_PREFIX${PATH:+:$PATH}"
-ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+
+if [ -n "$PROFILE_ARG" ]; then
+  ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+fi
+
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" --profile "$PROFILE_NAME" "$@"

@@ -166,6 +166,7 @@ Notes:
 - Saving proxy settings reapplies Electron networking immediately and restarts the Gateway automatically.
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
 - On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
+- The managed `openclaw` wrappers also pin `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`, `OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`, and default to `--profile geeclaw` so terminal usage matches GeeClaw's managed runtime.
 
 ### OpenCLI Browser Bridge Check
 

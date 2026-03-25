@@ -14,13 +14,47 @@ case "$1" in
 esac
 
 export OPENCLAW_EMBEDDED_IN="GeeClaw"
+export OPENCLAW_STATE_DIR="${USERPROFILE:-$HOME}/.openclaw-geeclaw"
+export OPENCLAW_CONFIG_PATH="${OPENCLAW_STATE_DIR}/openclaw.json"
 NODE_EXE="$INSTALL_DIR/resources/bin/node.exe"
 OPENCLAW_ENTRY="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
+PROFILE_NAME="geeclaw"
+PROFILE_ARG=""
+PREV_WAS_PROFILE=0
+
+for arg in "$@"; do
+  if [ "$PREV_WAS_PROFILE" -eq 1 ]; then
+    PROFILE_ARG="$arg"
+    PREV_WAS_PROFILE=0
+    continue
+  fi
+
+  case "$arg" in
+    --profile)
+      PREV_WAS_PROFILE=1
+      ;;
+    --profile=*)
+      PROFILE_ARG="${arg#--profile=}"
+      ;;
+  esac
+done
+
+if [ -n "$PROFILE_ARG" ] && [ "$PROFILE_ARG" != "$PROFILE_NAME" ]; then
+  echo "Error: GeeClaw wrapper only supports --profile $PROFILE_NAME (got: $PROFILE_ARG)" >&2
+  exit 1
+fi
 
 if [ -f "$NODE_EXE" ]; then
   if "$NODE_EXE" -e 'const [maj,min]=process.versions.node.split(".").map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)' >/dev/null 2>&1; then
-    exec "$NODE_EXE" "$OPENCLAW_ENTRY" "$@"
+    if [ -n "$PROFILE_ARG" ]; then
+      exec "$NODE_EXE" "$OPENCLAW_ENTRY" "$@"
+    fi
+    exec "$NODE_EXE" "$OPENCLAW_ENTRY" --profile "$PROFILE_NAME" "$@"
   fi
 fi
 
-ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$OPENCLAW_ENTRY" "$@"
+if [ -n "$PROFILE_ARG" ]; then
+  ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$OPENCLAW_ENTRY" "$@"
+fi
+
+ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$OPENCLAW_ENTRY" --profile "$PROFILE_NAME" "$@"
