@@ -153,19 +153,20 @@ Issues:
   });
 
   it('prepends managed runtime paths when running doctor in packaged builds', async () => {
-    setPlatform('linux');
+    setPlatform('darwin');
     mockIsPackagedGetter.value = true;
     process.env.PATH = '/usr/bin:/bin';
     Object.defineProperty(process, 'resourcesPath', {
-      value: '/opt/geeclaw/resources',
+      value: '/Applications/GeeClaw.app/Contents/Resources',
       configurable: true,
       writable: true,
     });
     mockExistsSync.mockImplementation((value: string) => (
-      value === '/opt/geeclaw/resources/opencli/dist/main.js'
-      || value === '/opt/geeclaw/resources/opencli/extension'
-      || value === '/opt/geeclaw/resources/managed-bin'
-      || value === '/opt/geeclaw/resources/bin'
+      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
     ));
     mockSpawn.mockImplementation((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
       const child = new EventEmitter() as EventEmitter & {
@@ -190,14 +191,14 @@ Issues:
         child.emit('close', 0);
       });
 
-      expect(command).toBe(process.execPath);
+      expect(command).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/node');
       expect(args).toEqual([
-        '/opt/geeclaw/resources/opencli/dist/main.js',
+        '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js',
         'doctor',
         '--no-live',
       ]);
       expect(options.env.OPENCLI_EMBEDDED_IN).toBe('GeeClaw');
-      expect(options.env.PATH).toBe('/opt/geeclaw/resources/managed-bin:/opt/geeclaw/resources/bin:/usr/bin:/bin');
+      expect(options.env.PATH).toBe('/Applications/GeeClaw.app/Contents/Resources/managed-bin:/Applications/GeeClaw.app/Contents/Resources/bin:/usr/bin:/bin');
 
       return child;
     });

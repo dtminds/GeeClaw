@@ -14,6 +14,7 @@
 
 import 'zx/globals';
 import { build } from 'esbuild';
+import { createRequire } from 'node:module';
 import windowsPaths from './lib/windows-paths.cjs';
 
 const ROOT = path.resolve(__dirname, '..');
@@ -24,6 +25,10 @@ const OPENCLI_LINK = path.join(NODE_MODULES, '@jackwener', 'opencli');
 // still support ESM top-level await but do not parse logical assignment syntax.
 const OPENCLI_RUNTIME_TARGET = 'node14.8';
 const { realpathCompat } = windowsPaths;
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function walkTsFiles(dir) {
   const entryPoints = [];
@@ -62,6 +67,304 @@ function walkTsFiles(dir) {
   }
 
   return entryPoints.sort();
+}
+
+function extractBalancedBlock(source, startIndex, openChar, closeChar) {
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+
+  for (let i = startIndex; i < source.length; i += 1) {
+    const ch = source[i];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === '\'' || ch === '`') {
+      quote = ch;
+      continue;
+    }
+
+    if (ch === openChar) {
+      depth += 1;
+    } else if (ch === closeChar) {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex + 1, i);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractTsArgsBlock(source) {
+  const argsMatch = source.match(/args\s*:/);
+  if (!argsMatch || argsMatch.index === undefined) {
+    return null;
+  }
+
+  const bracketIndex = source.indexOf('[', argsMatch.index);
+  if (bracketIndex === -1) {
+    return null;
+  }
+
+  return extractBalancedBlock(source, bracketIndex, '[', ']');
+}
+
+function parseInlineChoices(body) {
+  const choicesMatch = body.match(/choices\s*:\s*\[([^\]]*)\]/);
+  if (!choicesMatch) {
+    return undefined;
+  }
+
+  const values = choicesMatch[1]
+    .split(',')
+    .map((value) => value.trim().replace(/^['"`]|['"`]$/g, ''))
+    .filter(Boolean);
+
+  return values.length > 0 ? values : undefined;
+}
+
+function parseTsArgsBlock(argsBlock) {
+  const args = [];
+  let cursor = 0;
+
+  while (cursor < argsBlock.length) {
+    const nameMatch = argsBlock.slice(cursor).match(/\{\s*name\s*:\s*['"`]([^'"`]+)['"`]/);
+    if (!nameMatch || nameMatch.index === undefined) {
+      break;
+    }
+
+    const objectStart = cursor + nameMatch.index;
+    const body = extractBalancedBlock(argsBlock, objectStart, '{', '}');
+    if (body == null) {
+      break;
+    }
+
+    const typeMatch = body.match(/type\s*:\s*['"`](\w+)['"`]/);
+    const defaultMatch = body.match(/default\s*:\s*([^,}]+)/);
+    const requiredMatch = body.match(/required\s*:\s*(true|false)/);
+    const helpMatch = body.match(/help\s*:\s*['"`]([^'"`]*)['"`]/);
+    const positionalMatch = body.match(/positional\s*:\s*(true|false)/);
+
+    let defaultValue;
+    if (defaultMatch) {
+      const raw = defaultMatch[1].trim();
+      if (raw === 'true') {
+        defaultValue = true;
+      } else if (raw === 'false') {
+        defaultValue = false;
+      } else if (/^\d+$/.test(raw)) {
+        defaultValue = parseInt(raw, 10);
+      } else if (/^\d+\.\d+$/.test(raw)) {
+        defaultValue = parseFloat(raw);
+      } else {
+        defaultValue = raw.replace(/^['"`]|['"`]$/g, '');
+      }
+    }
+
+    args.push({
+      name: nameMatch[1],
+      type: typeMatch?.[1] ?? 'str',
+      default: defaultValue,
+      required: requiredMatch?.[1] === 'true',
+      positional: positionalMatch?.[1] === 'true' || undefined,
+      help: helpMatch?.[1] ?? '',
+      choices: parseInlineChoices(body),
+    });
+
+    cursor = objectStart + body.length + 2;
+  }
+
+  return args;
+}
+
+function shouldReplaceManifestEntry(current, next) {
+  if (current.type === next.type) {
+    return true;
+  }
+  return current.type === 'yaml' && next.type === 'ts';
+}
+
+function scanYamlCli(filePath, site, yaml) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const def = yaml.load(raw);
+    if (!def || typeof def !== 'object' || Array.isArray(def)) {
+      return null;
+    }
+
+    const strategy = String(def.strategy ?? (def.browser === false ? 'public' : 'cookie')).toLowerCase();
+    const browser = def.browser ?? (strategy !== 'public');
+    const args = [];
+    if (def.args && typeof def.args === 'object') {
+      for (const [argName, argDef] of Object.entries(def.args)) {
+        args.push({
+          name: argName,
+          type: argDef?.type ?? 'str',
+          default: argDef?.default,
+          required: argDef?.required ?? false,
+          positional: argDef?.positional === true || undefined,
+          help: argDef?.description ?? argDef?.help ?? '',
+          choices: argDef?.choices,
+        });
+      }
+    }
+
+    return {
+      site: def.site ?? site,
+      name: def.name ?? path.basename(filePath, path.extname(filePath)),
+      description: def.description ?? '',
+      domain: def.domain,
+      strategy,
+      browser,
+      args,
+      columns: def.columns,
+      pipeline: def.pipeline,
+      timeout: def.timeout,
+      type: 'yaml',
+      navigateBefore: def.navigateBefore,
+    };
+  } catch (error) {
+    process.stderr.write(`Warning: failed to parse ${filePath}: ${getErrorMessage(error)}\n`);
+    return null;
+  }
+}
+
+function scanTsCli(filePath, site) {
+  const baseName = path.basename(filePath, path.extname(filePath));
+
+  try {
+    const src = fs.readFileSync(filePath, 'utf-8');
+    if (!/\bcli\s*\(/.test(src)) {
+      return null;
+    }
+
+    const entry = {
+      site,
+      name: baseName,
+      description: '',
+      strategy: 'cookie',
+      browser: true,
+      args: [],
+      type: 'ts',
+      modulePath: `${site}/${baseName}.js`,
+    };
+
+    const descMatch = src.match(/description\s*:\s*['"`]([^'"`]*)['"`]/);
+    if (descMatch) {
+      entry.description = descMatch[1];
+    }
+
+    const domainMatch = src.match(/domain\s*:\s*['"`]([^'"`]*)['"`]/);
+    if (domainMatch) {
+      entry.domain = domainMatch[1];
+    }
+
+    const strategyMatch = src.match(/strategy\s*:\s*Strategy\.(\w+)/);
+    if (strategyMatch) {
+      entry.strategy = strategyMatch[1].toLowerCase();
+    }
+
+    const browserMatch = src.match(/browser\s*:\s*(true|false)/);
+    if (browserMatch) {
+      entry.browser = browserMatch[1] === 'true';
+    } else {
+      entry.browser = entry.strategy !== 'public';
+    }
+
+    const columnsMatch = src.match(/columns\s*:\s*\[([^\]]*)\]/);
+    if (columnsMatch) {
+      entry.columns = columnsMatch[1]
+        .split(',')
+        .map((value) => value.trim().replace(/^['"`]|['"`]$/g, ''))
+        .filter(Boolean);
+    }
+
+    const argsBlock = extractTsArgsBlock(src);
+    if (argsBlock) {
+      entry.args = parseTsArgsBlock(argsBlock);
+    }
+
+    const navigateBeforeMatch = src.match(/navigateBefore\s*:\s*(true|false)/);
+    if (navigateBeforeMatch) {
+      entry.navigateBefore = navigateBeforeMatch[1] === 'true';
+    }
+
+    return entry;
+  } catch (error) {
+    process.stderr.write(`Warning: failed to scan ${filePath}: ${getErrorMessage(error)}\n`);
+    return null;
+  }
+}
+
+function buildCliManifest(srcDir, outputDir, opencliRoot) {
+  const clisDir = path.join(srcDir, 'clis');
+  const manifestPath = path.join(outputDir, 'cli-manifest.json');
+  const manifestEntries = new Map();
+  const requireFromOpenCli = createRequire(path.join(opencliRoot, 'package.json'));
+  const yaml = requireFromOpenCli('js-yaml');
+
+  if (!fs.existsSync(clisDir)) {
+    return { manifestPath, manifestCount: 0, yamlCount: 0, tsCount: 0 };
+  }
+
+  for (const site of fs.readdirSync(clisDir)) {
+    const siteDir = path.join(clisDir, site);
+    if (!fs.statSync(siteDir).isDirectory()) {
+      continue;
+    }
+
+    for (const file of fs.readdirSync(siteDir)) {
+      const filePath = path.join(siteDir, file);
+      let entry = null;
+
+      if (file.endsWith('.yaml') || file.endsWith('.yml')) {
+        entry = scanYamlCli(filePath, site, yaml);
+      } else if (
+        (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts') && file !== 'index.ts')
+        || (file.endsWith('.js') && !file.endsWith('.d.js') && !file.endsWith('.test.js') && file !== 'index.js')
+      ) {
+        entry = scanTsCli(filePath, site);
+      }
+
+      if (!entry) {
+        continue;
+      }
+
+      const key = `${entry.site}/${entry.name}`;
+      const existing = manifestEntries.get(key);
+      if (!existing || shouldReplaceManifestEntry(existing, entry)) {
+        if (existing && existing.type !== entry.type) {
+          process.stderr.write(`Warning: duplicate adapter ${key}: ${existing.type} superseded by ${entry.type}\n`);
+        }
+        manifestEntries.set(key, entry);
+      }
+    }
+  }
+
+  const manifest = [...manifestEntries.values()];
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+  return {
+    manifestPath,
+    manifestCount: manifest.length,
+    yamlCount: manifest.filter((entry) => entry.type === 'yaml').length,
+    tsCount: manifest.filter((entry) => entry.type === 'ts').length,
+  };
 }
 
 function copyYamlTree(srcDir, destDir) {
@@ -228,6 +531,10 @@ const externalCliRegistry = path.join(srcDir, 'external-clis.yaml');
 if (fs.existsSync(externalCliRegistry)) {
   fs.copyFileSync(externalCliRegistry, path.join(distDir, 'external-clis.yaml'));
 }
+
+echo`   Building CLI manifest...`;
+const manifestSummary = buildCliManifest(srcDir, OUTPUT, opencliReal);
+echo`   Manifest compiled: ${manifestSummary.manifestCount} entries (${manifestSummary.yamlCount} YAML, ${manifestSummary.tsCount} TS)`;
 
 echo`   Writing runtime compatibility shims...`;
 writeRuntimeCompatShims(OUTPUT);

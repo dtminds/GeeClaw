@@ -12,6 +12,7 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
 
 PROJECT_ROOT="$(cd -P "$SCRIPT_DIR/../../.." 2>/dev/null && pwd)"
+NODE_SHIM="$SCRIPT_DIR/node"
 
 bin_arch() {
   case "$(uname -m)" in
@@ -28,11 +29,6 @@ PROFILE_NAME="geeclaw"
 
 if [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
   CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
-  if [ "$(uname)" = "Darwin" ]; then
-    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
-  else
-    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/electron"
-  fi
   DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
   if [ -d "$DEV_BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
@@ -41,7 +37,6 @@ elif [ "$(uname)" = "Darwin" ]; then
   # macOS: <App>.app/Contents/Resources/managed-bin/openclaw
   # SCRIPT_DIR = .../Contents/Resources/managed-bin
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-  ELECTRON="$CONTENTS_DIR/MacOS/GeeClaw"
   CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"
   BUNDLED_BIN="$CONTENTS_DIR/Resources/bin"
   if [ -d "$BUNDLED_BIN" ]; then
@@ -51,7 +46,6 @@ else
   # Linux: /opt/GeeClaw/resources/managed-bin/openclaw
   # SCRIPT_DIR = .../resources/managed-bin
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-  ELECTRON="$INSTALL_DIR/geeclaw"
   CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
   BUNDLED_BIN="$INSTALL_DIR/resources/bin"
   if [ -d "$BUNDLED_BIN" ]; then
@@ -59,8 +53,14 @@ else
   fi
 fi
 
-if [ ! -f "$ELECTRON" ]; then
-  echo "Error: GeeClaw executable not found at $ELECTRON" >&2
+if [ ! -x "$NODE_SHIM" ]; then
+  echo "Error: GeeClaw node shim not found at $NODE_SHIM" >&2
+  echo "Please reinstall GeeClaw or remove this script: $0" >&2
+  exit 1
+fi
+
+if [ ! -f "$CLI" ]; then
+  echo "Error: bundled openclaw entry not found at $CLI" >&2
   echo "Please reinstall GeeClaw or remove this script: $0" >&2
   exit 1
 fi
@@ -73,7 +73,7 @@ case "$1" in
     echo "  Open GeeClaw > Settings > Check for Updates"
     echo "  Or download the latest version from https://geeclaw.chat"
     echo ""
-    ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" --version 2>/dev/null || true
+    "$NODE_SHIM" "$CLI" --version 2>/dev/null || true
     exit 0
     ;;
 esac
@@ -108,7 +108,7 @@ export OPENCLAW_CONFIG_PATH="$CONFIG_PATH"
 export PATH="$PATH_PREFIX${PATH:+:$PATH}"
 
 if [ -n "$PROFILE_ARG" ]; then
-  ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+  exec "$NODE_SHIM" "$CLI" "$@"
 fi
 
-ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" --profile "$PROFILE_NAME" "$@"
+exec "$NODE_SHIM" "$CLI" --profile "$PROFILE_NAME" "$@"

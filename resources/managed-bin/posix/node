@@ -1,7 +1,6 @@
 #!/bin/sh
 # Node runtime shim — managed by GeeClaw
-# Prefer a real system Node.js when available; otherwise fall back to the
-# packaged GeeClaw Electron binary running in Node mode.
+# Prefer the bundled GeeClaw Node.js runtime, then fall back to a system Node.js.
 
 SCRIPT="$0"
 while [ -L "$SCRIPT" ]; do
@@ -11,6 +10,37 @@ while [ -L "$SCRIPT" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT")" && pwd)"
 PROJECT_ROOT="$(cd -P "$SCRIPT_DIR/../../.." 2>/dev/null && pwd)"
+
+bin_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "x64" ;;
+    arm64|aarch64) echo "arm64" ;;
+    *) uname -m ;;
+  esac
+}
+
+find_bundled_node() {
+  DEV_BUNDLED_NODE="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/node"
+  if [ -x "$DEV_BUNDLED_NODE" ]; then
+    echo "$DEV_BUNDLED_NODE"
+    return 0
+  fi
+
+  if [ "$(uname)" = "Darwin" ]; then
+    CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    PACKAGED_BUNDLED_NODE="$CONTENTS_DIR/Resources/bin/node"
+  else
+    INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    PACKAGED_BUNDLED_NODE="$INSTALL_DIR/resources/bin/node"
+  fi
+
+  if [ -x "$PACKAGED_BUNDLED_NODE" ]; then
+    echo "$PACKAGED_BUNDLED_NODE"
+    return 0
+  fi
+
+  return 1
+}
 
 find_system_node() {
   for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node /bin/node; do
@@ -37,31 +67,17 @@ find_system_node() {
   return 1
 }
 
+BUNDLED_NODE="$(find_bundled_node)"
+if [ -n "$BUNDLED_NODE" ]; then
+  exec "$BUNDLED_NODE" "$@"
+fi
+
 SYSTEM_NODE="$(find_system_node)"
 if [ -n "$SYSTEM_NODE" ]; then
   exec "$SYSTEM_NODE" "$@"
 fi
 
-if [ "$(uname)" = "Darwin" ]; then
-  if [ -f "$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then
-    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
-  else
-    CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-    ELECTRON="$CONTENTS_DIR/MacOS/GeeClaw"
-  fi
-else
-  if [ -f "$PROJECT_ROOT/node_modules/electron/dist/electron" ]; then
-    ELECTRON="$PROJECT_ROOT/node_modules/electron/dist/electron"
-  else
-    INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-    ELECTRON="$INSTALL_DIR/geeclaw"
-  fi
-fi
-
-if [ ! -f "$ELECTRON" ]; then
-  echo "Error: GeeClaw executable not found at $ELECTRON" >&2
-  echo "Install Node.js or reinstall GeeClaw." >&2
-  exit 1
-fi
-
-ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$@"
+echo "Error: Node.js runtime not found for GeeClaw managed CLI." >&2
+echo "Expected bundled node near $SCRIPT_DIR or a system node on PATH." >&2
+echo "Reinstall GeeClaw, or download the bundled Node.js runtime before packaging." >&2
+exit 1
