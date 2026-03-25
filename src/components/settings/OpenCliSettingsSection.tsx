@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   CheckCircle2,
@@ -83,7 +83,7 @@ export function OpenCliSettingsSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadStatus = async (background = false) => {
+  const loadStatus = useCallback(async (background = false) => {
     if (background) {
       setRefreshing(true);
     } else {
@@ -102,11 +102,11 @@ export function OpenCliSettingsSection() {
         setLoading(false);
       }
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void loadStatus();
-  }, []);
+  }, [loadStatus]);
 
   const overallHealthy = !!status?.binaryExists && !!status?.doctor?.ok;
 

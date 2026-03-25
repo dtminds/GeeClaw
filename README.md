@@ -266,10 +266,12 @@ pnpm dev                  # Start with hot reload
 
 # Quality
 pnpm lint                 # Run ESLint
+pnpm run lint:check       # Run ESLint without modifying files
 pnpm typecheck            # TypeScript validation
 
 # Testing
 pnpm test                 # Run unit tests
+pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
@@ -310,22 +312,14 @@ own `node_modules/`.
 
 ## Contributing
 
-We welcome contributions from the community! Whether it's bug fixes, new features, documentation improvements, or translations—every contribution helps make GeeClaw better.
+We welcome contributions from the community. For local setup, validation commands, and project guardrails, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### How to Contribute
+Quick expectations for pull requests:
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes with clear messages
-4. **Push** to your branch
-5. **Open** a Pull Request
-
-### Guidelines
-
-- Follow the existing code style (ESLint + Prettier)
-- Write tests for new functionality
-- Update documentation as needed
-- Keep commits atomic and descriptive
+- Follow the existing code style enforced by ESLint and TypeScript.
+- Add or update tests when behavior changes.
+- Update `README.md` and `README.zh-CN.md` when user-facing flows or architecture change.
+- Keep commits and pull requests focused and well-described.
 
 ---
 

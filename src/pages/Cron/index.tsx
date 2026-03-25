@@ -39,13 +39,14 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { formatRelativeTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CronJob, CronJobCreateInput, CronDeliveryMode, ScheduleType } from '@/types/cron';
-import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } from '@/types/channel';
+import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelType } from '@/types/channel';
 import { useChannelsStore } from '@/stores/channels';
 import { useAgentsStore } from '@/stores/agents';
 import { hostApiFetch } from '@/lib/host-api';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
+import { getCronDeliveryChannelOptions } from './delivery-channels';
 
 // Common cron schedule presets
 const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
@@ -58,28 +59,6 @@ const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
   { key: 'weeklyMon', value: '0 9 * * 1', type: 'weekly' },
   { key: 'monthly1st', value: '0 9 1 * *', type: 'monthly' },
 ];
-
-const CRON_DISABLED_DELIVERY_CHANNELS = new Set<ChannelType>(['openclaw-weixin']);
-
-type CronDeliveryChannelOption = {
-  id: string;
-  type: ChannelType;
-  name: string;
-  disabled: boolean;
-};
-
-export function getCronDeliveryChannelOptions(
-  channels: Pick<ChannelGroup, 'id' | 'type' | 'name' | 'accounts'>[],
-): CronDeliveryChannelOption[] {
-  return channels
-    .filter((channel) => channel.accounts.some((account) => account.enabled))
-    .map((channel) => ({
-      id: channel.id,
-      type: channel.type,
-      name: channel.name,
-      disabled: CRON_DISABLED_DELIVERY_CHANNELS.has(channel.type),
-    }));
-}
 
 // Parse cron schedule to human-readable format
 // Handles both plain cron strings and Gateway CronSchedule objects:

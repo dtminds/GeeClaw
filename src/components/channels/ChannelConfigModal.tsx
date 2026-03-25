@@ -514,7 +514,7 @@ export function ChannelConfigModal({
     }
 
     setConnecting(false);
-  }, [configValues, meta, onChannelSaved, onClose, resolvedAccountId, selectedType, t]);
+  }, [accountId, configValues, meta, onChannelSaved, onClose, resolvedAccountId, selectedType, t]);
 
   const handleStartWeComScan = useCallback(async () => {
     setConnecting(true);
