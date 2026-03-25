@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.9.3-test.1",
+    "version": "0.9.3-test.2",
     "description": "GeeClaw - Graphical AI Assistant based on OpenClaw",
     "keywords": [
         "electron",
@@ -103,7 +103,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@larksuite/openclaw-lark": "2026.3.25",
+        "@larksuite/openclaw-lark": "2026.3.18",
         "@martian-engineering/lossless-claw": "0.4.0",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
