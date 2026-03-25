@@ -288,7 +288,7 @@ function getBaseCommand(command: string): string {
   return match ? match[1].toLowerCase() : '';
 }
 
-export function getToolDisplayIcon(name: string, input?: unknown) {
+function getToolDisplayIcon(name: string, input?: unknown) {
   const normalized = normalizeToolName(name);
 
   if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {

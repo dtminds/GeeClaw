@@ -101,11 +101,10 @@ export const useCronStore = create<CronState>((set) => ({
   
   triggerJob: async (id) => {
     try {
-      const result = await hostApiFetch('/api/cron/trigger', {
+      await hostApiFetch('/api/cron/trigger', {
         method: 'POST',
         body: JSON.stringify({ id }),
       });
-      console.log('Cron trigger result:', result);
       // Refresh jobs after trigger to update lastRun/nextRun state
       try {
         const jobs = await hostApiFetch<CronJob[]>('/api/cron/jobs');

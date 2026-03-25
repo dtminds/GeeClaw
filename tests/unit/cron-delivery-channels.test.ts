@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getCronDeliveryChannelOptions } from '@/pages/Cron';
+import { getCronDeliveryChannelOptions } from '@/pages/Cron/delivery-channels';
 import type { ChannelGroup } from '@/types/channel';
 
 describe('getCronDeliveryChannelOptions', () => {

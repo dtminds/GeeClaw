@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   CheckCircle2,
@@ -102,7 +102,7 @@ export function McpSettingsSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadStatus = async (background = false) => {
+  const loadStatus = useCallback(async (background = false) => {
     if (background) {
       setRefreshing(true);
     } else {
@@ -121,11 +121,11 @@ export function McpSettingsSection() {
         setLoading(false);
       }
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void loadStatus();
-  }, []);
+  }, [loadStatus]);
 
   const systemInstalled = loading ? null : (status?.system.exists ?? false);
   const bundledInstalled = loading ? null : (status?.bundled.exists ?? false);

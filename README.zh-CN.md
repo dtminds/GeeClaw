@@ -264,10 +264,12 @@ pnpm dev                  # 以热重载模式启动
 
 # 代码质量
 pnpm lint                 # 运行 ESLint 检查
+pnpm run lint:check       # 运行不修改文件的 ESLint 检查
 pnpm typecheck            # TypeScript 类型检查
 
 # 测试
 pnpm test                 # 运行单元测试
+pnpm run verify           # 运行 lint + typecheck + 单元测试
 
 # 构建与打包
 pnpm run build:vite       # 仅构建前端
@@ -308,22 +310,20 @@ pnpm package:linux        # 为 Linux 打包
 
 ## 参与贡献
 
-我们欢迎社区的各种贡献！无论是修复 Bug、开发新功能、改进文档还是翻译——每一份贡献都让 GeeClaw 变得更好。
+欢迎社区贡献各种改进。关于本地开发、校验命令和项目边界约束，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-### 如何贡献
+补充的维护与协作文档：
 
-1. **Fork** 本仓库
-2. **创建** 功能分支（`git checkout -b feature/amazing-feature`）
-3. **提交** 清晰描述的变更
-4. **推送** 到你的分支
-5. **创建** Pull Request
+- [SUPPORT.md](SUPPORT.md)：问题分流与支持预期
+- [SECURITY.md](SECURITY.md)：安全漏洞提交流程
+- [docs/release-checklist.md](docs/release-checklist.md)：发布前检查清单
 
-### 贡献规范
+Pull Request 的基本预期：
 
-- 遵循现有代码风格（ESLint + Prettier）
-- 为新功能编写测试
-- 按需更新文档
-- 保持提交原子化且描述清晰
+- 遵循当前由 ESLint 和 TypeScript 约束的代码风格。
+- 行为变更时补充或更新测试。
+- 涉及用户流程或架构调整时，同时更新 `README.md` 和 `README.zh-CN.md`。
+- 保持提交和 PR 聚焦、描述清晰。
 
 ---
 

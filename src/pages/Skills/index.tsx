@@ -931,7 +931,7 @@ export function Skills() {
       return;
     }
     void fetchMarketplaceCatalog();
-  }, [activeTab, marketplaceCatalog, marketplaceLoading]);
+  }, [activeTab, fetchMarketplaceCatalog, marketplaceCatalog, marketplaceLoading]);
 
   const loadSkillHubStatus = useCallback(async () => {
     setSkillHubStatusLoading(true);
