@@ -29,6 +29,7 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
     { pluginId: 'openclaw-lark', packageName: '@larksuite/openclaw-lark' },
     { pluginId: 'lossless-claw', packageName: '@martian-engineering/lossless-claw' },
     { pluginId: 'qmemory', packageName: 'qmemory' },
+    { pluginId: 'cron-delivery-guard', packageName: 'cron-delivery-guard' },
   ];
 
   for (const plugin of pluginDefs) {
@@ -242,8 +243,8 @@ describe('reconcileBundledPluginLoadPaths', () => {
         getAlwaysEnabledBundledPluginIds,
       } = await import('@electron/utils/plugin-install');
 
-      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'qmemory']);
-      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'qmemory']);
+      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'qmemory', 'cron-delivery-guard']);
+      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'qmemory', 'cron-delivery-guard']);
 
       const result = await ensureAlwaysEnabledBundledPluginsConfigured();
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
@@ -267,9 +268,9 @@ describe('reconcileBundledPluginLoadPaths', () => {
 
       expect(result).toEqual({
         success: true,
-        updated: ['lossless-claw', 'qmemory'],
+        updated: ['lossless-claw', 'qmemory', 'cron-delivery-guard'],
       });
-      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'qmemory']);
+      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'qmemory', 'cron-delivery-guard']);
       expect(config.plugins?.entries).toEqual({
         'lossless-claw': {
           enabled: true,
@@ -290,6 +291,9 @@ describe('reconcileBundledPluginLoadPaths', () => {
         qmemory: {
           enabled: true,
         },
+        'cron-delivery-guard': {
+          enabled: true,
+        },
       });
       expect(config.plugins?.entries?.['lossless-claw']).toEqual({
         enabled: true,
@@ -308,6 +312,9 @@ describe('reconcileBundledPluginLoadPaths', () => {
         },
       });
       expect(config.plugins?.entries?.qmemory).toEqual({
+        enabled: true,
+      });
+      expect(config.plugins?.entries?.['cron-delivery-guard']).toEqual({
         enabled: true,
       });
     } finally {
