@@ -39,12 +39,13 @@ async function requestInviteBind(
   });
 
   const rawText = await response.text();
-  let payload: InviteBindApiResponse | null = null;
-  try {
-    payload = (asRecord(rawText ? JSON.parse(rawText) : {}) as InviteBindApiResponse | null) ?? null;
-  } catch {
-    payload = null;
-  }
+  const payload: InviteBindApiResponse | null = (() => {
+    try {
+      return (asRecord(rawText ? JSON.parse(rawText) : {}) as InviteBindApiResponse | null) ?? null;
+    } catch {
+      return null;
+    }
+  })();
 
   return { response, payload, rawText };
 }

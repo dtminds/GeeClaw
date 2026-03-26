@@ -65,12 +65,13 @@ export async function fetchGeeclawUserInfo(accessToken: string): Promise<Geeclaw
   });
 
   const rawText = await response.text();
-  let payload: GeeclawUserInfoApiResponse | null = null;
-  try {
-    payload = (asRecord(rawText ? JSON.parse(rawText) : {}) as GeeclawUserInfoApiResponse | null) ?? null;
-  } catch {
-    payload = null;
-  }
+  const payload: GeeclawUserInfoApiResponse | null = (() => {
+    try {
+      return (asRecord(rawText ? JSON.parse(rawText) : {}) as GeeclawUserInfoApiResponse | null) ?? null;
+    } catch {
+      return null;
+    }
+  })();
 
   if (!response.ok) {
     if (response.status === 401) {
