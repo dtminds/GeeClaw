@@ -27,7 +27,7 @@ describe('bindInviteCode', () => {
 
   it('returns true when the GeeClaw auth API confirms the invite binding', async () => {
     proxyAwareFetchMock.mockResolvedValue(
-      createResponse({ success: true, data: true, errorMsg: '' }),
+      createResponse({ success: true, data: "sk-xx", errorMsg: '' }),
     );
 
     const { bindInviteCode } = await import('@electron/services/auth/invite-bind');
@@ -45,9 +45,9 @@ describe('bindInviteCode', () => {
     );
   });
 
-  it('rejects when the API responds with data=false', async () => {
+  it('rejects when the API responds with success=false', async () => {
     proxyAwareFetchMock.mockResolvedValue(
-      createResponse({ success: true, data: false, errorMsg: '邀请码无效' }),
+      createResponse({ success: false, data: "", errorMsg: '邀请码无效' }),
     );
 
     const { bindInviteCode } = await import('@electron/services/auth/invite-bind');
