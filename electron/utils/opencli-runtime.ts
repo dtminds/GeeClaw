@@ -44,6 +44,8 @@ interface OpenCliExecutionSpec {
   displayCommand: string;
 }
 
+let openCliDoctorInFlight: Promise<OpenCliDoctorStatus> | null = null;
+
 function escapeForDoubleQuotes(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -331,6 +333,45 @@ async function runOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
   };
 }
 
+function logDoctorIssues(doctor: OpenCliDoctorStatus): void {
+  if (doctor.ok) {
+    return;
+  }
+
+  logger.info('OpenCLI doctor reported issues', {
+    daemonRunning: doctor.daemonRunning,
+    extensionConnected: doctor.extensionConnected,
+    connectivityOk: doctor.connectivityOk,
+    error: doctor.error,
+  });
+}
+
+async function runSharedOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
+  if (openCliDoctorInFlight) {
+    return await openCliDoctorInFlight;
+  }
+
+  openCliDoctorInFlight = (async () => {
+    const doctor = await runOpenCliDoctor();
+    logDoctorIssues(doctor);
+    return doctor;
+  })();
+
+  try {
+    return await openCliDoctorInFlight;
+  } finally {
+    openCliDoctorInFlight = null;
+  }
+}
+
+export async function warmupOpenCliDoctor(): Promise<OpenCliDoctorStatus | null> {
+  if (!existsSync(getOpenCliEntryPath())) {
+    return null;
+  }
+
+  return await runSharedOpenCliDoctor();
+}
+
 export async function getOpenCliStatus(): Promise<OpenCliStatus> {
   const runtimeDir = getOpenCliRuntimeDir();
   const entryPath = getOpenCliEntryPath();
@@ -357,15 +398,7 @@ export async function getOpenCliStatus(): Promise<OpenCliStatus> {
     };
   }
 
-  const doctor = await runOpenCliDoctor();
-  if (!doctor.ok) {
-    logger.info('OpenCLI doctor reported issues', {
-      daemonRunning: doctor.daemonRunning,
-      extensionConnected: doctor.extensionConnected,
-      connectivityOk: doctor.connectivityOk,
-      error: doctor.error,
-    });
-  }
+  const doctor = await runSharedOpenCliDoctor();
 
   return {
     binaryExists: true,

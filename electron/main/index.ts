@@ -38,6 +38,7 @@ import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { weComLoginManager } from '../utils/wecom-login';
 import { weixinLoginManager } from '../utils/weixin-login';
 import { PORTS } from '../utils/config';
+import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 
 // Disable GPU hardware acceleration globally for maximum stability across
 // all GPU configurations (no GPU, integrated, discrete).
@@ -106,6 +107,7 @@ const clawHubService = new ClawHubService();
 const hostEventBus = new HostEventBus();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
+let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
@@ -310,6 +312,12 @@ async function initialize(): Promise<void> {
   gatewayManager.on('status', (status: { state: string }) => {
     hostEventBus.emit('gateway:status', status);
     if (status.state === 'running') {
+      if (!hasScheduledOpenCliWarmup) {
+        hasScheduledOpenCliWarmup = true;
+        void warmupOpenCliDoctor().catch((error) => {
+          logger.warn('Failed to warm up OpenCLI doctor in the background:', error);
+        });
+      }
       void ensureGeeClawContext().catch((error) => {
         logger.warn('Failed to re-merge GeeClaw context after gateway reconnect:', error);
       });

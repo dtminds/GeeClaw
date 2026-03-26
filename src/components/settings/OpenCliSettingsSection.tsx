@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Activity,
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -77,6 +78,23 @@ function StatusBadge({
   );
 }
 
+function MetricCard({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="modal-field-surface rounded-2xl border p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/80">
+        {label}
+      </p>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
 export function OpenCliSettingsSection() {
   const { t } = useTranslation('settings');
   const [status, setStatus] = useState<OpenCliStatus | null>(null);
@@ -107,8 +125,6 @@ export function OpenCliSettingsSection() {
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
-
-  const overallHealthy = !!status?.binaryExists && !!status?.doctor?.ok;
 
   return (
     <div className="flex flex-col gap-6">
@@ -149,64 +165,30 @@ export function OpenCliSettingsSection() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/80">
-                {t('opencli.runtime.version')}
-              </p>
-              <p className="mt-2 text-sm font-medium text-foreground">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <MetricCard label={t('opencli.runtime.version')}>
+              <p className="text-sm font-medium text-foreground">
                 {loading ? t('common:status.loading') : (status?.version || t('opencli.runtime.unknown'))}
               </p>
-            </div>
+            </MetricCard>
 
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/80">
-                {t('opencli.runtime.doctor')}
-              </p>
-              <div className="mt-2">
-                <StatusBadge
-                  status={loading ? null : overallHealthy}
-                  trueLabel={t('opencli.doctor.healthy')}
-                  falseLabel={t('opencli.doctor.unhealthy')}
-                  unknownLabel={t('opencli.status.checking')}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            <MetricCard label={t('opencli.doctor.daemon')}>
+              <StatusBadge
+                status={loading ? null : (status?.doctor?.daemonRunning ?? null)}
+                trueLabel={t('opencli.status.connected')}
+                falseLabel={t('opencli.status.missing')}
+                unknownLabel={loading ? t('opencli.status.checking') : t('opencli.status.unknown')}
+              />
+            </MetricCard>
 
-      <section className="modal-section-surface rounded-3xl border p-5">
-        <div className="flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">{t('opencli.doctor.title')}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t('opencli.doctor.description')}</p>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <p className="text-sm font-medium text-foreground">{t('opencli.doctor.daemon')}</p>
-              <div className="mt-3">
-                <StatusBadge
-                  status={status?.doctor?.daemonRunning ?? null}
-                  trueLabel={t('opencli.status.connected')}
-                  falseLabel={t('opencli.status.missing')}
-                  unknownLabel={t('opencli.status.unknown')}
-                />
-              </div>
-            </div>
-
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <p className="text-sm font-medium text-foreground">{t('opencli.doctor.extension')}</p>
-              <div className="mt-3">
-                <StatusBadge
-                  status={status?.doctor?.extensionConnected ?? null}
-                  trueLabel={t('opencli.status.connected')}
-                  falseLabel={t('opencli.status.notConnected')}
-                  unknownLabel={t('opencli.status.unknown')}
-                />
-              </div>
-            </div>
+            <MetricCard label={t('opencli.doctor.extension')}>
+              <StatusBadge
+                status={loading ? null : (status?.doctor?.extensionConnected ?? null)}
+                trueLabel={t('opencli.status.connected')}
+                falseLabel={t('opencli.status.notConnected')}
+                unknownLabel={loading ? t('opencli.status.checking') : t('opencli.status.unknown')}
+              />
+            </MetricCard>
           </div>
 
           {status?.doctor?.error && (
@@ -242,31 +224,36 @@ export function OpenCliSettingsSection() {
       </section>
 
       <section className="modal-section-surface rounded-3xl border p-5">
-        <div className="flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">{t('opencli.extension.title')}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t('opencli.extension.description')}</p>
-          </div>
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">{t('opencli.extension.title')}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{t('opencli.extension.description')}</p>
+            </div>
+            <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+          </summary>
 
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => invokeIpc('shell:openExternal', status?.releasesUrl || 'https://github.com/jackwener/opencli/releases')}
-            >
-              <ExternalLink className="mr-2 h-4 w-4" />
-              {t('opencli.actions.downloadExtension')}
-            </Button>
-          </div>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => invokeIpc('shell:openExternal', status?.releasesUrl || 'https://github.com/jackwener/opencli/releases')}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                {t('opencli.actions.downloadExtension')}
+              </Button>
+            </div>
 
-          <div className="rounded-2xl border border-dashed border-black/12 bg-background/45 px-4 py-4 text-sm leading-7 text-muted-foreground dark:border-white/12 dark:bg-black/10">
-            <p>{t('opencli.extension.step1')}</p>
-            <p>{t('opencli.extension.step2')}</p>
-            <p>{t('opencli.extension.step3')}</p>
-            <p>{t('opencli.extension.step4')}</p>
+            <div className="rounded-2xl border border-dashed border-black/12 bg-background/45 px-4 py-4 text-sm leading-7 text-muted-foreground dark:border-white/12 dark:bg-black/10">
+              <p>{t('opencli.extension.step1')}</p>
+              <p>{t('opencli.extension.step2')}</p>
+              <p>{t('opencli.extension.step3')}</p>
+              <p>{t('opencli.extension.step4')}</p>
+            </div>
           </div>
-        </div>
+        </details>
       </section>
     </div>
   );

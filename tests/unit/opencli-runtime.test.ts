@@ -152,6 +152,15 @@ Issues:
     expect(parsed.issues[1]).toContain('Load unpacked');
   });
 
+  it('skips background warmup when the bundled runtime is missing', async () => {
+    const { warmupOpenCliDoctor } = await import('@electron/utils/opencli-runtime');
+
+    const result = await warmupOpenCliDoctor();
+
+    expect(result).toBeNull();
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
   it('prepends managed runtime paths when running doctor in packaged builds', async () => {
     setPlatform('darwin');
     mockIsPackagedGetter.value = true;
@@ -209,6 +218,58 @@ Issues:
     expect(status.binaryExists).toBe(true);
     expect(status.doctor?.ok).toBe(true);
     expect(mockLoggerInfo).not.toHaveBeenCalled();
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates doctor warmup and status fetch when they overlap', async () => {
+    setPlatform('darwin');
+    mockIsPackagedGetter.value = true;
+    process.env.PATH = '/usr/bin:/bin';
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+    ));
+    mockSpawn.mockImplementation(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill: ReturnType<typeof vi.fn>;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from([
+          'opencli v1.3.3 doctor',
+          '',
+          '[OK] Daemon: running on port 19825',
+          '[OK] Extension: connected',
+          '[SKIP] Connectivity: skipped (--no-live)',
+          '',
+          'Everything looks good!',
+        ].join('\n')));
+        child.emit('close', 0);
+      });
+
+      return child;
+    });
+
+    const { getOpenCliStatus, warmupOpenCliDoctor } = await import('@electron/utils/opencli-runtime');
+    const [, status] = await Promise.all([
+      warmupOpenCliDoctor(),
+      getOpenCliStatus(),
+    ]);
+
+    expect(status.doctor?.ok).toBe(true);
     expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 });
