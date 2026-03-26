@@ -11,6 +11,7 @@ export interface SessionAccount {
   email?: string;
   displayName?: string;
   userId?: number;
+  apiKey?: string;
   openid?: string;
   nickName?: string;
   avatarUrl?: string;

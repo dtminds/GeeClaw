@@ -21,6 +21,7 @@ export interface SessionAccount {
   email?: string;
   displayName?: string;
   userId?: number;
+  apiKey?: string;
   openid?: string;
   nickName?: string;
   avatarUrl?: string;
@@ -111,6 +112,7 @@ function buildAccountFromUserInfo(userInfo: Record<string, unknown>): SessionAcc
   const nickName = readFirstString(userInfo, ['nickName', 'nickname', 'displayName', 'name']);
   const displayName = nickName;
   const email = readFirstString(userInfo, ['email']);
+  const apiKey = readFirstString(userInfo, ['apiKey', 'api_key']);
   const openid = readFirstString(userInfo, ['openid']);
   const avatarUrl = readFirstString(userInfo, ['avatarUrl', 'avatar', 'headImgUrl']);
   const userId = readFirstNumber(userInfo, ['userId', 'uid', 'id']);
@@ -124,6 +126,7 @@ function buildAccountFromUserInfo(userInfo: Record<string, unknown>): SessionAcc
     displayName,
     email,
     userId,
+    apiKey,
     openid,
     nickName,
     avatarUrl,
@@ -181,6 +184,7 @@ export async function getSessionState(): Promise<SessionState> {
       } else {
         const nextAccount: SessionAccount = {
           ...account,
+          apiKey: userInfo.apiKey || account.apiKey,
           userStatus: userInfo.status,
           nickName: userInfo.nickName || account.nickName,
           displayName: userInfo.nickName || account.displayName,

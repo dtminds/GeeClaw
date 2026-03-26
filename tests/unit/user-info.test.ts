@@ -30,6 +30,7 @@ describe('fetchGeeclawUserInfo', () => {
       success: true,
       data: {
         avatar: 'https://example.com/avatar.png',
+        apiKey: 'gc-user-api-key',
         nickName: 'lsave',
         status: 1,
       },
@@ -38,6 +39,7 @@ describe('fetchGeeclawUserInfo', () => {
     const { fetchGeeclawUserInfo } = await import('@electron/services/auth/user-info');
     await expect(fetchGeeclawUserInfo('token-abc')).resolves.toEqual({
       avatar: 'https://example.com/avatar.png',
+      apiKey: 'gc-user-api-key',
       nickName: 'lsave',
       status: 1,
     });

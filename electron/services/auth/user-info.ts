@@ -12,6 +12,7 @@ type GeeclawUserInfoApiResponse = {
     status?: number | string;
     inviteCode?: string;
     shopId?: number;
+    apiKey?: string;
   };
   success?: boolean;
   error?: number;
@@ -24,6 +25,7 @@ export interface GeeclawUserInfo {
   avatar?: string;
   nickName?: string;
   status: UserStatus;
+  apiKey?: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -97,5 +99,6 @@ export async function fetchGeeclawUserInfo(accessToken: string): Promise<Geeclaw
     avatar: payload?.data?.avatar?.trim() || undefined,
     nickName: payload?.data?.nickName?.trim() || undefined,
     status,
+    apiKey: payload?.data?.apiKey?.trim() || undefined,
   };
 }

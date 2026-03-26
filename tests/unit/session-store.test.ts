@@ -46,6 +46,7 @@ describe('session-store startup refresh', () => {
     mockStoreShape = {
       account: {
         id: 'user-1',
+        apiKey: 'old-api-key',
         displayName: 'old-name',
         nickName: 'old-name',
         avatarUrl: 'https://old.example/avatar.png',
@@ -60,6 +61,7 @@ describe('session-store startup refresh', () => {
   it('refreshes user status from GeeClaw user info on startup', async () => {
     fetchGeeclawUserInfoMock.mockResolvedValue({
       avatar: 'https://new.example/avatar.png',
+      apiKey: 'new-api-key',
       nickName: 'new-name',
       status: 1,
     });
@@ -69,6 +71,7 @@ describe('session-store startup refresh', () => {
       status: 'authenticated',
       account: expect.objectContaining({
         id: 'user-1',
+        apiKey: 'new-api-key',
         displayName: 'new-name',
         nickName: 'new-name',
         avatarUrl: 'https://new.example/avatar.png',
