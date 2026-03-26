@@ -479,7 +479,7 @@ async function runOpenCliCatalog(): Promise<OpenCliCatalog> {
     throw new Error(result.error);
   }
   if (result.exitCode !== 0) {
-    throw new Error(`OpenCLI list exited with code ${result.exitCode}`);
+    throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
   }
 
   let parsed: unknown;
