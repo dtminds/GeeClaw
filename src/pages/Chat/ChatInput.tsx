@@ -22,6 +22,12 @@ import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useProviderStore } from '@/stores/providers';
 import { useSkillsStore } from '@/stores/skills';
+import {
+  buildProviderModelRef,
+  getModelDisplayLabel,
+  isModelMenuItemSelected,
+  pendingModelSelectionMatchesSession,
+} from './model-selection';
 import type { SecurityPolicy } from '@/stores/settings';
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
@@ -552,33 +558,6 @@ function getVisibleSlashItems(
   return rankSlashPickerItemsForQuery(scopedItems, slashQuery?.query ?? '', tChat);
 }
 
-function normalizeModelValue(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase();
-}
-
-function modelValuesMatch(left: string | null | undefined, right: string | null | undefined): boolean {
-  const normalizedLeft = normalizeModelValue(left);
-  const normalizedRight = normalizeModelValue(right);
-
-  if (!normalizedLeft || !normalizedRight) {
-    return false;
-  }
-
-  return normalizedLeft === normalizedRight
-    || normalizedLeft.endsWith(`/${normalizedRight}`)
-    || normalizedRight.endsWith(`/${normalizedLeft}`);
-}
-
-function getModelDisplayLabel(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const segments = trimmed.split('/').filter(Boolean);
-  return segments[segments.length - 1] || trimmed;
-}
-
 function SkillTokenView(props: { node: { attrs: { label?: string | null; slug?: string | null; id?: string | null } } }) {
   const label = props.node.attrs.label || props.node.attrs.slug || props.node.attrs.id || 'Skill';
 
@@ -1075,7 +1054,7 @@ export const ChatInput = memo(function ChatInput({
 
         if (!cancelled) {
           setSessionModel(nextModel || null);
-          if (modelValuesMatch(pendingModelSelection, nextModel)) {
+          if (pendingModelSelectionMatchesSession(pendingModelSelection, nextModel)) {
             setPendingModelSelection(null);
           }
         }
@@ -1270,7 +1249,7 @@ export const ChatInput = memo(function ChatInput({
 
   const handleModelSelect = useCallback((providerId: string, model: string) => {
     if (disabled || sending) return;
-    const nextModel = `${providerId}/${model.trim()}`;
+    const nextModel = buildProviderModelRef(providerId, model);
     setPendingModelSelection(nextModel);
     onSend(`/model ${nextModel}`);
     editor?.commands.focus('end');
@@ -1626,7 +1605,7 @@ export const ChatInput = memo(function ChatInput({
                             className="mx-1 flex cursor-default items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                           >
                             <span className="truncate">{model}</span>
-                            {modelValuesMatch(activeModelValue, `${group.providerId}/${model}`) && (
+                            {isModelMenuItemSelected(activeModelValue, group.providerId, model) && (
                               <Check className="ml-3 h-3.5 w-3.5 shrink-0" />
                             )}
                           </DropdownMenu.Item>
