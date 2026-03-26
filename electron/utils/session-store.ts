@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { safeStorage } from 'electron';
 import type { BrowserWindow } from 'electron';
+import {
+  isUserStatus,
+  USER_STATUS_ACTIVE,
+  USER_STATUS_DISABLED,
+  type UserStatus,
+} from '../../shared/auth/user-status';
+import { bindInviteCode } from '../services/auth/invite-bind';
+import { fetchGeeclawUserInfo } from '../services/auth/user-info';
 import { runWechatLoginFlow } from '../services/auth/wechat-auth';
 import { logger } from './logger';
 
@@ -13,10 +21,11 @@ export interface SessionAccount {
   email?: string;
   displayName?: string;
   userId?: number;
+  apiKey?: string;
   openid?: string;
   nickName?: string;
   avatarUrl?: string;
-  userStatus?: number;
+  userStatus?: UserStatus;
   tokenExpiresIn?: number;
 }
 
@@ -103,16 +112,21 @@ function buildAccountFromUserInfo(userInfo: Record<string, unknown>): SessionAcc
   const nickName = readFirstString(userInfo, ['nickName', 'nickname', 'displayName', 'name']);
   const displayName = nickName;
   const email = readFirstString(userInfo, ['email']);
+  const apiKey = readFirstString(userInfo, ['apiKey', 'api_key']);
   const openid = readFirstString(userInfo, ['openid']);
   const avatarUrl = readFirstString(userInfo, ['avatarUrl', 'avatar', 'headImgUrl']);
   const userId = readFirstNumber(userInfo, ['userId', 'uid', 'id']);
-  const userStatus = readFirstNumber(userInfo, ['status']);
+  const parsedUserStatus = readFirstNumber(userInfo, ['status']);
+  const userStatus = parsedUserStatus !== undefined && isUserStatus(parsedUserStatus)
+    ? parsedUserStatus
+    : undefined;
   const tokenExpiresIn = readFirstNumber(userInfo, ['expiresIn']);
   return {
     id,
     displayName,
     email,
     userId,
+    apiKey,
     openid,
     nickName,
     avatarUrl,
@@ -137,13 +151,64 @@ async function getSessionStore() {
   return sessionStoreInstance;
 }
 
-export async function getSessionState(): Promise<SessionState> {
+async function readStoredSessionState(): Promise<SessionState & { token: string | null }> {
   const store = await getSessionStore();
   const account = store.get('account') as SessionAccount | null;
   const tokenEncrypted = (store.get('tokenEncrypted') as string | null) || null;
   const tokenPlain = (store.get('tokenPlain') as string | null) || null;
   const token = decodeToken({ account, deviceId: '', tokenEncrypted, tokenPlain });
   const status = account && token ? 'authenticated' : 'unauthenticated';
+  return {
+    status,
+    account,
+    token,
+  };
+}
+
+export async function getSessionState(): Promise<SessionState> {
+  const store = await getSessionStore();
+  const stored = await readStoredSessionState();
+  let { status, account, token } = stored;
+
+  if (status === 'authenticated' && account && token) {
+    try {
+      const userInfo = await fetchGeeclawUserInfo(token);
+      if (userInfo.status === USER_STATUS_DISABLED) {
+        logger.warn(`[SessionStore] User info status=${USER_STATUS_DISABLED} for accountId=${account.id}; clearing session`);
+        store.set('account', null);
+        store.set('tokenEncrypted', null);
+        store.set('tokenPlain', null);
+        status = 'unauthenticated';
+        account = null;
+        token = null;
+      } else {
+        const nextAccount: SessionAccount = {
+          ...account,
+          apiKey: userInfo.apiKey || account.apiKey,
+          userStatus: userInfo.status,
+          nickName: userInfo.nickName || account.nickName,
+          displayName: userInfo.nickName || account.displayName,
+          avatarUrl: userInfo.avatar || account.avatarUrl,
+        };
+        store.set('account', nextAccount);
+        account = nextAccount;
+      }
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (message.includes('user info session expired') || message.includes('(401)')) {
+        logger.warn('[SessionStore] User info session expired during refresh; clearing session');
+        store.set('account', null);
+        store.set('tokenEncrypted', null);
+        store.set('tokenPlain', null);
+        status = 'unauthenticated';
+        account = null;
+        token = null;
+      } else {
+        logger.warn('[SessionStore] Failed to refresh user info; keeping stored session state', error);
+      }
+    }
+  }
+
   logger.info(
     `[SessionStore] getSessionState resolved status=${status}, hasAccount=${Boolean(account)}, hasToken=${Boolean(token)}, accountId=${account?.id || '(none)'}`,
   );
@@ -187,6 +252,46 @@ export async function loginWithWechat(mainWindow: BrowserWindow | null): Promise
   return {
     status: 'authenticated',
     account,
+  };
+}
+
+export async function submitInviteCode(inviteCode: string): Promise<SessionState> {
+  const trimmedInviteCode = inviteCode.trim();
+  if (!trimmedInviteCode) {
+    throw new Error('Invite code is required');
+  }
+
+  const state = await readStoredSessionState();
+  if (state.status !== 'authenticated' || !state.account) {
+    throw new Error('No active session');
+  }
+
+  const store = await getSessionStore();
+  const currentAccount = (store.get('account') as SessionAccount | null) ?? state.account;
+  if (!currentAccount) {
+    throw new Error('No active session');
+  }
+
+  const accessToken = await getSessionAccessToken();
+  if (!accessToken) {
+    throw new Error('No active session');
+  }
+
+  await bindInviteCode(trimmedInviteCode, accessToken);
+
+  const nextAccount: SessionAccount = {
+    ...currentAccount,
+    userStatus: USER_STATUS_ACTIVE,
+  };
+
+  store.set('account', nextAccount);
+  logger.info(
+    `[SessionStore] Invite code accepted for accountId=${nextAccount.id}. userStatus=${currentAccount.userStatus ?? '(unset)'} -> ${nextAccount.userStatus}`,
+  );
+
+  return {
+    status: 'authenticated',
+    account: nextAccount,
   };
 }
 
