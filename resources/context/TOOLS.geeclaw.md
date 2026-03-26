@@ -1,10 +1,5 @@
 ## GeeClaw Tool Notes
 
-### uv (Python)
-
-- `uv` is bundled with GeeClaw and on PATH. Do NOT use bare `python` or `pip`.
-- Run scripts: `uv run python <script>` | Install packages: `uv pip install <package>`
-
 ### Browser
 
 - `browser` tool provides full automation (scraping, form filling, testing) via an isolated managed browser.

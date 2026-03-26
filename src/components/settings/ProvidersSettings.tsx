@@ -24,13 +24,13 @@ import { Separator } from '@/components/ui/separator';
 import {
   useProviderStore,
   type ProviderAccount,
-  type ProviderConfig,
   type ProviderVendorInfo,
 } from '@/stores/providers';
 import {
   PROVIDER_TYPE_INFO,
   getProviderDocsUrl,
   type ProviderType,
+  type ProviderTypeInfo,
   getProviderIconUrl,
   getConfiguredProviderModels,
   normalizeProviderModelList,
@@ -41,6 +41,7 @@ import {
 import {
   buildProviderAccountId,
   buildProviderListItems,
+  hasConfiguredCredentials,
   type ProviderListItem,
 } from '@/lib/provider-accounts';
 import { cn } from '@/lib/utils';
@@ -50,7 +51,7 @@ import { invokeIpc } from '@/lib/api-client';
 import { useSettingsStore } from '@/stores/settings';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
-import { AiSettingIcon, Delete02Icon, PinIcon } from '@hugeicons/core-free-icons';
+import { Delete02Icon, PinIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
 function getProtocolBaseUrlPlaceholder(
@@ -89,6 +90,30 @@ function isArkCodePlanMode(
   );
 }
 
+function getProviderDraftState(
+  account: ProviderAccount,
+  configuredModels: string[],
+  typeInfo?: ProviderTypeInfo,
+): {
+  baseUrl: string;
+  apiProtocol: ProviderAccount['apiProtocol'];
+  modelsText: string;
+  arkMode: ArkMode;
+} {
+  return {
+    baseUrl: account.baseUrl || '',
+    apiProtocol: account.apiProtocol || 'openai-completions',
+    modelsText: configuredModels.join('\n'),
+    arkMode: isArkCodePlanMode(
+      account.vendorId,
+      account.baseUrl,
+      configuredModels,
+      typeInfo?.codePlanPresetBaseUrl,
+      typeInfo?.codePlanPresetModelId,
+    ) ? 'codeplan' : 'apikey',
+  };
+}
+
 function getAuthModeLabel(
   authMode: ProviderAccount['authMode'],
   t: (key: string) => string
@@ -125,12 +150,29 @@ export function ProvidersSettings() {
   } = useProviderStore();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const vendorMap = new Map(vendors.map((vendor) => [vendor.id, vendor]));
   const existingVendorIds = new Set(accounts.map((account) => account.vendorId));
   const displayProviders = useMemo(
     () => buildProviderListItems(accounts, statuses, vendors, defaultAccountId),
     [accounts, statuses, vendors, defaultAccountId],
+  );
+  const selectedProvider = useMemo(
+    () => {
+      if (displayProviders.length === 0) {
+        return null;
+      }
+
+      if (selectedProviderId) {
+        const explicitlySelectedProvider = displayProviders.find((item) => item.account.id === selectedProviderId);
+        if (explicitlySelectedProvider) {
+          return explicitlySelectedProvider;
+        }
+      }
+
+      return displayProviders.find((item) => item.account.id === defaultAccountId) ?? displayProviders[0] ?? null;
+    },
+    [defaultAccountId, displayProviders, selectedProviderId],
   );
 
   // Fetch providers on mount
@@ -233,46 +275,84 @@ export function ProvidersSettings() {
           </p>
           <Button
             onClick={() => setShowAddDialog(true)}
-            className="rounded-full border border-transparent bg-primary px-6 text-primary-foreground shadow-sm hover:bg-primary/90 h-10"
+            className="rounded-full border border-transparent bg-primary px-6 text-primary-foreground shadow-none hover:bg-primary/90 h-10"
           >
             <Plus className="h-4 w-4 mr-2" />
             {t('aiProviders.empty.cta')}
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {displayProviders.map((item) => (
-            <ProviderCard
-              key={item.account.id}
-              item={item}
-              allProviders={displayProviders}
-              isDefault={item.account.id === defaultAccountId}
-              isEditing={editingProvider === item.account.id}
-              onEdit={() => setEditingProvider(item.account.id)}
-              onCancelEdit={() => setEditingProvider(null)}
-              onDelete={() => handleDeleteProvider(item.account.id)}
-              onSetDefault={() => handleSetDefault(item.account.id)}
-              onSaveEdits={async (payload) => {
-                const updates: Partial<ProviderAccount> = {};
-                if (payload.updates) {
-                  if (payload.updates.baseUrl !== undefined) updates.baseUrl = payload.updates.baseUrl;
-                  if (payload.updates.apiProtocol !== undefined) updates.apiProtocol = payload.updates.apiProtocol;
-                  if (payload.updates.models !== undefined) updates.models = payload.updates.models;
-                  updates.model = undefined;
-                  updates.fallbackModels = [];
-                  updates.fallbackAccountIds = [];
-                }
-                await updateAccount(
-                  item.account.id,
-                  updates,
-                  payload.newApiKey
+        <div className="overflow-hidden rounded-[20px] border border-black/8 bg-card dark:border-white/10">
+          <div className="grid xl:grid-cols-[205px_minmax(0,1fr)]">
+            <div className="bg-card py-4">
+              <div className="space-y-1">
+              {displayProviders.map((item) => {
+                const isSelected = item.account.id === selectedProvider?.account.id;
+                return (
+                  <button
+                    key={item.account.id}
+                    type="button"
+                    onClick={() => setSelectedProviderId(item.account.id)}
+                    className={cn(
+                      "flex w-full items-center gap-1 px-2 py-0.5 text-left transition-colors",
+                      isSelected
+                        ? "bg-black/[0.055] text-foreground dark:bg-white/[0.07]"
+                        : "text-foreground/88 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]",
+                    )}
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center text-foreground">
+                      {getProviderIconUrl(item.account.vendorId) ? (
+                        <img
+                          src={getProviderIconUrl(item.account.vendorId)}
+                          alt={item.vendor?.name || item.account.vendorId}
+                          className={cn('h-5 w-5', shouldInvertInDark(item.account.vendorId) && 'dark:invert')}
+                        />
+                      ) : (
+                        <span className="text-lg">{item.vendor?.icon || '⚙️'}</span>
+                      )}
+                    </div>
+                    <span className="truncate text-[14px] font-medium text-foreground">
+                      {item.account.label}
+                    </span>
+                  </button>
                 );
-                setEditingProvider(null);
-              }}
-              onValidateKey={(key, options) => validateAccountApiKey(item.account.id, key, options)}
-              devModeUnlocked={devModeUnlocked}
-            />
-          ))}
+              })}
+              </div>
+            </div>
+
+            <div className="border-t border-black/6 bg-card dark:border-white/10 xl:border-l xl:border-t-0">
+              {selectedProvider ? (
+                <ProviderCard
+                  item={selectedProvider}
+                  isDefault={selectedProvider.account.id === defaultAccountId}
+                  onDelete={() => handleDeleteProvider(selectedProvider.account.id)}
+                  onSetDefault={() => handleSetDefault(selectedProvider.account.id)}
+                  onSaveAccount={async (updates, newApiKey) => {
+                    const nextUpdates: Partial<ProviderAccount> = { ...updates };
+                    const touchedProviderConfig = (
+                      updates.baseUrl !== undefined
+                      || updates.apiProtocol !== undefined
+                      || updates.models !== undefined
+                    );
+                    if (touchedProviderConfig) {
+                      nextUpdates.model = undefined;
+                      nextUpdates.fallbackModels = [];
+                      nextUpdates.fallbackAccountIds = [];
+                    }
+
+                    await updateAccount(
+                      selectedProvider.account.id,
+                      nextUpdates,
+                      newApiKey
+                    );
+                  }}
+                  onRefresh={refreshProviderSnapshot}
+                  onValidateKey={(key, options) => validateAccountApiKey(selectedProvider.account.id, key, options)}
+                  devModeUnlocked={devModeUnlocked}
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
 
@@ -293,14 +373,11 @@ export function ProvidersSettings() {
 
 interface ProviderCardProps {
   item: ProviderListItem;
-  allProviders: ProviderListItem[];
   isDefault: boolean;
-  isEditing: boolean;
-  onEdit: () => void;
-  onCancelEdit: () => void;
   onDelete: () => void;
   onSetDefault: () => void;
-  onSaveEdits: (payload: { newApiKey?: string; updates?: Partial<ProviderConfig> }) => Promise<void>;
+  onSaveAccount: (updates: Partial<ProviderAccount>, newApiKey?: string) => Promise<void>;
+  onRefresh: () => Promise<void>;
   onValidateKey: (
     key: string,
     options?: { baseUrl?: string; apiProtocol?: ProviderAccount['apiProtocol'] }
@@ -312,14 +389,11 @@ interface ProviderCardProps {
 
 function ProviderCard({
   item,
-  allProviders: _allProviders,
   isDefault,
-  isEditing,
-  onEdit,
-  onCancelEdit,
   onDelete,
   onSetDefault,
-  onSaveEdits,
+  onSaveAccount,
+  onRefresh,
   onValidateKey,
   devModeUnlocked,
 }: ProviderCardProps) {
@@ -329,20 +403,7 @@ function ProviderCard({
     () => getConfiguredProviderModels(account),
     [account],
   );
-  const [newKey, setNewKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState(account.baseUrl || '');
-  const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>(
-    account.apiProtocol || 'openai-completions'
-  );
-  const [modelsText, setModelsText] = useState(configuredModels.join('\n'));
-  const [showKey, setShowKey] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [arkMode, setArkMode] = useState<ArkMode>('apikey');
-
-  const typeInfo = PROVIDER_TYPE_INFO.find((t) => t.id === account.vendorId);
+  const typeInfo = PROVIDER_TYPE_INFO.find((provider) => provider.id === account.vendorId);
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
   const codePlanPreset = typeInfo?.codePlanPresetBaseUrl && typeInfo?.codePlanPresetModelId
@@ -351,44 +412,208 @@ function ProviderCard({
         modelId: typeInfo.codePlanPresetModelId,
       }
     : null;
+  const draftState = getProviderDraftState(account, configuredModels, typeInfo);
+  const [newKey, setNewKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState(draftState.baseUrl);
+  const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>(draftState.apiProtocol);
+  const [modelsText, setModelsText] = useState(draftState.modelsText);
+  const [showKey, setShowKey] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [arkMode, setArkMode] = useState<ArkMode>(draftState.arkMode);
+  const [oauthFlowing, setOauthFlowing] = useState(false);
+  const [oauthData, setOauthData] = useState<{
+    verificationUri: string;
+    userCode: string;
+    expiresIn: number;
+  } | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
   const effectiveDocsUrl = account.vendorId === 'ark' && arkMode === 'codeplan'
     ? (typeInfo?.codePlanDocsUrl || providerDocsUrl)
     : providerDocsUrl;
   const canEditProtocol = account.vendorId === 'custom';
   const canEditModelConfig = Boolean(typeInfo?.showBaseUrl || showModelIdField);
+  const supportsApiKeyMode = vendor?.supportedAuthModes.includes('api_key') ?? account.authMode === 'api_key';
+  const preferredOAuthMode = vendor?.supportedAuthModes.includes('oauth_browser')
+    ? 'oauth_browser'
+    : (vendor?.supportedAuthModes.includes('oauth_device') ? 'oauth_device' : null);
+  const supportsModeToggle = Boolean(supportsApiKeyMode && preferredOAuthMode);
+  const [authModeSelection, setAuthModeSelection] = useState<'oauth' | 'apikey'>(
+    account.authMode === 'api_key' ? 'apikey' : 'oauth',
+  );
+  const selectedAuthMode = supportsModeToggle
+    ? (authModeSelection === 'oauth' ? preferredOAuthMode! : 'api_key')
+    : account.authMode;
+  const usesApiKeyAuth = selectedAuthMode === 'api_key';
+  const usesOAuthAuth = selectedAuthMode === 'oauth_device' || selectedAuthMode === 'oauth_browser';
+  const hasConfiguredAuth = hasConfiguredCredentials(account, status);
+  const oauthConfigured = usesOAuthAuth && account.authMode === selectedAuthMode && hasConfiguredAuth;
+  const apiKeyConfigured = status?.hasKey ?? false;
+  const normalizedDraftModels = useMemo(
+    () => normalizeProviderModelList(modelsText.split('\n')),
+    [modelsText],
+  );
+  const currentBaseUrl = account.baseUrl || undefined;
+  const currentApiProtocol = account.apiProtocol || 'openai-completions';
+  const hasBaseUrlChange = Boolean(typeInfo?.showBaseUrl) && (baseUrl.trim() || undefined) !== currentBaseUrl;
+  const hasProtocolChange = canEditProtocol && apiProtocol !== currentApiProtocol;
+  const hasModelChange = showModelIdField && !providerModelsEqual(normalizedDraftModels, configuredModels);
+  const authModeChangeNeedsSave = usesApiKeyAuth && account.authMode !== 'api_key';
+  const missingApiKeyForModeSwitch = authModeChangeNeedsSave && !apiKeyConfigured && !newKey.trim();
+  const hasPendingChanges = Boolean(newKey.trim()) || hasBaseUrlChange || hasProtocolChange || hasModelChange || authModeChangeNeedsSave;
+  const missingRequiredModel = showModelIdField && normalizedDraftModels.length === 0;
+  const hasEditableFields = canEditModelConfig || usesApiKeyAuth || authModeChangeNeedsSave;
+  const headerLink = usesApiKeyAuth && typeInfo?.apiKeyUrl
+    ? { href: typeInfo.apiKeyUrl, label: t('aiProviders.oauth.getApiKey') }
+    : (effectiveDocsUrl ? { href: effectiveDocsUrl, label: t('aiProviders.dialog.customDoc') } : null);
+  const pendingOAuthRef = React.useRef<{ accountId: string } | null>(null);
+  const sectionClassName = 'border-t border-black/6 pt-5 dark:border-white/10';
+  const subtlePanelClassName = 'rounded-2xl border border-black/8 bg-black/[0.025] dark:border-white/10 dark:bg-white/[0.03]';
+  const segmentedControlClassName = 'inline-flex w-full rounded-2xl border border-black/8 bg-black/[0.025] p-1 text-[13px] font-medium dark:border-white/10 dark:bg-white/[0.03]';
+  const segmentedButtonClassName = 'flex-1 rounded-xl px-4 py-2.5 transition-colors';
+  const segmentedButtonActiveClassName = 'bg-black/[0.06] text-foreground dark:bg-white/[0.09]';
+  const segmentedButtonInactiveClassName = 'text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05]';
+  const inputClassName = 'field-focus-ring h-[40px] rounded-xl border border-black/8 bg-black/[0.025] font-mono text-[13px] shadow-none dark:border-white/10 dark:bg-white/[0.03]';
+  const textAreaClassName = 'field-focus-ring min-h-24 w-full rounded-xl border border-black/8 bg-black/[0.025] px-3 py-2 text-[13px] font-mono outline-none shadow-none dark:border-white/10 dark:bg-white/[0.03]';
 
   useEffect(() => {
-    if (isEditing) {
-      setNewKey('');
-      setShowKey(false);
-      setBaseUrl(account.baseUrl || '');
-      setApiProtocol(account.apiProtocol || 'openai-completions');
-      setModelsText(configuredModels.join('\n'));
-      setArkMode(
-        isArkCodePlanMode(
-          account.vendorId,
-          account.baseUrl,
-          configuredModels,
-          typeInfo?.codePlanPresetBaseUrl,
-          typeInfo?.codePlanPresetModelId,
-        ) ? 'codeplan' : 'apikey'
-      );
-    }
+    setNewKey('');
+    setShowKey(false);
+    setBaseUrl(draftState.baseUrl);
+    setApiProtocol(draftState.apiProtocol);
+    setModelsText(draftState.modelsText);
+    setArkMode(draftState.arkMode);
+    setOauthFlowing(false);
+    setOauthData(null);
+    setOauthError(null);
   }, [
-    isEditing,
-    account.apiProtocol,
-    account.baseUrl,
-    account.vendorId,
-    configuredModels,
-    typeInfo?.codePlanPresetBaseUrl,
-    typeInfo?.codePlanPresetModelId,
+    draftState.apiProtocol,
+    draftState.arkMode,
+    draftState.baseUrl,
+    draftState.modelsText,
   ]);
 
+  useEffect(() => {
+    setAuthModeSelection(account.authMode === 'api_key' ? 'apikey' : 'oauth');
+  }, [account.authMode]);
+
+  const resetDrafts = () => {
+    setNewKey('');
+    setShowKey(false);
+    setBaseUrl(draftState.baseUrl);
+    setApiProtocol(draftState.apiProtocol);
+    setModelsText(draftState.modelsText);
+    setArkMode(draftState.arkMode);
+    setAuthModeSelection(account.authMode === 'api_key' ? 'apikey' : 'oauth');
+  };
+
+  useEffect(() => {
+    const handleCode = (data: unknown) => {
+      if (!pendingOAuthRef.current || pendingOAuthRef.current.accountId !== account.id) {
+        return;
+      }
+      setOauthData(data as { verificationUri: string; userCode: string; expiresIn: number });
+      setOauthError(null);
+    };
+
+    const handleSuccess = async (data: unknown) => {
+      const payload = (data as { accountId?: string } | undefined) || undefined;
+      const accountId = payload?.accountId || pendingOAuthRef.current?.accountId;
+      if (!pendingOAuthRef.current || accountId !== pendingOAuthRef.current.accountId) {
+        return;
+      }
+
+      pendingOAuthRef.current = null;
+      setOauthFlowing(false);
+      setOauthData(null);
+      setOauthError(null);
+
+      try {
+        await onRefresh();
+        toast.success(t('aiProviders.toast.updated'));
+      } catch (error) {
+        toast.error(`${t('aiProviders.toast.failedUpdate')}: ${error}`);
+      }
+    };
+
+    const handleError = (data: unknown) => {
+      if (!pendingOAuthRef.current || pendingOAuthRef.current.accountId !== account.id) {
+        return;
+      }
+      setOauthError((data as { message: string }).message);
+      setOauthData(null);
+      setOauthFlowing(false);
+      pendingOAuthRef.current = null;
+    };
+
+    const offCode = subscribeHostEvent('oauth:code', handleCode);
+    const offSuccess = subscribeHostEvent('oauth:success', handleSuccess);
+    const offError = subscribeHostEvent('oauth:error', handleError);
+
+    return () => {
+      offCode();
+      offSuccess();
+      offError();
+    };
+  }, [account.id, onRefresh, t]);
+
+  const handleStartOAuth = async () => {
+    if (!usesOAuthAuth) {
+      return;
+    }
+
+    setOauthFlowing(true);
+    setOauthData(null);
+    setOauthError(null);
+
+    try {
+      pendingOAuthRef.current = { accountId: account.id };
+      await hostApiFetch('/api/providers/oauth/start', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider: account.vendorId,
+          accountId: account.id,
+          label: account.label,
+        }),
+      });
+    } catch (error) {
+      setOauthError(String(error));
+      setOauthFlowing(false);
+      pendingOAuthRef.current = null;
+    }
+  };
+
+  const handleCancelOAuth = async () => {
+    setOauthFlowing(false);
+    setOauthData(null);
+    setOauthError(null);
+    pendingOAuthRef.current = null;
+    await hostApiFetch('/api/providers/oauth/cancel', {
+      method: 'POST',
+    });
+  };
+
   const handleSaveEdits = async () => {
+    if (!hasPendingChanges) {
+      return;
+    }
+
+    if (missingRequiredModel) {
+      toast.error(t('aiProviders.toast.modelRequired'));
+      return;
+    }
+
+    if (missingApiKeyForModeSwitch) {
+      toast.error(t('aiProviders.toast.invalidKey'));
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload: { newApiKey?: string; updates?: Partial<ProviderConfig> } = {};
-      const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
+      let nextApiKey: string | undefined;
 
       if (newKey.trim()) {
         setValidating(true);
@@ -402,45 +627,36 @@ function ProviderCard({
           setSaving(false);
           return;
         }
-        payload.newApiKey = newKey.trim();
+        nextApiKey = newKey.trim();
       }
 
-      {
-        if (showModelIdField && normalizedModels.length === 0) {
-          toast.error(t('aiProviders.toast.modelRequired'));
-          setSaving(false);
-          return;
-        }
-
-        const updates: Partial<ProviderConfig> = {};
-        if (typeInfo?.showBaseUrl && (baseUrl.trim() || undefined) !== (account.baseUrl || undefined)) {
-          updates.baseUrl = baseUrl.trim() || undefined;
-        }
-        if (canEditProtocol && apiProtocol !== (account.apiProtocol || 'openai-completions')) {
-          updates.apiProtocol = apiProtocol || 'openai-completions';
-        }
-        if (showModelIdField && !providerModelsEqual(normalizedModels, configuredModels)) {
-          updates.models = normalizedModels;
-        }
-        if (Object.keys(updates).length > 0) {
-          payload.updates = updates;
-        }
+      const updates: Partial<ProviderAccount> = {};
+      if (hasBaseUrlChange) {
+        updates.baseUrl = baseUrl.trim() || undefined;
+      }
+      if (hasProtocolChange) {
+        updates.apiProtocol = apiProtocol || 'openai-completions';
+      }
+      if (hasModelChange) {
+        updates.models = normalizedDraftModels;
+      }
+      if (authModeChangeNeedsSave) {
+        updates.authMode = 'api_key';
       }
 
       // Keep Ollama key optional in UI, but persist a placeholder when
       // editing legacy configs that have no stored key.
-      if (account.vendorId === 'ollama' && !status?.hasKey && !payload.newApiKey) {
-        payload.newApiKey = resolveProviderApiKeyForSave(account.vendorId, '') as string;
+      if (account.vendorId === 'ollama' && !status?.hasKey && !nextApiKey) {
+        nextApiKey = resolveProviderApiKeyForSave(account.vendorId, '') as string;
       }
 
-      if (!payload.newApiKey && !payload.updates) {
-        onCancelEdit();
-        setSaving(false);
+      if (!nextApiKey && Object.keys(updates).length === 0) {
         return;
       }
 
-      await onSaveEdits(payload);
+      await onSaveAccount(updates, nextApiKey);
       setNewKey('');
+      setShowKey(false);
       toast.success(t('aiProviders.toast.updated'));
     } catch (error) {
       toast.error(`${t('aiProviders.toast.failedUpdate')}: ${error}`);
@@ -451,96 +667,444 @@ function ProviderCard({
   };
 
   return (
-    <div
-      className={cn(
-        "group flex flex-col p-4 rounded-2xl transition-all relative overflow-hidden",
-        isDefault
-          ? "border border-info/20 bg-card shadow-sm ring-1 ring-info/20"
-          : "surface-muted border border-transparent"
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={cn("h-[42px] w-[42px] shrink-0 flex items-center justify-center text-foreground rounded-full group-hover:scale-105 transition-transform", isDefault ? "surface-muted" : "bg-white dark:bg-[#1a1a19]")}>
-            {getProviderIconUrl(account.vendorId) ? (
-              <img src={getProviderIconUrl(account.vendorId)} alt={typeInfo?.name || account.vendorId} className={cn('h-5 w-5', shouldInvertInDark(account.vendorId) && 'dark:invert')} />
-            ) : (
-              <span className="text-xl">{vendor?.icon || typeInfo?.icon || '⚙️'}</span>
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-[15px]">{account.label}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 text-[13px] text-muted-foreground">
-              <span className="capitalize">{vendor?.name || account.vendorId}</span>
-              <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
-              <span>{getAuthModeLabel(account.authMode, t)}</span>
-              {configuredModels.length > 0 && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
-                  <span className="truncate max-w-[240px]">
-                    {configuredModels.slice(0, 2).join(', ')}
-                    {configuredModels.length > 2 ? ` +${configuredModels.length - 2}` : ''}
-                  </span>
-                </>
-              )}
-              <span className="flex items-center gap-1">
-                {status?.hasKey ? (
-                  <><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> {t('aiProviders.card.configured')}</>
+    <div className="flex h-full flex-col p-4 md:p-5 xl:p-6">
+      <div className="space-y-5">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-black/8 bg-black/[0.03] text-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                {getProviderIconUrl(account.vendorId) ? (
+                  <img
+                    src={getProviderIconUrl(account.vendorId)}
+                    alt={typeInfo?.name || account.vendorId}
+                    className={cn('h-5 w-5', shouldInvertInDark(account.vendorId) && 'dark:invert')}
+                  />
                 ) : (
-                  <><div className="w-1.5 h-1.5 rounded-full bg-red-500" /> {t('aiProviders.dialog.apiKeyMissing')}</>
+                  <span className="text-xl">{vendor?.icon || typeInfo?.icon || '⚙️'}</span>
                 )}
-              </span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="truncate text-[22px] font-semibold text-foreground">{account.label}</h3>
+                  {isDefault ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-black/8 bg-black/[0.045] px-2.5 py-1 text-[11px] font-medium text-foreground/80 dark:border-white/10 dark:bg-white/[0.08] dark:text-foreground/85">
+                      <Check className="h-3 w-3" />
+                      {t('aiProviders.card.default')}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-[13px] text-muted-foreground">
+                  {vendor?.name || account.vendorId}
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {!isEditing && (
-          <div className="flex items-center gap-1 transition-opacity">
-            {isDefault ?
-              <span className="flex items-center gap-1 rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info">
-                <Check className="h-3 w-3" />
-                默认提供商
-              </span>
-            :
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              {headerLink && (
+                <a
+                  href={headerLink.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-info hover:opacity-80"
+                >
+                  {headerLink.label}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              {!isDefault && (
+                <Button
+                  variant="ghost"
+                  className="h-9 text-muted-foreground"
+                  onClick={onSetDefault}
+                  title={t('aiProviders.card.setDefault')}
+                >
+                  <HugeiconsIcon icon={PinIcon} className="h-4 w-4 mr-1.5" />
+                  设为默认
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground hover:bg-card hover:text-info"
-                onClick={onSetDefault}
-                title={t('aiProviders.card.setDefault')}
+                disabled={isDefault}
+                className="h-9 w-9 rounded-full text-muted-foreground hover:bg-black/[0.04] hover:text-destructive dark:hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-30"
+                onClick={() => setConfirmingDelete(true)}
+                title={isDefault ? t('aiProviders.card.deleteDisabledDefault') : t('aiProviders.card.delete')}
               >
-                <HugeiconsIcon icon={PinIcon} className="h-4 w-4" />
+                <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
               </Button>
-            }
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-[#1a1a19]"
-              onClick={onEdit}
-              title={t('aiProviders.card.editKey')}
+            </div>
+          </div>
+
+          {supportsModeToggle ? (
+            <div className="max-w-[340px]">
+              <div className={segmentedControlClassName}>
+                <button
+                  type="button"
+                  onClick={() => setAuthModeSelection('oauth')}
+                  className={cn(
+                    segmentedButtonClassName,
+                    authModeSelection === 'oauth'
+                      ? segmentedButtonActiveClassName
+                      : segmentedButtonInactiveClassName,
+                  )}
+                >
+                  {t('aiProviders.oauth.loginMode')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthModeSelection('apikey')}
+                  className={cn(
+                    segmentedButtonClassName,
+                    authModeSelection === 'apikey'
+                      ? segmentedButtonActiveClassName
+                      : segmentedButtonInactiveClassName,
+                  )}
+                >
+                  {t('aiProviders.oauth.apikeyMode')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-black/8 bg-black/[0.03] px-3 py-1.5 text-[12px] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                {getAuthModeLabel(account.authMode, t)}
+              </span>
+              {hasConfiguredAuth ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-3 py-1.5 text-[12px] font-medium text-green-700 dark:text-green-400">
+                  <div className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {t('aiProviders.card.configured')}
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
+
+        {usesOAuthAuth && (
+          <section className={sectionClassName}>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.authMode')}</Label>
+                  <p className="text-[12px] text-muted-foreground">
+                    {oauthConfigured ? t('aiProviders.card.configured') : t('aiProviders.oauth.loginPrompt')}
+                  </p>
+                </div>
+                {oauthConfigured ? (
+                  <div className="flex items-center gap-1.5 rounded-md bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 dark:text-green-500">
+                    <div className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {t('aiProviders.card.configured')}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className={cn(subtlePanelClassName, 'p-5')}>
+                <p className="mb-4 text-[13px] font-medium text-foreground/80">
+                  {t('aiProviders.oauth.loginPrompt')}
+                </p>
+                <Button
+                  onClick={handleStartOAuth}
+                  disabled={oauthFlowing}
+                  className="h-10 w-full rounded-full px-5 text-[13px] font-medium shadow-none"
+                >
+                  {oauthFlowing ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('aiProviders.oauth.waiting')}</>
+                  ) : (
+                    t('aiProviders.oauth.loginButton')
+                  )}
+                </Button>
+              </div>
+
+              {oauthFlowing && (
+                <div className={cn(subtlePanelClassName, 'relative overflow-hidden p-5')}>
+                  <div className="absolute inset-0 animate-pulse bg-black/[0.02] dark:bg-white/[0.03]" />
+
+                  <div className="relative z-10 flex flex-col items-center justify-center space-y-5 text-center">
+                    {oauthError ? (
+                      <div className="space-y-3 text-red-500">
+                        <XCircle className="mx-auto h-10 w-10" />
+                        <p className="text-[15px] font-semibold">{t('aiProviders.oauth.authFailed')}</p>
+                        <p className="text-[13px] opacity-80">{oauthError}</p>
+                        <Button variant="outline" size="sm" onClick={handleCancelOAuth} className="modal-secondary-button mt-2 shadow-none">
+                          {t('aiProviders.oauth.tryAgain')}
+                        </Button>
+                      </div>
+                    ) : !oauthData ? (
+                      <div className="space-y-4 py-6">
+                        <Loader2 className="mx-auto h-10 w-10 animate-spin text-info" />
+                        <p className="animate-pulse text-[13px] font-medium text-muted-foreground">{t('aiProviders.oauth.requestingCode')}</p>
+                      </div>
+                    ) : (
+                      <div className="w-full space-y-5">
+                        <div className="space-y-2">
+                          <h3 className="text-[16px] font-semibold text-foreground">{t('aiProviders.oauth.approveLogin')}</h3>
+                          <div className="mt-2 space-y-1.5 rounded-xl border border-black/8 bg-black/[0.03] p-4 text-left text-[13px] text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                            <p>1. {t('aiProviders.oauth.step1')}</p>
+                            <p>2. {t('aiProviders.oauth.step2')}</p>
+                            <p>3. {t('aiProviders.oauth.step3')}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-3 rounded-xl border border-black/8 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                          <code className="text-3xl font-mono font-bold tracking-[0.2em] text-foreground">
+                            {oauthData.userCode}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-full hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+                            onClick={() => {
+                              navigator.clipboard.writeText(oauthData.userCode);
+                              toast.success(t('aiProviders.oauth.codeCopied'));
+                            }}
+                          >
+                            <Copy className="h-5 w-5" />
+                          </Button>
+                        </div>
+
+                        <Button
+                          variant="secondary"
+                          className="modal-secondary-button w-full shadow-none"
+                          onClick={() => invokeIpc('shell:openExternal', oauthData.verificationUri)}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          {t('aiProviders.oauth.openLoginPage')}
+                        </Button>
+
+                        <div className="flex items-center justify-center gap-2 pt-2 text-[13px] font-medium text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin text-info" />
+                          <span>{t('aiProviders.oauth.waitingApproval')}</span>
+                        </div>
+
+                        <Button variant="ghost" className="modal-secondary-button w-full shadow-none" onClick={handleCancelOAuth}>
+                          {t('aiProviders.oauth.cancel')}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {canEditModelConfig && (
+          <section className={sectionClassName}>
+            <div className="space-y-3">
+              <p className="text-[14px] font-bold text-foreground/80">{t('aiProviders.sections.model')}</p>
+              {typeInfo?.showBaseUrl && (
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.baseUrl')}</Label>
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
+                    className={inputClassName}
+                  />
+                </div>
+              )}
+              {account.vendorId === 'ark' && codePlanPreset && (
+                <div className="space-y-1.5 pt-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.codePlanPreset')}</Label>
+                    {typeInfo?.codePlanDocsUrl && (
+                      <a
+                        href={typeInfo.codePlanDocsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[12px] font-medium text-info hover:opacity-80"
+                      >
+                        {t('aiProviders.dialog.codePlanDoc')}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[13px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArkMode('apikey');
+                        setBaseUrl(typeInfo?.defaultBaseUrl || '');
+                        if (normalizedDraftModels.length === 1 && normalizedDraftModels[0] === codePlanPreset.modelId) {
+                          setModelsText(typeInfo?.defaultModelId || '');
+                        }
+                      }}
+                      className={cn(
+                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
+                        arkMode === 'apikey'
+                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
+                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
+                      )}
+                    >
+                      {t('aiProviders.authModes.apiKey')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArkMode('codeplan');
+                        setBaseUrl(codePlanPreset.baseUrl);
+                        setModelsText(codePlanPreset.modelId);
+                      }}
+                      className={cn(
+                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
+                        arkMode === 'codeplan'
+                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
+                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
+                      )}
+                    >
+                      {t('aiProviders.dialog.codePlanMode')}
+                    </button>
+                  </div>
+                  {arkMode === 'codeplan' && (
+                    <p className="text-[12px] text-muted-foreground">
+                      {t('aiProviders.dialog.codePlanPresetDesc')}
+                    </p>
+                  )}
+                </div>
+              )}
+              {canEditProtocol && (
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.protocol', 'Protocol')}</Label>
+                  <div className="flex flex-wrap gap-2 text-[13px]">
+                    <button
+                      type="button"
+                      onClick={() => setApiProtocol('openai-completions')}
+                      className={cn(
+                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
+                        apiProtocol === 'openai-completions'
+                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
+                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
+                      )}
+                    >
+                      {t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApiProtocol('openai-responses')}
+                      className={cn(
+                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
+                        apiProtocol === 'openai-responses'
+                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
+                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
+                      )}
+                    >
+                      {t('aiProviders.protocols.openaiResponses', 'OpenAI Responses')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApiProtocol('anthropic-messages')}
+                      className={cn(
+                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
+                        apiProtocol === 'anthropic-messages'
+                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
+                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
+                      )}
+                    >
+                      {t('aiProviders.protocols.anthropic', 'Anthropic')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {showModelIdField && (
+                <div className="space-y-1.5">
+                  <textarea
+                    value={modelsText}
+                    onChange={(e) => setModelsText(e.target.value)}
+                    placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
+                    className={textAreaClassName}
+                  />
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('aiProviders.dialog.modelIdsHelp')}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {usesApiKeyAuth && (
+          <section className={sectionClassName}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.apiKey')}</Label>
+                  <p className="text-[12px] text-muted-foreground">
+                    {apiKeyConfigured
+                      ? t('aiProviders.dialog.apiKeyConfigured')
+                      : t('aiProviders.dialog.apiKeyMissing')}
+                  </p>
+                </div>
+                {apiKeyConfigured ? (
+                  <div className="flex items-center gap-1.5 rounded-md bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 dark:text-green-500">
+                    <div className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {t('aiProviders.card.configured')}
+                  </div>
+                ) : null}
+              </div>
+              {typeInfo?.apiKeyUrl && (
+                <div className="flex justify-start">
+                  <a
+                    href={typeInfo.apiKeyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[13px] text-info hover:underline hover:opacity-80"
+                    tabIndex={-1}
+                  >
+                    {t('aiProviders.oauth.getApiKey')} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.replaceApiKey')}</Label>
+                <div className="relative">
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    placeholder={typeInfo?.requiresApiKey ? typeInfo?.placeholder : (typeInfo?.id === 'ollama' ? t('aiProviders.notRequired') : t('aiProviders.card.editKey'))}
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
+                    className={cn(inputClassName, 'pr-10')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-[12px] text-muted-foreground">
+                  {t('aiProviders.dialog.replaceApiKeyHelp')}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {hasEditableFields && (
+          <div className="flex justify-end gap-2 border-t border-black/6 pt-5 dark:border-white/10">
+            <button
+              type="button"
+              className="modal-secondary-button shadow-none"
+              disabled={!hasPendingChanges || saving || validating}
+              onClick={resetDrafts}
             >
-              <HugeiconsIcon icon={AiSettingIcon} className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={isDefault}
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-white dark:hover:bg-[#1a1a19] disabled:opacity-30 disabled:cursor-not-allowed"
-              onClick={() => setConfirmingDelete(true)}
-              title={isDefault ? t('aiProviders.card.deleteDisabledDefault') : t('aiProviders.card.delete')}
+              {t('aiProviders.dialog.reset')}
+            </button>
+            <button
+              type="button"
+              className="modal-primary-button inline-flex items-center gap-2 shadow-none disabled:opacity-50"
+              disabled={validating || saving || !hasPendingChanges || missingRequiredModel || missingApiKeyForModeSwitch}
+              onClick={handleSaveEdits}
             >
-              <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
-            </Button>
+              {validating || saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {t('aiProviders.dialog.save')}
+            </button>
           </div>
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
       {confirmingDelete && createPortal(
         <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4">
-          <div className="modal-card-surface w-full max-w-sm rounded-3xl border shadow-2xl p-6 flex flex-col gap-4">
+          <div className="modal-card-surface w-full max-w-sm rounded-3xl border shadow-none p-6 flex flex-col gap-4">
             <div>
               <p className="modal-title text-[17px]">{t('aiProviders.card.deleteConfirmTitle')}</p>
               <p className="modal-description mt-1">
@@ -577,212 +1141,6 @@ function ProviderCard({
           </div>
         </div>,
         document.body,
-      )}
-
-      {isEditing && (
-        <div className="space-y-4 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
-          {effectiveDocsUrl && (
-            <div className="flex justify-end -mt-2 mb-2">
-              <a
-                href={effectiveDocsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-info inline-flex items-center gap-1 text-[12px] font-medium hover:opacity-80"
-              >
-                {t('aiProviders.dialog.customDoc')}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-          )}
-          {canEditModelConfig && (
-            <div className="modal-section-surface space-y-3 rounded-xl border p-4">
-              <p className="text-[14px] font-bold text-foreground/80">{t('aiProviders.sections.model')}</p>
-              {typeInfo?.showBaseUrl && (
-                <div className="space-y-1.5">
-                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.baseUrl')}</Label>
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
-                    className="modal-field-surface field-focus-ring h-[40px] rounded-xl font-mono text-[13px] shadow-sm"
-                  />
-                </div>
-              )}
-              {account.vendorId === 'ark' && codePlanPreset && (
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.codePlanPreset')}</Label>
-                    {typeInfo?.codePlanDocsUrl && (
-                      <a
-                        href={typeInfo.codePlanDocsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-info inline-flex items-center gap-1 text-[12px] font-medium hover:opacity-80"
-                      >
-                        {t('aiProviders.dialog.codePlanDoc')}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex gap-2 text-[13px]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setArkMode('apikey');
-                        setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                        const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
-                        if (normalizedModels.length === 1 && normalizedModels[0] === codePlanPreset.modelId) {
-                          setModelsText(typeInfo?.defaultModelId || '');
-                        }
-                      }}
-                      className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", arkMode === 'apikey' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                    >
-                      {t('aiProviders.authModes.apiKey')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setArkMode('codeplan');
-                        setBaseUrl(codePlanPreset.baseUrl);
-                        setModelsText(codePlanPreset.modelId);
-                      }}
-                      className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", arkMode === 'codeplan' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                    >
-                      {t('aiProviders.dialog.codePlanMode')}
-                    </button>
-                  </div>
-                  {arkMode === 'codeplan' && (
-                    <p className="text-[12px] text-muted-foreground">
-                      {t('aiProviders.dialog.codePlanPresetDesc')}
-                    </p>
-                  )}
-                </div>
-              )}
-              {canEditProtocol && (
-                <div className="space-y-1.5">
-                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.protocol', 'Protocol')}</Label>
-                  <div className="flex gap-2 text-[13px]">
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('openai-completions')}
-                      className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'openai-completions' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                    >
-                      {t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('openai-responses')}
-                      className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'openai-responses' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                    >
-                      {t('aiProviders.protocols.openaiResponses', 'OpenAI Responses')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('anthropic-messages')}
-                      className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'anthropic-messages' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                    >
-                      {t('aiProviders.protocols.anthropic', 'Anthropic')}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {showModelIdField && (
-                <div className="space-y-1.5">
-                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.modelIds')}</Label>
-                  <textarea
-                    value={modelsText}
-                    onChange={(e) => setModelsText(e.target.value)}
-                    placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
-                    className="modal-field-surface field-focus-ring min-h-24 w-full rounded-xl border px-3 py-2 text-[13px] font-mono outline-none shadow-sm"
-                  />
-                  <p className="text-[12px] text-muted-foreground">
-                    {t('aiProviders.dialog.modelIdsHelp')}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-          <div className="modal-section-surface space-y-3 rounded-xl border p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.apiKey')}</Label>
-                <p className="text-[12px] text-muted-foreground">
-                  {status?.hasKey
-                    ? t('aiProviders.dialog.apiKeyConfigured')
-                    : t('aiProviders.dialog.apiKeyMissing')}
-                </p>
-              </div>
-              {status?.hasKey ? (
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-500 bg-green-500/10 px-2 py-1 rounded-md">
-                  <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                  {t('aiProviders.card.configured')}
-                </div>
-              ) : null}
-            </div>
-            {typeInfo?.apiKeyUrl && (
-              <div className="flex justify-start">
-                <a
-                  href={typeInfo.apiKeyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-info flex items-center gap-1 text-[13px] hover:underline hover:opacity-80"
-                  tabIndex={-1}
-                >
-                  {t('aiProviders.oauth.getApiKey')} <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            )}
-            <div className="space-y-1.5 pt-1">
-              <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.replaceApiKey')}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showKey ? 'text' : 'password'}
-                    placeholder={typeInfo?.requiresApiKey ? typeInfo?.placeholder : (typeInfo?.id === 'ollama' ? t('aiProviders.notRequired') : t('aiProviders.card.editKey'))}
-                    value={newKey}
-                    onChange={(e) => setNewKey(e.target.value)}
-                    className="modal-field-surface field-focus-ring pr-10 h-[40px] rounded-xl font-mono text-[13px] shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={handleSaveEdits}
-                  className="modal-field-surface surface-hover h-[40px] rounded-xl px-4"
-                  disabled={
-                    validating
-                    || saving
-                    || (
-                      !newKey.trim()
-                      && (baseUrl.trim() || undefined) === (account.baseUrl || undefined)
-                      && (!canEditProtocol || apiProtocol === (account.apiProtocol || 'openai-completions'))
-                      && providerModelsEqual(normalizeProviderModelList(modelsText.split('\n')), configuredModels)
-                    )
-                    || Boolean(showModelIdField && normalizeProviderModelList(modelsText.split('\n')).length === 0)
-                  }
-                >
-                  {validating || saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4 text-green-500" />
-                  )}
-                </Button>
-                <Button variant="ghost" onClick={onCancelEdit} className="surface-hover-strong h-[40px] w-[40px] rounded-xl p-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-[12px] text-muted-foreground">
-                {t('aiProviders.dialog.replaceApiKeyHelp')}
-              </p>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

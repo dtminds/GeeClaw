@@ -88,7 +88,7 @@ Environment variables for bundled search skills:
 Packaged builds also ship managed `opencli` and `mcporter` CLIs on the internal PATH so bundled skill / exec flows do not depend on separate system installs.
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic, GeekAI, and more) with credentials stored securely in your system's native keychain.
+Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
