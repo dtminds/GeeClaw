@@ -45,7 +45,7 @@ describe('fetchGeeclawUserInfo', () => {
     });
 
     expect(proxyAwareFetchMock).toHaveBeenCalledWith(
-      'https://api-test.geeclaw.cn/geeclaw/api/user/info',
+      'https://api.geeclaw.cn/geeclaw/api/user/info',
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({

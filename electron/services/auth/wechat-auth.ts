@@ -73,7 +73,7 @@ const WECHAT_APP_ID = 'wxeb0be7ca66db3ea9';
 const WECHAT_REDIRECT_URI = 'https://auth.geeclaw.cn/callback';
 const WECHAT_SCOPE = 'snsapi_login';
 const WECHAT_STATE = 'geeclaw_login';
-const AUTH_LOGIN_API_URL = 'https://api-test.geeclaw.cn/geeclaw/api/auth/login';
+const AUTH_LOGIN_API_URL = 'https://api.geeclaw.cn/geeclaw/api/auth/login';
 const AUTH_XY_EXTRA_DATA = 'appid=wx0573c66bdfab18bc;version=1.9.990;envVersion=release;senceId=1089';
 const AUTH_REQUEST_ORIGIN = 'Knife4j';
 const WECHAT_LOGIN_TIMEOUT_MS = DEFAULT_TIMEOUT_MS;

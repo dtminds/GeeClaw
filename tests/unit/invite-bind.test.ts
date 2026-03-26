@@ -34,7 +34,7 @@ describe('bindInviteCode', () => {
     await expect(bindInviteCode('invite-123', 'token-abc')).resolves.toBe(true);
 
     expect(proxyAwareFetchMock).toHaveBeenCalledWith(
-      'https://api-test.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
+      'https://api.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -64,12 +64,12 @@ describe('bindInviteCode', () => {
 
     expect(proxyAwareFetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://api-test.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
+      'https://api.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(proxyAwareFetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://api-test.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
+      'https://api.geeclaw.cn/geeclaw/api/invite/bind?inviteCode=invite-123',
       expect.objectContaining({ method: 'GET' }),
     );
   });

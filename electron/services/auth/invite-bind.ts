@@ -85,9 +85,5 @@ export async function bindInviteCode(inviteCode: string, accessToken: string): P
     throw new Error(resolveInviteBindMessage(result.payload, 'Invite code binding failed'));
   }
 
-  if (result.payload?.data !== true) {
-    throw new Error(resolveInviteBindMessage(result.payload, 'Invalid invite code'));
-  }
-
   return true;
 }
