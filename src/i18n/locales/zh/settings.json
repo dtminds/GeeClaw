@@ -296,7 +296,7 @@
     },
     "extension": {
       "title": "Chrome浏览器插件",
-      "description": "如果插件还没有连通，请先下载最新扩展包，再按下面步骤安装到 Chrome。",
+      "description": "如果插件还没有连通，请先下载最新扩展包，再按下面步骤安装到 Chrome",
       "folder": "内置扩展目录",
       "empty": "扩展目录不可用",
       "opening": "打开中...",

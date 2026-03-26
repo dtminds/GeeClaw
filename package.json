@@ -81,7 +81,6 @@
     "dependencies": {
         "@hugeicons/core-free-icons": "^3.1.1",
         "@hugeicons/react": "^1.1.4",
-        "@jackwener/opencli": "github:jackwener/opencli",
         "@radix-ui/react-popover": "^1.1.15",
         "@streamdown/cjk": "^1.0.3",
         "@streamdown/code": "^1.1.1",
@@ -103,6 +102,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@jackwener/opencli": "1.4.1",
         "@larksuite/openclaw-lark": "2026.3.18",
         "@martian-engineering/lossless-claw": "0.4.0",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -121,7 +121,7 @@
         "@soimy/dingtalk": "^3.3.0",
         "@tailwindcss/typography": "^0.5.19",
         "@tailwindcss/vite": "^4.2.1",
-        "@tencent-weixin/openclaw-weixin": "1.0.2",
+        "@tencent-weixin/openclaw-weixin": "1.0.3",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
         "@types/node": "^25.3.0",
