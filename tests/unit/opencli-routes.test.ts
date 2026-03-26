@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 const getOpenCliStatusMock = vi.fn();
+const getOpenCliCatalogMock = vi.fn();
 const sendJsonMock = vi.fn();
 
 vi.mock('@electron/utils/opencli-runtime', () => ({
   getOpenCliStatus: (...args: unknown[]) => getOpenCliStatusMock(...args),
+  getOpenCliCatalog: (...args: unknown[]) => getOpenCliCatalogMock(...args),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -44,6 +46,44 @@ describe('handleOpenCliRoutes', () => {
       expect.objectContaining({
         binaryExists: true,
         doctor: { ok: true },
+      }),
+    );
+  });
+
+  it('returns grouped opencli catalog for GET /api/opencli/catalog', async () => {
+    getOpenCliCatalogMock.mockResolvedValue({
+      totalSites: 1,
+      totalCommands: 2,
+      sites: [
+        {
+          site: 'bilibili',
+          domains: ['www.bilibili.com'],
+          strategies: ['cookie'],
+          commands: [
+            { command: 'bilibili/hot', name: 'hot' },
+            { command: 'bilibili/search', name: 'search' },
+          ],
+        },
+      ],
+    });
+
+    const { handleOpenCliRoutes } = await import('@electron/api/routes/opencli');
+
+    const handled = await handleOpenCliRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:3210/api/opencli/catalog'),
+      {} as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(getOpenCliCatalogMock).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({
+        totalSites: 1,
+        totalCommands: 2,
       }),
     );
   });
