@@ -719,7 +719,7 @@ function ProviderCard({
                   title={t('aiProviders.card.setDefault')}
                 >
                   <HugeiconsIcon icon={PinIcon} className="h-4 w-4 mr-1.5" />
-                  设为默认
+                  {t('aiProviders.card.setDefault')}
                 </Button>
               )}
               <Button
