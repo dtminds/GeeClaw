@@ -487,7 +487,7 @@ async function runOpenCliCatalog(): Promise<OpenCliCatalog> {
     parsed = JSON.parse(result.output);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse OpenCLI list output: ${message}`);
+    throw new Error(`Failed to parse OpenCLI list output: ${message}`, { cause: error });
   }
 
   const commands = Array.isArray(parsed)
