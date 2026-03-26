@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { getOpenClawDir, getOpenClawEntryPath } from './paths';
 import { logger } from './logger';
-import { getManagedCommandWrapperPath } from './managed-bin';
+import { getBundledNodePath, getManagedCommandWrapperPath } from './managed-bin';
 
 // ── Quoting helpers ──────────────────────────────────────────────────────────
 
@@ -276,6 +276,11 @@ export async function autoInstallCliIfNeeded(
 // ── Completion helpers ───────────────────────────────────────────────────────
 
 function getNodeExecForCli(): string {
+  const bundledNode = getBundledNodePath();
+  if (bundledNode) {
+    return bundledNode;
+  }
+
   if (process.platform === 'darwin' && app.isPackaged) {
     const appName = app.getName();
     const helperName = `${appName} Helper`;

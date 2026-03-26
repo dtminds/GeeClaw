@@ -18,9 +18,6 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.4
         version: 1.1.6(react@19.2.4)
-      '@jackwener/opencli':
-        specifier: github:jackwener/opencli
-        version: https://codeload.github.com/jackwener/opencli/tar.gz/56d43266469a70a03ec8d67ea9afc76327f627f4
       '@radix-ui/react-popover':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -79,9 +76,12 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
+      '@jackwener/opencli':
+        specifier: 1.4.1
+        version: 1.4.1
       '@larksuite/openclaw-lark':
-        specifier: 2026.3.25
-        version: 2026.3.25(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))
+        specifier: 2026.3.18
+        version: 2026.3.18
       '@martian-engineering/lossless-claw':
         specifier: 0.4.0
         version: 0.4.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(openclaw@2026.3.13(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3)))(ws@8.19.0)(zod@4.3.6)
@@ -134,8 +134,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))
       '@tencent-weixin/openclaw-weixin':
-        specifier: 1.0.2
-        version: 1.0.2
+        specifier: 1.0.3
+        version: 1.0.3
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -1277,9 +1277,8 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
-  '@jackwener/opencli@https://codeload.github.com/jackwener/opencli/tar.gz/56d43266469a70a03ec8d67ea9afc76327f627f4':
-    resolution: {tarball: https://codeload.github.com/jackwener/opencli/tar.gz/56d43266469a70a03ec8d67ea9afc76327f627f4}
-    version: 1.3.3
+  '@jackwener/opencli@1.4.1':
+    resolution: {integrity: sha512-zgyAsDCDK0V+wK2Ib9In3b7KLOyNd4KWBxFV7d4htgi0dRviaeWeS2c2W604Ux/rqA7fCFIKzf7wxcHEOs+M8w==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -1314,8 +1313,8 @@ packages:
   '@kwsites/promise-deferred@1.1.1':
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
 
-  '@larksuite/openclaw-lark@2026.3.25':
-    resolution: {integrity: sha512-SkNm0vuBLL58FFIVaDZ4vmdgTYXPfnfAy1vP2h+j0jnw5V+VSTj6IEKUq1oFmfyw7fIztUw/5GaM/quuMuRjog==}
+  '@larksuite/openclaw-lark@2026.3.18':
+    resolution: {integrity: sha512-9qqO0a1HQ+2E9jvob/13jf1ZDfe39vzr7SgYFgtNc/ajv+jFaC7sweONyPZbiQ22CF+lIWb4FvSve74ev0Irnw==}
     hasBin: true
 
   '@larksuiteoapi/node-sdk@1.59.0':
@@ -3218,8 +3217,8 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
 
-  '@tencent-weixin/openclaw-weixin@1.0.2':
-    resolution: {integrity: sha512-kYPEowHB/0VWt9nQFee/AS6Fb+jbnu38wjkgZDBdKTuJoBL0IBW2obQ0ymgFKBFJJL9rDwnFrb/17ORGZD/X8Q==}
+  '@tencent-weixin/openclaw-weixin@1.0.3':
+    resolution: {integrity: sha512-TOo9rb5gt3ce3lJEulFT5Ta4/8ocWkR40wzM7lZ8OM3/fjTk3UHYeNjHmDcZlLeg93XYJKdVUFUEiujrf8zMYw==}
     engines: {node: '>=22'}
 
   '@testing-library/dom@10.4.1':
@@ -9620,7 +9619,7 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  '@jackwener/opencli@https://codeload.github.com/jackwener/opencli/tar.gz/56d43266469a70a03ec8d67ea9afc76327f627f4':
+  '@jackwener/opencli@1.4.1':
     dependencies:
       chalk: 5.6.2
       cli-table3: 0.6.5
@@ -9669,30 +9668,15 @@ snapshots:
   '@kwsites/promise-deferred@1.1.1':
     optional: true
 
-  '@larksuite/openclaw-lark@2026.3.25(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))':
+  '@larksuite/openclaw-lark@2026.3.18':
     dependencies:
       '@larksuiteoapi/node-sdk': 1.59.0
       '@sinclair/typebox': 0.34.48
       image-size: 2.0.2
-      openclaw: 2026.3.13(@discordjs/opus@0.10.0(encoding@0.1.13))(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(encoding@0.1.13)(node-llama-cpp@3.16.2(typescript@5.9.3))
       zod: 4.3.6
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - '@discordjs/opus'
-      - '@napi-rs/canvas'
-      - '@types/express'
-      - audio-decode
-      - aws-crt
       - bufferutil
-      - canvas
       - debug
-      - encoding
-      - ffmpeg-static
-      - jimp
-      - link-preview-js
-      - node-llama-cpp
-      - node-opus
-      - supports-color
       - utf-8-validate
 
   '@larksuiteoapi/node-sdk@1.59.0':
@@ -11639,7 +11623,7 @@ snapshots:
       tailwindcss: 4.2.1
       vite: 7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2)
 
-  '@tencent-weixin/openclaw-weixin@1.0.2':
+  '@tencent-weixin/openclaw-weixin@1.0.3':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6

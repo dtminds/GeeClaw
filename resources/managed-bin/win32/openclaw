@@ -44,17 +44,25 @@ if [ -n "$PROFILE_ARG" ] && [ "$PROFILE_ARG" != "$PROFILE_NAME" ]; then
   exit 1
 fi
 
-if [ -f "$NODE_EXE" ]; then
-  if "$NODE_EXE" -e 'const [maj,min]=process.versions.node.split(".").map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)' >/dev/null 2>&1; then
-    if [ -n "$PROFILE_ARG" ]; then
-      exec "$NODE_EXE" "$OPENCLAW_ENTRY" "$@"
-    fi
-    exec "$NODE_EXE" "$OPENCLAW_ENTRY" --profile "$PROFILE_NAME" "$@"
+if [ ! -f "$OPENCLAW_ENTRY" ]; then
+  echo "Error: bundled openclaw entry not found at $OPENCLAW_ENTRY" >&2
+  echo "Please reinstall GeeClaw or remove this script: $0" >&2
+  exit 1
+fi
+
+if [ ! -f "$NODE_EXE" ]; then
+  echo "Error: bundled Node.js runtime not found at $NODE_EXE" >&2
+  echo "Please reinstall GeeClaw or remove this script: $0" >&2
+  exit 1
+fi
+
+if "$NODE_EXE" -e 'const [maj,min]=process.versions.node.split(".").map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)' >/dev/null 2>&1; then
+  if [ -n "$PROFILE_ARG" ]; then
+    exec "$NODE_EXE" "$OPENCLAW_ENTRY" "$@"
   fi
+  exec "$NODE_EXE" "$OPENCLAW_ENTRY" --profile "$PROFILE_NAME" "$@"
 fi
 
-if [ -n "$PROFILE_ARG" ]; then
-  ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$OPENCLAW_ENTRY" "$@"
-fi
-
-ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$OPENCLAW_ENTRY" --profile "$PROFILE_NAME" "$@"
+echo "Error: bundled Node.js runtime at $NODE_EXE is too old or failed to start" >&2
+echo "Please reinstall GeeClaw." >&2
+exit 1

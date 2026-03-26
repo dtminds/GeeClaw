@@ -91,4 +91,21 @@ describe('managed-bin paths', () => {
     expect(getManagedBinDir()).toBe(join(process.cwd(), 'resources', 'managed-bin', 'win32'));
     expect(getBundledBinDir()).toBe(join(process.cwd(), 'resources', 'bin', 'win32-x64'));
   });
+
+  it('resolves the bundled node path for packaged macOS builds', async () => {
+    setPlatform('darwin');
+    setArch('arm64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+    ));
+
+    const { getBundledNodePath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNodePath()).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/node');
+  });
 });

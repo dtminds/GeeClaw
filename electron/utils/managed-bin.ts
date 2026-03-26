@@ -22,6 +22,12 @@ export function getBundledBinDir(): string {
   return join(process.cwd(), 'resources', 'bin', `${process.platform}-${process.arch}`);
 }
 
+export function getBundledNodePath(): string | null {
+  const fileName = process.platform === 'win32' ? 'node.exe' : 'node';
+  const nodePath = join(getBundledBinDir(), fileName);
+  return existsSync(nodePath) ? nodePath : null;
+}
+
 export function getBundledPathEntries(): string[] {
   const entries = [getManagedBinDir(), getBundledBinDir()];
   return entries.filter((entry, index) => existsSync(entry) && entries.indexOf(entry) === index);

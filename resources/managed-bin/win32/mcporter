@@ -16,10 +16,22 @@ esac
 NODE_EXE="$INSTALL_DIR/resources/bin/node.exe"
 MCPORTER_ENTRY="$INSTALL_DIR/resources/mcporter/dist/cli.js"
 
-if [ -f "$NODE_EXE" ]; then
-  if "$NODE_EXE" -e 'const [maj,min]=process.versions.node.split(".").map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)' >/dev/null 2>&1; then
-    exec "$NODE_EXE" "$MCPORTER_ENTRY" "$@"
-  fi
+if [ ! -f "$MCPORTER_ENTRY" ]; then
+  echo "Error: bundled mcporter entry not found at $MCPORTER_ENTRY" >&2
+  echo "Please reinstall GeeClaw or remove this script: $0" >&2
+  exit 1
 fi
 
-ELECTRON_RUN_AS_NODE=1 exec "$INSTALL_DIR/GeeClaw.exe" "$MCPORTER_ENTRY" "$@"
+if [ ! -f "$NODE_EXE" ]; then
+  echo "Error: bundled Node.js runtime not found at $NODE_EXE" >&2
+  echo "Please reinstall GeeClaw or remove this script: $0" >&2
+  exit 1
+fi
+
+if "$NODE_EXE" -e 'const [maj,min]=process.versions.node.split(".").map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)' >/dev/null 2>&1; then
+  exec "$NODE_EXE" "$MCPORTER_ENTRY" "$@"
+fi
+
+echo "Error: bundled Node.js runtime at $NODE_EXE is too old or failed to start" >&2
+echo "Please reinstall GeeClaw." >&2
+exit 1

@@ -32,25 +32,29 @@ set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"
 set "NODE_EXE=%~dp0..\bin\node.exe"
 set "OPENCLAW_ENTRY=%~dp0..\openclaw\openclaw.mjs"
 
-set "_USE_BUNDLED_NODE=0"
-if exist "%NODE_EXE%" (
-    "%NODE_EXE%" -e "const [maj,min]=process.versions.node.split('.').map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)" >nul 2>&1
-    if not errorlevel 1 set "_USE_BUNDLED_NODE=1"
+if not exist "%OPENCLAW_ENTRY%" (
+    echo Error: bundled openclaw entry not found at %OPENCLAW_ENTRY%
+    set "_EXIT=1"
+    goto finish
 )
 
-if "%_USE_BUNDLED_NODE%"=="1" (
-    if defined PROFILE_VALUE (
-        "%NODE_EXE%" "%OPENCLAW_ENTRY%" %*
-    ) else (
-        "%NODE_EXE%" "%OPENCLAW_ENTRY%" --profile "%PROFILE_NAME%" %*
-    )
+if not exist "%NODE_EXE%" (
+    echo Error: bundled Node.js runtime not found at %NODE_EXE%
+    set "_EXIT=1"
+    goto finish
+)
+
+"%NODE_EXE%" -e "const [maj,min]=process.versions.node.split('.').map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)" >nul 2>&1
+if errorlevel 1 (
+    echo Error: bundled Node.js runtime at %NODE_EXE% is too old or failed to start
+    set "_EXIT=1"
+    goto finish
+)
+
+if defined PROFILE_VALUE (
+    "%NODE_EXE%" "%OPENCLAW_ENTRY%" %*
 ) else (
-    set ELECTRON_RUN_AS_NODE=1
-    if defined PROFILE_VALUE (
-        "%~dp0..\..\GeeClaw.exe" "%OPENCLAW_ENTRY%" %*
-    ) else (
-        "%~dp0..\..\GeeClaw.exe" "%OPENCLAW_ENTRY%" --profile "%PROFILE_NAME%" %*
-    )
+    "%NODE_EXE%" "%OPENCLAW_ENTRY%" --profile "%PROFILE_NAME%" %*
 )
 set _EXIT=%ERRORLEVEL%
 

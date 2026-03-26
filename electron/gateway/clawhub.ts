@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { app, shell } from 'electron';
 import { getOpenClawConfigDir, getResourcesDir, ensureDir, quoteForCmd } from '../utils/paths';
+import { getBundledNodePath } from '../utils/managed-bin';
 import {
     getSkillHubInstallLocations,
     installSkillHubCli,
@@ -307,8 +308,9 @@ export class ClawHubService {
             const cliEntryPath = path.join(packageDir, binEntry);
             const binFileName = process.platform === 'win32' ? `${name}.cmd` : name;
             const binPath = path.join(appPath, 'node_modules', '.bin', binFileName);
-            const useNodeRunner = app.isPackaged || !fs.existsSync(binPath);
-            const cliPath = useNodeRunner ? process.execPath : binPath;
+            const bundledNodePath = app.isPackaged ? getBundledNodePath() : null;
+            const useNodeRunner = Boolean(bundledNodePath) || app.isPackaged || !fs.existsSync(binPath);
+            const cliPath = bundledNodePath ?? (useNodeRunner ? process.execPath : binPath);
 
             if (useNodeRunner && !fs.existsSync(cliEntryPath)) {
                 return null;
@@ -611,7 +613,7 @@ export class ClawHubService {
                 CLAWHUB_WORKDIR: this.workDir,
             } as NodeJS.ProcessEnv;
 
-            if (candidate.useNodeRunner) {
+            if (candidate.useNodeRunner && candidate.cliPath === process.execPath) {
                 env.ELECTRON_RUN_AS_NODE = '1';
             }
 
