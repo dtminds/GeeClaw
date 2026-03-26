@@ -173,6 +173,7 @@ GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill 
 - 检查内置 OpenCLI 运行时是否存在
 - 查看内置运行时版本、后台服务状态，以及 Chrome Browser Bridge 插件连通状态
 - 在 Gateway 启动后由 GeeClaw 后台预热一次 `opencli doctor --no-live`，让 daemon 在进入设置页前就先拉起
+- 在设置页按站点查看 OpenCLI 当前支持的命令目录
 - 在 Chrome 未连通时，直接下载 Chrome 插件包或跳转到上游安装说明
 
 ### MCP Runtime 检查

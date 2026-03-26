@@ -41,6 +41,23 @@ interface OpenCliStatus {
   doctor: OpenCliDoctorStatus | null;
 }
 
+interface OpenCliCatalogCommand {
+  command: string;
+  name: string;
+  description: string;
+}
+
+interface OpenCliCatalogSite {
+  site: string;
+  commands: OpenCliCatalogCommand[];
+}
+
+interface OpenCliCatalog {
+  totalSites: number;
+  totalCommands: number;
+  sites: OpenCliCatalogSite[];
+}
+
 function StatusBadge({
   status,
   trueLabel,
@@ -98,6 +115,9 @@ function MetricCard({
 export function OpenCliSettingsSection() {
   const { t } = useTranslation('settings');
   const [status, setStatus] = useState<OpenCliStatus | null>(null);
+  const [catalog, setCatalog] = useState<OpenCliCatalog | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -122,9 +142,27 @@ export function OpenCliSettingsSection() {
     }
   }, [t]);
 
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+
+    try {
+      const response = await hostApiFetch<OpenCliCatalog>('/api/opencli/catalog');
+      setCatalog(response);
+    } catch (error) {
+      setCatalogError(`${t('opencli.catalog.loadFailed')}: ${toUserMessage(error)}`);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -254,6 +292,94 @@ export function OpenCliSettingsSection() {
             </div>
           </div>
         </details>
+      </section>
+
+      <section className="modal-section-surface overflow-hidden rounded-3xl border">
+        <div className="flex flex-col gap-4 border-b border-black/8 px-5 py-5 dark:border-white/10">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{t('opencli.catalog.title')}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t('opencli.catalog.description')}</p>
+          </div>
+
+          {catalog && catalog.sites.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
+                {t('opencli.catalog.summarySites', { count: catalog.totalSites })}
+              </Badge>
+              <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
+                {t('opencli.catalog.summaryCommands', { count: catalog.totalCommands })}
+              </Badge>
+            </div>
+          )}
+        </div>
+
+        {catalogLoading ? (
+          <div className="flex items-center gap-3 px-5 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('opencli.catalog.loading')}
+          </div>
+        ) : catalogError ? (
+          <div className="px-5 py-5">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+              {catalogError}
+            </div>
+          </div>
+        ) : catalog && catalog.sites.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse">
+              <thead>
+                <tr className="border-b border-black/8 dark:border-white/10">
+                  <th className="w-52 px-5 py-3 text-left text-sm font-semibold text-foreground">
+                    {t('opencli.catalog.site')}
+                  </th>
+                  <th className="px-5 py-3 text-left text-sm font-semibold text-foreground">
+                    {t('opencli.catalog.commands')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalog.sites.map((site) => (
+                  <tr
+                    key={site.site}
+                    className="align-top border-b border-black/8 last:border-b-0 dark:border-white/10"
+                  >
+                    <td className="w-52 px-5 py-4 align-top">
+                      <div className="space-y-1">
+                        <p className="text-base font-semibold text-foreground">{site.site}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t('opencli.catalog.commandCount', { count: site.commands.length })}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <div className="divide-y divide-black/6 dark:divide-white/8">
+                        {site.commands.map((command) => (
+                          <div
+                            key={command.command}
+                            className="flex min-w-0 items-center gap-2 py-2 first:pt-0 last:pb-0"
+                            title={command.description ? `${command.command} - ${command.description}` : command.command}
+                          >
+                            <span className="shrink-0 font-mono text-[13px] font-medium text-foreground">
+                              {command.name}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground/40">-</span>
+                            <span className="min-w-0 truncate text-sm text-muted-foreground">
+                              {command.description || t('opencli.catalog.noDescription')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-sm text-muted-foreground">
+            {t('opencli.catalog.empty')}
+          </div>
+        )}
       </section>
     </div>
   );

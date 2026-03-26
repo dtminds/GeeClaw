@@ -175,6 +175,7 @@ GeeClaw also ships a bundled `opencli` runtime for skill/exec environments that 
 - verify that the bundled OpenCLI runtime is present
 - inspect the bundled runtime version, daemon status, and Chrome Browser Bridge connectivity
 - let GeeClaw warm up `opencli doctor --no-live` in the background after Gateway startup so the daemon is ready before you open the page
+- browse supported OpenCLI sites and commands grouped by site from the Settings page
 - download the Chrome extension package or jump to the upstream install guide when Chrome is not connected
 
 ### MCP Runtime Check

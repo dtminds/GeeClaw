@@ -302,11 +302,24 @@
       "opening": "打开中...",
       "openFolder": "打开目录",
       "openFailed": "打开扩展目录失败",
-      "bundleMissing": "当前构建未包含内置 Browser Bridge 扩展。请重新打包 GeeClaw，或从 OpenCLI Releases 下载扩展。",
+      "bundleMissing": "当前构建未包含内置 Browser Bridge 扩展。请重新打包 GeeClaw，或从 OpenCLI Releases 下载扩展",
       "step1": "1. 点击上方按钮，下载最新的扩展安装包 `opencli-extension.zip`。",
       "step2": "2. 解压后打开 Chrome，访问 chrome://extensions，并打开右上角的“开发者模式”。",
       "step3": "3. 点击“加载已解压的扩展程序”，选择刚刚解压出来的扩展文件夹。",
       "step4": "4. 等 Chrome 显示 OpenCLI 扩展已启用后，回到这里刷新状态。"
+    },
+    "catalog": {
+      "title": "支持的站点与命令",
+      "description": "按站点查看 OpenCLI 已支持的命令，先了解它能做什么，再决定要不要进一步配置浏览器环境",
+      "site": "站点",
+      "commands": "命令",
+      "summarySites": "{{count}} 个站点",
+      "summaryCommands": "{{count}} 个命令",
+      "commandCount": "{{count}} 个命令",
+      "loading": "正在读取 OpenCLI 站点目录...",
+      "empty": "当前没有可展示的 OpenCLI 站点目录。",
+      "loadFailed": "加载 OpenCLI 站点目录失败",
+      "noDescription": "暂无说明"
     },
     "actions": {
       "copyPath": "复制路径",

@@ -308,6 +308,19 @@
       "step3": "3. Click \"Load unpacked\" and choose the extracted extension folder.",
       "step4": "4. Come back here and refresh after Chrome shows the OpenCLI extension as enabled."
     },
+    "catalog": {
+      "title": "Supported Sites & Commands",
+      "description": "Browse the sites OpenCLI already supports and see what each command can do before you dive into setup details.",
+      "site": "Site",
+      "commands": "Commands",
+      "summarySites": "{{count}} sites",
+      "summaryCommands": "{{count}} commands",
+      "commandCount": "{{count}} commands",
+      "loading": "Loading the OpenCLI site catalog...",
+      "empty": "No OpenCLI site catalog is available right now.",
+      "loadFailed": "Failed to load the OpenCLI site catalog",
+      "noDescription": "No description available"
+    },
     "actions": {
       "copyPath": "Copy Path",
       "copyCommand": "Copy Command",
