@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
+import { USER_STATUS_ACTIVE, type UserStatus } from '../../shared/auth/user-status';
 
 export type SessionStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -13,7 +14,7 @@ export interface SessionAccount {
   openid?: string;
   nickName?: string;
   avatarUrl?: string;
-  userStatus?: number;
+  userStatus?: UserStatus;
   tokenExpiresIn?: number;
 }
 
@@ -206,12 +207,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       throw error;
     }
 
-    console.info('[SessionStore(Renderer)] skipInviteCode -> setting userStatus=1 locally');
+    console.info(`[SessionStore(Renderer)] skipInviteCode -> setting userStatus=${USER_STATUS_ACTIVE} locally`);
     set({
       status: 'authenticated',
       account: {
         ...current.account,
-        userStatus: 1,
+        userStatus: USER_STATUS_ACTIVE,
       },
       isInitialized: true,
     });

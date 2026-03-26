@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { safeStorage } from 'electron';
 import type { BrowserWindow } from 'electron';
+import {
+  isUserStatus,
+  USER_STATUS_ACTIVE,
+  USER_STATUS_DISABLED,
+  type UserStatus,
+} from '../../shared/auth/user-status';
 import { bindInviteCode } from '../services/auth/invite-bind';
 import { fetchGeeclawUserInfo } from '../services/auth/user-info';
 import { runWechatLoginFlow } from '../services/auth/wechat-auth';
@@ -18,7 +24,7 @@ export interface SessionAccount {
   openid?: string;
   nickName?: string;
   avatarUrl?: string;
-  userStatus?: number;
+  userStatus?: UserStatus;
   tokenExpiresIn?: number;
 }
 
@@ -108,7 +114,10 @@ function buildAccountFromUserInfo(userInfo: Record<string, unknown>): SessionAcc
   const openid = readFirstString(userInfo, ['openid']);
   const avatarUrl = readFirstString(userInfo, ['avatarUrl', 'avatar', 'headImgUrl']);
   const userId = readFirstNumber(userInfo, ['userId', 'uid', 'id']);
-  const userStatus = readFirstNumber(userInfo, ['status']);
+  const parsedUserStatus = readFirstNumber(userInfo, ['status']);
+  const userStatus = parsedUserStatus !== undefined && isUserStatus(parsedUserStatus)
+    ? parsedUserStatus
+    : undefined;
   const tokenExpiresIn = readFirstNumber(userInfo, ['expiresIn']);
   return {
     id,
@@ -161,8 +170,8 @@ export async function getSessionState(): Promise<SessionState> {
   if (status === 'authenticated' && account && token) {
     try {
       const userInfo = await fetchGeeclawUserInfo(token);
-      if (userInfo.status === 2) {
-        logger.warn(`[SessionStore] User info status=2 for accountId=${account.id}; clearing session`);
+      if (userInfo.status === USER_STATUS_DISABLED) {
+        logger.warn(`[SessionStore] User info status=${USER_STATUS_DISABLED} for accountId=${account.id}; clearing session`);
         store.set('account', null);
         store.set('tokenEncrypted', null);
         store.set('tokenPlain', null);
@@ -268,7 +277,7 @@ export async function submitInviteCode(inviteCode: string): Promise<SessionState
 
   const nextAccount: SessionAccount = {
     ...currentAccount,
-    userStatus: 1,
+    userStatus: USER_STATUS_ACTIVE,
   };
 
   store.set('account', nextAccount);

@@ -1,3 +1,4 @@
+import { isUserStatus, type UserStatus } from '../../../shared/auth/user-status';
 import { logger } from '../../utils/logger';
 import { proxyAwareFetch } from '../../utils/proxy-fetch';
 import { GEECLAW_AUTH_API_ORIGIN, buildGeeclawAuthHeaders } from './geeclaw-auth-api';
@@ -22,7 +23,7 @@ type GeeclawUserInfoApiResponse = {
 export interface GeeclawUserInfo {
   avatar?: string;
   nickName?: string;
-  status: number;
+  status: UserStatus;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -87,6 +88,9 @@ export async function fetchGeeclawUserInfo(accessToken: string): Promise<Geeclaw
   const status = toFiniteStatus(payload?.data?.status);
   if (status === null) {
     throw new Error('User info response missing status');
+  }
+  if (!isUserStatus(status)) {
+    throw new Error(`User info response returned unsupported status: ${status}`);
   }
 
   return {

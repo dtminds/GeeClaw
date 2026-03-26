@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { USER_STATUS_REQUIRES_INVITE } from '../../shared/auth/user-status';
 import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
@@ -35,7 +36,7 @@ function isLoginCanceledError(error: unknown): boolean {
 }
 
 function requiresInviteCode(account: SessionAccount | null | undefined): boolean {
-  return account?.userStatus === 0;
+  return account?.userStatus === USER_STATUS_REQUIRES_INVITE;
 }
 
 async function waitForGatewayRunning(timeoutMs = GATEWAY_READY_TIMEOUT_MS): Promise<void> {
