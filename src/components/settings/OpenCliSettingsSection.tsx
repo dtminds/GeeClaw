@@ -6,10 +6,12 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  Search,
   XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc, toUserMessage } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -118,6 +120,7 @@ export function OpenCliSettingsSection() {
   const [catalog, setCatalog] = useState<OpenCliCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -163,6 +166,12 @@ export function OpenCliSettingsSection() {
   useEffect(() => {
     void loadCatalog();
   }, [loadCatalog]);
+
+  const normalizedCatalogSearch = catalogSearch.trim().toLowerCase();
+  const filteredSites = catalog?.sites.filter((site) => (
+    !normalizedCatalogSearch || site.site.toLowerCase().includes(normalizedCatalogSearch)
+  )) ?? [];
+  const filteredCommandCount = filteredSites.reduce((count, site) => count + site.commands.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -302,13 +311,32 @@ export function OpenCliSettingsSection() {
           </div>
 
           {catalog && catalog.sites.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
-                {t('opencli.catalog.summarySites', { count: catalog.totalSites })}
-              </Badge>
-              <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
-                {t('opencli.catalog.summaryCommands', { count: catalog.totalCommands })}
-              </Badge>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="relative w-full md:max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={catalogSearch}
+                  onChange={(event) => setCatalogSearch(event.target.value)}
+                  placeholder={t('opencli.catalog.searchPlaceholder')}
+                  aria-label={t('opencli.catalog.searchAriaLabel')}
+                  className="h-10 rounded-full border-black/10 bg-background pl-9 pr-3 dark:border-white/10"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
+                  {t('opencli.catalog.summarySites', { count: filteredSites.length })}
+                </Badge>
+                <Badge className="rounded-full border-0 bg-black/6 px-2.5 py-1 text-foreground/75 dark:bg-white/10 dark:text-foreground/80">
+                  {t('opencli.catalog.summaryCommands', { count: filteredCommandCount })}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          {catalogSearch && catalog && catalog.sites.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              {t('opencli.catalog.searchResults', { query: catalogSearch.trim() })}
             </div>
           )}
         </div>
@@ -324,7 +352,7 @@ export function OpenCliSettingsSection() {
               {catalogError}
             </div>
           </div>
-        ) : catalog && catalog.sites.length > 0 ? (
+        ) : catalog && filteredSites.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse">
               <thead>
@@ -338,7 +366,7 @@ export function OpenCliSettingsSection() {
                 </tr>
               </thead>
               <tbody>
-                {catalog.sites.map((site) => (
+                {filteredSites.map((site) => (
                   <tr
                     key={site.site}
                     className="align-top border-b border-black/8 last:border-b-0 dark:border-white/10"
@@ -359,7 +387,7 @@ export function OpenCliSettingsSection() {
                             className="flex min-w-0 items-center gap-2 py-2 first:pt-0 last:pb-0"
                             title={command.description ? `${command.command} - ${command.description}` : command.command}
                           >
-                            <span className="shrink-0 font-mono text-[13px] font-medium text-foreground">
+                            <span className="shrink-0 font-mono text-[13px] font-bold text-foreground">
                               {command.name}
                             </span>
                             <span className="shrink-0 text-muted-foreground/40">-</span>
@@ -374,6 +402,10 @@ export function OpenCliSettingsSection() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : catalogSearch && catalog && catalog.sites.length > 0 ? (
+          <div className="px-5 py-8 text-sm text-muted-foreground">
+            {t('opencli.catalog.emptySearch')}
           </div>
         ) : (
           <div className="px-5 py-8 text-sm text-muted-foreground">
