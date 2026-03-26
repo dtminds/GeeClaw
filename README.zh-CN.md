@@ -88,7 +88,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 打包版本也会把托管的 `opencli` 与 `mcporter` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
 
 ### 🔐 安全的供应商集成
-连接多个 AI 供应商（OpenAI、Anthropic、GeekAI 等），凭证安全存储在系统原生密钥链中。
+连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。
 
 ### 🌙 自适应主题
 支持浅色模式、深色模式或跟随系统主题。GeeClaw 自动适应你的偏好设置。

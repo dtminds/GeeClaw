@@ -19,9 +19,10 @@
 import { EventEmitter } from 'events';
 import { BrowserWindow, shell } from 'electron';
 import { logger } from './logger';
-import { saveProvider, getProvider, ProviderConfig } from './secure-storage';
 import { getProviderDefaultModel } from './provider-registry';
 import { isOpenClawPresent } from './paths';
+import { getProviderService } from '../services/providers/provider-service';
+import type { ProviderAccount } from '../shared/providers/types';
 import {
     loginMiniMaxPortalOAuth,
     type MiniMaxOAuthToken,
@@ -270,27 +271,40 @@ class DeviceOAuthManager extends EventEmitter {
             logger.warn(`[DeviceOAuth] Failed to configure openclaw models:`, err);
         }
 
-        // 3. Save provider record in GeeClaw's own store so UI shows it as configured
-        const existing = await getProvider(accountId);
+        // 3. Save provider account in GeeClaw's own store so both the
+        //    provider account registry and the legacy provider config stay aligned.
+        const providerService = getProviderService();
+        const existing = await providerService.getAccount(accountId);
         const nameMap: Record<OAuthProviderType, string> = {
             'minimax-portal': 'MiniMax (Global)',
             'minimax-portal-cn': 'MiniMax (CN)',
             'qwen-portal': 'Qwen',
         };
-        const providerConfig: ProviderConfig = {
+        const nextAccount: ProviderAccount = {
             id: accountId,
-            name: accountLabel || nameMap[providerType as OAuthProviderType] || providerType,
-            type: providerType,
+            vendorId: providerType,
+            label: accountLabel || existing?.label || nameMap[providerType as OAuthProviderType] || providerType,
+            authMode: 'oauth_device',
             enabled: existing?.enabled ?? true,
+            isDefault: existing?.isDefault ?? false,
             baseUrl, // Save the dynamically resolved URL (Global vs CN)
+            apiProtocol: existing?.apiProtocol,
             models: existing?.models ?? (existing?.model || getProviderDefaultModel(providerType)
                 ? [existing?.model || getProviderDefaultModel(providerType)!]
                 : []),
             model: existing?.model || getProviderDefaultModel(providerType),
+            fallbackModels: existing?.fallbackModels,
+            fallbackAccountIds: existing?.fallbackAccountIds,
+            metadata: {
+                ...existing?.metadata,
+                region: providerType === 'minimax-portal-cn'
+                    ? 'cn'
+                    : (providerType === 'minimax-portal' ? 'global' : existing?.metadata?.region),
+            },
             createdAt: existing?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        await saveProvider(providerConfig);
+        await providerService.createAccount(nextAccount);
 
         // 4. Emit success internally so the main process can restart the Gateway
         this.emit('oauth:success', { provider: providerType, accountId });
