@@ -386,19 +386,14 @@ function parseOpenCliCatalogSiteCommands(value: unknown): OpenCliCatalogCommand[
 
 function collectOpenCliCatalogCommands(value: unknown): OpenCliCatalogCommand[] {
   if (Array.isArray(value)) {
-    const directCommands = value
-      .map((item) => parseOpenCliCatalogCommand(item))
-      .filter((item): item is OpenCliCatalogCommand => item !== null);
-    if (directCommands.length > 0) {
-      return directCommands;
-    }
+    return value.flatMap((item) => {
+      const directCommand = parseOpenCliCatalogCommand(item);
+      if (directCommand) {
+        return [directCommand];
+      }
 
-    const groupedCommands = value.flatMap((item) => parseOpenCliCatalogSiteCommands(item));
-    if (groupedCommands.length > 0) {
-      return groupedCommands;
-    }
-
-    return [];
+      return parseOpenCliCatalogSiteCommands(item);
+    });
   }
 
   if (!isRecord(value)) {
@@ -661,44 +656,37 @@ async function runOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
 }
 
 async function runOpenCliCatalog(): Promise<OpenCliCatalog> {
-  const result = await runOpenCliCommand(['list', '--json'], DEFAULT_LIST_TIMEOUT_MS);
-  if (result.error) {
-    const fallbackCatalog = loadOpenCliCatalogFromManifest();
-    if (fallbackCatalog) {
-      return fallbackCatalog;
-    }
-    throw new Error(result.error);
-  }
-  if (result.exitCode !== 0) {
-    const fallbackCatalog = loadOpenCliCatalogFromManifest();
-    if (fallbackCatalog) {
-      return fallbackCatalog;
-    }
-    throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
-  }
-
   try {
+    const result = await runOpenCliCommand(['list', '--json'], DEFAULT_LIST_TIMEOUT_MS);
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
+    }
+
     const parsed = parseOpenCliJsonOutput(result.output);
     const commands = collectOpenCliCatalogCommands(parsed);
     if (commands.length > 0) {
       return groupOpenCliCatalog(commands);
     }
+
+    throw new Error('OpenCLI list output did not contain any catalog commands');
   } catch (error) {
     const fallbackCatalog = loadOpenCliCatalogFromManifest();
     if (fallbackCatalog) {
       return fallbackCatalog;
     }
 
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse OpenCLI list output: ${message}`, { cause: error });
-  }
+    if (error instanceof Error && (
+      error.message === 'OpenCLI output was empty'
+      || error.message === 'No valid JSON payload found in OpenCLI output'
+    )) {
+      throw new Error(`Failed to parse OpenCLI list output: ${error.message}`, { cause: error });
+    }
 
-  const fallbackCatalog = loadOpenCliCatalogFromManifest();
-  if (fallbackCatalog) {
-    return fallbackCatalog;
+    throw error instanceof Error ? error : new Error(String(error));
   }
-
-  throw new Error('OpenCLI list output did not contain any catalog commands');
 }
 
 function logDoctorIssues(doctor: OpenCliDoctorStatus): void {
