@@ -181,6 +181,19 @@
             "title": "GeeClaw 需要处理一下",
             "body": "我们暂时没能完成应用准备。您可以重试，或查看下面的详情。",
             "retry": "重试"
+        },
+        "gatewayRecovery": {
+            "recovering": {
+                "eyebrow": "网关恢复中",
+                "title": "正在重启 OpenClaw",
+                "body": "部分功能暂时不可用 我们会在网关恢复后自动继续",
+                "caption": "这通常只需要十几秒，请保持窗口打开"
+            },
+            "error": {
+                "title": "OpenClaw 服务未能恢复",
+                "body": "我们尝试重新连接 OpenClaw 网关，但这次没有成功。您可以直接重试，或查看下面的详情。",
+                "retry": "重试"
+            }
         }
     }
 }
