@@ -297,16 +297,13 @@ function WelcomeScreen() {
 
   return (
     <div className="flex flex-col items-center justify-center text-center h-[60vh]">
-      <div className="flex h-32 w-32 items-center justify-center">
-        <img src={logoSvg} alt="GeeClaw" className="h-32 w-auto" />
+      <div className="flex h-48 w-48 items-center justify-center">
+        <img src={logoSvg} alt="GeeClaw" className="h-48 w-auto" />
       </div>
-      <h1 className="text-6xl md:text-7xl text-foreground mt-3 mb-3 font-normal tracking-tight">
-        {t('welcome.title')}
-      </h1>
-      <p className="text-[17px] text-foreground/80 mb-8 font-medium">
+      <p className="text-[18px] text-foreground/80 mb-8 font-medium">
         {t('welcome.subtitle')}
       </p>
-      <div className="flex max-w-full flex-col items-center gap-4">
+      <div className="flex max-w-full flex-col items-center gap-4 mt-10">
         <p className="text-sm text-muted-foreground">
           {t('welcome.channelPrompt')}
         </p>
