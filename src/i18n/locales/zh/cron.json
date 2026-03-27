@@ -3,7 +3,7 @@
     "subtitle": "通过设置定时任务实现工作自动化处理",
     "newTask": "新建任务",
     "refresh": "刷新",
-    "gatewayWarning": "网关未运行。没有活跃的网关，无法管理定时任务。",
+    "gatewayWarning": "OpenClaw 服务未运行，无法管理定时任务",
     "stats": {
         "total": "任务总数",
         "active": "已启用",
@@ -12,7 +12,7 @@
     },
     "empty": {
         "title": "暂无定时任务",
-        "description": "创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。",
+        "description": "创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作",
         "create": "创建第一个任务"
     },
     "card": {
@@ -29,16 +29,16 @@
         "back": "返回",
         "taskFallback": "定时任务",
         "pageTitle": "运行记录",
-        "subtitle": "查看该定时任务的执行历史与只读消息记录。",
+        "subtitle": "查看该定时任务的执行历史与只读消息记录",
         "runListTitle": "运行历史",
         "runListDescription": "按最近执行时间倒序展示。",
         "messagesTitle": "消息记录",
-        "messagesDescription": "从左侧选择一次运行查看详细消息。",
+        "messagesDescription": "从左侧选择一次运行查看详细消息",
         "emptyTitle": "暂无运行记录",
-        "emptyDescription": "这个任务还没有产生任何可查看的执行记录。",
+        "emptyDescription": "这个任务还没有产生任何可查看的执行记录",
         "selectRun": "请先从左侧选择一次运行。",
-        "messagesEmpty": "这次运行暂时没有可显示的消息记录。",
-        "noSummary": "这次运行没有记录摘要。",
+        "messagesEmpty": "这次运行暂时没有可显示的消息记录",
+        "noSummary": "这次运行没有记录摘要",
         "durationUnknown": "无耗时信息",
         "status": {
             "ok": "成功",
