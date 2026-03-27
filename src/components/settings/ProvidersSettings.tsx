@@ -312,9 +312,16 @@ export function ProvidersSettings() {
                         <span className="text-lg">{item.vendor?.icon || '⚙️'}</span>
                       )}
                     </div>
-                    <span className="truncate text-[14px] font-medium text-foreground">
-                      {item.account.label}
-                    </span>
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span className="truncate text-[14px] font-medium text-foreground">
+                        {item.account.label}
+                      </span>
+                      {item.account.id === defaultAccountId ? (
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-black/8 bg-black/[0.045] px-1.5 py-0.5 text-[10px] font-medium text-foreground/75 dark:border-white/10 dark:bg-white/[0.08] dark:text-foreground/85">
+                          {t('aiProviders.card.default')}
+                        </span>
+                      ) : null}
+                    </div>
                   </button>
                 );
               })}
