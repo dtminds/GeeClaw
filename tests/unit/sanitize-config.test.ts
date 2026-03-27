@@ -78,6 +78,19 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
 
   const config = JSON.parse(raw) as Record<string, unknown>;
   let modified = false;
+  const BUILTIN_CHANNEL_IDS = new Set([
+    'discord',
+    'telegram',
+    'whatsapp',
+    'slack',
+    'signal',
+    'imessage',
+    'matrix',
+    'line',
+    'msteams',
+    'googlechat',
+    'mattermost',
+  ]);
 
   // Mirror of the production blocklist logic
   const skills = config.skills;
@@ -117,6 +130,74 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
             modified = true;
           }
         }
+      }
+
+      const allow = Array.isArray(pluginsObj.allow)
+        ? pluginsObj.allow.filter((entry): entry is string => typeof entry === 'string')
+        : [];
+      const entries = (
+        pluginsObj.entries && typeof pluginsObj.entries === 'object' && !Array.isArray(pluginsObj.entries)
+          ? { ...(pluginsObj.entries as Record<string, unknown>) }
+          : {}
+      ) as Record<string, unknown>;
+
+      if ('whatsapp' in entries) {
+        delete entries.whatsapp;
+        modified = true;
+      }
+
+      const configuredBuiltIns = new Set<string>();
+      const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
+      if (channelsObj && typeof channelsObj === 'object') {
+        for (const [channelId, section] of Object.entries(channelsObj)) {
+          if (!BUILTIN_CHANNEL_IDS.has(channelId)) continue;
+          if (!section || section.enabled === false) continue;
+          if (Object.keys(section).length > 0) {
+            configuredBuiltIns.add(channelId);
+          }
+        }
+      }
+
+      const externalPluginIds = allow.filter((pluginId) => !BUILTIN_CHANNEL_IDS.has(pluginId));
+      const nextAllow = [...externalPluginIds];
+      if (externalPluginIds.length > 0) {
+        for (const channelId of configuredBuiltIns) {
+          if (!nextAllow.includes(channelId)) {
+            nextAllow.push(channelId);
+          }
+        }
+      }
+
+      if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
+        if (nextAllow.length > 0) {
+          pluginsObj.allow = nextAllow;
+        } else {
+          delete pluginsObj.allow;
+        }
+        modified = true;
+      }
+
+      if (Array.isArray(pluginsObj.allow) && pluginsObj.allow.length === 0) {
+        delete pluginsObj.allow;
+        modified = true;
+      }
+
+      if (pluginsObj.entries && Object.keys(entries).length === 0) {
+        delete pluginsObj.entries;
+        modified = true;
+      } else if (Object.keys(entries).length > 0) {
+        pluginsObj.entries = entries;
+      }
+
+      const pluginKeysExcludingEnabled = Object.keys(pluginsObj).filter((key) => key !== 'enabled');
+      if (pluginsObj.enabled === true && pluginKeysExcludingEnabled.length === 0) {
+        delete pluginsObj.enabled;
+        modified = true;
+      }
+
+      if (Object.keys(pluginsObj).length === 0) {
+        delete config.plugins;
+        modified = true;
       }
     }
   }
@@ -290,7 +371,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     await writeConfig({
       skills: { enabled: true, entries: {} },
       channels: { discord: { token: 'abc', enabled: true } },
-      plugins: { entries: { whatsapp: { enabled: true } } },
+      plugins: { entries: { customPlugin: { enabled: true } } },
       gateway: { mode: 'local', auth: { token: 'xyz' } },
       agents: { defaults: { model: { primary: 'gpt-4' } } },
       models: { providers: { openai: { baseUrl: 'https://api.openai.com' } } },
@@ -304,9 +385,38 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     expect(result.skills).not.toHaveProperty('enabled');
     // All other sections unchanged
     expect(result.channels).toEqual({ discord: { token: 'abc', enabled: true } });
-    expect(result.plugins).toEqual({ entries: { whatsapp: { enabled: true } } });
+    expect(result.plugins).toEqual({ entries: { customPlugin: { enabled: true } } });
     expect(result.gateway).toEqual({ mode: 'local', auth: { token: 'xyz' } });
     expect(result.agents).toEqual({ defaults: { model: { primary: 'gpt-4' } } });
+  });
+
+  it('keeps configured built-in channels in plugins.allow when external plugins are enabled', async () => {
+    await writeConfig({
+      plugins: {
+        enabled: true,
+        allow: ['whatsapp', 'customPlugin'],
+        entries: {
+          whatsapp: { enabled: true },
+          customPlugin: { enabled: true },
+        },
+      },
+      channels: {
+        discord: { enabled: true, token: 'abc' },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.channels).toEqual({ discord: { enabled: true, token: 'abc' } });
+    expect(result.plugins).toEqual({
+      enabled: true,
+      allow: ['customPlugin', 'discord'],
+      entries: {
+        customPlugin: { enabled: true },
+      },
+    });
   });
 
   it('removes tools.web.search.kimi.apiKey when moonshot provider exists', async () => {

@@ -360,7 +360,7 @@
             ]
         },
         "qqbot": {
-            "description": "Connect QQ Bot via @sliverp/qqbot plugin",
+            "description": "Connect QQ Bot via @tencent-connect/openclaw-qqbot plugin",
             "docsUrl": "https://github.com/sliverp/qqbot/blob/main/README.zh.md",
             "fields": {
                 "appId": {

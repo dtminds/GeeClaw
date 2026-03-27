@@ -32,7 +32,7 @@ const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
 const PLUGINS = [
   { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
   { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
-  { npmName: '@sliverp/qqbot', pluginId: 'qqbot' },
+  { npmName: '@tencent-connect/openclaw-qqbot', pluginId: 'openclaw-qqbot' },
   { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
   { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
   { npmName: '@tencent-weixin/openclaw-weixin', pluginId: 'openclaw-weixin' },

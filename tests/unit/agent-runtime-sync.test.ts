@@ -89,7 +89,7 @@ describe('agent runtime sync', () => {
         },
       },
       plugins: {
-        allow: ['qqbot', 'other-plugin'],
+        allow: ['openclaw-qqbot', 'other-plugin'],
       },
       skills: {
         entries: {

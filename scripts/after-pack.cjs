@@ -20,7 +20,7 @@
  */
 
 const { cpSync, existsSync, readdirSync, rmSync, statSync, mkdirSync } = require('fs');
-const { join, dirname, basename } = require('path');
+const { join, dirname, basename, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 
 // ── Arch helpers ─────────────────────────────────────────────────────────────
@@ -162,9 +162,6 @@ function patchBrokenModules(nodeModulesDir) {
       count++;
     }
   }
-  if (count > 0) {
-    console.log(`[after-pack] 🩹 Patched ${count} broken module(s) in ${nodeModulesDir}`);
-  }
 
   // https-proxy-agent: add a CJS `require` condition only when we can point to
   // a real CommonJS entry. Mapping `require` to an ESM file can cause
@@ -215,6 +212,96 @@ function patchBrokenModules(nodeModulesDir) {
     } catch (err) {
       console.warn('[after-pack] ⚠️  Failed to patch https-proxy-agent:', err.message);
     }
+  }
+
+  function patchAllLruCacheInstances(rootDir) {
+    let lruCount = 0;
+    const stack = [rootDir];
+
+    while (stack.length > 0) {
+      const dir = stack.pop();
+      let entries;
+      try {
+        entries = readdirSync(normWin(dir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+        let isDirectory = entry.isDirectory();
+        if (!isDirectory) {
+          try {
+            isDirectory = statSync(normWin(fullPath)).isDirectory();
+          } catch {
+            isDirectory = false;
+          }
+        }
+        if (!isDirectory) continue;
+
+        if (entry.name === 'lru-cache') {
+          const pkgPath = join(fullPath, 'package.json');
+          if (!existsSync(normWin(pkgPath))) {
+            stack.push(fullPath);
+            continue;
+          }
+
+          try {
+            const pkg = JSON.parse(readFileSync(normWin(pkgPath), 'utf8'));
+            if (pkg.type !== 'module') {
+              const mainFile = pkg.main || 'index.js';
+              const entryFile = join(fullPath, mainFile);
+              if (existsSync(normWin(entryFile))) {
+                const original = readFileSync(normWin(entryFile), 'utf8');
+                if (!original.includes('exports.LRUCache')) {
+                  const patched = [
+                    original,
+                    '',
+                    '// GeeClaw patch: add LRUCache named export for Node.js 22+ ESM interop',
+                    'if (typeof module.exports === "function" && !module.exports.LRUCache) {',
+                    '  module.exports.LRUCache = module.exports;',
+                    '}',
+                    '',
+                  ].join('\n');
+                  writeFileSync(normWin(entryFile), patched, 'utf8');
+                  lruCount++;
+                  console.log(`[after-pack] 🩹 Patched lru-cache CJS (v${pkg.version}) at ${relative(rootDir, fullPath)}`);
+                }
+              }
+            }
+
+            const moduleFile = typeof pkg.module === 'string' ? pkg.module : null;
+            if (moduleFile) {
+              const esmEntry = join(fullPath, moduleFile);
+              if (existsSync(normWin(esmEntry))) {
+                const esmOriginal = readFileSync(normWin(esmEntry), 'utf8');
+                if (
+                  esmOriginal.includes('export default LRUCache')
+                  && !esmOriginal.includes('export { LRUCache')
+                ) {
+                  const esmPatched = [esmOriginal, '', 'export { LRUCache }', ''].join('\n');
+                  writeFileSync(normWin(esmEntry), esmPatched, 'utf8');
+                  lruCount++;
+                  console.log(`[after-pack] 🩹 Patched lru-cache ESM (v${pkg.version}) at ${relative(rootDir, fullPath)}`);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`[after-pack] ⚠️  Failed to patch lru-cache at ${fullPath}:`, err.message);
+          }
+        } else {
+          stack.push(fullPath);
+        }
+      }
+    }
+
+    return lruCount;
+  }
+
+  count += patchAllLruCacheInstances(nodeModulesDir);
+
+  if (count > 0) {
+    console.log(`[after-pack] 🩹 Patched ${count} broken module(s) in ${nodeModulesDir}`);
   }
 }
 
@@ -403,7 +490,7 @@ exports.default = async function afterPack(context) {
     const BUNDLED_PLUGINS = [
       { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
       { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
-      { npmName: '@sliverp/qqbot', pluginId: 'qqbot' },
+      { npmName: '@tencent-connect/openclaw-qqbot', pluginId: 'openclaw-qqbot' },
       { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
       { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
     ];
@@ -439,5 +526,93 @@ exports.default = async function afterPack(context) {
   const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
   if (nativeRemoved > 0) {
     console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+  }
+
+  const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');
+  if (existsSync(asarUnpackedDir)) {
+    const { readFileSync: readFS, writeFileSync: writeFS } = require('fs');
+    let asarLruCount = 0;
+    const lruStack = [asarUnpackedDir];
+
+    while (lruStack.length > 0) {
+      const dir = lruStack.pop();
+      let entries;
+      try {
+        entries = readdirSync(normWin(dir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+        let isDirectory = entry.isDirectory();
+        if (!isDirectory) {
+          try {
+            isDirectory = statSync(normWin(fullPath)).isDirectory();
+          } catch {
+            isDirectory = false;
+          }
+        }
+        if (!isDirectory) continue;
+
+        if (entry.name === 'lru-cache') {
+          const pkgPath = join(fullPath, 'package.json');
+          if (!existsSync(normWin(pkgPath))) {
+            lruStack.push(fullPath);
+            continue;
+          }
+
+          try {
+            const pkg = JSON.parse(readFS(normWin(pkgPath), 'utf8'));
+            if (pkg.type !== 'module') {
+              const mainFile = pkg.main || 'index.js';
+              const entryFile = join(fullPath, mainFile);
+              if (existsSync(normWin(entryFile))) {
+                const original = readFS(normWin(entryFile), 'utf8');
+                if (!original.includes('exports.LRUCache')) {
+                  const patched = [
+                    original,
+                    '',
+                    '// GeeClaw patch: add LRUCache named export for Node.js 22+ ESM interop',
+                    'if (typeof module.exports === "function" && !module.exports.LRUCache) {',
+                    '  module.exports.LRUCache = module.exports;',
+                    '}',
+                    '',
+                  ].join('\n');
+                  writeFS(normWin(entryFile), patched, 'utf8');
+                  asarLruCount++;
+                  console.log(`[after-pack] 🩹 Patched lru-cache CJS in app.asar.unpacked at ${relative(asarUnpackedDir, fullPath)}`);
+                }
+              }
+            }
+
+            const moduleFile = typeof pkg.module === 'string' ? pkg.module : null;
+            if (moduleFile) {
+              const esmEntry = join(fullPath, moduleFile);
+              if (existsSync(normWin(esmEntry))) {
+                const esmOriginal = readFS(normWin(esmEntry), 'utf8');
+                if (
+                  esmOriginal.includes('export default LRUCache')
+                  && !esmOriginal.includes('export { LRUCache')
+                ) {
+                  const esmPatched = [esmOriginal, '', 'export { LRUCache }', ''].join('\n');
+                  writeFS(normWin(esmEntry), esmPatched, 'utf8');
+                  asarLruCount++;
+                  console.log(`[after-pack] 🩹 Patched lru-cache ESM in app.asar.unpacked at ${relative(asarUnpackedDir, fullPath)}`);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`[after-pack] ⚠️  Failed to patch lru-cache in app.asar.unpacked at ${fullPath}:`, err.message);
+          }
+        } else {
+          lruStack.push(fullPath);
+        }
+      }
+    }
+
+    if (asarLruCount > 0) {
+      console.log(`[after-pack] 🩹 Patched ${asarLruCount} lru-cache instance(s) in app.asar.unpacked`);
+    }
   }
 };

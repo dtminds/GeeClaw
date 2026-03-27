@@ -1,6 +1,6 @@
 import { app, utilityProcess } from 'electron';
 import path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { getAllSettings } from '../utils/store';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
@@ -40,6 +40,23 @@ import { getBundledPathEntries } from '../utils/managed-bin';
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
+const BUILTIN_CHANNEL_EXTENSIONS = ['discord', 'telegram'];
+
+function cleanupStaleBuiltInExtensions(openclawConfigDir: string): void {
+  for (const extensionId of BUILTIN_CHANNEL_EXTENSIONS) {
+    const extensionDir = path.join(openclawConfigDir, 'extensions', extensionId);
+    if (!existsSync(extensionDir)) {
+      continue;
+    }
+
+    logger.info(`[plugin] Removing stale built-in extension copy: ${extensionId}`);
+    try {
+      rmSync(extensionDir, { recursive: true, force: true });
+    } catch (error) {
+      logger.warn(`[plugin] Failed to remove stale extension ${extensionId}:`, error);
+    }
+  }
+}
 
 export interface GatewayLaunchContext {
   appSettings: Awaited<ReturnType<typeof getAllSettings>>;
@@ -283,6 +300,12 @@ export async function syncGatewayConfigBeforeLaunch(
     await syncAllAgentConfigToOpenClaw();
   } catch (err) {
     logger.warn('Failed to sync agent configs to openclaw.json on startup:', err);
+  }
+
+  try {
+    cleanupStaleBuiltInExtensions(getOpenClawConfigDir());
+  } catch (err) {
+    logger.warn('Failed to clean stale built-in extensions:', err);
   }
 
   await syncProxyConfigToOpenClaw(appSettings);
