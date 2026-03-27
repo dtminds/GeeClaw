@@ -63,5 +63,18 @@
         "notRunning": "网关未运行",
         "notRunningDesc": "OpenClaw 网关需要运行才能使用此功能。它将自动启动，或者您可以从设置中启动。",
         "warning": "网关未运行。"
+    },
+    "tray": {
+        "tooltipRunning": "GeeClaw - 网关运行中",
+        "tooltipStopped": "GeeClaw - 网关已停止",
+        "show": "显示 GeeClaw",
+        "gatewayStatus": "网关状态",
+        "running": "运行中",
+        "stopped": "已停止",
+        "quickActions": "快捷操作",
+        "openChat": "打开聊天",
+        "openSettings": "打开设置",
+        "checkUpdates": "检查更新...",
+        "quit": "退出 GeeClaw"
     }
 }

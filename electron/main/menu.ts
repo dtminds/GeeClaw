@@ -24,7 +24,7 @@ export function createMenu(): void {
                 accelerator: 'Cmd+,',
                 click: () => {
                   const win = BrowserWindow.getFocusedWindow();
-                  win?.webContents.send('navigate', '/settings');
+                  win?.webContents.send('navigate', '/settings/appearance');
                 },
               },
               { type: 'separator' as const },
@@ -49,7 +49,7 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/chat');
+            win?.webContents.send('navigate', '/');
           },
         },
         { type: 'separator' },
@@ -106,7 +106,7 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+1',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/');
+            win?.webContents.send('navigate', '/dashboard');
           },
         },
         {
@@ -138,7 +138,7 @@ export function createMenu(): void {
           accelerator: isMac ? 'Cmd+,' : 'Ctrl+,',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/settings');
+            win?.webContents.send('navigate', '/settings/appearance');
           },
         },
       ],
