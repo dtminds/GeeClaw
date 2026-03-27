@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import {
+  cleanupDanglingManagedChannelPluginState,
   deleteChannelConfig,
   deleteChannelAccountConfig,
   getChannelFormValues,
@@ -17,17 +18,22 @@ import { whatsAppLoginManager } from '../../utils/whatsapp-login';
 import { weComLoginManager } from '../../utils/wecom-login';
 import { weixinLoginManager } from '../../utils/weixin-login';
 import {
-  ensureDingTalkPluginInstalled,
-  ensureFeishuPluginInstalled,
-  ensureQQBotPluginInstalled,
-  ensureWeComPluginInstalled,
-  ensureWeixinPluginInstalled,
+  ensureManagedChannelPluginInstalled,
 } from '../../utils/plugin-install';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 
 function scheduleGatewayChannelRestart(ctx: HostApiContext, reason: string): void {
   refreshGatewayAfterConfigChange(ctx.gatewayManager, reason);
+}
+
+function getManagedChannelPluginInstallError(channelType: string): string | null {
+  const installResult = ensureManagedChannelPluginInstalled(channelType);
+  if (!installResult || installResult.installed) {
+    return null;
+  }
+
+  return installResult.warning || `Bundled plugin unavailable for channel "${channelType}"`;
 }
 
 export async function handleChannelRoutes(
@@ -90,6 +96,12 @@ export async function handleChannelRoutes(
   if (url.pathname === '/api/channels/wecom/start' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ accountId?: string }>(req);
+      const installError = getManagedChannelPluginInstallError('wecom');
+      if (installError) {
+        sendJson(res, 500, { success: false, error: installError });
+        return true;
+      }
+      await cleanupDanglingManagedChannelPluginState('wecom');
       await weComLoginManager.start(body.accountId || 'default');
       sendJson(res, 200, { success: true });
     } catch (error) {
@@ -111,6 +123,12 @@ export async function handleChannelRoutes(
   if (url.pathname === '/api/channels/openclaw-weixin/start' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ accountId?: string }>(req);
+      const installError = getManagedChannelPluginInstallError('openclaw-weixin');
+      if (installError) {
+        sendJson(res, 500, { success: false, error: installError });
+        return true;
+      }
+      await cleanupDanglingManagedChannelPluginState('openclaw-weixin');
       await weixinLoginManager.start(body.accountId);
       sendJson(res, 200, { success: true });
     } catch (error) {
@@ -136,40 +154,10 @@ export async function handleChannelRoutes(
         config: Record<string, unknown>;
         accountId?: string;
       }>(req);
-      if (body.channelType === 'dingtalk') {
-        const installResult = await ensureDingTalkPluginInstalled();
-        if (!installResult.installed) {
-          sendJson(res, 500, { success: false, error: installResult.warning || 'DingTalk bundled plugin unavailable' });
-          return true;
-        }
-      }
-      if (body.channelType === 'wecom') {
-        const installResult = await ensureWeComPluginInstalled();
-        if (!installResult.installed) {
-          sendJson(res, 500, { success: false, error: installResult.warning || 'WeCom bundled plugin unavailable' });
-          return true;
-        }
-      }
-      if (body.channelType === 'feishu') {
-        const installResult = await ensureFeishuPluginInstalled();
-        if (!installResult.installed) {
-          sendJson(res, 500, { success: false, error: installResult.warning || 'Feishu bundled plugin unavailable' });
-          return true;
-        }
-      }
-      if (body.channelType === 'qqbot') {
-        const installResult = await ensureQQBotPluginInstalled();
-        if (!installResult.installed) {
-          sendJson(res, 500, { success: false, error: installResult.warning || 'QQ Bot bundled plugin unavailable' });
-          return true;
-        }
-      }
-      if (body.channelType === 'openclaw-weixin') {
-        const installResult = await ensureWeixinPluginInstalled();
-        if (!installResult.installed) {
-          sendJson(res, 500, { success: false, error: installResult.warning || 'Weixin bundled plugin unavailable' });
-          return true;
-        }
+      const installError = getManagedChannelPluginInstallError(body.channelType);
+      if (installError) {
+        sendJson(res, 500, { success: false, error: installError });
+        return true;
       }
       await saveChannelConfig(body.channelType, body.config, body.accountId);
       scheduleGatewayChannelRestart(ctx, `channel:saveConfig:${body.channelType}`);

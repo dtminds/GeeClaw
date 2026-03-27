@@ -51,18 +51,47 @@ const BUILTIN_CHANNEL_IDS = new Set([
     'mattermost',
 ]);
 
-const CHANNEL_PLUGIN_INSTALLS: Record<string, { pluginId: string; installDir: string }> = {
+interface ManagedChannelPluginInstall {
+    pluginId: string;
+    installDir: string;
+    legacyPluginIds?: string[];
+    deleteAccountState?: (accountId: string) => Promise<void>;
+    clearChannelState?: () => Promise<void>;
+}
+
+const CHANNEL_PLUGIN_INSTALLS: Record<string, ManagedChannelPluginInstall> = {
     dingtalk: { pluginId: DINGTALK_PLUGIN_ID, installDir: 'dingtalk' },
-    wecom: { pluginId: WECOM_PLUGIN_ID, installDir: WECOM_PLUGIN_ID },
-    [WEIXIN_CHANNEL_ID]: { pluginId: WEIXIN_PLUGIN_ID, installDir: WEIXIN_PLUGIN_ID },
-    feishu: { pluginId: FEISHU_PLUGIN_ID, installDir: FEISHU_PLUGIN_ID },
-    qqbot: { pluginId: QQ_PLUGIN_ID, installDir: QQ_PLUGIN_ID },
+    wecom: { pluginId: WECOM_PLUGIN_ID, installDir: WECOM_PLUGIN_ID, legacyPluginIds: ['wecom'] },
+    [WEIXIN_CHANNEL_ID]: {
+        pluginId: WEIXIN_PLUGIN_ID,
+        installDir: WEIXIN_PLUGIN_ID,
+        deleteAccountState: deleteWeixinAccountState,
+        clearChannelState: clearAllWeixinState,
+    },
+    feishu: { pluginId: FEISHU_PLUGIN_ID, installDir: FEISHU_PLUGIN_ID, legacyPluginIds: ['feishu'] },
+    qqbot: { pluginId: QQ_PLUGIN_ID, installDir: QQ_PLUGIN_ID, legacyPluginIds: ['qqbot'] },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 async function fileExists(p: string): Promise<boolean> {
     try { await access(p, constants.F_OK); return true; } catch { return false; }
+}
+
+function getManagedChannelPluginInstall(channelType: string): ManagedChannelPluginInstall | undefined {
+    return CHANNEL_PLUGIN_INSTALLS[channelType];
+}
+
+function getManagedChannelPluginRegistrationIds(channelType: string): string[] {
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
+    if (!pluginInstall) {
+        return [];
+    }
+
+    return Array.from(new Set([
+        pluginInstall.pluginId,
+        ...(pluginInstall.legacyPluginIds ?? []),
+    ]));
 }
 
 function removePluginRegistration(currentConfig: OpenClawConfig, pluginId: string): boolean {
@@ -108,6 +137,17 @@ function removePluginRegistration(currentConfig: OpenClawConfig, pluginId: strin
     return modified;
 }
 
+function removeManagedChannelPluginRegistration(
+    currentConfig: OpenClawConfig,
+    channelType: string,
+): boolean {
+    let modified = false;
+    for (const pluginId of getManagedChannelPluginRegistrationIds(channelType)) {
+        modified = removePluginRegistration(currentConfig, pluginId) || modified;
+    }
+    return modified;
+}
+
 function channelHasConfiguredAccounts(channelSection: ChannelConfigData | undefined): boolean {
     if (!channelSection || typeof channelSection !== 'object') {
         return false;
@@ -148,6 +188,30 @@ function ensurePluginRegistration(currentConfig: OpenClawConfig, pluginId: strin
         currentConfig.plugins.entries[pluginId] = {};
     }
     currentConfig.plugins.entries[pluginId].enabled = true;
+}
+
+function setLegacyManagedChannelPluginEntriesEnabled(
+    currentConfig: OpenClawConfig,
+    channelType: string,
+    enabled: boolean,
+): void {
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
+    const legacyPluginIds = pluginInstall?.legacyPluginIds ?? [];
+    if (legacyPluginIds.length === 0 || !currentConfig.plugins?.entries) {
+        return;
+    }
+
+    for (const legacyPluginId of legacyPluginIds) {
+        const existingEntry = currentConfig.plugins.entries[legacyPluginId];
+        if (!existingEntry || typeof existingEntry !== 'object') {
+            continue;
+        }
+
+        currentConfig.plugins.entries[legacyPluginId] = {
+            ...existingEntry,
+            enabled,
+        };
+    }
 }
 
 function cleanupLegacyBuiltInChannelPluginRegistration(
@@ -406,71 +470,21 @@ export function ensurePluginAllowlist(currentConfig: OpenClawConfig, channelType
         return currentConfig.plugins;
     };
 
-    if (channelType === 'dingtalk') {
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
+    if (pluginInstall) {
         const plugins = ensurePlugins();
         const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
-        if (!allow.includes(DINGTALK_PLUGIN_ID)) {
-            plugins.allow = [...allow, DINGTALK_PLUGIN_ID];
-        }
-        setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
-        return;
-    }
-
-    if (channelType === 'wecom') {
-        const plugins = ensurePlugins();
-        const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
-        const normalizedAllow = allow.filter((pluginId) => pluginId !== 'wecom');
-        if (!normalizedAllow.includes(WECOM_PLUGIN_ID)) {
-            plugins.allow = [...normalizedAllow, WECOM_PLUGIN_ID];
+        const legacyPluginIds = new Set(pluginInstall.legacyPluginIds ?? []);
+        const normalizedAllow = allow.filter((pluginId) => (
+            pluginId !== pluginInstall.pluginId && !legacyPluginIds.has(pluginId)
+        ));
+        if (!normalizedAllow.includes(pluginInstall.pluginId)) {
+            plugins.allow = [...normalizedAllow, pluginInstall.pluginId];
         } else if (normalizedAllow.length !== allow.length) {
             plugins.allow = normalizedAllow;
         }
         setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
-        return;
-    }
-
-    if (channelType === WEIXIN_CHANNEL_ID) {
-        const plugins = ensurePlugins();
-        const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
-        if (!allow.includes(WEIXIN_PLUGIN_ID)) {
-            plugins.allow = [...allow, WEIXIN_PLUGIN_ID];
-        }
-        setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
-        return;
-    }
-
-    if (channelType === 'feishu') {
-        const plugins = ensurePlugins();
-        const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
-        const normalizedAllow = allow.filter((pluginId) => pluginId !== 'feishu');
-        if (!normalizedAllow.includes(FEISHU_PLUGIN_ID)) {
-            plugins.allow = [...normalizedAllow, FEISHU_PLUGIN_ID];
-        } else if (normalizedAllow.length !== allow.length) {
-            plugins.allow = normalizedAllow;
-        }
-        if (!plugins.entries) {
-            plugins.entries = {};
-        }
-        plugins.entries.feishu = {
-            ...(plugins.entries.feishu && typeof plugins.entries.feishu === 'object'
-                ? plugins.entries.feishu
-                : {}),
-            enabled: false,
-        };
-        plugins.entries[FEISHU_PLUGIN_ID] = {
-            ...plugins.entries[FEISHU_PLUGIN_ID],
-            enabled: true,
-        };
-        return;
-    }
-
-    if (channelType === 'qqbot') {
-        const plugins = ensurePlugins();
-        const allow = Array.isArray(plugins.allow) ? plugins.allow : [];
-        if (!allow.includes(QQ_PLUGIN_ID)) {
-            plugins.allow = [...allow, QQ_PLUGIN_ID];
-        }
-        setManagedChannelPluginEntryEnabled(currentConfig, channelType, true);
+        setLegacyManagedChannelPluginEntriesEnabled(currentConfig, channelType, false);
     }
 }
 
@@ -479,7 +493,7 @@ function setManagedChannelPluginEntryEnabled(
     channelType: string,
     enabled: boolean,
 ): void {
-    const pluginInstall = CHANNEL_PLUGIN_INSTALLS[channelType];
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
     if (!pluginInstall) {
         return;
     }
@@ -498,15 +512,7 @@ function setManagedChannelPluginEntryEnabled(
             : {}),
         enabled,
     };
-
-    if (channelType === 'feishu') {
-        currentConfig.plugins.entries.feishu = {
-            ...(currentConfig.plugins.entries.feishu && typeof currentConfig.plugins.entries.feishu === 'object'
-                ? currentConfig.plugins.entries.feishu
-                : {}),
-            enabled: false,
-        };
-    }
+    setLegacyManagedChannelPluginEntriesEnabled(currentConfig, channelType, false);
 }
 
 function hasLegacyManagedPluginEntryEnabled(currentConfig: OpenClawConfig, channelType: string): boolean {
@@ -515,23 +521,18 @@ function hasLegacyManagedPluginEntryEnabled(currentConfig: OpenClawConfig, chann
         return false;
     }
 
-    const pluginInstall = CHANNEL_PLUGIN_INSTALLS[channelType];
-    if (!pluginInstall) {
-        return false;
-    }
-
-    const candidateEntryIds = [pluginInstall.pluginId];
-    if (channelType === 'wecom') {
-        candidateEntryIds.push('wecom');
-    }
-    if (channelType === 'feishu') {
-        candidateEntryIds.push('feishu');
-    }
-
-    return candidateEntryIds.some((entryId) => {
+    return getManagedChannelPluginRegistrationIds(channelType).some((entryId) => {
         const entry = pluginEntries[entryId];
         return Boolean(entry && typeof entry === 'object' && (entry as ChannelConfigData).enabled !== false);
     });
+}
+
+function hasManagedChannelPluginArtifacts(currentConfig: OpenClawConfig, channelType: string): boolean {
+    const registrationIds = getManagedChannelPluginRegistrationIds(channelType);
+    return registrationIds.some((pluginId) => (
+        Boolean(currentConfig.plugins?.entries?.[pluginId])
+        || currentConfig.plugins?.allow?.includes(pluginId)
+    ));
 }
 
 function isChannelEnabledForPluginAllowlist(currentConfig: OpenClawConfig, channelType: string): boolean {
@@ -558,7 +559,9 @@ export function reconcileManagedChannelPluginConfig(currentConfig: OpenClawConfi
 
     for (const channelType of managedChannelTypes) {
         if (!isChannelEnabledForPluginAllowlist(currentConfig, channelType)) {
-            setManagedChannelPluginEntryEnabled(currentConfig, channelType, false);
+            if (hasManagedChannelPluginArtifacts(currentConfig, channelType)) {
+                setManagedChannelPluginEntryEnabled(currentConfig, channelType, false);
+            }
             continue;
         }
 
@@ -572,7 +575,9 @@ export function reconcileManagedChannelPluginConfig(currentConfig: OpenClawConfi
 
     const managedPluginIds = new Set<string>();
     for (const channelType of managedChannelTypes) {
-        managedPluginIds.add(CHANNEL_PLUGIN_INSTALLS[channelType].pluginId);
+        for (const pluginId of getManagedChannelPluginRegistrationIds(channelType)) {
+            managedPluginIds.add(pluginId);
+        }
     }
 
     const nextAllow = existingAllow.filter((pluginId) => !managedPluginIds.has(pluginId));
@@ -970,10 +975,18 @@ export async function getChannelFormValues(channelType: string, accountId?: stri
 
 export async function deleteChannelAccountConfig(channelType: string, accountId: string): Promise<void> {
     const currentConfig = await readOpenClawConfig();
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
     const channelSection = currentConfig.channels?.[channelType];
     if (!channelSection) {
-        if (channelType === WEIXIN_CHANNEL_ID) {
-            await deleteWeixinAccountState(accountId);
+        const removedPluginRegistration = pluginInstall
+            ? removeManagedChannelPluginRegistration(currentConfig, channelType)
+            : false;
+        if (removedPluginRegistration) {
+            syncBuiltinChannelsWithPluginAllowlist(currentConfig);
+            await writeOpenClawConfig(currentConfig);
+        }
+        if (pluginInstall?.deleteAccountState) {
+            await pluginInstall.deleteAccountState(accountId);
         }
         return;
     }
@@ -991,15 +1004,18 @@ export async function deleteChannelAccountConfig(channelType: string, accountId:
 
     if (Object.keys(accounts).length === 0) {
         delete currentConfig.channels![channelType];
+        if (pluginInstall) {
+            removeManagedChannelPluginRegistration(currentConfig, channelType);
+        }
     } else {
         syncTopLevelFromDefaultAccount(channelSection, getResolvedDefaultAccountId(channelSection));
     }
 
-    if (channelType === WEIXIN_CHANNEL_ID) {
-        await deleteWeixinAccountState(accountId);
-    }
-
+    syncBuiltinChannelsWithPluginAllowlist(currentConfig);
     await writeOpenClawConfig(currentConfig);
+    if (pluginInstall?.deleteAccountState) {
+        await pluginInstall.deleteAccountState(accountId);
+    }
     logger.info('Deleted channel account config', { channelType, accountId });
     console.log(`Deleted channel account config for ${channelType}/${accountId}`);
 }
@@ -1026,12 +1042,16 @@ export async function setDefaultChannelAccount(channelType: string, accountId: s
 
 export async function deleteChannelConfig(channelType: string): Promise<void> {
     const currentConfig = await readOpenClawConfig();
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
     const cleanedLegacyBuiltinPlugin = cleanupLegacyBuiltInChannelPluginRegistration(currentConfig, channelType);
     let modified = cleanedLegacyBuiltinPlugin;
 
     if (currentConfig.channels?.[channelType]) {
         delete currentConfig.channels[channelType];
         modified = true;
+        if (pluginInstall) {
+            modified = removeManagedChannelPluginRegistration(currentConfig, channelType) || modified;
+        }
     } else if (PLUGIN_CHANNELS.includes(channelType)) {
         if (currentConfig.plugins?.entries?.[channelType]) {
             delete currentConfig.plugins.entries[channelType];
@@ -1043,9 +1063,12 @@ export async function deleteChannelConfig(channelType: string): Promise<void> {
             }
             modified = true;
         }
+    } else if (pluginInstall) {
+        modified = removeManagedChannelPluginRegistration(currentConfig, channelType) || modified;
     }
 
     if (modified) {
+        syncBuiltinChannelsWithPluginAllowlist(currentConfig);
         await writeOpenClawConfig(currentConfig);
         console.log(`Deleted channel config for ${channelType}`);
     }
@@ -1063,8 +1086,8 @@ export async function deleteChannelConfig(channelType: string): Promise<void> {
         }
     }
 
-    if (channelType === WEIXIN_CHANNEL_ID) {
-        await clearAllWeixinState();
+    if (pluginInstall?.clearChannelState) {
+        await pluginInstall.clearChannelState();
     }
 }
 
@@ -1196,9 +1219,11 @@ export async function deleteAgentChannelAccounts(agentId: string): Promise<void>
 
     const accountId = agentId === 'main' ? DEFAULT_ACCOUNT_ID : agentId;
     let modified = false;
+    const postWriteCleanupTasks: Array<() => Promise<void>> = [];
 
     for (const channelType of Object.keys(currentConfig.channels)) {
         const section = currentConfig.channels[channelType];
+        const pluginInstall = getManagedChannelPluginInstall(channelType);
         migrateLegacyChannelConfigToAccounts(section, DEFAULT_ACCOUNT_ID);
         const accounts = section.accounts as Record<string, ChannelConfigData> | undefined;
         if (!accounts?.[accountId]) continue;
@@ -1206,6 +1231,9 @@ export async function deleteAgentChannelAccounts(agentId: string): Promise<void>
         delete accounts[accountId];
         if (Object.keys(accounts).length === 0) {
             delete currentConfig.channels[channelType];
+            if (pluginInstall) {
+                removeManagedChannelPluginRegistration(currentConfig, channelType);
+            }
         } else {
             const defaultAccountId = getResolvedDefaultAccountId(section);
             if (defaultAccountId === accountId) {
@@ -1213,11 +1241,20 @@ export async function deleteAgentChannelAccounts(agentId: string): Promise<void>
             }
             syncTopLevelFromDefaultAccount(section, getResolvedDefaultAccountId(section));
         }
+        if (pluginInstall?.clearChannelState && Object.keys(accounts).length === 0) {
+            postWriteCleanupTasks.push(() => pluginInstall.clearChannelState!());
+        } else if (pluginInstall?.deleteAccountState) {
+            postWriteCleanupTasks.push(() => pluginInstall.deleteAccountState!(accountId));
+        }
         modified = true;
     }
 
     if (modified) {
+        syncBuiltinChannelsWithPluginAllowlist(currentConfig);
         await writeOpenClawConfig(currentConfig);
+        for (const task of postWriteCleanupTasks) {
+            await task();
+        }
         logger.info('Deleted all channel accounts for agent', { agentId, accountId });
     }
 }
@@ -1245,6 +1282,37 @@ export async function setChannelEnabled(channelType: string, enabled: boolean): 
     currentConfig.channels[channelType].enabled = enabled;
     await writeOpenClawConfig(currentConfig);
     console.log(`Set channel ${channelType} enabled: ${enabled}`);
+}
+
+export async function cleanupDanglingManagedChannelPluginState(
+    channelType: string,
+): Promise<{ cleanedDanglingState: boolean }> {
+    const pluginInstall = getManagedChannelPluginInstall(channelType);
+    if (!pluginInstall) {
+        return { cleanedDanglingState: false };
+    }
+
+    const currentConfig = await readOpenClawConfig();
+    const channelSection = currentConfig.channels?.[channelType];
+    if (channelHasConfiguredAccounts(channelSection)) {
+        return { cleanedDanglingState: false };
+    }
+
+    const registrationIds = getManagedChannelPluginRegistrationIds(channelType);
+    const hadPluginRegistration = registrationIds.some((pluginId) => (
+        Boolean(currentConfig.plugins?.entries?.[pluginId])
+        || currentConfig.plugins?.allow?.includes(pluginId)
+    ));
+    const modified = removeManagedChannelPluginRegistration(currentConfig, channelType);
+    if (modified) {
+        syncBuiltinChannelsWithPluginAllowlist(currentConfig);
+        await writeOpenClawConfig(currentConfig);
+    }
+    if (pluginInstall.clearChannelState) {
+        await pluginInstall.clearChannelState();
+    }
+
+    return { cleanedDanglingState: hadPluginRegistration || modified };
 }
 
 // ── Validation ───────────────────────────────────────────────────
