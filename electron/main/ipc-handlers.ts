@@ -13,7 +13,7 @@ import {
   type ProviderConfig,
 } from '../utils/secure-storage';
 import { getOpenClawConfigDir, getOpenClawSkillsDir, ensureDir, expandPath } from '../utils/paths';
-import { getOpenClawCliCommand } from '../utils/openclaw-cli';
+import { getOpenClawCliCommand, installOpenClawCli } from '../utils/openclaw-cli';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../utils/store';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
 import {
@@ -1414,6 +1414,21 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
         return { success: false, error: `OpenClaw entry script not found at: ${status.entryPath}` };
       }
       return { success: true, command: await getOpenClawCliCommand() };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle('openclaw:installCli', async () => {
+    try {
+      const status = await getConfiguredOpenClawRuntime();
+      if (!status.packageExists) {
+        return { success: false, error: status.error || 'OpenClaw runtime not found' };
+      }
+      if (status.entryPath && !existsSync(status.entryPath)) {
+        return { success: false, error: `OpenClaw entry script not found at: ${status.entryPath}` };
+      }
+      return await installOpenClawCli();
     } catch (error) {
       return { success: false, error: String(error) };
     }

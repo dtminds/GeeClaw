@@ -100,6 +100,23 @@ interface SettingsProps {
   embedded?: boolean;
 }
 
+function getCliCommandDisplayPath(command: string): string {
+  const trimmed = command.trim();
+  if (!trimmed) return '';
+
+  const powerShellWrapperMatch = trimmed.match(/^&\s+'([^']+)'$/);
+  if (powerShellWrapperMatch) {
+    return powerShellWrapperMatch[1];
+  }
+
+  const quotedPathMatch = trimmed.match(/^"([^"]+)"$/);
+  if (quotedPathMatch) {
+    return quotedPathMatch[1];
+  }
+
+  return trimmed;
+}
+
 function AppSettingsPanel({
   section = 'general',
   onOpenSessions,
@@ -146,12 +163,11 @@ function AppSettingsPanel({
   const [proxyEnabledDraft, setProxyEnabledDraft] = useState(false);
   const [showAdvancedProxy, setShowAdvancedProxy] = useState(false);
   const [savingProxy, setSavingProxy] = useState(false);
+  const [installingCli, setInstallingCli] = useState(false);
   const [wsDiagnosticEnabled, setWsDiagnosticEnabled] = useState(false);
   const [showTelemetryViewer, setShowTelemetryViewer] = useState(false);
   const [telemetryEntries, setTelemetryEntries] = useState<UiTelemetryEntry[]>([]);
 
-  const isWindows = window.electron.platform === 'win32';
-  const showCliTools = true;
   const [showLogs, setShowLogs] = useState(false);
   const [logContent, setLogContent] = useState('');
 
@@ -226,7 +242,6 @@ function AppSettingsPanel({
   };
 
   useEffect(() => {
-    if (!showCliTools) return;
     let cancelled = false;
 
     (async () => {
@@ -252,7 +267,7 @@ function AppSettingsPanel({
     })();
 
     return () => { cancelled = true; };
-  }, [devModeUnlocked, showCliTools]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,9 +292,45 @@ function AppSettingsPanel({
     if (!openclawCliCommand) return;
     try {
       await navigator.clipboard.writeText(openclawCliCommand);
-      toast.success(t('developer.cmdCopied'));
+      toast.success(t('advanced.cli.cmdCopied'));
     } catch (error) {
       toast.error(`Failed to copy command: ${String(error)}`);
+    }
+  };
+
+  const handleInstallCli = async () => {
+    try {
+      const confirm = await invokeIpc<{ response: number }>('dialog:message', {
+        type: 'question',
+        buttons: [t('common:actions.install'), t('common:actions.cancel')],
+        defaultId: 0,
+        cancelId: 1,
+        title: t('advanced.cli.installTitle'),
+        message: t('advanced.cli.installMessage'),
+        detail: t('advanced.cli.installDetail'),
+      });
+
+      if (confirm.response !== 0) {
+        return;
+      }
+
+      setInstallingCli(true);
+      const result = await invokeIpc<{
+        success: boolean;
+        path?: string;
+        error?: string;
+      }>('openclaw:installCli');
+
+      if (result.success && result.path) {
+        toast.success(t('advanced.cli.installSuccess', { path: result.path }));
+        return;
+      }
+
+      toast.error(result.error || t('advanced.cli.installError'));
+    } catch (error) {
+      toast.error(`Failed to install CLI command: ${String(error)}`);
+    } finally {
+      setInstallingCli(false);
     }
   };
 
@@ -424,6 +475,13 @@ function AppSettingsPanel({
       .slice(0, 12);
   }, [telemetryEntries]);
 
+  const cliDisplayPath = useMemo(() => {
+    if (!openclawCliCommand) {
+      return openclawCliError || t('advanced.cli.unavailable');
+    }
+    return getCliCommandDisplayPath(openclawCliCommand);
+  }, [openclawCliCommand, openclawCliError, t]);
+
   const handleCopyTelemetry = async () => {
     try {
       const serialized = telemetryEntries.map((entry) => JSON.stringify(entry)).join('\n');
@@ -567,6 +625,49 @@ function AppSettingsPanel({
               <CardTitle>{t('advanced.title')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>{t('advanced.cli.label')}</Label>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3 mt-2">
+                  <div>
+                    <p className="text-sm font-medium">{t('advanced.cli.installLabel')}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('advanced.cli.installDescription')}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleInstallCli}
+                    disabled={installingCli}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {installingCli ? t('advanced.cli.installing') : t('common:actions.install')}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t('advanced.cli.copyLabel')}</p>
+                    <p
+                      className="truncate text-xs font-mono text-muted-foreground"
+                      title={cliDisplayPath}
+                    >
+                      {cliDisplayPath}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCopyCliCommand}
+                    disabled={!openclawCliCommand}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {t('common:actions.copy')}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label>{t('advanced.devMode')}</Label>
@@ -751,39 +852,6 @@ function AppSettingsPanel({
                     </div>
                   </div>
                 </div>
-                {showCliTools && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>{t('developer.cli')}</Label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('developer.cliDesc')}
-                      </p>
-                      {isWindows && (
-                        <p className="text-xs text-muted-foreground">
-                          {t('developer.cliPowershell')}
-                        </p>
-                      )}
-                      <div className="flex gap-2">
-                        <Input
-                          readOnly
-                          value={openclawCliCommand}
-                          placeholder={openclawCliError || t('developer.cmdUnavailable')}
-                          className="font-mono"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleCopyCliCommand}
-                          disabled={!openclawCliCommand}
-                        >
-                          <Copy className="h-4 w-4 mr-2" />
-                          {t('common:actions.copy')}
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
-
                 <div className="space-y-2">
                   <div className="flex items-center justify-between rounded-md border border-border/60 p-3">
                     <div>

@@ -138,6 +138,7 @@ pnpm dev
 > 当配置 Moonshot 后，GeeClaw 也会将 OpenClaw 配置中的 Kimi web search 同步到中国区端点（`https://api.moonshot.cn/v1`）。
 
 GeeClaw 会自行管理 OpenClaw 运行时和状态目录。首次启动时，在完成登录态检查后，会先改写 `~/.openclaw-geeclaw/openclaw.json`，安全配置都会持久化到应用 store，并在启动时重新校验回写到 `openclaw.json`。
+你也可以在 **设置 → 高级** 里直接复制终端命令，或安装一个用户级的 `geeclaw` 命令，以托管的 `geeclaw` profile 运行应用内置 OpenClaw，而不需要把 `openclaw` 注册到全局 PATH。
 
 ### 代理设置
 
