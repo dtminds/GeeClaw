@@ -12,34 +12,22 @@ This directory contains the application icons for all supported platforms.
 | `icon.png` | All | 512x512 PNG fallback |
 | `16x16.png` - `512x512.png` | Linux | PNG set for Linux |
 | `tray-icon-template.svg` | Source | macOS tray icon template source |
-| `tray-icon-Template.png` | macOS | 22x22 status bar icon (note: "Template" suffix required) |
+| `tray-icon-Template.png` | macOS | 16x16 1x status bar icon (note: "Template" suffix required) |
+| `tray-icon-Template@2x.png` | macOS | 32x32 retina status bar icon |
 
 ## Generating Icons
 
 ### Using the Script
 
 ```bash
-# Make the script executable
-chmod +x scripts/generate-icons.sh
-
-# Run icon generation
-./scripts/generate-icons.sh
+# Generate all app icons, including macOS tray assets
+pnpm run icons
 ```
 
 ### Prerequisites
 
-**macOS:**
-```bash
-brew install imagemagick librsvg
-```
-
-**Linux:**
-```bash
-apt install imagemagick librsvg2-bin
-```
-
-**Windows:**
-Install ImageMagick from https://imagemagick.org/
+- Install project dependencies so `sharp`, `png2icons`, and `zx` are available.
+- Run commands from the project root.
 
 ### Manual Generation
 
@@ -63,17 +51,18 @@ If you prefer to generate icons manually:
 - **Safe Area**: Keep 10% margin from edges
 
 ### macOS Tray Icon
-- **Format**: Single-color (black) on transparent background
-- **Size**: 22x22 pixels (system automatically handles @2x retina)
+- **Format**: Transparent background with a single monochrome shape
+- **Source Contract**: Provide a tray SVG whose visible content is just the icon silhouette. The generator converts all visible pixels to pure black while preserving alpha.
+- **Outputs**: `tray-icon-Template.png` (16x16 @ 72dpi) and `tray-icon-Template@2x.png` (32x32 @ 144dpi)
 - **Naming**: Must end with "Template.png" for automatic template mode
-- **Design**: Simplified monochrome version of main icon (GeeClaw logo)
+- **Design**: Simplified monochrome version of the main icon with thick enough strokes for a 16px menu bar target
 - **Source**: Use `tray-icon-template.svg` as the source
-- **Important**: Must be pure black (#000000) on transparent background - no gradients or colors
+- **Automatic Processing**: The script rasterizes at high density, trims transparent padding, adds a small safety inset, and exports both 1x and retina assets
 
 ## Updating the Icon
 
 1. Edit `icon.svg` with your vector editor (Figma, Illustrator, Inkscape)
-2. For macOS tray icon, edit `tray-icon-template.svg` (must be single-color black on transparent)
-3. Run `node scripts/generate-icons.mjs`
+2. For macOS tray icon, edit `tray-icon-template.svg` and keep it to a single silhouette on a transparent background
+3. Run `pnpm run icons`
 4. Verify generated icons look correct
 5. Commit all generated files

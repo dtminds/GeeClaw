@@ -11,6 +11,85 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const ICONS_DIR = path.join(PROJECT_ROOT, 'resources', 'icons');
 const SVG_SOURCE = path.join(ICONS_DIR, 'icon.svg');
+const MASTER_ICON_SIZE = 1024;
+const APP_ICON_SIZE = 512;
+const TRAY_SOURCE_DENSITY = 1024;
+const TRAY_PADDING_RATIO = 1 / 16;
+const TRAY_OUTPUTS = [
+  {
+    filename: 'tray-icon-Template.png',
+    size: 16,
+    density: 72,
+  },
+  {
+    filename: 'tray-icon-Template@2x.png',
+    size: 32,
+    density: 144,
+  },
+];
+
+function transparentBackground(alpha = 0) {
+  return {
+    r: 0,
+    g: 0,
+    b: 0,
+    alpha,
+  };
+}
+
+async function buildTrayTemplateBuffer(svgSource) {
+  const renderedSource = sharp(svgSource, { density: TRAY_SOURCE_DENSITY }).ensureAlpha();
+  const metadata = await renderedSource.metadata();
+
+  if (!metadata.width || !metadata.height) {
+    throw new Error('Unable to read tray icon dimensions from SVG source');
+  }
+
+  const alphaMask = await renderedSource
+    .extractChannel('alpha')
+    .toBuffer();
+
+  const silhouetteBuffer = await sharp({
+    create: {
+      width: metadata.width,
+      height: metadata.height,
+      channels: 3,
+      background: transparentBackground(1),
+    },
+  })
+    .joinChannel(alphaMask)
+    .png()
+    .toBuffer();
+
+  return sharp(silhouetteBuffer)
+    .trim()
+    .png()
+    .toBuffer();
+}
+
+async function writeTrayTemplate(outputPath, templateBuffer, size, density) {
+  const inset = Math.max(1, Math.round(size * TRAY_PADDING_RATIO));
+  const contentSize = Math.max(1, size - inset * 2);
+
+  await sharp(templateBuffer)
+    .resize({
+      width: contentSize,
+      height: contentSize,
+      fit: 'contain',
+      background: transparentBackground(),
+      kernel: sharp.kernel.lanczos3,
+    })
+    .extend({
+      top: inset,
+      right: inset,
+      bottom: inset,
+      left: inset,
+      background: transparentBackground(),
+    })
+    .png()
+    .withMetadata({ density })
+    .toFile(outputPath);
+}
 
 echo`🎨 Generating GeeClaw icons using Node.js...`;
 
@@ -27,15 +106,15 @@ try {
   // 1. Generate Master PNG Buffer (1024x1024)
   echo`  Processing SVG source...`;
   const masterPngBuffer = await sharp(SVG_SOURCE)
-    .resize(1024, 1024)
+    .resize(MASTER_ICON_SIZE, MASTER_ICON_SIZE)
     .png() // Ensure it's PNG
     .toBuffer();
 
   // Save the main icon.png (typically 512x512 for Electron root icon)
   await sharp(masterPngBuffer)
-    .resize(512, 512)
+    .resize(APP_ICON_SIZE, APP_ICON_SIZE)
     .toFile(path.join(ICONS_DIR, 'icon.png'));
-  echo`  ✅ Created icon.png (512x512)`;
+  echo`  ✅ Created icon.png (${APP_ICON_SIZE}x${APP_ICON_SIZE})`;
 
   // 2. Generate Windows .ico
   // png2icons expects a buffer. It returns a buffer (or null).
@@ -82,11 +161,17 @@ try {
   const TRAY_SVG_SOURCE = path.join(ICONS_DIR, 'tray-icon-template.svg');
   
   if (fs.existsSync(TRAY_SVG_SOURCE)) {
-    await sharp(TRAY_SVG_SOURCE)
-      .resize(22, 22)
-      .png()
-      .toFile(path.join(ICONS_DIR, 'tray-icon-Template.png'));
-    echo`  ✅ Created tray-icon-Template.png (22x22)`;
+    const trayTemplateBuffer = await buildTrayTemplateBuffer(TRAY_SVG_SOURCE);
+
+    for (const { filename, size, density } of TRAY_OUTPUTS) {
+      await writeTrayTemplate(
+        path.join(ICONS_DIR, filename),
+        trayTemplateBuffer,
+        size,
+        density,
+      );
+      echo`  ✅ Created ${filename} (${size}x${size} @ ${density}dpi)`;
+    }
   } else {
     echo`  ⚠️  tray-icon-template.svg not found, skipping tray icon generation`;
   }
