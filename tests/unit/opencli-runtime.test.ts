@@ -331,4 +331,144 @@ Issues:
     expect(catalog.sites.map((site) => site.site)).toEqual(['bilibili', 'youtube']);
     expect(catalog.sites[1]?.commands.map((command) => command.name)).toEqual(['channel', 'video']);
   });
+
+  it('extracts list JSON when warning lines precede the payload', async () => {
+    setPlatform('darwin');
+    mockIsPackagedGetter.value = true;
+    process.env.PATH = '/usr/bin:/bin';
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+    ));
+    mockSpawn.mockImplementation(() => createMockChild([
+      "⚠  Plugin hot-digest/aggregate.ts: Cannot find package '@jackwener/opencli'",
+      JSON.stringify([
+        {
+          command: 'youtube/video',
+          site: 'youtube',
+          name: 'video',
+          description: 'Get video metadata',
+          strategy: 'cookie',
+          browser: true,
+          args: [],
+          columns: ['field', 'value'],
+          domain: 'www.youtube.com',
+        },
+      ]),
+    ].join('\n')));
+
+    const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
+    const catalog = await getOpenCliCatalog();
+
+    expect(catalog.totalSites).toBe(1);
+    expect(catalog.totalCommands).toBe(1);
+    expect(catalog.sites[0]?.site).toBe('youtube');
+    expect(catalog.sites[0]?.commands[0]?.command).toBe('youtube/video');
+  });
+
+  it('supports grouped catalog payloads that wrap commands by site', async () => {
+    setPlatform('darwin');
+    mockIsPackagedGetter.value = true;
+    process.env.PATH = '/usr/bin:/bin';
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+    ));
+    mockSpawn.mockImplementation(() => createMockChild(JSON.stringify({
+      sites: [
+        {
+          site: 'youtube',
+          domains: ['www.youtube.com'],
+          strategies: ['cookie'],
+          commands: [
+            {
+              name: 'video',
+              description: 'Get video metadata',
+              browser: true,
+              args: [],
+              columns: ['field', 'value'],
+            },
+            {
+              name: 'channel',
+              description: 'Get channel info',
+              browser: true,
+              args: [],
+              columns: ['field', 'value'],
+            },
+          ],
+        },
+      ],
+    })));
+
+    const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
+    const catalog = await getOpenCliCatalog();
+
+    expect(catalog.totalSites).toBe(1);
+    expect(catalog.totalCommands).toBe(2);
+    expect(catalog.sites[0]?.commands.map((command) => command.command)).toEqual([
+      'youtube/channel',
+      'youtube/video',
+    ]);
+  });
+
+  it('falls back to the bundled manifest when list output is not parseable', async () => {
+    setPlatform('darwin');
+    mockIsPackagedGetter.value = true;
+    process.env.PATH = '/usr/bin:/bin';
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/cli-manifest.json'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+    ));
+    mockReadFileSync.mockImplementation((value: string) => {
+      if (value === '/Applications/GeeClaw.app/Contents/Resources/opencli/cli-manifest.json') {
+        return JSON.stringify([
+          {
+            site: 'bilibili',
+            name: 'search',
+            description: 'Search Bilibili videos',
+            strategy: 'cookie',
+            browser: true,
+            args: [],
+            columns: ['title'],
+            domain: 'www.bilibili.com',
+          },
+        ]);
+      }
+
+      return JSON.stringify({ version: '1.3.3' });
+    });
+    mockSpawn.mockImplementation(() => createMockChild('plugin warning without json payload'));
+
+    const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
+    const catalog = await getOpenCliCatalog();
+
+    expect(catalog.totalSites).toBe(1);
+    expect(catalog.totalCommands).toBe(1);
+    expect(catalog.sites[0]?.commands[0]?.command).toBe('bilibili/search');
+  });
 });
