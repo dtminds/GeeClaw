@@ -54,10 +54,7 @@ export function subscribeHostEvent<T = unknown>(
     // fallback for environments/tests that register the original listener.
     const unsubscribe = ipc.on(ipcChannel, listener);
     if (typeof unsubscribe === 'function') {
-      return () => {
-        unsubscribe();
-        ipc.off(ipcChannel, listener);
-      };
+      return unsubscribe;
     }
     // Fallback for environments where on() doesn't return cleanup
     return () => {
