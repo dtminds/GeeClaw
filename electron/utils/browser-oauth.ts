@@ -64,12 +64,7 @@ class BrowserOAuthManager extends EventEmitter {
     this.activeLabel = options?.label || null;
     this.emit('oauth:start', { provider, accountId: this.activeAccountId });
 
-    if (provider === 'openai') {
-      void this.executeFlow(provider);
-      return true;
-    }
-
-    await this.executeFlow(provider);
+    void this.executeFlow(provider);
     return true;
   }
 
