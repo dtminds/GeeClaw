@@ -51,6 +51,7 @@ import { invokeIpc } from '@/lib/api-client';
 import { useSettingsStore } from '@/stores/settings';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
+import { normalizeOAuthFlowPayload, type OAuthFlowData } from '@/lib/oauth-flow';
 import { Delete02Icon, PinIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
@@ -70,37 +71,6 @@ function providerModelsEqual(a?: string[], b?: string[]): boolean {
 }
 
 type ArkMode = 'apikey' | 'codeplan';
-
-type OAuthFlowData =
-  | {
-      mode: 'device';
-      verificationUri: string;
-      userCode: string;
-      expiresIn: number;
-    }
-  | {
-      mode: 'manual';
-      authorizationUrl: string;
-      message?: string;
-    };
-
-function normalizeOAuthFlowPayload(data: unknown): OAuthFlowData {
-  const payload = data as Record<string, unknown>;
-  if (payload?.mode === 'manual') {
-    return {
-      mode: 'manual',
-      authorizationUrl: String(payload.authorizationUrl || ''),
-      message: typeof payload.message === 'string' ? payload.message : undefined,
-    };
-  }
-
-  return {
-    mode: 'device',
-    verificationUri: String(payload?.verificationUri || ''),
-    userCode: String(payload?.userCode || ''),
-    expiresIn: Number(payload?.expiresIn || 300),
-  };
-}
 
 function isArkCodePlanMode(
   vendorId: string,
