@@ -181,6 +181,19 @@
             "title": "GeeClaw needs attention",
             "body": "We could not finish preparing the app. Try again, or check the details below.",
             "retry": "Try again"
+        },
+        "gatewayRecovery": {
+            "recovering": {
+                "eyebrow": "Gateway recovery",
+                "title": "Restarting OpenClaw",
+                "body": "Some features are temporarily unavailable We will resume automatically once the gateway is back",
+                "caption": "This usually takes around ten seconds Please keep this window open"
+            },
+            "error": {
+                "title": "The OpenClaw Gateway could not recover",
+                "body": "We tried to reconnect the OpenClaw Gateway, but this attempt did not succeed. You can retry now or inspect the details below.",
+                "retry": "Retry"
+            }
         }
     }
 }

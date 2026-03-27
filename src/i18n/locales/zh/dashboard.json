@@ -1,6 +1,6 @@
 {
-    "pageSubtitle": "查看网关状态、频道连接与常用快捷操作",
-    "gateway": "网关",
+    "pageSubtitle": "查看 OpenClaw 状态、频道连接与常用快捷操作",
+    "gateway": "OpenClaw 服务",
     "channels": "频道",
     "skills": "技能",
     "uptime": "运行时间",
@@ -9,7 +9,7 @@
     "connectedOf": "已连接",
     "enabledOf": "已启用",
     "sinceRestart": "自上次重启",
-    "gatewayNotRunning": "网关未运行",
+    "gatewayNotRunning": "OpenClaw 服务未运行",
     "quickActions": {
         "title": "快捷操作",
         "description": "常用任务和快捷方式",

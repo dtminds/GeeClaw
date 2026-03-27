@@ -1,6 +1,6 @@
 {
-    "gatewayNotRunning": "网关未运行",
-    "gatewayRequired": "OpenClaw 网关需要运行才能使用聊天。它将自动启动，或者您可以从设置中启动。",
+    "gatewayNotRunning": "OpenClaw未运行",
+    "gatewayRequired": "OpenClaw 需要运行才能使用聊天，您可以从设置中启动",
     "welcome": {
         "title": "GeeClaw",
         "subtitle": "您的 AI 龙虾助手已就绪，在下方开始对话。",

@@ -20,6 +20,7 @@ import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { Startup } from './pages/Startup';
 import { GatewaySessions } from './pages/GatewaySessions';
+import { GatewayRecoveryOverlay } from '@/components/gateway/GatewayRecoveryOverlay';
 import { useSettingsStore } from './stores/settings';
 import { useUpdateStore } from './stores/update';
 import { useBootstrapStore } from './stores/bootstrap';
@@ -245,6 +246,7 @@ function App() {
         </Routes>
 
         {showSettingsOverlay && <Settings />}
+        <GatewayRecoveryOverlay />
 
         {/* Global toast notifications */}
         <Toaster

@@ -48,7 +48,15 @@ export function subscribeHostEvent<T = unknown>(
     const listener = (payload: unknown) => {
       handler(payload as T);
     };
-    ipc.on(ipcChannel, listener);
+    // preload's `on()` may wrap the callback in an internal subscription
+    // function and return a cleanup handle for that exact wrapper.  Prefer the
+    // returned cleanup when available, but still call `off()` as a no-op-safe
+    // fallback for environments/tests that register the original listener.
+    const unsubscribe = ipc.on(ipcChannel, listener);
+    if (typeof unsubscribe === 'function') {
+      return unsubscribe;
+    }
+    // Fallback for environments where on() doesn't return cleanup
     return () => {
       ipc.off(ipcChannel, listener);
     };
