@@ -4,7 +4,6 @@
 import { app } from 'electron';
 import {
   // appendFileSync,
-  chmodSync,
   existsSync,
   mkdirSync,
   // readFileSync,
@@ -245,7 +244,6 @@ export async function installOpenClawCli(): Promise<{
     }
 
     symlinkSync(wrapperSrc, target);
-    chmodSync(wrapperSrc, 0o755);
     logger.info(`OpenClaw CLI symlink created: ${target} -> ${wrapperSrc}`);
     return { success: true, path: target };
   } catch (error) {
