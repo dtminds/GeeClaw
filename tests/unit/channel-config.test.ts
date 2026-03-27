@@ -758,6 +758,6 @@ describe('saveChannelConfig', () => {
       };
     };
 
-    expect(config.plugins?.allow).toEqual(expect.arrayContaining(['qqbot', 'discord', 'whatsapp']));
+    expect(config.plugins?.allow).toEqual(expect.arrayContaining(['openclaw-qqbot', 'discord', 'whatsapp']));
   });
 });
