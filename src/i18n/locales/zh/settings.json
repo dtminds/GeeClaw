@@ -424,6 +424,23 @@
   "advanced": {
     "title": "高级",
     "description": "高级选项",
+    "cli": {
+      "label": "GeeClaw 中的 OpenClaw 是受托管的，你需要使用以下方式来运行 OpenClaw 的命令行工具",
+      "description": "复制命令，在终端运行 GeeClaw 内置 OpenClaw 命令行工具",
+      "copyLabel": "复制运行命令",
+      "powershell": "PowerShell 命令",
+      "unavailable": "命令不可用",
+      "cmdCopied": "CLI 命令已复制",
+      "installLabel": "安装 `geeclaw` 命令（推荐）",
+      "installDescription": "安装后，即可通过 `geeclaw` 别名来运行受托管的 OpenClaw， 如 geeclaw --version",
+      "installTitle": "安装 `geeclaw` 命令",
+      "installMessage": "要安装 `geeclaw` 终端命令吗？",
+      "installDetail": "GeeClaw 会添加一个用户级 `geeclaw` 命令",
+      "installSuccess": "`geeclaw` 已安装到 {{path}}",
+      "installError": "安装 `geeclaw` 失败",
+      "installed": "已安装",
+      "installing": "安装中..."
+    },
     "transport": {
       "label": "网关传输策略",
       "desc": "选择渲染进程访问网关 RPC 的优先协议：WebSocket、HTTP 代理或 IPC 回退。",
@@ -457,11 +474,6 @@
     "gatewayTokenDesc": "如果需要，将此粘贴到控制台设置中",
     "tokenUnavailable": "令牌不可用",
     "tokenCopied": "网关令牌已复制",
-    "cli": "OpenClaw CLI",
-    "cliDesc": "复制命令以 geeclaw 托管 profile 运行 GeeClaw 内置 OpenClaw，无需修改 PATH。",
-    "cliPowershell": "PowerShell 命令。",
-    "cmdUnavailable": "命令不可用",
-    "cmdCopied": "CLI 命令已复制",
     "wsDiagnostic": "WS 诊断模式",
     "wsDiagnosticDesc": "临时启用 WS/HTTP 回退链，用于网关 RPC 调试。",
     "wsDiagnosticEnabled": "已启用 WS 诊断模式",
@@ -474,12 +486,7 @@
     "telemetrySlow": "慢请求（>=800ms）",
     "telemetryEmpty": "暂无埋点",
     "telemetryCopied": "埋点已复制",
-    "telemetryCleared": "埋点已清空",
-    "installCmd": "安装 \"openclaw\" 命令",
-    "installCmdDesc": "安装 ~/.local/bin/openclaw（无需管理员权限）",
-    "installTitle": "安装 OpenClaw 命令",
-    "installMessage": "安装 \"openclaw\" 命令？",
-    "installDetail": "这将创建 ~/.local/bin/openclaw。确保 ~/.local/bin 在您的 PATH 中。"
+    "telemetryCleared": "埋点已清空"
   },
   "about": {
     "title": "关于",

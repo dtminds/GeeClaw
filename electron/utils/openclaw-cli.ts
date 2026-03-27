@@ -4,10 +4,10 @@
 import { app } from 'electron';
 import {
   // appendFileSync,
-  chmodSync,
   existsSync,
   mkdirSync,
   // readFileSync,
+  writeFileSync,
   symlinkSync,
   unlinkSync,
 } from 'node:fs';
@@ -16,7 +16,9 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { getOpenClawDir, getOpenClawEntryPath } from './paths';
 import { logger } from './logger';
-import { getBundledNodePath, getManagedCommandWrapperPath } from './managed-bin';
+import { getBundledNodePath, getManagedBinDir, getManagedCommandWrapperPath } from './managed-bin';
+
+const MANAGED_CLI_COMMAND_NAME = 'geeclaw';
 
 // ── Quoting helpers ──────────────────────────────────────────────────────────
 
@@ -40,9 +42,31 @@ function getPackagedWindowsNodePath(): string | null {
 
 // ── CLI command string (for display / copy) ──────────────────────────────────
 
+function getPreferredCliWrapperPath(): string | null {
+  const wrapperPath = getManagedCommandWrapperPath('openclaw');
+  if (!wrapperPath) {
+    return null;
+  }
+
+  // The Windows dev wrapper assumes packaged resource layout.
+  if (process.platform === 'win32' && !app.isPackaged) {
+    return null;
+  }
+
+  return wrapperPath;
+}
+
 function getBundledOpenClawCliCommand(): string {
   const entryPath = getOpenClawEntryPath();
   const platform = process.platform;
+  const wrapperPath = getPreferredCliWrapperPath();
+
+  if (wrapperPath) {
+    if (platform === 'win32') {
+      return `& ${quoteForPowerShell(wrapperPath)}`;
+    }
+    return quoteForPosix(wrapperPath);
+  }
 
   if (!app.isPackaged) {
     const openclawDir = getOpenClawDir();
@@ -59,14 +83,6 @@ function getBundledOpenClawCliCommand(): string {
   }
 
   if (app.isPackaged) {
-    const wrapperPath = getPackagedCliWrapperPath();
-    if (wrapperPath) {
-      if (platform === 'win32') {
-        return `& ${quoteForPowerShell(wrapperPath)}`;
-      }
-      return quoteForPosix(wrapperPath);
-    }
-
     if (platform === 'win32') {
       const bundledNode = getPackagedWindowsNodePath();
       if (bundledNode) {
@@ -92,6 +108,17 @@ export async function getOpenClawCliCommand(): Promise<string> {
   return getBundledOpenClawCliCommand();
 }
 
+export function getOpenClawCliInstallStatus(): {
+  installed: boolean;
+  path: string;
+} {
+  const path = getCliTargetPath();
+  return {
+    installed: existsSync(path),
+    path,
+  };
+}
+
 // ── Packaged CLI wrapper path ────────────────────────────────────────────────
 
 function getPackagedCliWrapperPath(): string | null {
@@ -99,25 +126,95 @@ function getPackagedCliWrapperPath(): string | null {
   return getManagedCommandWrapperPath('openclaw');
 }
 
-// function getWindowsPowerShellPath(): string {
-//   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-//   return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-// }
+function getWindowsPowerShellPath(): string {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  return join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+}
 
 // ── macOS / Linux install ────────────────────────────────────────────────────
 
 function getCliTargetPath(): string {
-  return join(homedir(), '.local', 'bin', 'openclaw');
+  if (process.platform === 'win32') {
+    return join(homedir(), '.geeclaw', 'bin', `${MANAGED_CLI_COMMAND_NAME}.cmd`);
+  }
+
+  return join(homedir(), '.local', 'bin', MANAGED_CLI_COMMAND_NAME);
+}
+
+function getCliTargetDir(): string {
+  return dirname(getCliTargetPath());
+}
+
+function getWindowsCliShimPath(): string {
+  return join(getCliTargetDir(), `${MANAGED_CLI_COMMAND_NAME}.cmd`);
+}
+
+function buildWindowsCliShim(wrapperSrc: string): string {
+  return `@echo off\r\ncall "${wrapperSrc}" %*\r\n`;
+}
+
+function ensureWindowsCliOnPath(cliDir: string): Promise<'updated' | 'already-present'> {
+  return new Promise((resolve, reject) => {
+    const helperPath = join(getManagedBinDir(), 'update-user-path.ps1');
+    if (!existsSync(helperPath)) {
+      reject(new Error(`PATH helper not found at ${helperPath}`));
+      return;
+    }
+
+    const child = spawn(
+      getWindowsPowerShellPath(),
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        helperPath,
+        '-Action',
+        'add',
+        '-CliDir',
+        cliDir,
+      ],
+      {
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      },
+    );
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `PowerShell exited with code ${code}`));
+        return;
+      }
+
+      const status = stdout.trim();
+      if (status === 'updated' || status === 'already-present') {
+        resolve(status);
+        return;
+      }
+
+      reject(new Error(`Unexpected PowerShell output: ${status || '(empty)'}`));
+    });
+  });
 }
 
 export async function installOpenClawCli(): Promise<{
   success: boolean; path?: string; error?: string;
 }> {
   const platform = process.platform;
-
-  if (platform === 'win32') {
-    return { success: false, error: 'Windows CLI is configured by the installer.' };
-  }
 
   if (!app.isPackaged) {
     return { success: false, error: 'CLI install is only available in packaged builds.' };
@@ -128,7 +225,7 @@ export async function installOpenClawCli(): Promise<{
     return { success: false, error: 'CLI wrapper not found in app resources.' };
   }
 
-  const targetDir = join(homedir(), '.local', 'bin');
+  const targetDir = getCliTargetDir();
   const target = getCliTargetPath();
 
   try {
@@ -139,8 +236,14 @@ export async function installOpenClawCli(): Promise<{
       unlinkSync(target);
     }
 
+    if (platform === 'win32') {
+      writeFileSync(getWindowsCliShimPath(), buildWindowsCliShim(wrapperSrc), 'utf8');
+      const pathStatus = await ensureWindowsCliOnPath(targetDir);
+      logger.info(`OpenClaw CLI shim created: ${target} -> ${wrapperSrc} (PATH=${pathStatus})`);
+      return { success: true, path: target };
+    }
+
     symlinkSync(wrapperSrc, target);
-    chmodSync(wrapperSrc, 0o755);
     logger.info(`OpenClaw CLI symlink created: ${target} -> ${wrapperSrc}`);
     return { success: true, path: target };
   } catch (error) {
@@ -270,7 +373,7 @@ export async function autoInstallCliIfNeeded(
   notify?: (path: string) => void,
 ): Promise<void> {
   void notify;
-  logger.info('Skipping global openclaw CLI auto-install; GeeClaw now uses bundled-only runtime access.');
+  logger.info('Skipping managed CLI auto-install; GeeClaw exposes bundled runtime access explicitly from Settings.');
 }
 
 // ── Completion helpers ───────────────────────────────────────────────────────

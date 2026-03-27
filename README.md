@@ -97,6 +97,7 @@ Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your pre
 GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`. On first launch, after the app resolves session state, it rewrites `~/.openclaw-geeclaw/openclaw.json` so `agents.defaults.workspace` points to `~/.openclaw-geeclaw/workspace`, `agents.defaults.heartbeat.every` is fixed to `"2h"`, and `agents.defaults.maxConcurrent` is fixed to `3`, then runs `openclaw.mjs --profile geeclaw setup`, then starts the Gateway with `openclaw.mjs --profile geeclaw gateway --port 28788`. Existing system `openclaw` installations and `~/Library/LaunchAgents/ai.openclaw.gateway.plist` are left untouched.
 
 You can inspect the managed OpenClaw state directory from **Settings → Safety**. GeeClaw keeps `openclaw.json -> tools.fs.workspaceOnly` fixed at `false`, and that page controls the deny/exec/elevated safety policy written under `tools`. These safety values are persisted in the app settings store and validated back into `openclaw.json` on startup.
+Open **Settings → Advanced** to copy a terminal command that runs GeeClaw's bundled OpenClaw with the managed `geeclaw` profile, or install a user-level `geeclaw` command for terminal use without registering `openclaw` on your global PATH.
 
 ---
 

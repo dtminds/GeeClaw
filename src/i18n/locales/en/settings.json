@@ -424,6 +424,23 @@
   "advanced": {
     "title": "Advanced",
     "description": "Power-user options",
+    "cli": {
+      "label": "Managed OpenClaw CLI",
+      "description": "Copy a terminal command that runs GeeClaw's bundled OpenClaw with the managed geeclaw profile, without changing your global PATH.",
+      "copyLabel": "Copy Runtime Command",
+      "powershell": "PowerShell command.",
+      "unavailable": "Command unavailable",
+      "cmdCopied": "CLI command copied",
+      "installLabel": "Install `geeclaw` Command",
+      "installDescription": "Adds a user-level `geeclaw` terminal command for GeeClaw's managed OpenClaw runtime without shadowing system `openclaw`.",
+      "installTitle": "Install `geeclaw` Command",
+      "installMessage": "Install the `geeclaw` terminal command?",
+      "installDetail": "GeeClaw will add a user-level `geeclaw` command so your terminal can run the bundled managed runtime directly. You may need to open a new terminal window after installation.",
+      "installSuccess": "`geeclaw` installed at {{path}}",
+      "installError": "Failed to install `geeclaw`",
+      "installed": "Installed",
+      "installing": "Installing..."
+    },
     "transport": {
       "label": "Gateway Transport Preference",
       "desc": "Choose how renderer requests gateway RPC: WebSocket, HTTP proxy, or IPC fallback.",
@@ -457,11 +474,6 @@
     "gatewayTokenDesc": "Paste this into Control UI settings if prompted",
     "tokenUnavailable": "Token unavailable",
     "tokenCopied": "Gateway token copied",
-    "cli": "OpenClaw CLI",
-    "cliDesc": "Copy a command that runs GeeClaw's bundled OpenClaw with the managed geeclaw profile, without modifying PATH.",
-    "cliPowershell": "PowerShell command.",
-    "cmdUnavailable": "Command unavailable",
-    "cmdCopied": "CLI command copied",
     "wsDiagnostic": "WS Diagnostic Mode",
     "wsDiagnosticDesc": "Temporarily enable WS/HTTP fallback chain for gateway RPC debugging.",
     "wsDiagnosticEnabled": "WS diagnostic mode enabled",
@@ -474,12 +486,7 @@
     "telemetrySlow": "Slow (>=800ms)",
     "telemetryEmpty": "No telemetry yet",
     "telemetryCopied": "Telemetry copied",
-    "telemetryCleared": "Telemetry cleared",
-    "installCmd": "Install \"openclaw\" Command",
-    "installCmdDesc": "Installs ~/.local/bin/openclaw (no admin required)",
-    "installTitle": "Install OpenClaw Command",
-    "installMessage": "Install the \"openclaw\" command?",
-    "installDetail": "This will create ~/.local/bin/openclaw. Ensure ~/.local/bin is on your PATH if you want to run it globally."
+    "telemetryCleared": "Telemetry cleared"
   },
   "about": {
     "title": "About",

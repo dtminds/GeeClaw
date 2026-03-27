@@ -138,6 +138,8 @@ const electronAPI = {
         'openclaw:getConfigDir',
         'openclaw:getSkillsDir',
         'openclaw:getCliCommand',
+        'openclaw:installCli',
+        'openclaw:isCliInstalled',
       ];
 
       if (validChannels.includes(channel)) {
