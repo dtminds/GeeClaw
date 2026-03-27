@@ -173,3 +173,29 @@ describe('getOpenClawCliCommand (non-Windows dev)', () => {
     await expect(getOpenClawCliCommand()).resolves.toMatch(/resources\/managed-bin\/posix\/openclaw"$/);
   });
 });
+
+describe('getOpenClawCliInstallStatus', () => {
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+    Object.defineProperty(process, 'resourcesPath', {
+      value: originalResourcesPath,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it('reports installed when the macOS target exists', async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    setPlatform('darwin');
+    const { homedir } = await import('node:os');
+    const expectedPath = `${homedir()}/.local/bin/geeclaw`;
+    mockExistsSync.mockImplementation((value: string) => value === expectedPath);
+
+    const { getOpenClawCliInstallStatus } = await import('@electron/utils/openclaw-cli');
+    expect(getOpenClawCliInstallStatus()).toEqual({
+      installed: true,
+      path: expectedPath,
+    });
+  });
+});

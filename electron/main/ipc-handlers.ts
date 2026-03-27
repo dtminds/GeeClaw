@@ -13,7 +13,11 @@ import {
   type ProviderConfig,
 } from '../utils/secure-storage';
 import { getOpenClawConfigDir, getOpenClawSkillsDir, ensureDir, expandPath } from '../utils/paths';
-import { getOpenClawCliCommand, installOpenClawCli } from '../utils/openclaw-cli';
+import {
+  getOpenClawCliCommand,
+  getOpenClawCliInstallStatus,
+  installOpenClawCli,
+} from '../utils/openclaw-cli';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../utils/store';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
 import {
@@ -1431,6 +1435,14 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
       return await installOpenClawCli();
     } catch (error) {
       return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle('openclaw:isCliInstalled', async () => {
+    try {
+      return { success: true, ...getOpenClawCliInstallStatus() };
+    } catch (error) {
+      return { success: false, installed: false, error: String(error) };
     }
   });
 

@@ -438,6 +438,7 @@
       "installDetail": "GeeClaw will add a user-level `geeclaw` command so your terminal can run the bundled managed runtime directly. You may need to open a new terminal window after installation.",
       "installSuccess": "`geeclaw` installed at {{path}}",
       "installError": "Failed to install `geeclaw`",
+      "installed": "Installed",
       "installing": "Installing..."
     },
     "transport": {

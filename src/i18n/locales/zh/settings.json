@@ -438,6 +438,7 @@
       "installDetail": "GeeClaw 会添加一个用户级 `geeclaw` 命令",
       "installSuccess": "`geeclaw` 已安装到 {{path}}",
       "installError": "安装 `geeclaw` 失败",
+      "installed": "已安装",
       "installing": "安装中..."
     },
     "transport": {

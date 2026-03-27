@@ -164,6 +164,7 @@ function AppSettingsPanel({
   const [showAdvancedProxy, setShowAdvancedProxy] = useState(false);
   const [savingProxy, setSavingProxy] = useState(false);
   const [installingCli, setInstallingCli] = useState(false);
+  const [cliInstalled, setCliInstalled] = useState(false);
   const [wsDiagnosticEnabled, setWsDiagnosticEnabled] = useState(false);
   const [showTelemetryViewer, setShowTelemetryViewer] = useState(false);
   const [telemetryEntries, setTelemetryEntries] = useState<UiTelemetryEntry[]>([]);
@@ -251,6 +252,10 @@ function AppSettingsPanel({
           command?: string;
           error?: string;
         }>('openclaw:getCliCommand');
+        const installStatus = await invokeIpc<{
+          success: boolean;
+          installed?: boolean;
+        }>('openclaw:isCliInstalled');
         if (cancelled) return;
         if (result.success && result.command) {
           setOpenclawCliCommand(result.command);
@@ -259,10 +264,12 @@ function AppSettingsPanel({
           setOpenclawCliCommand('');
           setOpenclawCliError(result.error || 'OpenClaw CLI unavailable');
         }
+        setCliInstalled(!!installStatus.installed);
       } catch (error) {
         if (cancelled) return;
         setOpenclawCliCommand('');
         setOpenclawCliError(String(error));
+        setCliInstalled(false);
       }
     })();
 
@@ -322,6 +329,7 @@ function AppSettingsPanel({
       }>('openclaw:installCli');
 
       if (result.success && result.path) {
+        setCliInstalled(true);
         toast.success(t('advanced.cli.installSuccess', { path: result.path }));
         return;
       }
@@ -638,10 +646,18 @@ function AppSettingsPanel({
                     type="button"
                     variant="outline"
                     onClick={handleInstallCli}
-                    disabled={installingCli}
+                    disabled={installingCli || cliInstalled}
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    {installingCli ? t('advanced.cli.installing') : t('common:actions.install')}
+                    {cliInstalled ? (
+                      <Check className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    {cliInstalled
+                      ? t('advanced.cli.installed')
+                      : installingCli
+                        ? t('advanced.cli.installing')
+                        : t('common:actions.install')}
                   </Button>
                 </div>
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3">

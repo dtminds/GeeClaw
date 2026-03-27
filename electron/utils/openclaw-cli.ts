@@ -109,6 +109,17 @@ export async function getOpenClawCliCommand(): Promise<string> {
   return getBundledOpenClawCliCommand();
 }
 
+export function getOpenClawCliInstallStatus(): {
+  installed: boolean;
+  path: string;
+} {
+  const path = getCliTargetPath();
+  return {
+    installed: existsSync(path),
+    path,
+  };
+}
+
 // ── Packaged CLI wrapper path ────────────────────────────────────────────────
 
 function getPackagedCliWrapperPath(): string | null {
