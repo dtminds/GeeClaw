@@ -100,7 +100,7 @@ export function UpdateAnnouncementDialog() {
             )}
 
             {status === 'downloading' && progress && (
-              <div className="mt-4 rounded-2xl border border-black/6 bg-background/70 px-4 py-3 text-sm text-muted-foreground dark:border-white/10">
+              <div className="mt-4 rounded-2xl border border-black/6 bg-background/70 px-4 py-3 mr-5 text-sm text-muted-foreground dark:border-white/10">
                 {t('updates.dialog.progress', {
                   percent: Math.round(progress.percent),
                 })}
@@ -108,7 +108,7 @@ export function UpdateAnnouncementDialog() {
             )}
 
             {status === 'downloaded' && autoInstallCountdown != null && autoInstallCountdown >= 0 && (
-              <div className="mt-4 rounded-2xl border border-black/6 bg-background/70 px-4 py-3 text-sm text-muted-foreground dark:border-white/10">
+              <div className="mt-4 rounded-2xl border border-black/6 bg-background/70 px-4 py-3 mr-5 text-sm text-muted-foreground dark:border-white/10">
                 {t('updates.status.autoInstalling', { seconds: autoInstallCountdown })}
               </div>
             )}
