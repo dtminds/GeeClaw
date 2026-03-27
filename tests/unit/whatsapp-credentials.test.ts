@@ -113,8 +113,8 @@ describe('WhatsApp credentials helpers', () => {
     const cancelledAccountDir = getWhatsAppAccountCredentialsDir('cancelled');
     mkdirSync(cancelledAccountDir, { recursive: true });
 
-    expect(cleanupCancelledWhatsAppLogin('cancelled')).toBe(true);
-    expect(cleanupCancelledWhatsAppLogin('existing')).toBe(false);
+    await expect(cleanupCancelledWhatsAppLogin('cancelled')).resolves.toBe(true);
+    await expect(cleanupCancelledWhatsAppLogin('existing')).resolves.toBe(false);
 
     expect(existsSync(cancelledAccountDir)).toBe(false);
     expect(existsSync(existingAccountDir)).toBe(true);

@@ -1,5 +1,5 @@
-import { constants, existsSync, readdirSync, rmSync } from 'fs';
-import { access, readdir, stat } from 'fs/promises';
+import { constants } from 'fs';
+import { access, readdir, rm, stat } from 'fs/promises';
 import { join } from 'path';
 import { getOpenClawConfigDir } from './paths';
 
@@ -46,21 +46,21 @@ export async function hasConfiguredWhatsAppSession(): Promise<boolean> {
   return false;
 }
 
-export function cleanupCancelledWhatsAppLogin(accountId: string): boolean {
+export async function cleanupCancelledWhatsAppLogin(accountId: string): Promise<boolean> {
   const accountDir = getWhatsAppAccountCredentialsDir(accountId);
-  if (!existsSync(accountDir)) {
+  if (!await fileExists(accountDir)) {
     return false;
   }
 
-  if (existsSync(getWhatsAppCredsFilePathForDir(accountDir))) {
+  if (await fileExists(getWhatsAppCredsFilePathForDir(accountDir))) {
     return false;
   }
 
-  rmSync(accountDir, { recursive: true, force: true });
+  await rm(accountDir, { recursive: true, force: true });
 
   const credentialsDir = getWhatsAppCredentialsDir();
-  if (existsSync(credentialsDir) && readdirSync(credentialsDir).length === 0) {
-    rmSync(credentialsDir, { recursive: true, force: true });
+  if (await fileExists(credentialsDir) && (await readdir(credentialsDir)).length === 0) {
+    await rm(credentialsDir, { recursive: true, force: true });
   }
 
   return true;

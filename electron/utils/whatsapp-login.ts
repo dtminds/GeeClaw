@@ -420,7 +420,7 @@ export class WhatsAppLoginManager extends EventEmitter {
             this.socket = null;
         }
 
-        if (cleanupAccountId && cleanupCancelledWhatsAppLogin(cleanupAccountId)) {
+        if (cleanupAccountId && await cleanupCancelledWhatsAppLogin(cleanupAccountId)) {
             console.log(`[WhatsAppLogin] Cleaned up cancelled login state for ${cleanupAccountId}`);
         }
     }
