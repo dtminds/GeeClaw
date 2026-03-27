@@ -3,7 +3,7 @@ import { readOpenClawConfig, reconcileManagedChannelPluginConfig, type OpenClawC
 import { mutateOpenClawConfigDocument } from '../../utils/openclaw-config-coordinator';
 import { isDeepStrictEqual } from 'node:util';
 
-const MANAGED_PLUGIN_ENTRY_IDS = ['dingtalk', 'wecom-openclaw-plugin', 'openclaw-weixin', 'openclaw-lark', 'qqbot'];
+const MANAGED_PLUGIN_ENTRY_IDS = ['dingtalk', 'wecom-openclaw-plugin', 'openclaw-weixin', 'openclaw-lark', 'openclaw-qqbot'];
 const MANAGED_PLUGIN_ENTRY_ID_SET = new Set(MANAGED_PLUGIN_ENTRY_IDS);
 
 const MANAGED_SESSION_DM_SCOPE = 'per-channel-peer';
