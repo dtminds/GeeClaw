@@ -29,13 +29,15 @@ export function mapAppErrorCode(error: unknown): AppErrorCode {
   return 'INTERNAL';
 }
 
+const PROXY_KEYS: ReadonlyArray<keyof AppSettings> = [
+  'proxyEnabled',
+  'proxyServer',
+  'proxyHttpServer',
+  'proxyHttpsServer',
+  'proxyAllServer',
+  'proxyBypassRules',
+];
+
 export function isProxyKey(key: keyof AppSettings): boolean {
-  return (
-    key === 'proxyEnabled' ||
-    key === 'proxyServer' ||
-    key === 'proxyHttpServer' ||
-    key === 'proxyHttpsServer' ||
-    key === 'proxyAllServer' ||
-    key === 'proxyBypassRules'
-  );
+  return PROXY_KEYS.includes(key);
 }
