@@ -98,7 +98,7 @@ interface SlashQueryState {
 }
 
 interface ProviderModelMenuGroup {
-  providerId: string;
+  runtimeProviderId: string;
   providerName: string;
   icon: string;
   iconUrl?: string;
@@ -910,7 +910,8 @@ export const ChatInput = memo(function ChatInput({
         continue;
       }
 
-      const existing = groups.get(item.account.vendorId);
+      const runtimeProviderId = item.runtimeProviderId;
+      const existing = groups.get(runtimeProviderId);
       if (existing) {
         existing.models = Array.from(new Set([...existing.models, ...models]));
         existing.isDefault = existing.isDefault || item.account.id === defaultProviderAccountId;
@@ -918,10 +919,10 @@ export const ChatInput = memo(function ChatInput({
       }
 
       const providerId = item.account.vendorId;
-      const providerName = item.vendor?.name || item.account.label || providerId;
+      const providerName = item.account.label || item.vendor?.name || providerId;
 
-      groups.set(providerId, {
-        providerId,
+      groups.set(runtimeProviderId, {
+        runtimeProviderId,
         providerName,
         icon: item.vendor?.icon || '🤖',
         iconUrl: getProviderIconUrl(providerId),
@@ -1247,9 +1248,9 @@ export const ChatInput = memo(function ChatInput({
     onStop?.();
   }, [canStop, onStop]);
 
-  const handleModelSelect = useCallback((providerId: string, model: string) => {
+  const handleModelSelect = useCallback((runtimeProviderId: string, model: string) => {
     if (disabled || sending) return;
-    const nextModel = buildProviderModelRef(providerId, model);
+    const nextModel = buildProviderModelRef(runtimeProviderId, model);
     setPendingModelSelection(nextModel);
     onSend(`/model ${nextModel}`);
     editor?.commands.focus('end');
@@ -1591,7 +1592,7 @@ export const ChatInput = memo(function ChatInput({
                     className="z-50 min-w-[210px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
                   >
                     {providerModelGroups.map((group, index) => (
-                      <div key={group.providerId}>
+                      <div key={group.runtimeProviderId}>
                         {index > 0 && (
                           <DropdownMenu.Separator className="mx-2 my-0.5 h-px bg-black/6 dark:bg-white/8" />
                         )}
@@ -1600,12 +1601,12 @@ export const ChatInput = memo(function ChatInput({
                         </DropdownMenu.Label>
                         {group.models.map((model) => (
                           <DropdownMenu.Item
-                            key={`${group.providerId}-${model}`}
-                            onSelect={() => handleModelSelect(group.providerId, model)}
+                            key={`${group.runtimeProviderId}-${model}`}
+                            onSelect={() => handleModelSelect(group.runtimeProviderId, model)}
                             className="mx-1 flex cursor-default items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                           >
                             <span className="truncate">{model}</span>
-                            {isModelMenuItemSelected(activeModelValue, group.providerId, model) && (
+                            {isModelMenuItemSelected(activeModelValue, group.runtimeProviderId, model) && (
                               <Check className="ml-3 h-3.5 w-3.5 shrink-0" />
                             )}
                           </DropdownMenu.Item>

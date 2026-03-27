@@ -18,6 +18,23 @@ export interface ProviderListItem {
   account: ProviderAccount;
   vendor?: ProviderVendorInfo;
   status?: ProviderWithKeyInfo;
+  runtimeProviderId: string;
+}
+
+const BROWSER_OAUTH_RUNTIME_PROVIDER_IDS: Partial<Record<ProviderType, string>> = {
+  google: 'google-gemini-cli',
+  openai: 'openai-codex',
+};
+
+const MULTI_INSTANCE_PROVIDER_TYPES = new Set<ProviderType>(['custom', 'ollama']);
+
+function getMetadataRuntimeProviderId(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? null : trimmed;
 }
 
 export async function fetchProviderSnapshot(): Promise<ProviderSnapshot> {
@@ -44,6 +61,36 @@ export function hasConfiguredCredentials(
     return true;
   }
   return status?.hasKey ?? false;
+}
+
+export function getProviderAccountRuntimeKey(
+  account: Pick<ProviderAccount, 'id' | 'vendorId' | 'authMode' | 'metadata'>,
+): string {
+  const metadataRuntimeProviderId = account.authMode === 'oauth_browser'
+    ? getMetadataRuntimeProviderId(account.metadata?.resourceUrl)
+    : null;
+
+  if (metadataRuntimeProviderId) {
+    return metadataRuntimeProviderId;
+  }
+
+  if (account.authMode === 'oauth_browser') {
+    const browserOAuthProviderId = BROWSER_OAUTH_RUNTIME_PROVIDER_IDS[account.vendorId];
+    if (browserOAuthProviderId) {
+      return browserOAuthProviderId;
+    }
+  }
+
+  if (MULTI_INSTANCE_PROVIDER_TYPES.has(account.vendorId)) {
+    const suffix = account.id.replace(/-/g, '').slice(0, 8);
+    return `${account.vendorId}-${suffix}`;
+  }
+
+  if (account.vendorId === 'minimax-portal-cn') {
+    return 'minimax-portal';
+  }
+
+  return account.vendorId;
 }
 
 export function pickPreferredAccount(
@@ -108,6 +155,7 @@ export function buildProviderListItems(
         account,
         vendor: vendorMap.get(account.vendorId),
         status: statusMap.get(account.id),
+        runtimeProviderId: getProviderAccountRuntimeKey(account),
       }))
       .sort((left, right) => {
         if (left.account.id === defaultAccountId) return -1;
@@ -116,9 +164,13 @@ export function buildProviderListItems(
       });
   }
 
-  return statuses.map((status) => ({
-    account: legacyProviderToAccount(status),
-    vendor: vendorMap.get(status.type),
-    status,
-  }));
+  return statuses.map((status) => {
+    const account = legacyProviderToAccount(status);
+    return {
+      account,
+      vendor: vendorMap.get(status.type),
+      status,
+      runtimeProviderId: getProviderAccountRuntimeKey(account),
+    };
+  });
 }
