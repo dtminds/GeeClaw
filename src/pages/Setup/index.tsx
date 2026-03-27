@@ -724,6 +724,37 @@ interface ProviderContentProps {
   onConfiguredChange: (configured: boolean) => void;
 }
 
+type OAuthFlowData =
+  | {
+      mode: 'device';
+      verificationUri: string;
+      userCode: string;
+      expiresIn: number;
+    }
+  | {
+      mode: 'manual';
+      authorizationUrl: string;
+      message?: string;
+    };
+
+function normalizeOAuthFlowPayload(data: unknown): OAuthFlowData {
+  const payload = data as Record<string, unknown>;
+  if (payload?.mode === 'manual') {
+    return {
+      mode: 'manual',
+      authorizationUrl: String(payload.authorizationUrl || ''),
+      message: typeof payload.message === 'string' ? payload.message : undefined,
+    };
+  }
+
+  return {
+    mode: 'device',
+    verificationUri: String(payload?.verificationUri || ''),
+    userCode: String(payload?.userCode || ''),
+    expiresIn: Number(payload?.expiresIn || 300),
+  };
+}
+
 export function ProviderContent({
   providers,
   selectedProvider,
@@ -750,24 +781,22 @@ export function ProviderContent({
 
   // OAuth Flow State
   const [oauthFlowing, setOauthFlowing] = useState(false);
-  const [oauthData, setOauthData] = useState<{
-    verificationUri: string;
-    userCode: string;
-    expiresIn: number;
-  } | null>(null);
+  const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
+  const [manualCodeInput, setManualCodeInput] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
   const pendingOAuthRef = useRef<{ accountId: string; label: string } | null>(null);
 
   // Manage OAuth events
   useEffect(() => {
     const handleCode = (data: unknown) => {
-      setOauthData(data as { verificationUri: string; userCode: string; expiresIn: number });
+      setOauthData(normalizeOAuthFlowPayload(data));
       setOauthError(null);
     };
 
     const handleSuccess = async (data: unknown) => {
       setOauthFlowing(false);
       setOauthData(null);
+      setManualCodeInput('');
       setKeyValid(true);
 
       const payload = (data as { accountId?: string } | undefined) || undefined;
@@ -827,6 +856,7 @@ export function ProviderContent({
 
     setOauthFlowing(true);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
 
     try {
@@ -852,9 +882,27 @@ export function ProviderContent({
   const handleCancelOAuth = async () => {
     setOauthFlowing(false);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
     pendingOAuthRef.current = null;
     await hostApiFetch('/api/providers/oauth/cancel', { method: 'POST' });
+  };
+
+  const handleSubmitManualOAuthCode = async () => {
+    const value = manualCodeInput.trim();
+    if (!value) {
+      return;
+    }
+
+    try {
+      await hostApiFetch('/api/providers/oauth/submit', {
+        method: 'POST',
+        body: JSON.stringify({ code: value }),
+      });
+      setOauthError(null);
+    } catch (error) {
+      setOauthError(String(error));
+    }
   };
 
   // On mount, try to restore previously configured provider
@@ -1470,9 +1518,9 @@ export function ProviderContent({
                   className="modal-primary-button w-full"
                 >
                   {oauthFlowing ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Waiting...</>
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('settings:aiProviders.oauth.waiting')}</>
                   ) : (
-                    'Login with Browser'
+                    t('settings:aiProviders.oauth.loginButton')
                   )}
                 </Button>
               </div>
@@ -1487,25 +1535,62 @@ export function ProviderContent({
                     {oauthError ? (
                       <div className="space-y-2 text-destructive">
                         <XCircle className="h-8 w-8 mx-auto" />
-                        <p className="font-medium">Authentication Failed</p>
+                        <p className="font-medium">{t('settings:aiProviders.oauth.authFailed')}</p>
                         <p className="text-sm opacity-80">{oauthError}</p>
                         <Button variant="outline" size="sm" onClick={handleCancelOAuth} className="modal-secondary-button mt-2">
-                          Try Again
+                          {t('settings:aiProviders.oauth.tryAgain')}
                         </Button>
                       </div>
                     ) : !oauthData ? (
                       <div className="space-y-3 py-4">
                         <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-                        <p className="animate-pulse text-sm text-muted-foreground">Requesting secure login code...</p>
+                        <p className="animate-pulse text-sm text-muted-foreground">{t('settings:aiProviders.oauth.requestingCode')}</p>
+                      </div>
+                    ) : oauthData.mode === 'manual' ? (
+                      <div className="space-y-4 w-full">
+                        <div className="space-y-1">
+                          <h3 className="text-lg font-medium text-foreground">{t('settings:aiProviders.oauth.manualTitle')}</h3>
+                          <div className="modal-section-surface mt-2 rounded-xl border p-4 text-left text-sm text-muted-foreground">
+                            {oauthData.message || t('settings:aiProviders.oauth.manualMessage')}
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="secondary"
+                          className="modal-secondary-button w-full"
+                          onClick={() => invokeIpc('shell:openExternal', oauthData.authorizationUrl)}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          {t('settings:aiProviders.oauth.manualOpenAuthorizationPage')}
+                        </Button>
+
+                        <Input
+                          placeholder={t('settings:aiProviders.oauth.manualInputPlaceholder')}
+                          value={manualCodeInput}
+                          onChange={(e) => setManualCodeInput(e.target.value)}
+                          className="modal-field-surface field-focus-ring h-[44px] rounded-xl border font-mono text-[13px] shadow-sm"
+                        />
+
+                        <Button
+                          className="modal-primary-button w-full"
+                          onClick={handleSubmitManualOAuthCode}
+                          disabled={!manualCodeInput.trim()}
+                        >
+                          {t('settings:aiProviders.oauth.manualSubmit')}
+                        </Button>
+
+                        <Button variant="ghost" size="sm" className="modal-secondary-button mt-2 w-full" onClick={handleCancelOAuth}>
+                          {t('settings:aiProviders.oauth.cancel')}
+                        </Button>
                       </div>
                     ) : (
                       <div className="space-y-4 w-full">
                         <div className="space-y-1">
-                          <h3 className="text-lg font-medium text-foreground">Approve Login</h3>
+                          <h3 className="text-lg font-medium text-foreground">{t('settings:aiProviders.oauth.approveLogin')}</h3>
                           <div className="surface-muted mt-2 space-y-1 rounded-xl p-4 text-left text-sm text-muted-foreground">
-                            <p>1. Copy the authorization code below.</p>
-                            <p>2. Open the login page in your browser.</p>
-                            <p>3. Paste the code to approve access.</p>
+                            <p>1. {t('settings:aiProviders.oauth.step1')}</p>
+                            <p>2. {t('settings:aiProviders.oauth.step2')}</p>
+                            <p>3. {t('settings:aiProviders.oauth.step3')}</p>
                           </div>
                         </div>
 
@@ -1519,7 +1604,7 @@ export function ProviderContent({
                             className="surface-hover-strong h-10 w-10 rounded-full"
                             onClick={() => {
                               navigator.clipboard.writeText(oauthData.userCode);
-                              toast.success('Code copied to clipboard');
+                              toast.success(t('settings:aiProviders.oauth.codeCopied'));
                             }}
                           >
                             <Copy className="h-4 w-4" />
@@ -1532,16 +1617,16 @@ export function ProviderContent({
                           onClick={() => invokeIpc('shell:openExternal', oauthData.verificationUri)}
                         >
                           <ExternalLink className="h-4 w-4 mr-2" />
-                          Open Login Page
+                          {t('settings:aiProviders.oauth.openLoginPage')}
                         </Button>
 
                         <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
                           <Loader2 className="h-3 w-3 animate-spin text-info" />
-                          <span>Waiting for approval in browser...</span>
+                          <span>{t('settings:aiProviders.oauth.waitingApproval')}</span>
                         </div>
 
                         <Button variant="ghost" size="sm" className="modal-secondary-button mt-2 w-full" onClick={handleCancelOAuth}>
-                          Cancel
+                          {t('settings:aiProviders.oauth.cancel')}
                         </Button>
                       </div>
                     )}

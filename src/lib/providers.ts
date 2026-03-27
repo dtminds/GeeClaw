@@ -150,7 +150,17 @@ export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = [
     requiresApiKey: true,
     docsUrl: 'https://platform.claude.com/docs/en/api/overview',
   },
-  { id: 'openai', name: 'OpenAI', icon: '💚', placeholder: 'sk-proj-...', model: 'GPT', requiresApiKey: true },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    icon: '💚',
+    placeholder: 'sk-proj-...',
+    model: 'GPT',
+    requiresApiKey: true,
+    isOAuth: true,
+    supportsApiKey: true,
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+  },
   {
     id: 'google',
     name: 'Google',

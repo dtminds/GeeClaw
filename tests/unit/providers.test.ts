@@ -71,6 +71,23 @@ describe('provider metadata', () => {
     }));
   });
 
+  it('enables OpenAI browser OAuth alongside API keys in both registries', () => {
+    const openaiFrontend = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openai');
+
+    expect(openaiFrontend).toMatchObject({
+      id: 'openai',
+      isOAuth: true,
+      supportsApiKey: true,
+      apiKeyUrl: 'https://platform.openai.com/api-keys',
+    });
+
+    expect(getProviderConfig('openai')).toEqual({
+      baseUrl: 'https://api.openai.com/v1',
+      api: 'openai-responses',
+      apiKeyEnv: 'OPENAI_API_KEY',
+    });
+  });
+
   it('uses a single canonical env key for moonshot provider', () => {
     expect(getProviderEnvVar('moonshot')).toBe('MOONSHOT_API_KEY');
     expect(getProviderEnvVars('moonshot')).toEqual(['MOONSHOT_API_KEY']);

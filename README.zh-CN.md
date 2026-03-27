@@ -88,7 +88,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 打包版本也会把托管的 `opencli` 与 `mcporter` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
 
 ### 🔐 安全的供应商集成
-连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。
+连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。OpenAI 同时支持 API Key 与浏览器 OAuth（Codex 订阅）登录。
 
 ### 🌙 自适应主题
 支持浅色模式、深色模式或跟随系统主题。GeeClaw 自动适应你的偏好设置。
@@ -131,7 +131,7 @@ pnpm dev
 
 1. **检查登录状态** – 先确认是否已登录
 2. **准备运行环境** – 自动准备内置 OpenClaw 运行环境
-3. **连接 AI 服务** – 如果还没有可用 provider，再引导你补充
+3. **连接 AI 服务** – 如果还没有可用 provider，再引导你补充；OpenAI 支持 API Key 或浏览器 OAuth 登录
 4. **进入主界面** – 准备完成后直接进入应用
 
 > Moonshot（Kimi）说明：GeeClaw 默认保持开启 Kimi 的 web search。  
