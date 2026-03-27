@@ -3,7 +3,8 @@ import { createRequire } from 'module';
 import { EventEmitter } from 'events';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { deflateSync } from 'zlib';
-import { getOpenClawDir, getOpenClawResolvedDir, getOpenClawConfigDir } from './paths';
+import { getOpenClawDir, getOpenClawResolvedDir } from './paths';
+import { cleanupCancelledWhatsAppLogin, getWhatsAppAccountCredentialsDir } from './whatsapp-credentials';
 
 const require = createRequire(import.meta.url);
 
@@ -243,7 +244,7 @@ export class WhatsAppLoginManager extends EventEmitter {
 
         try {
             // Path where OpenClaw expects WhatsApp credentials
-            const authDir = join(getOpenClawConfigDir(), 'credentials', 'whatsapp', accountId);
+            const authDir = getWhatsAppAccountCredentialsDir(accountId);
 
             // Ensure directory exists
             if (!existsSync(authDir)) {
@@ -396,8 +397,10 @@ export class WhatsAppLoginManager extends EventEmitter {
      * Stop current login process
      */
     async stop(): Promise<void> {
+        const cleanupAccountId = this.accountId;
         this.active = false;
         this.qr = null;
+        this.accountId = null;
         if (this.socket) {
             try {
                 // Remove listeners to prevent handling closure as error
@@ -415,6 +418,10 @@ export class WhatsAppLoginManager extends EventEmitter {
                 // Ignore error if socket already closed
             }
             this.socket = null;
+        }
+
+        if (cleanupAccountId && cleanupCancelledWhatsAppLogin(cleanupAccountId)) {
+            console.log(`[WhatsAppLogin] Cleaned up cancelled login state for ${cleanupAccountId}`);
         }
     }
 }
