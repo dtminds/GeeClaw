@@ -80,6 +80,13 @@ interface OpenCliExecutionSpec {
   displayCommand: string;
 }
 
+interface OpenCliCatalogCommandOverrides {
+  site?: string;
+  strategy?: string;
+  browser?: boolean;
+  domain?: string | null;
+}
+
 let openCliDoctorInFlight: Promise<OpenCliDoctorStatus> | null = null;
 let openCliCatalogInFlight: Promise<OpenCliCatalog> | null = null;
 let openCliCatalogCache: OpenCliCatalog | null = null;
@@ -132,6 +139,10 @@ function getOpenCliEntryPath(): string {
 
 function getOpenCliExtensionDir(): string {
   return join(getOpenCliRuntimeDir(), 'extension');
+}
+
+function getOpenCliManifestPath(): string {
+  return join(getOpenCliRuntimeDir(), 'cli-manifest.json');
 }
 
 function getOpenCliWrapperPath(): string | null {
@@ -316,31 +327,202 @@ function parseOpenCliCatalogArg(value: unknown): OpenCliCatalogArg | null {
   };
 }
 
-function parseOpenCliCatalogCommand(value: unknown): OpenCliCatalogCommand | null {
+function parseOpenCliCatalogCommand(
+  value: unknown,
+  overrides: OpenCliCatalogCommandOverrides = {},
+): OpenCliCatalogCommand | null {
   if (
     !isRecord(value)
-    || typeof value.command !== 'string'
-    || typeof value.site !== 'string'
     || typeof value.name !== 'string'
   ) {
     return null;
   }
 
+  const site = typeof value.site === 'string' ? value.site : overrides.site;
+  if (!site) {
+    return null;
+  }
+
+  const command = typeof value.command === 'string' && value.command.trim()
+    ? value.command
+    : `${site}/${value.name}`;
+  const derivedDomain = typeof value.domain === 'string' && value.domain.trim()
+    ? value.domain
+    : overrides.domain ?? null;
+
   return {
-    command: value.command,
-    site: value.site,
+    command,
+    site,
     name: value.name,
     description: typeof value.description === 'string' ? value.description : '',
-    strategy: typeof value.strategy === 'string' ? value.strategy : 'unknown',
-    browser: Boolean(value.browser),
+    strategy: typeof value.strategy === 'string' ? value.strategy : (overrides.strategy ?? 'unknown'),
+    browser: typeof value.browser === 'boolean' ? value.browser : Boolean(overrides.browser),
     args: Array.isArray(value.args)
       ? value.args
         .map((arg) => parseOpenCliCatalogArg(arg))
         .filter((arg): arg is OpenCliCatalogArg => arg !== null)
       : [],
     columns: toStringArray(value.columns),
-    domain: typeof value.domain === 'string' && value.domain.trim() ? value.domain : null,
+    domain: derivedDomain,
   };
+}
+
+function parseOpenCliCatalogSiteCommands(value: unknown): OpenCliCatalogCommand[] {
+  if (!isRecord(value) || typeof value.site !== 'string' || !Array.isArray(value.commands)) {
+    return [];
+  }
+
+  const inheritedStrategy = toStringArray(value.strategies).find((item) => item.trim()) ?? undefined;
+  const inheritedDomain = toStringArray(value.domains).find((item) => item.trim()) ?? null;
+
+  return value.commands
+    .map((command) => parseOpenCliCatalogCommand(command, {
+      site: value.site,
+      strategy: inheritedStrategy,
+      domain: inheritedDomain,
+    }))
+    .filter((command): command is OpenCliCatalogCommand => command !== null);
+}
+
+function collectOpenCliCatalogCommands(value: unknown): OpenCliCatalogCommand[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const directCommand = parseOpenCliCatalogCommand(item);
+      if (directCommand) {
+        return [directCommand];
+      }
+
+      return parseOpenCliCatalogSiteCommands(item);
+    });
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  if (Array.isArray(value.commands)) {
+    if (typeof value.site === 'string') {
+      const siteCommands = parseOpenCliCatalogSiteCommands(value);
+      if (siteCommands.length > 0) {
+        return siteCommands;
+      }
+    }
+
+    const nestedCommands = collectOpenCliCatalogCommands(value.commands);
+    if (nestedCommands.length > 0) {
+      return nestedCommands;
+    }
+  }
+
+  if (Array.isArray(value.sites)) {
+    const siteCommands = value.sites.flatMap((site) => parseOpenCliCatalogSiteCommands(site));
+    if (siteCommands.length > 0) {
+      return siteCommands;
+    }
+  }
+
+  for (const key of ['items', 'rows', 'results', 'data', 'catalog', 'list']) {
+    if (!(key in value)) {
+      continue;
+    }
+
+    const nestedCommands = collectOpenCliCatalogCommands(value[key]);
+    if (nestedCommands.length > 0) {
+      return nestedCommands;
+    }
+  }
+
+  return [];
+}
+
+function extractBalancedJsonValue(value: string, startIndex: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '[' || char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ']' || char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(startIndex, index + 1);
+      }
+      if (depth < 0) {
+        return null;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseOpenCliJsonOutput(output: string): unknown {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    throw new Error('OpenCLI output was empty');
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    for (let index = 0; index < trimmed.length; index += 1) {
+      const char = trimmed[index];
+      if (char !== '[' && char !== '{') {
+        continue;
+      }
+
+      const candidate = extractBalancedJsonValue(trimmed, index);
+      if (!candidate) {
+        continue;
+      }
+
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  throw new Error('No valid JSON payload found in OpenCLI output');
+}
+
+function loadOpenCliCatalogFromManifest(): OpenCliCatalog | null {
+  const manifestPath = getOpenCliManifestPath();
+  if (!existsSync(manifestPath)) {
+    return null;
+  }
+
+  try {
+    const raw = readFileSync(manifestPath, 'utf-8');
+    const parsed = parseOpenCliJsonOutput(raw);
+    const commands = collectOpenCliCatalogCommands(parsed);
+    return commands.length > 0 ? groupOpenCliCatalog(commands) : null;
+  } catch {
+    return null;
+  }
 }
 
 function groupOpenCliCatalog(commands: OpenCliCatalogCommand[]): OpenCliCatalog {
@@ -474,29 +656,37 @@ async function runOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
 }
 
 async function runOpenCliCatalog(): Promise<OpenCliCatalog> {
-  const result = await runOpenCliCommand(['list', '--json'], DEFAULT_LIST_TIMEOUT_MS);
-  if (result.error) {
-    throw new Error(result.error);
-  }
-  if (result.exitCode !== 0) {
-    throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
-  }
-
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(result.output);
+    const result = await runOpenCliCommand(['list', '--json'], DEFAULT_LIST_TIMEOUT_MS);
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
+    }
+
+    const parsed = parseOpenCliJsonOutput(result.output);
+    const commands = collectOpenCliCatalogCommands(parsed);
+    if (commands.length > 0) {
+      return groupOpenCliCatalog(commands);
+    }
+
+    throw new Error('OpenCLI list output did not contain any catalog commands');
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse OpenCLI list output: ${message}`, { cause: error });
+    const fallbackCatalog = loadOpenCliCatalogFromManifest();
+    if (fallbackCatalog) {
+      return fallbackCatalog;
+    }
+
+    if (error instanceof Error && (
+      error.message === 'OpenCLI output was empty'
+      || error.message === 'No valid JSON payload found in OpenCLI output'
+    )) {
+      throw new Error(`Failed to parse OpenCLI list output: ${error.message}`, { cause: error });
+    }
+
+    throw error instanceof Error ? error : new Error(String(error));
   }
-
-  const commands = Array.isArray(parsed)
-    ? parsed
-      .map((item) => parseOpenCliCatalogCommand(item))
-      .filter((item): item is OpenCliCatalogCommand => item !== null)
-    : [];
-
-  return groupOpenCliCatalog(commands);
 }
 
 function logDoctorIssues(doctor: OpenCliDoctorStatus): void {
