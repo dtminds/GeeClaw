@@ -9,6 +9,8 @@ vi.mock('@/lib/api-client', () => ({
 describe('host-api', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.resetModules();
+    vi.unstubAllGlobals();
   });
 
   it('uses IPC proxy and returns unified envelope json', async () => {
@@ -52,10 +54,12 @@ describe('host-api', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    invokeIpcMock.mockResolvedValueOnce({
-      ok: false,
-      error: { message: 'No handler registered for hostapi:fetch' },
-    });
+    invokeIpcMock
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { message: 'No handler registered for hostapi:fetch' },
+      })
+      .mockResolvedValueOnce('test-host-api-token');
 
     const { hostApiFetch } = await import('@/lib/host-api');
     const result = await hostApiFetch<{ fallback: boolean }>('/api/test');
@@ -63,8 +67,13 @@ describe('host-api', () => {
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3210/api/test',
-      expect.objectContaining({ headers: expect.any(Object) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-host-api-token',
+        }),
+      }),
     );
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(2, 'hostapi:token');
   });
 
   it('throws message from legacy non-ok envelope', async () => {
@@ -87,7 +96,9 @@ describe('host-api', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    invokeIpcMock.mockRejectedValueOnce(new Error('Invalid IPC channel: hostapi:fetch'));
+    invokeIpcMock
+      .mockRejectedValueOnce(new Error('Invalid IPC channel: hostapi:fetch'))
+      .mockResolvedValueOnce('fallback-token');
 
     const { hostApiFetch } = await import('@/lib/host-api');
     const result = await hostApiFetch<{ fallback: boolean }>('/api/test');
@@ -95,7 +106,37 @@ describe('host-api', () => {
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3210/api/test',
-      expect.objectContaining({ headers: expect.any(Object) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer fallback-token',
+        }),
+      }),
+    );
+  });
+
+  it('appends the cached token to EventSource URLs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ fallback: true }),
+    });
+    const eventSourceMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('EventSource', eventSourceMock as unknown as typeof EventSource);
+
+    invokeIpcMock
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { message: 'No handler registered for hostapi:fetch' },
+      })
+      .mockResolvedValueOnce('event-token');
+
+    const { createHostEventSource, hostApiFetch } = await import('@/lib/host-api');
+    await hostApiFetch('/api/test');
+    createHostEventSource('/api/events?channel=settings');
+
+    expect(eventSourceMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3210/api/events?channel=settings&token=event-token',
     );
   });
 });

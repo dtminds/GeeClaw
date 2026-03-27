@@ -2,7 +2,7 @@
  * Electron Main Process Entry
  * Manages window creation, system tray, and IPC handlers
  */
-import { app, BrowserWindow, nativeImage, session, shell } from 'electron';
+import { app, BrowserWindow, nativeImage, session } from 'electron';
 import type { Server } from 'node:http';
 import { join } from 'path';
 import { GatewayManager } from '../gateway/manager';
@@ -39,6 +39,7 @@ import { weComLoginManager } from '../utils/wecom-login';
 import { weixinLoginManager } from '../utils/weixin-login';
 import { PORTS } from '../utils/config';
 import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
+import { openSafeExternalUrl } from '../utils/external-links';
 
 // Disable GPU hardware acceleration globally for maximum stability across
 // all GPU configurations (no GPU, integrated, discrete).
@@ -201,9 +202,9 @@ function createWindow(): BrowserWindow {
     win.show();
   });
 
-  // Handle external links
+  // Only allow safe external links from renderer-created windows.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    void openSafeExternalUrl(url);
     return { action: 'deny' };
   });
 

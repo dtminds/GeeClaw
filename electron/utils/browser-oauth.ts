@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow } from 'electron';
 import { logger } from './logger';
+import { openSafeExternalUrl } from './external-links';
 import { loginGeminiCliOAuth, type GeminiCliOAuthCredentials } from './gemini-cli-oauth';
 import { loginOpenAICodexOAuth, type OpenAICodexOAuthCredentials } from './openai-codex-oauth';
 import { getProviderService } from '../services/providers/provider-service';
@@ -74,7 +75,7 @@ class BrowserOAuthManager extends EventEmitter {
         ? await loginGeminiCliOAuth({
           isRemote: false,
           openUrl: async (url) => {
-            await shell.openExternal(url);
+            await openSafeExternalUrl(url);
           },
           log: (message) => logger.info(`[BrowserOAuth] ${message}`),
           note: async (message, title) => {
@@ -94,7 +95,7 @@ class BrowserOAuthManager extends EventEmitter {
         })
         : await loginOpenAICodexOAuth({
           openUrl: async (url) => {
-            await shell.openExternal(url);
+            await openSafeExternalUrl(url);
           },
           onProgress: (message) => logger.info(`[BrowserOAuth] ${message}`),
           onManualCodeRequired: ({ authorizationUrl, reason }) => {

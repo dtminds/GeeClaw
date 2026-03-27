@@ -5,6 +5,22 @@ import { normalizeAppError } from './error-model';
 const HOST_API_PORT = 3210;
 const HOST_API_BASE = `http://127.0.0.1:${HOST_API_PORT}`;
 
+let cachedHostApiToken: string | null = null;
+
+async function getHostApiToken(): Promise<string> {
+  if (cachedHostApiToken !== null) {
+    return cachedHostApiToken;
+  }
+
+  try {
+    const token = await invokeIpc<string>('hostapi:token');
+    cachedHostApiToken = typeof token === 'string' ? token : '';
+    return cachedHostApiToken;
+  } catch {
+    return '';
+  }
+}
+
 type HostApiProxyResponse = {
   ok?: boolean;
   data?: {
@@ -163,12 +179,18 @@ export async function hostApiFetch<T>(path: string, init?: RequestInit): Promise
   }
 
   // Browser-only fallback (non-Electron environments).
+  const token = await getHostApiToken();
+  const headers = headersToRecord(init?.headers);
+  if (init?.body !== undefined && init.body !== null && !headers['Content-Type'] && !headers['content-type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token && !headers.Authorization && !headers.authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${HOST_API_BASE}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    headers,
   });
   trackUiEvent('hostapi.fetch', {
     path,
@@ -185,7 +207,8 @@ export async function hostApiFetch<T>(path: string, init?: RequestInit): Promise
 }
 
 export function createHostEventSource(path = '/api/events'): EventSource {
-  return new EventSource(`${HOST_API_BASE}${path}`);
+  const separator = path.includes('?') ? '&' : '?';
+  return new EventSource(`${HOST_API_BASE}${path}${separator}token=${encodeURIComponent(cachedHostApiToken ?? '')}`);
 }
 
 export function getHostApiBase(): string {

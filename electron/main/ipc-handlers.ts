@@ -65,6 +65,8 @@ import { appUpdater } from './updater';
 import { updateTrayMenu, type TrayTranslations } from './tray';
 import { PORTS } from '../utils/config';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
+import { getHostApiToken } from '../api/server';
+import { openSafeExternalUrl } from '../utils/external-links';
 
 type AppRequest = {
   id?: string;
@@ -170,6 +172,8 @@ type HostApiFetchRequest = {
 };
 
 function registerHostApiProxyHandlers(): void {
+  ipcMain.handle('hostapi:token', () => getHostApiToken());
+
   ipcMain.handle('hostapi:fetch', async (_, request: HostApiFetchRequest) => {
     try {
       const path = typeof request?.path === 'string' ? request.path : '';
@@ -179,6 +183,9 @@ function registerHostApiProxyHandlers(): void {
 
       const method = (request.method || 'GET').toUpperCase();
       const headers: Record<string, string> = { ...(request.headers || {}) };
+      if (!headers.Authorization && !headers.authorization) {
+        headers.Authorization = `Bearer ${getHostApiToken()}`;
+      }
       let body: BodyInit | undefined;
 
       if (request.body !== undefined && request.body !== null) {
@@ -186,9 +193,10 @@ function registerHostApiProxyHandlers(): void {
           body = request.body;
         } else {
           body = JSON.stringify(request.body);
-          if (!headers['Content-Type'] && !headers['content-type']) {
-            headers['Content-Type'] = 'application/json';
-          }
+        }
+
+        if (!headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
         }
       }
 
@@ -2007,7 +2015,10 @@ function registerShellHandlers(): void {
 
   // Open external URL
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
-    await shell.openExternal(url);
+    const opened = await openSafeExternalUrl(url);
+    if (!opened) {
+      throw new Error('Only http:// and https:// URLs can be opened externally.');
+    }
   });
 
   // Open path in file explorer

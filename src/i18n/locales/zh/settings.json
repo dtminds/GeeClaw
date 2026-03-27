@@ -2,7 +2,7 @@
   "title": "设置",
   "subtitle": "配置您的 GeeClaw 体验",
   "nav": {
-    "general": "通用",
+    "general": "关于",
     "gateway": "OpenClaw",
     "opencli": "OpenCLI",
     "mcp": "MCP"
@@ -496,7 +496,7 @@
   "about": {
     "title": "关于",
     "appName": "GeeClaw",
-    "tagline": "电商行业的专属龙虾",
+    "tagline": "致力于成为人人都能养活的虾",
     "basedOn": "基于 OpenClaw，ClawX 构建",
     "version": "版本 {{version}}",
     "docs": "官网",
