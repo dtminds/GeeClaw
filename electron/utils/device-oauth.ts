@@ -16,8 +16,9 @@
  * the Electron IPC system to display UI in the GeeClaw frontend.
  */
 import { EventEmitter } from 'events';
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow } from 'electron';
 import { logger } from './logger';
+import { openSafeExternalUrl } from './external-links';
 import { getProviderDefaultModel } from './provider-registry';
 import { getProviderService } from '../services/providers/provider-service';
 import type { ProviderAccount } from '../shared/providers/types';
@@ -111,7 +112,7 @@ class DeviceOAuthManager extends EventEmitter {
             openUrl: async (url: string) => {
                 logger.info(`[DeviceOAuth] MiniMax opening browser: ${url}`);
                 // Open the authorization URL in the system browser
-                shell.openExternal(url).catch((err: unknown) =>
+                openSafeExternalUrl(url).catch((err: unknown) =>
                     logger.warn(`[DeviceOAuth] Failed to open browser:`, err)
                 );
             },
@@ -155,7 +156,7 @@ class DeviceOAuthManager extends EventEmitter {
         const token: QwenOAuthToken = await loginQwenPortalOAuth({
             openUrl: async (url: string) => {
                 logger.info(`[DeviceOAuth] Qwen opening browser: ${url}`);
-                shell.openExternal(url).catch((err: unknown) =>
+                openSafeExternalUrl(url).catch((err: unknown) =>
                     logger.warn(`[DeviceOAuth] Failed to open browser:`, err)
                 );
             },

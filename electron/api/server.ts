@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { PORTS } from '../utils/config';
 import { logger } from '../utils/logger';
@@ -18,7 +19,7 @@ import { handleCronRoutes } from './routes/cron';
 import { handleDesktopSessionRoutes } from './routes/desktop-sessions';
 import { handleAgentRoutes } from './routes/agents';
 import { handleMcpRoutes } from './routes/mcp';
-import { sendJson } from './route-utils';
+import { requireJsonContentType, sendJson, setCorsHeaders } from './route-utils';
 
 type RouteHandler = (
   req: IncomingMessage,
@@ -46,10 +47,41 @@ const routeHandlers: RouteHandler[] = [
   handleUsageRoutes,
 ];
 
+let hostApiToken = '';
+
+export function getHostApiToken(): string {
+  return hostApiToken;
+}
+
 export function startHostApiServer(ctx: HostApiContext, port = PORTS.GEECLAW_HOST_API): Server {
+  hostApiToken = randomBytes(32).toString('hex');
+
   const server = createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${port}`);
+      const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+      setCorsHeaders(res, origin);
+
+      if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
+
+      const authHeader = req.headers.authorization || '';
+      const bearerToken = authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : (requestUrl.searchParams.get('token') || '');
+      if (bearerToken !== hostApiToken) {
+        sendJson(res, 401, { success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      if (!requireJsonContentType(req)) {
+        sendJson(res, 415, { success: false, error: 'Content-Type must be application/json' });
+        return;
+      }
+
       for (const handler of routeHandlers) {
         if (await handler(req, res, requestUrl, ctx)) {
           return;
