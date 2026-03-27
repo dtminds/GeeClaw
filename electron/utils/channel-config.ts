@@ -4,7 +4,7 @@
  *
  * All file I/O uses async fs/promises to avoid blocking the main thread.
  */
-import { access, mkdir, readFile, writeFile, readdir, stat, rm } from 'fs/promises';
+import { access, mkdir, readFile, writeFile, rm } from 'fs/promises';
 import { constants } from 'fs';
 import { join } from 'path';
 import { getGeeClawAgentStore } from "../services/agents/store-instance";
@@ -16,6 +16,7 @@ import { buildManagedOpenClawArgs } from './openclaw-managed-profile';
 import { reconcileBundledPluginLoadPaths } from './plugin-install';
 import * as logger from './logger';
 import { proxyAwareFetch } from './proxy-fetch';
+import { hasConfiguredWhatsAppSession } from './whatsapp-credentials';
 import {
     clearAllWeixinState,
     deleteWeixinAccountState,
@@ -1111,24 +1112,10 @@ export async function listConfiguredChannels(): Promise<string[]> {
         }
     }
 
-    // Check for WhatsApp credentials directory
+    // Check for persisted WhatsApp credentials.
     try {
-        const whatsappDir = join(getOpenClawConfigDir(), 'credentials', 'whatsapp');
-        if (await fileExists(whatsappDir)) {
-            const entries = await readdir(whatsappDir);
-            const hasSession = await (async () => {
-                for (const entry of entries) {
-                    try {
-                        const s = await stat(join(whatsappDir, entry));
-                        if (s.isDirectory()) return true;
-                    } catch { /* ignore */ }
-                }
-                return false;
-            })();
-
-            if (hasSession && !channels.includes('whatsapp')) {
-                channels.push('whatsapp');
-            }
+        if (await hasConfiguredWhatsAppSession() && !channels.includes('whatsapp')) {
+            channels.push('whatsapp');
         }
     } catch {
         // Ignore errors checking whatsapp dir
