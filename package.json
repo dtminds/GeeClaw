@@ -36,6 +36,15 @@
         "overrides": {
             "isbinaryfile": "^5.0.0",
             "https-proxy-agent": "7.0.6"
+        },
+        "supportedArchitectures": {
+            "os": [
+                "current"
+            ],
+            "cpu": [
+                "x64",
+                "arm64"
+            ]
         }
     },
     "main": "dist-electron/main/index.js",
