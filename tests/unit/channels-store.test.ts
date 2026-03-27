@@ -118,4 +118,48 @@ describe('Channels Store', () => {
       }),
     ]);
   });
+
+  it('treats successful runtime probes as connected', async () => {
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      channels: {
+        wecom: {
+          defaultAccount: 'xyclaw',
+          accounts: [
+            {
+              accountId: 'xyclaw',
+              enabled: true,
+              isDefault: true,
+            },
+          ],
+        },
+      },
+    });
+
+    useGatewayStore.setState({
+      rpc: vi.fn().mockResolvedValue({
+        channels: {
+          wecom: {},
+        },
+        channelAccounts: {
+          wecom: [
+            {
+              accountId: 'xyclaw',
+              configured: true,
+              probe: { ok: true },
+            },
+          ],
+        },
+      }),
+    } as Partial<ReturnType<typeof useGatewayStore.getState>>);
+
+    await useChannelsStore.getState().fetchChannels();
+
+    expect(useChannelsStore.getState().channels[0]?.accounts).toEqual([
+      expect.objectContaining({
+        accountId: 'xyclaw',
+        status: 'connected',
+      }),
+    ]);
+  });
 });

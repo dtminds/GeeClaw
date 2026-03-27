@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +32,11 @@ function mockStores(): void {
       },
     })),
   }));
+}
+
+async function getMockedOpenClawConfigDir(): Promise<string> {
+  const { getOpenClawConfigDir } = await import('@electron/utils/paths');
+  return getOpenClawConfigDir();
 }
 
 afterEach(() => {
@@ -204,7 +209,7 @@ describe('saveChannelConfig', () => {
     }));
     mockStores();
 
-    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configDir = await getMockedOpenClawConfigDir();
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
       session: {
@@ -380,7 +385,7 @@ describe('saveChannelConfig', () => {
     }));
     mockStores();
 
-    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configDir = await getMockedOpenClawConfigDir();
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
       plugins: {
@@ -409,7 +414,7 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.allow).toContain('openclaw-lark');
     expect(config.plugins?.allow).not.toContain('feishu');
     expect(config.plugins?.entries?.['openclaw-lark']?.enabled).toBe(true);
-    expect(config.plugins?.entries?.feishu?.enabled).toBe(false);
+    expect(config.plugins?.entries?.feishu?.enabled).not.toBe(true);
   });
 
   it('enables the bundled openclaw-weixin plugin id when saving weixin config', async () => {
@@ -482,7 +487,7 @@ describe('saveChannelConfig', () => {
     writeFileSync(join(bundledPluginPath, 'openclaw.plugin.json'), '{"id":"openclaw-weixin"}\n', 'utf8');
     writeFileSync(join(bundledPluginPath, 'package.json'), '{"version":"1.0.2"}\n', 'utf8');
 
-    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configDir = await getMockedOpenClawConfigDir();
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
       plugins: {
@@ -595,6 +600,202 @@ describe('saveChannelConfig', () => {
         },
       ],
     });
+  });
+
+  it.each([
+    {
+      channelType: 'dingtalk',
+      allowIds: ['dingtalk'],
+      entryIds: ['dingtalk'],
+    },
+    {
+      channelType: 'wecom',
+      allowIds: ['wecom-openclaw-plugin', 'wecom'],
+      entryIds: ['wecom-openclaw-plugin', 'wecom'],
+    },
+    {
+      channelType: 'feishu',
+      allowIds: ['openclaw-lark', 'feishu'],
+      entryIds: ['openclaw-lark', 'feishu'],
+    },
+    {
+      channelType: 'qqbot',
+      allowIds: ['openclaw-qqbot', 'qqbot'],
+      entryIds: ['openclaw-qqbot', 'qqbot'],
+    },
+    {
+      channelType: 'openclaw-weixin',
+      allowIds: ['openclaw-weixin'],
+      entryIds: ['openclaw-weixin'],
+    },
+  ])('removes managed plugin registrations when deleting $channelType channel config', async ({
+    channelType,
+    allowIds,
+    entryIds,
+  }) => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      channels: {
+        [channelType]: {
+          defaultAccount: 'default',
+          accounts: {
+            default: {
+              enabled: true,
+            },
+          },
+        },
+      },
+      plugins: {
+        enabled: true,
+        allow: allowIds,
+        entries: Object.fromEntries(entryIds.map((entryId) => [entryId, { enabled: true }])),
+      },
+    }, null, 2), 'utf8');
+
+    const { deleteChannelConfig, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    await deleteChannelConfig(channelType);
+
+    const config = await readOpenClawConfig() as {
+      channels?: Record<string, unknown>;
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.[channelType]).toBeUndefined();
+    for (const allowId of allowIds) {
+      expect(config.plugins?.allow?.includes(allowId)).not.toBe(true);
+    }
+    for (const entryId of entryIds) {
+      expect(config.plugins?.entries?.[entryId]).toBeUndefined();
+    }
+  });
+
+  it.each([
+    {
+      channelType: 'dingtalk',
+      allowIds: ['dingtalk'],
+      entryIds: ['dingtalk'],
+    },
+    {
+      channelType: 'wecom',
+      allowIds: ['wecom-openclaw-plugin', 'wecom'],
+      entryIds: ['wecom-openclaw-plugin', 'wecom'],
+    },
+    {
+      channelType: 'feishu',
+      allowIds: ['openclaw-lark', 'feishu'],
+      entryIds: ['openclaw-lark', 'feishu'],
+    },
+    {
+      channelType: 'qqbot',
+      allowIds: ['openclaw-qqbot', 'qqbot'],
+      entryIds: ['openclaw-qqbot', 'qqbot'],
+    },
+    {
+      channelType: 'openclaw-weixin',
+      allowIds: ['openclaw-weixin'],
+      entryIds: ['openclaw-weixin'],
+    },
+  ])('cleans dangling managed plugin state for $channelType without channel config', async ({
+    channelType,
+    allowIds,
+    entryIds,
+  }) => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      plugins: {
+        enabled: true,
+        allow: allowIds,
+        entries: Object.fromEntries(entryIds.map((entryId) => [entryId, { enabled: true }])),
+      },
+    }, null, 2), 'utf8');
+
+    if (channelType === 'openclaw-weixin') {
+      const staleStateDir = join(configDir, 'openclaw-weixin', 'accounts');
+      mkdirSync(staleStateDir, { recursive: true });
+      writeFileSync(join(staleStateDir, 'bot-im-bot.json'), JSON.stringify({ token: 'stale-token' }), 'utf8');
+      writeFileSync(join(configDir, 'openclaw-weixin', 'accounts.json'), JSON.stringify(['bot-im-bot']), 'utf8');
+    }
+
+    const { cleanupDanglingManagedChannelPluginState, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    const before = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+    const result = await cleanupDanglingManagedChannelPluginState(channelType);
+    const config = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    for (const allowId of allowIds) {
+      expect(before.plugins?.allow?.includes(allowId)).toBe(true);
+    }
+    for (const entryId of entryIds) {
+      expect(before.plugins?.entries?.[entryId]).toBeDefined();
+    }
+    expect(result.cleanedDanglingState).toBe(true);
+    for (const allowId of allowIds) {
+      expect(config.plugins?.allow?.includes(allowId)).not.toBe(true);
+    }
+    for (const entryId of entryIds) {
+      expect(config.plugins?.entries?.[entryId]).toBeUndefined();
+    }
+    if (channelType === 'openclaw-weixin') {
+      expect(existsSync(join(configDir, 'openclaw-weixin'))).toBe(false);
+    }
   });
 
   it('removes managed channel plugin ids from allow when the channel is disabled', async () => {

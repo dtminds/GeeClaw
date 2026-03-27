@@ -4,11 +4,14 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
+const { getAppPathMock } = vi.hoisted(() => ({
+  getAppPathMock: vi.fn(() => '/dev/null'),
+}));
 
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
-    getAppPath: () => '/dev/null',
+    getAppPath: getAppPathMock,
   },
 }));
 
@@ -90,6 +93,8 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
 
 afterEach(() => {
   vi.resetModules();
+  getAppPathMock.mockReset();
+  getAppPathMock.mockReturnValue('/dev/null');
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -320,5 +325,26 @@ describe('reconcileBundledPluginLoadPaths', () => {
     } finally {
       process.env.HOME = previousHome;
     }
+  });
+
+  it.each([
+    ['dingtalk', 'dingtalk'],
+    ['wecom', 'wecom-openclaw-plugin'],
+    ['openclaw-weixin', 'openclaw-weixin'],
+    ['feishu', 'openclaw-lark'],
+    ['qqbot', 'openclaw-qqbot'],
+  ])('resolves bundled plugin sources for managed channel %s', async (channelType, pluginId) => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'plugin-install-'));
+    tempDirs.push(rootDir);
+
+    const { appRoot } = createBundledPluginMirrorFixture(rootDir);
+    getAppPathMock.mockReturnValue(appRoot);
+
+    const { ensureManagedChannelPluginInstalled } = await import('@electron/utils/plugin-install');
+    const result = ensureManagedChannelPluginInstalled(channelType);
+
+    expect(result).not.toBeNull();
+    expect(result?.installed).toBe(true);
+    expect(result?.sourceDir).toContain(pluginId);
   });
 });

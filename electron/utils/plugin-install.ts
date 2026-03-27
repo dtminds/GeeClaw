@@ -28,6 +28,18 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'cron-delivery-guard', npmName: 'cron-delivery-guard', displayName: 'Cron 投递降级守卫' },
 ];
 
+const BUNDLED_PLUGIN_SPECS_BY_ID = Object.fromEntries(
+  ALL_BUNDLED_PLUGINS.map((plugin) => [plugin.pluginId, plugin]),
+) as Record<string, BundledPluginSpec>;
+
+const MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL: Record<string, string> = {
+  dingtalk: 'dingtalk',
+  wecom: 'wecom-openclaw-plugin',
+  'openclaw-weixin': 'openclaw-weixin',
+  qqbot: 'openclaw-qqbot',
+  feishu: 'openclaw-lark',
+};
+
 export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'qmemory', 'cron-delivery-guard'] as const;
 
 const ALWAYS_ENABLED_BUNDLED_PLUGIN_POLICIES: Record<string, {
@@ -515,4 +527,13 @@ export function ensureQQBotPluginInstalled(): BundledPluginSourceResult {
 
 export function ensureFeishuPluginInstalled(): BundledPluginSourceResult {
   return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[4]);
+}
+
+export function ensureManagedChannelPluginInstalled(channelType: string): BundledPluginSourceResult | null {
+  const pluginId = MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL[channelType];
+  if (!pluginId) {
+    return null;
+  }
+
+  return resolveBundledPluginSource(BUNDLED_PLUGIN_SPECS_BY_ID[pluginId]);
 }

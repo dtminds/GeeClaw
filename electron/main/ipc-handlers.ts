@@ -28,10 +28,7 @@ import { softDeleteOpenClawSession } from '../utils/openclaw-sessions';
 import { logger } from '../utils/logger';
 import { refreshGatewayAfterConfigChange } from '../utils/gateway-refresh';
 import {
-  ensureDingTalkPluginInstalled,
-  ensureFeishuPluginInstalled,
-  ensureQQBotPluginInstalled,
-  ensureWeComPluginInstalled,
+  ensureManagedChannelPluginInstalled,
 } from '../utils/plugin-install';
 import {
   saveChannelConfig,
@@ -85,6 +82,15 @@ type AppResponse = {
     details?: unknown;
   };
 };
+
+function getManagedChannelPluginInstallError(channelType: string): string | null {
+  const installResult = ensureManagedChannelPluginInstalled(channelType);
+  if (!installResult || installResult.installed) {
+    return null;
+  }
+
+  return installResult.warning || `Bundled plugin unavailable for channel "${channelType}"`;
+}
 
 /**
  * Register all IPC handlers
@@ -1455,68 +1461,11 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
     async (_, channelType: string, config: Record<string, unknown>, accountId?: string) => {
     try {
       logger.info('channel:saveConfig', { channelType, keys: Object.keys(config || {}) });
-      if (channelType === 'dingtalk') {
-        const installResult = await ensureDingTalkPluginInstalled();
-        if (!installResult.installed) {
-          return {
-            success: false,
-            error: installResult.warning || 'DingTalk bundled plugin unavailable',
-          };
-        }
-        await saveChannelConfig(channelType, config, accountId);
-        scheduleGatewayChannelRestart(`channel:saveConfig (${channelType})`);
+      const installError = getManagedChannelPluginInstallError(channelType);
+      if (installError) {
         return {
-          success: true,
-          pluginInstalled: installResult.installed,
-          warning: installResult.warning,
-        };
-      }
-      if (channelType === 'wecom') {
-        const installResult = await ensureWeComPluginInstalled();
-        if (!installResult.installed) {
-          return {
-            success: false,
-            error: installResult.warning || 'WeCom bundled plugin unavailable',
-          };
-        }
-        await saveChannelConfig(channelType, config, accountId);
-        scheduleGatewayChannelRestart(`channel:saveConfig (${channelType})`);
-        return {
-          success: true,
-          pluginInstalled: installResult.installed,
-          warning: installResult.warning,
-        };
-      }
-      if (channelType === 'feishu') {
-        const installResult = await ensureFeishuPluginInstalled();
-        if (!installResult.installed) {
-          return {
-            success: false,
-            error: installResult.warning || 'Feishu bundled plugin unavailable',
-          };
-        }
-        await saveChannelConfig(channelType, config, accountId);
-        scheduleGatewayChannelRestart(`channel:saveConfig (${channelType})`);
-        return {
-          success: true,
-          pluginInstalled: installResult.installed,
-          warning: installResult.warning,
-        };
-      }
-      if (channelType === 'qqbot') {
-        const installResult = await ensureQQBotPluginInstalled();
-        if (!installResult.installed) {
-          return {
-            success: false,
-            error: installResult.warning || 'QQ Bot bundled plugin unavailable',
-          };
-        }
-        await saveChannelConfig(channelType, config, accountId);
-        scheduleGatewayChannelRestart(`channel:saveConfig (${channelType})`);
-        return {
-          success: true,
-          pluginInstalled: installResult.installed,
-          warning: installResult.warning,
+          success: false,
+          error: installError,
         };
       }
       await saveChannelConfig(channelType, config, accountId);

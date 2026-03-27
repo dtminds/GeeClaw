@@ -4,6 +4,13 @@
  */
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
+import {
+  hasChannelRuntimeError,
+  hasRecentChannelActivity,
+  hasSuccessfulChannelProbe,
+  hasSummaryRuntimeError,
+  type ChannelRuntimeSummarySnapshot,
+} from '@/lib/channel-status';
 import { useGatewayStore } from './gateway';
 import type { ChannelAccount, ChannelGroup, ChannelStatus, ChannelType } from '../types/channel';
 
@@ -18,6 +25,10 @@ interface GatewayChannelAccount {
   lastConnectedAt?: number | null;
   lastInboundAt?: number | null;
   lastOutboundAt?: number | null;
+  lastProbeAt?: number | null;
+  probe?: {
+    ok?: boolean | null;
+  } | null;
 }
 
 interface ConfiguredAccountSummary {
@@ -51,29 +62,37 @@ interface ChannelsState {
 function getAccountStatus(
   account?: GatewayChannelAccount,
   groupSummary?: Record<string, unknown>,
-  groupError?: string,
 ): ChannelStatus {
+  const summarySignal: ChannelRuntimeSummarySnapshot | undefined = groupSummary
+    ? {
+        error: typeof groupSummary.error === 'string' ? groupSummary.error : null,
+        lastError: typeof groupSummary.lastError === 'string' ? groupSummary.lastError : null,
+      }
+    : undefined;
+  const groupError = hasSummaryRuntimeError(summarySignal);
   const groupConnected =
     groupSummary?.connected === true ||
     groupSummary?.linked === true ||
     groupSummary?.running === true;
 
   if (!account) {
-    return groupConnected && !groupError ? 'connected' : 'disconnected';
+    if (groupConnected && !groupError) {
+      return 'connected';
+    }
+    return groupError ? 'error' : 'disconnected';
   }
 
-  const now = Date.now();
-  const recentMs = 10 * 60 * 1000;
-  const hasRecentActivity =
-    (typeof account.lastInboundAt === 'number' && now - account.lastInboundAt < recentMs) ||
-    (typeof account.lastOutboundAt === 'number' && now - account.lastOutboundAt < recentMs) ||
-    (typeof account.lastConnectedAt === 'number' && now - account.lastConnectedAt < recentMs);
+  const hasDirectConnectionSignal =
+    account.connected === true ||
+    account.linked === true ||
+    hasRecentChannelActivity(account) ||
+    hasSuccessfulChannelProbe(account);
 
-  if (account.connected || account.linked || hasRecentActivity) {
+  if (hasDirectConnectionSignal) {
     return 'connected';
   }
 
-  if (typeof account.lastError === 'string' && account.lastError) {
+  if (hasChannelRuntimeError(account)) {
     return 'error';
   }
 
@@ -192,7 +211,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
             channelType: channelType as ChannelType,
             accountId,
             name: runtimeEntry?.name || accountId,
-            status: getAccountStatus(runtimeEntry, summary, groupError),
+            status: getAccountStatus(runtimeEntry, summary),
             enabled: configuredEntry?.enabled ?? true,
             configured: configuredEntry !== undefined || runtimeEntry?.configured === true,
             isDefault: accountId === defaultAccountId,
