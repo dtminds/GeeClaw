@@ -7,6 +7,19 @@ import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
+const BUILTIN_CHANNEL_IDS = new Set([
+  'discord',
+  'telegram',
+  'whatsapp',
+  'slack',
+  'signal',
+  'imessage',
+  'matrix',
+  'line',
+  'msteams',
+  'googlechat',
+  'mattermost',
+]);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -139,6 +152,75 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
               changed = true;
             }
           }
+        }
+
+        const allow = Array.isArray(pluginsObj.allow)
+          ? pluginsObj.allow.filter((entry): entry is string => typeof entry === 'string')
+          : [];
+        const entries = (
+          pluginsObj.entries && typeof pluginsObj.entries === 'object' && !Array.isArray(pluginsObj.entries)
+            ? { ...(pluginsObj.entries as Record<string, unknown>) }
+            : {}
+        ) as Record<string, unknown>;
+
+        if ('whatsapp' in entries) {
+          delete entries.whatsapp;
+          changed = true;
+          console.log('[sanitize] Removed legacy plugins.entries.whatsapp for built-in channel');
+        }
+
+        const configuredBuiltIns = new Set<string>();
+        const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
+        if (channelsObj && typeof channelsObj === 'object') {
+          for (const [channelId, section] of Object.entries(channelsObj)) {
+            if (!BUILTIN_CHANNEL_IDS.has(channelId)) continue;
+            if (!section || section.enabled === false) continue;
+            if (Object.keys(section).length > 0) {
+              configuredBuiltIns.add(channelId);
+            }
+          }
+        }
+
+        const externalPluginIds = allow.filter((pluginId) => !BUILTIN_CHANNEL_IDS.has(pluginId));
+        const nextAllow = [...externalPluginIds];
+        if (externalPluginIds.length > 0) {
+          for (const channelId of configuredBuiltIns) {
+            if (!nextAllow.includes(channelId)) {
+              nextAllow.push(channelId);
+            }
+          }
+        }
+
+        if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
+          if (nextAllow.length > 0) {
+            pluginsObj.allow = nextAllow;
+          } else {
+            delete pluginsObj.allow;
+          }
+          changed = true;
+        }
+
+        if (Array.isArray(pluginsObj.allow) && pluginsObj.allow.length === 0) {
+          delete pluginsObj.allow;
+          changed = true;
+        }
+
+        if (pluginsObj.entries && Object.keys(entries).length === 0) {
+          delete pluginsObj.entries;
+          changed = true;
+        } else if (Object.keys(entries).length > 0) {
+          pluginsObj.entries = entries;
+        }
+
+        const pluginKeysExcludingEnabled = Object.keys(pluginsObj).filter((key) => key !== 'enabled');
+        if (pluginsObj.enabled === true && pluginKeysExcludingEnabled.length === 0) {
+          delete pluginsObj.enabled;
+          changed = true;
+        }
+
+        if (Object.keys(pluginsObj).length === 0) {
+          delete config.plugins;
+          changed = true;
         }
       }
     }

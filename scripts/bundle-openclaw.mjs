@@ -174,6 +174,72 @@ while (queue.length > 0) {
 echo`   Found ${collected.size} total packages (direct + transitive)`;
 echo`   Skipped ${skippedDevCount} dev-only package references`;
 
+// 4b. Collect extra packages required by GeeClaw's Electron main process that
+// are not part of OpenClaw's dependency graph, but are resolved from the
+// OpenClaw context at runtime.
+const EXTRA_BUNDLED_PACKAGES = [
+  '@whiskeysockets/baileys',
+];
+
+let extraCount = 0;
+for (const pkgName of EXTRA_BUNDLED_PACKAGES) {
+  const pkgLink = path.join(NODE_MODULES, ...pkgName.split('/'));
+  if (!fs.existsSync(pkgLink)) {
+    echo`   ⚠️  Extra package ${pkgName} not found in workspace node_modules, skipping.`;
+    continue;
+  }
+
+  let pkgReal;
+  try {
+    pkgReal = realpathCompat(pkgLink);
+  } catch {
+    continue;
+  }
+
+  if (collected.has(pkgReal)) {
+    continue;
+  }
+
+  collected.set(pkgReal, pkgName);
+  extraCount++;
+
+  const depVirtualNM = getVirtualStoreNodeModules(pkgReal);
+  if (!depVirtualNM) {
+    continue;
+  }
+
+  const extraQueue = [{ nodeModulesDir: depVirtualNM, skipPkg: pkgName }];
+  while (extraQueue.length > 0) {
+    const { nodeModulesDir, skipPkg } = extraQueue.shift();
+    const packages = listPackages(nodeModulesDir);
+
+    for (const { name, fullPath } of packages) {
+      if (name === skipPkg) continue;
+      if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some((scope) => name.startsWith(scope))) continue;
+
+      let realPath;
+      try {
+        realPath = realpathCompat(fullPath);
+      } catch {
+        continue;
+      }
+
+      if (collected.has(realPath)) continue;
+      collected.set(realPath, name);
+      extraCount++;
+
+      const innerVirtualNM = getVirtualStoreNodeModules(realPath);
+      if (innerVirtualNM && innerVirtualNM !== nodeModulesDir) {
+        extraQueue.push({ nodeModulesDir: innerVirtualNM, skipPkg: name });
+      }
+    }
+  }
+}
+
+if (extraCount > 0) {
+  echo`   Added ${extraCount} extra packages (+ transitive deps) for Electron main process`;
+}
+
 // 5. Copy all collected packages into OUTPUT/node_modules/ (flat structure)
 //
 // IMPORTANT: BFS guarantees direct deps are encountered before transitive deps.
@@ -496,6 +562,93 @@ function patchBrokenModules(nodeModulesDir) {
       count++;
     }
   }
+
+  function patchAllLruCacheInstances(rootDir) {
+    let lruCount = 0;
+    const stack = [rootDir];
+
+    while (stack.length > 0) {
+      const dir = stack.pop();
+      let entries;
+      try {
+        entries = fs.readdirSync(normWin(dir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        let isDirectory = entry.isDirectory();
+        if (!isDirectory) {
+          try {
+            isDirectory = fs.statSync(normWin(fullPath)).isDirectory();
+          } catch {
+            isDirectory = false;
+          }
+        }
+        if (!isDirectory) continue;
+
+        if (entry.name === 'lru-cache') {
+          const pkgPath = path.join(fullPath, 'package.json');
+          if (!fs.existsSync(normWin(pkgPath))) {
+            stack.push(fullPath);
+            continue;
+          }
+
+          try {
+            const pkg = JSON.parse(fs.readFileSync(normWin(pkgPath), 'utf8'));
+            if (pkg.type !== 'module') {
+              const mainFile = pkg.main || 'index.js';
+              const entryFile = path.join(fullPath, mainFile);
+              if (fs.existsSync(normWin(entryFile))) {
+                const original = fs.readFileSync(normWin(entryFile), 'utf8');
+                if (!original.includes('exports.LRUCache')) {
+                  const patched = [
+                    original,
+                    '',
+                    '// GeeClaw patch: add LRUCache named export for Node.js 22+ ESM interop',
+                    'if (typeof module.exports === "function" && !module.exports.LRUCache) {',
+                    '  module.exports.LRUCache = module.exports;',
+                    '}',
+                    '',
+                  ].join('\n');
+                  fs.writeFileSync(normWin(entryFile), patched, 'utf8');
+                  lruCount++;
+                  echo`   🩹 Patched lru-cache CJS (v${pkg.version}) at ${path.relative(rootDir, fullPath)}`;
+                }
+              }
+            }
+
+            const moduleFile = typeof pkg.module === 'string' ? pkg.module : null;
+            if (moduleFile) {
+              const esmEntry = path.join(fullPath, moduleFile);
+              if (fs.existsSync(normWin(esmEntry))) {
+                const esmOriginal = fs.readFileSync(normWin(esmEntry), 'utf8');
+                if (
+                  esmOriginal.includes('export default LRUCache')
+                  && !esmOriginal.includes('export { LRUCache')
+                ) {
+                  const esmPatched = [esmOriginal, '', 'export { LRUCache }', ''].join('\n');
+                  fs.writeFileSync(normWin(esmEntry), esmPatched, 'utf8');
+                  lruCount++;
+                  echo`   🩹 Patched lru-cache ESM (v${pkg.version}) at ${path.relative(rootDir, fullPath)}`;
+                }
+              }
+            }
+          } catch (err) {
+            echo`   ⚠️  Failed to patch lru-cache at ${fullPath}: ${err.message}`;
+          }
+        } else {
+          stack.push(fullPath);
+        }
+      }
+    }
+
+    return lruCount;
+  }
+
+  count += patchAllLruCacheInstances(nodeModulesDir);
+
   if (count > 0) {
     echo`   🩹 Patched ${count} broken module(s) in node_modules`;
   }

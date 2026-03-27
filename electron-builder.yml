@@ -45,6 +45,7 @@ afterPack: ./scripts/after-pack.cjs
 asar: true
 asarUnpack:
   - "**/*.node"
+  - "**/node_modules/lru-cache/**"
 
 # Disable native module rebuilding.
 # The Electron renderer/main process has no native (.node) dependencies.

@@ -10,12 +10,24 @@ const require = createRequire(import.meta.url);
 // Resolve dependencies from OpenClaw package context (pnpm-safe)
 const openclawPath = getOpenClawDir();
 const openclawResolvedPath = getOpenClawResolvedDir();
+// Primary: resolves from OpenClaw's real (dereferenced) path in the pnpm store.
 const openclawRequire = createRequire(join(openclawResolvedPath, 'package.json'));
+// Fallback: resolves from the symlink path so Node can walk back to the
+// project-level node_modules in dev mode.
+const projectRequire = createRequire(join(openclawPath, 'package.json'));
 
 function resolveOpenClawPackageJson(packageName: string): string {
     const specifier = `${packageName}/package.json`;
+    // 1. Prefer OpenClaw's own dependency graph.
     try {
         return openclawRequire.resolve(specifier);
+    } catch {
+        // fall through
+    }
+
+    // 2. Fall back to the app's dependency graph for dev-only runtime helpers.
+    try {
+        return projectRequire.resolve(specifier);
     } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         throw new Error(

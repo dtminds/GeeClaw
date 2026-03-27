@@ -3,7 +3,8 @@ import { readOpenClawConfig, reconcileManagedChannelPluginConfig, type OpenClawC
 import { mutateOpenClawConfigDocument } from '../../utils/openclaw-config-coordinator';
 import { isDeepStrictEqual } from 'node:util';
 
-const MANAGED_PLUGIN_ENTRY_IDS = ['whatsapp', 'dingtalk', 'wecom-openclaw-plugin', 'openclaw-weixin', 'openclaw-lark', 'qqbot'];
+const MANAGED_PLUGIN_ENTRY_IDS = ['dingtalk', 'wecom-openclaw-plugin', 'openclaw-weixin', 'openclaw-lark', 'qqbot'];
+const MANAGED_PLUGIN_ENTRY_ID_SET = new Set(MANAGED_PLUGIN_ENTRY_IDS);
 
 const MANAGED_SESSION_DM_SCOPE = 'per-channel-peer';
 const MANAGED_SESSION_RESET_MODE = 'daily';
@@ -187,10 +188,15 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
   const store = await getGeeClawChannelStore();
   const storedChannels = store.get('channels') as Record<string, unknown> | undefined;
   const storedPlugins = store.get('plugins') as Record<string, unknown> | undefined;
+  const managedStoredPlugins = storedPlugins
+    ? Object.fromEntries(
+        Object.entries(storedPlugins).filter(([pluginId]) => MANAGED_PLUGIN_ENTRY_ID_SET.has(pluginId)),
+      )
+    : undefined;
 
   let hasStoredConfigs = false;
   if (storedChannels && Object.keys(storedChannels).length > 0) hasStoredConfigs = true;
-  if (storedPlugins && Object.keys(storedPlugins).length > 0) hasStoredConfigs = true;
+  if (managedStoredPlugins && Object.keys(managedStoredPlugins).length > 0) hasStoredConfigs = true;
 
   if (!hasStoredConfigs) {
     // If the store is empty, but openclaw.json has channels, we should probably 
@@ -213,10 +219,10 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
       }
     }
 
-    if (storedPlugins && Object.keys(storedPlugins).length > 0) {
+    if (managedStoredPlugins && Object.keys(managedStoredPlugins).length > 0) {
       if (!config.plugins) config.plugins = {};
       if (!config.plugins.entries) config.plugins.entries = {};
-      for (const [key, value] of Object.entries(storedPlugins)) {
+      for (const [key, value] of Object.entries(managedStoredPlugins)) {
         const nextValue = cloneValue(value);
         if (!isDeepStrictEqual(config.plugins.entries[key], nextValue)) {
           config.plugins.entries[key] = nextValue;

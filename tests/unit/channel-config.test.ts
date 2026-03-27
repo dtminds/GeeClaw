@@ -625,4 +625,139 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.allow).toEqual(['other-plugin']);
     expect(config.plugins?.entries?.['wecom-openclaw-plugin']?.enabled).toBe(false);
   });
+
+  it('saves whatsapp as a built-in channel instead of a plugin entry', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    await saveChannelConfig('whatsapp', { enabled: true }, 'default');
+
+    const config = await readOpenClawConfig() as {
+      channels?: {
+        whatsapp?: {
+          enabled?: boolean;
+          defaultAccount?: string;
+          accounts?: Record<string, { enabled?: boolean }>;
+        };
+      };
+      plugins?: {
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.whatsapp?.enabled).toBe(true);
+    expect(config.channels?.whatsapp?.defaultAccount).toBe('default');
+    expect(config.channels?.whatsapp?.accounts?.default?.enabled).toBe(true);
+    expect(config.plugins?.entries?.whatsapp).toBeUndefined();
+  });
+
+  it('cleans up stale whatsapp plugin registration when saving whatsapp config', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { readOpenClawConfig, saveChannelConfig, writeOpenClawConfig } = await import('@electron/utils/channel-config');
+    await writeOpenClawConfig({
+      plugins: {
+        enabled: true,
+        allow: ['whatsapp'],
+        entries: {
+          whatsapp: { enabled: true },
+        },
+      },
+    });
+
+    await saveChannelConfig('whatsapp', { enabled: true }, 'default');
+
+    const config = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+      channels?: {
+        whatsapp?: {
+          enabled?: boolean;
+        };
+      };
+    };
+
+    expect(config.plugins?.allow).toBeUndefined();
+    expect(config.plugins?.entries?.whatsapp).toBeUndefined();
+    expect(config.channels?.whatsapp?.enabled).toBe(true);
+  });
+
+  it('keeps configured built-in channels in plugins.allow when plugin-backed channels are enabled', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    await saveChannelConfig('discord', { token: 'discord-token' }, 'default');
+    await saveChannelConfig('whatsapp', { enabled: true }, 'default');
+    await saveChannelConfig('qqbot', { appId: 'qq-app', token: 'qq-token', appSecret: 'qq-secret' }, 'default');
+
+    const config = await readOpenClawConfig() as {
+      plugins?: {
+        allow?: string[];
+      };
+    };
+
+    expect(config.plugins?.allow).toEqual(expect.arrayContaining(['qqbot', 'discord', 'whatsapp']));
+  });
 });
