@@ -88,7 +88,7 @@ Environment variables for bundled search skills:
 Packaged builds also ship managed `opencli` and `mcporter` CLIs on the internal PATH so bundled skill / exec flows do not depend on separate system installs.
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain.
+Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
@@ -133,7 +133,7 @@ pnpm dev
 When you launch GeeClaw for the first time, the **Setup Wizard** will guide you through:
 
 1. **Language & Region** – Configure your preferred locale
-2. **AI Provider** – Enter your API keys for supported providers
+2. **AI Provider** – Add providers with API keys or OAuth (for providers that support browser/device login)
 3. **Skill Bundles** – Select pre-configured skills for common use cases
 4. **Verification** – Test your configuration before entering the main interface
 

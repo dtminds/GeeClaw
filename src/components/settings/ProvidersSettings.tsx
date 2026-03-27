@@ -51,6 +51,7 @@ import { invokeIpc } from '@/lib/api-client';
 import { useSettingsStore } from '@/stores/settings';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
+import { normalizeOAuthFlowPayload, type OAuthFlowData } from '@/lib/oauth-flow';
 import { Delete02Icon, PinIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
@@ -424,11 +425,8 @@ function ProviderCard({
   const [deleting, setDeleting] = useState(false);
   const [arkMode, setArkMode] = useState<ArkMode>(draftState.arkMode);
   const [oauthFlowing, setOauthFlowing] = useState(false);
-  const [oauthData, setOauthData] = useState<{
-    verificationUri: string;
-    userCode: string;
-    expiresIn: number;
-  } | null>(null);
+  const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
+  const [manualCodeInput, setManualCodeInput] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
 
   const effectiveDocsUrl = account.vendorId === 'ark' && arkMode === 'codeplan'
@@ -488,6 +486,7 @@ function ProviderCard({
     setArkMode(draftState.arkMode);
     setOauthFlowing(false);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
   }, [
     draftState.apiProtocol,
@@ -515,7 +514,7 @@ function ProviderCard({
       if (!pendingOAuthRef.current || pendingOAuthRef.current.accountId !== account.id) {
         return;
       }
-      setOauthData(data as { verificationUri: string; userCode: string; expiresIn: number });
+      setOauthData(normalizeOAuthFlowPayload(data));
       setOauthError(null);
     };
 
@@ -529,6 +528,7 @@ function ProviderCard({
       pendingOAuthRef.current = null;
       setOauthFlowing(false);
       setOauthData(null);
+      setManualCodeInput('');
       setOauthError(null);
 
       try {
@@ -567,6 +567,7 @@ function ProviderCard({
 
     setOauthFlowing(true);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
 
     try {
@@ -589,11 +590,29 @@ function ProviderCard({
   const handleCancelOAuth = async () => {
     setOauthFlowing(false);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
     pendingOAuthRef.current = null;
     await hostApiFetch('/api/providers/oauth/cancel', {
       method: 'POST',
     });
+  };
+
+  const handleSubmitManualOAuthCode = async () => {
+    const value = manualCodeInput.trim();
+    if (!value) {
+      return;
+    }
+
+    try {
+      await hostApiFetch('/api/providers/oauth/submit', {
+        method: 'POST',
+        body: JSON.stringify({ code: value }),
+      });
+      setOauthError(null);
+    } catch (error) {
+      setOauthError(String(error));
+    }
   };
 
   const handleSaveEdits = async () => {
@@ -832,6 +851,43 @@ function ProviderCard({
                       <div className="space-y-4 py-6">
                         <Loader2 className="mx-auto h-10 w-10 animate-spin text-info" />
                         <p className="animate-pulse text-[13px] font-medium text-muted-foreground">{t('aiProviders.oauth.requestingCode')}</p>
+                      </div>
+                    ) : oauthData.mode === 'manual' ? (
+                      <div className="w-full space-y-5">
+                        <div className="space-y-2">
+                          <h3 className="text-[16px] font-semibold text-foreground">{t('aiProviders.oauth.manualTitle')}</h3>
+                          <div className="modal-section-surface rounded-xl border p-4 text-left text-[13px] text-muted-foreground">
+                            {oauthData.message || t('aiProviders.oauth.manualMessage')}
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="secondary"
+                          className="modal-secondary-button w-full shadow-none"
+                          onClick={() => invokeIpc('shell:openExternal', oauthData.authorizationUrl)}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          {t('aiProviders.oauth.manualOpenAuthorizationPage')}
+                        </Button>
+
+                        <Input
+                          placeholder={t('aiProviders.oauth.manualInputPlaceholder')}
+                          value={manualCodeInput}
+                          onChange={(e) => setManualCodeInput(e.target.value)}
+                          className="modal-field-surface field-focus-ring h-[44px] rounded-xl border font-mono text-[13px] shadow-sm"
+                        />
+
+                        <Button
+                          className="modal-primary-button w-full"
+                          onClick={handleSubmitManualOAuthCode}
+                          disabled={!manualCodeInput.trim()}
+                        >
+                          {t('aiProviders.oauth.manualSubmit')}
+                        </Button>
+
+                        <Button variant="ghost" className="modal-secondary-button w-full shadow-none" onClick={handleCancelOAuth}>
+                          {t('aiProviders.oauth.cancel')}
+                        </Button>
                       </div>
                     ) : (
                       <div className="w-full space-y-5">
@@ -1191,11 +1247,8 @@ function AddProviderDialog({
 
   // OAuth Flow State
   const [oauthFlowing, setOauthFlowing] = useState(false);
-  const [oauthData, setOauthData] = useState<{
-    verificationUri: string;
-    userCode: string;
-    expiresIn: number;
-  } | null>(null);
+  const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
+  const [manualCodeInput, setManualCodeInput] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
   // For providers that support both OAuth and API key, let the user choose.
   // Default to the vendor's declared auth mode instead of hard-coding OAuth.
@@ -1221,7 +1274,7 @@ function AddProviderDialog({
     ? 'oauth_browser'
     : (selectedVendor?.supportedAuthModes.includes('oauth_device')
       ? 'oauth_device'
-      : (selectedType === 'google' ? 'oauth_browser' : null));
+      : ((selectedType === 'google' || selectedType === 'openai') ? 'oauth_browser' : null));
   // Effective OAuth mode: pure OAuth providers, or dual-mode with oauth selected
   const useOAuthFlow = isOAuth && (!supportsApiKey || authMode === 'oauth');
 
@@ -1248,13 +1301,14 @@ function AddProviderDialog({
   // Manage OAuth events
   useEffect(() => {
     const handleCode = (data: unknown) => {
-      setOauthData(data as { verificationUri: string; userCode: string; expiresIn: number });
+      setOauthData(normalizeOAuthFlowPayload(data));
       setOauthError(null);
     };
 
     const handleSuccess = async (data: unknown) => {
       setOauthFlowing(false);
       setOauthData(null);
+      setManualCodeInput('');
       setValidationError(null);
 
       const { onClose: close, t: translate } = latestRef.current;
@@ -1269,7 +1323,8 @@ function AddProviderDialog({
         const store = useProviderStore.getState();
         await store.refreshProviderSnapshot();
 
-        // Auto-set as default if no default is currently configured
+        // In Settings, adding another OAuth account should not unexpectedly
+        // replace the user's current default provider.
         if (!store.defaultAccountId && accountId) {
           await store.setDefaultAccount(accountId);
         }
@@ -1313,6 +1368,7 @@ function AddProviderDialog({
 
     setOauthFlowing(true);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
 
     try {
@@ -1335,11 +1391,29 @@ function AddProviderDialog({
   const handleCancelOAuth = async () => {
     setOauthFlowing(false);
     setOauthData(null);
+    setManualCodeInput('');
     setOauthError(null);
     pendingOAuthRef.current = null;
     await hostApiFetch('/api/providers/oauth/cancel', {
       method: 'POST',
     });
+  };
+
+  const handleSubmitManualOAuthCode = async () => {
+    const value = manualCodeInput.trim();
+    if (!value) {
+      return;
+    }
+
+    try {
+      await hostApiFetch('/api/providers/oauth/submit', {
+        method: 'POST',
+        body: JSON.stringify({ code: value }),
+      });
+      setOauthError(null);
+    } catch (error) {
+      setOauthError(String(error));
+    }
   };
 
   const availableTypes = PROVIDER_TYPE_INFO.filter((type) => {
@@ -1736,13 +1810,50 @@ function AddProviderDialog({
                               <p className="font-semibold text-[15px]">{t('aiProviders.oauth.authFailed')}</p>
                               <p className="text-[13px] opacity-80">{oauthError}</p>
                               <Button variant="outline" size="sm" onClick={handleCancelOAuth} className="modal-secondary-button mt-2">
-                                Try Again
+                                {t('aiProviders.oauth.tryAgain')}
                               </Button>
                             </div>
                           ) : !oauthData ? (
                             <div className="space-y-4 py-6">
                               <Loader2 className="text-info mx-auto h-10 w-10 animate-spin" />
                               <p className="text-[13px] font-medium text-muted-foreground animate-pulse">{t('aiProviders.oauth.requestingCode')}</p>
+                            </div>
+                          ) : oauthData.mode === 'manual' ? (
+                            <div className="space-y-5 w-full">
+                              <div className="space-y-2">
+                                <h3 className="font-semibold text-[16px] text-foreground">{t('aiProviders.oauth.manualTitle')}</h3>
+                                <div className="modal-section-surface rounded-xl border p-4 text-left text-[13px] text-muted-foreground">
+                                  {oauthData.message || t('aiProviders.oauth.manualMessage')}
+                                </div>
+                              </div>
+
+                              <Button
+                                variant="secondary"
+                                className="modal-secondary-button w-full"
+                                onClick={() => invokeIpc('shell:openExternal', oauthData.authorizationUrl)}
+                              >
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                {t('aiProviders.oauth.manualOpenAuthorizationPage')}
+                              </Button>
+
+                              <Input
+                                placeholder={t('aiProviders.oauth.manualInputPlaceholder')}
+                                value={manualCodeInput}
+                                onChange={(e) => setManualCodeInput(e.target.value)}
+                                className="modal-field-surface field-focus-ring h-[44px] rounded-xl border font-mono text-[13px] shadow-sm"
+                              />
+
+                              <Button
+                                className="modal-primary-button w-full"
+                                onClick={handleSubmitManualOAuthCode}
+                                disabled={!manualCodeInput.trim()}
+                              >
+                                {t('aiProviders.oauth.manualSubmit')}
+                              </Button>
+
+                              <Button variant="ghost" className="modal-secondary-button w-full" onClick={handleCancelOAuth}>
+                                {t('aiProviders.oauth.cancel')}
+                              </Button>
                             </div>
                           ) : (
                             <div className="space-y-5 w-full">
@@ -1787,7 +1898,7 @@ function AddProviderDialog({
                               </div>
 
                               <Button variant="ghost" className="modal-secondary-button w-full" onClick={handleCancelOAuth}>
-                                Cancel
+                                {t('aiProviders.oauth.cancel')}
                               </Button>
                             </div>
                           )}
