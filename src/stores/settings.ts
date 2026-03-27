@@ -5,8 +5,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import i18n from '@/i18n';
+import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
 import { DEFAULT_COLOR_THEME_ID, type ColorTheme } from '@/theme/color-themes';
+import { useGatewayStore } from './gateway';
 
 type Theme = 'light' | 'dark' | 'system';
 type UpdateChannel = 'stable' | 'beta' | 'dev';
@@ -100,6 +102,24 @@ const defaultSettings = {
   setupComplete: false,
 };
 
+async function syncTrayTranslations(): Promise<void> {
+  const isGatewayRunning = useGatewayStore.getState().status.state === 'running';
+
+  await invokeIpc('tray:updateLanguage', {
+    tooltipRunning: i18n.t('tray.tooltipRunning'),
+    tooltipStopped: i18n.t('tray.tooltipStopped'),
+    show: i18n.t('tray.show'),
+    gatewayStatus: i18n.t('tray.gatewayStatus'),
+    running: i18n.t('tray.running'),
+    stopped: i18n.t('tray.stopped'),
+    quickActions: i18n.t('tray.quickActions'),
+    openChat: i18n.t('tray.openChat'),
+    openSettings: i18n.t('tray.openSettings'),
+    checkUpdates: i18n.t('tray.checkUpdates'),
+    quit: i18n.t('tray.quit'),
+  }, isGatewayRunning);
+}
+
 function persistSettingValue(key: string, value: unknown): void {
   void hostApiFetch(`/api/settings/${key}`, {
     method: 'PUT',
@@ -154,6 +174,7 @@ export const useSettingsStore = create<SettingsState>()(
           if (settings.language) {
             i18n.changeLanguage(settings.language);
           }
+          void syncTrayTranslations().catch(() => {});
           if (themeToBackfill) {
             persistSettingValue('theme', themeToBackfill);
           }
@@ -181,6 +202,7 @@ export const useSettingsStore = create<SettingsState>()(
           method: 'PUT',
           body: JSON.stringify({ value: language }),
         }).catch(() => {});
+        void syncTrayTranslations().catch(() => {});
       },
       setStartMinimized: (startMinimized) => set({ startMinimized }),
       setLaunchAtStartup: (launchAtStartup) => set({ launchAtStartup }),

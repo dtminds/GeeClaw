@@ -6,6 +6,37 @@ import { Tray, Menu, BrowserWindow, app, nativeImage } from 'electron';
 import { join } from 'path';
 
 let tray: Tray | null = null;
+let mainWindowRef: BrowserWindow | null = null;
+
+export interface TrayTranslations {
+  tooltipRunning: string;
+  tooltipStopped: string;
+  show: string;
+  gatewayStatus: string;
+  running: string;
+  stopped: string;
+  quickActions: string;
+  openChat: string;
+  openSettings: string;
+  checkUpdates: string;
+  quit: string;
+}
+
+const defaultTranslations: TrayTranslations = {
+  tooltipRunning: 'GeeClaw - Gateway Running',
+  tooltipStopped: 'GeeClaw - Gateway Stopped',
+  show: 'Show GeeClaw',
+  gatewayStatus: 'Gateway Status',
+  running: 'Running',
+  stopped: 'Stopped',
+  quickActions: 'Quick Actions',
+  openChat: 'Open Chat',
+  openSettings: 'Open Settings',
+  checkUpdates: 'Check for Updates...',
+  quit: 'Quit GeeClaw',
+};
+
+let currentTranslations: TrayTranslations = defaultTranslations;
 
 /**
  * Resolve the icons directory path (works in both dev and packaged mode)
@@ -17,10 +48,93 @@ function getIconsDir(): string {
   return join(__dirname, '../../resources/icons');
 }
 
+function revealMainWindow(): void {
+  if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+  if (mainWindowRef.isMinimized()) {
+    mainWindowRef.restore();
+  }
+  if (!mainWindowRef.isVisible()) {
+    mainWindowRef.show();
+  }
+  mainWindowRef.focus();
+}
+
+function buildContextMenu(translations: TrayTranslations, gatewayRunning: boolean): Electron.Menu {
+  const showWindow = () => {
+    revealMainWindow();
+  };
+
+  return Menu.buildFromTemplate([
+    {
+      label: translations.show,
+      click: showWindow,
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: translations.gatewayStatus,
+      enabled: false,
+    },
+    {
+      label: `  ${gatewayRunning ? translations.running : translations.stopped}`,
+      type: 'checkbox',
+      checked: gatewayRunning,
+      enabled: false,
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: translations.quickActions,
+      submenu: [
+        {
+          label: translations.openChat,
+          click: () => {
+            revealMainWindow();
+            if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+            mainWindowRef.webContents.send('navigate', '/');
+          },
+        },
+        {
+          label: translations.openSettings,
+          click: () => {
+            revealMainWindow();
+            if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+            mainWindowRef.webContents.send('navigate', '/settings/appearance');
+          },
+        },
+      ],
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: translations.checkUpdates,
+      click: () => {
+        revealMainWindow();
+        if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+        mainWindowRef.webContents.send('navigate', '/settings/general');
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: translations.quit,
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+}
+
 /**
  * Create system tray icon and menu
  */
 export function createTray(mainWindow: BrowserWindow): Tray {
+  mainWindowRef = mainWindow;
+
   // Use platform-appropriate icon for system tray
   const iconsDir = getIconsDir();
   let iconPath: string;
@@ -56,117 +170,42 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   
   tray = new Tray(icon);
   
-  // Set tooltip
-  tray.setToolTip('GeeClaw - AI Assistant');
+  tray.setToolTip(defaultTranslations.tooltipStopped);
+  tray.setContextMenu(buildContextMenu(defaultTranslations, false));
   
-  const showWindow = () => {
-    if (mainWindow.isDestroyed()) return;
-    mainWindow.show();
-    mainWindow.focus();
-  };
-
-  // Create context menu
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Show GeeClaw',
-      click: showWindow,
-    },
-    {
-      type: 'separator',
-    },
-    {
-      label: 'Gateway Status',
-      enabled: false,
-    },
-    {
-      label: '  Running',
-      type: 'checkbox',
-      checked: true,
-      enabled: false,
-    },
-    {
-      type: 'separator',
-    },
-    {
-      label: 'Quick Actions',
-      submenu: [
-        {
-          label: 'Open Dashboard',
-          click: () => {
-            if (mainWindow.isDestroyed()) return;
-            mainWindow.show();
-            mainWindow.webContents.send('navigate', '/');
-          },
-        },
-        {
-          label: 'Open Chat',
-          click: () => {
-            if (mainWindow.isDestroyed()) return;
-            mainWindow.show();
-            mainWindow.webContents.send('navigate', '/chat');
-          },
-        },
-        {
-          label: 'Open Settings',
-          click: () => {
-            if (mainWindow.isDestroyed()) return;
-            mainWindow.show();
-            mainWindow.webContents.send('navigate', '/settings');
-          },
-        },
-      ],
-    },
-    {
-      type: 'separator',
-    },
-    {
-      label: 'Check for Updates...',
-      click: () => {
-        if (mainWindow.isDestroyed()) return;
-        mainWindow.webContents.send('update:check');
-      },
-    },
-    {
-      type: 'separator',
-    },
-    {
-      label: 'Quit GeeClaw',
-      click: () => {
-        app.quit();
-      },
-    },
-  ]);
-  
-  tray.setContextMenu(contextMenu);
-  
-  // Click to show window (Windows/Linux)
+  // Tray activation should only bring the app to the foreground.
   tray.on('click', () => {
-    if (mainWindow.isDestroyed()) return;
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    revealMainWindow();
   });
   
-  // Double-click to show window (Windows)
+  // Double-click also foregrounds the window on platforms that emit it.
   tray.on('double-click', () => {
-    if (mainWindow.isDestroyed()) return;
-    mainWindow.show();
-    mainWindow.focus();
+    revealMainWindow();
   });
   
   return tray;
 }
 
 /**
+ * Update tray menu text and status after renderer language changes.
+ */
+export function updateTrayMenu(translations: TrayTranslations, gatewayRunning: boolean): void {
+  if (!tray) return;
+
+  currentTranslations = translations;
+  tray.setToolTip(gatewayRunning ? translations.tooltipRunning : translations.tooltipStopped);
+  tray.setContextMenu(buildContextMenu(translations, gatewayRunning));
+}
+
+/**
  * Update tray tooltip with Gateway status
  */
 export function updateTrayStatus(status: string): void {
-  if (tray) {
-    tray.setToolTip(`GeeClaw - ${status}`);
-  }
+  if (!tray) return;
+
+  const isRunning = status === 'running';
+  tray.setToolTip(isRunning ? currentTranslations.tooltipRunning : currentTranslations.tooltipStopped);
+  tray.setContextMenu(buildContextMenu(currentTranslations, isRunning));
 }
 
 /**
@@ -176,5 +215,6 @@ export function destroyTray(): void {
   if (tray) {
     tray.destroy();
     tray = null;
+    mainWindowRef = null;
   }
 }
