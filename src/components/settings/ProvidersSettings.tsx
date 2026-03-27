@@ -1353,7 +1353,9 @@ function AddProviderDialog({
         const store = useProviderStore.getState();
         await store.refreshProviderSnapshot();
 
-        if (accountId) {
+        // In Settings, adding another OAuth account should not unexpectedly
+        // replace the user's current default provider.
+        if (!store.defaultAccountId && accountId) {
           await store.setDefaultAccount(accountId);
         }
       } catch (err) {
