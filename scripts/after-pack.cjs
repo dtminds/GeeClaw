@@ -163,11 +163,17 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
   }
 
   // 2. Unscoped packages (e.g. sqlite-vec-darwin-arm64)
-  for (const { pattern } of UNSCOPED_NATIVE_PACKAGES) {
-    let entries;
-    try { entries = readdirSync(nodeModulesDir); } catch { continue; }
+  let unscopedEntries;
+  try {
+    unscopedEntries = readdirSync(nodeModulesDir);
+  } catch {
+    unscopedEntries = [];
+  }
 
-    for (const entry of entries) {
+  for (const entry of unscopedEntries) {
+    for (const { prefix, pattern } of UNSCOPED_NATIVE_PACKAGES) {
+      if (prefix && !entry.startsWith(prefix)) continue;
+
       const match = entry.match(pattern);
       if (!match) continue;
 
@@ -184,6 +190,8 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
           removed++;
         } catch { /* */ }
       }
+
+      break;
     }
   }
 
