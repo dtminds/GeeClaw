@@ -558,6 +558,20 @@ function getVisibleSlashItems(
   return rankSlashPickerItemsForQuery(scopedItems, slashQuery?.query ?? '', tChat);
 }
 
+function scrollElementIntoScrollableView(container: HTMLElement, element: HTMLElement) {
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+
+  if (elementRect.top < containerRect.top) {
+    container.scrollTop -= containerRect.top - elementRect.top;
+    return;
+  }
+
+  if (elementRect.bottom > containerRect.bottom) {
+    container.scrollTop += elementRect.bottom - containerRect.bottom;
+  }
+}
+
 function SkillTokenView(props: { node: { attrs: { label?: string | null; slug?: string | null; id?: string | null } } }) {
   const label = props.node.attrs.label || props.node.attrs.slug || props.node.attrs.id || 'Skill';
 
@@ -663,6 +677,8 @@ export const ChatInput = memo(function ChatInput({
   const highlightedSkillIndexRef = useRef(0);
   const handleSendRef = useRef<() => void>(() => {});
   const handleSlashItemSelectRef = useRef<(item: SlashPickerItem, queryOverride?: SlashSkillQuery | null) => void>(() => {});
+  const skillPickerListRef = useRef<HTMLDivElement | null>(null);
+  const skillPickerItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const agents = useAgentsStore((s) => s.agents);
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const skills = useSkillsStore((s) => s.skills);
@@ -1095,6 +1111,22 @@ export const ChatInput = memo(function ChatInput({
   }, [filteredSlashItems.length, highlightedSkillIndex, setHighlightedSkillIndexState]);
 
   useEffect(() => {
+    if (!skillPickerVisible || filteredSlashItems.length === 0) {
+      return;
+    }
+
+    const container = skillPickerListRef.current;
+    const boundedHighlightedIndex = Math.min(highlightedSkillIndex, filteredSlashItems.length - 1);
+    const selectedItem = skillPickerItemRefs.current[boundedHighlightedIndex];
+
+    if (!container || !selectedItem) {
+      return;
+    }
+
+    scrollElementIntoScrollableView(container, selectedItem);
+  }, [filteredSlashItems.length, highlightedSkillIndex, skillPickerVisible]);
+
+  useEffect(() => {
     if (activeSkillRecommendation) {
       return;
     }
@@ -1462,13 +1494,16 @@ export const ChatInput = memo(function ChatInput({
                     </span>
                   </div>
                 </div>
-                <div className="mt-1 max-h-50 overflow-y-auto pr-2">
+                <div ref={skillPickerListRef} className="mt-1 max-h-50 overflow-y-auto pr-2">
                   {filteredSlashItems.length > 0 ? (
                     filteredSlashItems.map((item, index) => (
                       <SkillPickerItem
                         key={isSlashCommandItem(item) ? `command-${item.id}` : item.id}
                         item={item}
                         selected={index === highlightedSkillIndex}
+                        itemRef={(node) => {
+                          skillPickerItemRefs.current[index] = node;
+                        }}
                         onSelect={() => handleSlashItemSelect(item)}
                       />
                     ))
@@ -1827,10 +1862,12 @@ function AgentPickerItem({
 function SkillPickerItem({
   item,
   selected,
+  itemRef,
   onSelect,
 }: {
   item: SlashPickerItem;
   selected: boolean;
+  itemRef?: (node: HTMLButtonElement | null) => void;
   onSelect: () => void;
 }) {
   const { t } = useTranslation('skills');
@@ -1859,6 +1896,7 @@ function SkillPickerItem({
 
   return (
     <button
+      ref={itemRef}
       type="button"
       onMouseDown={(event) => event.preventDefault()}
       onClick={onSelect}
