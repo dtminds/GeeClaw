@@ -9,6 +9,8 @@ const RECOGNIZED_MANAGED_FILES = new Set([
   'SOUL.md',
   'MEMORY.md',
 ]);
+const RECOGNIZED_LOCKED_FIELDS = new Set(['id', 'workspace', 'persona']);
+const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export type AgentSkillScope =
   | { mode: 'default'; skills?: never }
@@ -38,8 +40,31 @@ export interface AgentPresetPackage {
   files: Record<string, string>;
 }
 
+function requireNonEmptyString(value: unknown, field: string, presetId?: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    if (presetId) {
+      throw new Error(`Preset "${presetId}" ${field} is required`);
+    }
+    throw new Error(`Preset ${field} is required`);
+  }
+  return value.trim();
+}
+
+function validatePresetAgentId(agentId: string): string {
+  if (!AGENT_ID_PATTERN.test(agentId)) {
+    throw new Error('Invalid Agent ID. Use lowercase letters, numbers, and hyphens only.');
+  }
+  if (agentId === 'main') {
+    throw new Error('Agent ID "main" is reserved.');
+  }
+  return agentId;
+}
+
 function normalizeSpecifiedSkills(skills: unknown): string[] {
   const list = Array.isArray(skills) ? skills : [];
+  if (list.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new Error('Preset specified skill scope must contain only non-empty string skills');
+  }
   const normalized = list
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim())
@@ -55,25 +80,82 @@ function normalizeSpecifiedSkills(skills: unknown): string[] {
   return normalized;
 }
 
-function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
-  if (!meta?.presetId?.trim()) {
-    throw new Error('Preset presetId is required');
-  }
-  if (!meta?.agent?.id?.trim()) {
-    throw new Error(`Preset "${meta.presetId}" agent.id is required`);
+function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillScope {
+  if (!skillScope || typeof skillScope !== 'object' || Array.isArray(skillScope)) {
+    throw new Error(`Preset "${presetId}" agent.skillScope is required`);
   }
 
-  if (meta.agent.skillScope?.mode === 'specified') {
-    const skills = normalizeSpecifiedSkills(meta.agent.skillScope.skills);
+  const scope = skillScope as { mode?: unknown; skills?: unknown };
+  if (scope.mode === 'default') {
+    return { mode: 'default' };
+  }
+  if (scope.mode === 'specified') {
+    const skills = normalizeSpecifiedSkills(scope.skills);
     if (skills.length === 0) {
-      throw new Error(`Preset "${meta.presetId}" specified skill scope must contain at least 1 skill`);
+      throw new Error(`Preset "${presetId}" specified skill scope must contain at least 1 skill`);
     }
-    meta.agent.skillScope = { mode: 'specified', skills };
-  } else {
-    meta.agent.skillScope = { mode: 'default' };
+    return { mode: 'specified', skills };
   }
 
-  return meta;
+  throw new Error(`Preset "${presetId}" has unsupported skill scope mode`);
+}
+
+function normalizeManagedPolicy(
+  presetId: string,
+  managedPolicy: unknown,
+): AgentPresetMeta['managedPolicy'] | undefined {
+  if (managedPolicy == null) {
+    return undefined;
+  }
+  if (typeof managedPolicy !== 'object' || Array.isArray(managedPolicy)) {
+    throw new Error(`Preset "${presetId}" managedPolicy is invalid`);
+  }
+
+  const policy = managedPolicy as AgentPresetMeta['managedPolicy'];
+  if (policy.lockedFields !== undefined) {
+    if (
+      !Array.isArray(policy.lockedFields)
+      || policy.lockedFields.some((field) => !RECOGNIZED_LOCKED_FIELDS.has(field))
+    ) {
+      throw new Error(`Preset "${presetId}" managedPolicy.lockedFields is invalid`);
+    }
+  }
+  if (policy.canUnmanage !== undefined && typeof policy.canUnmanage !== 'boolean') {
+    throw new Error(`Preset "${presetId}" managedPolicy.canUnmanage is invalid`);
+  }
+
+  return {
+    lockedFields: policy.lockedFields ? [...policy.lockedFields] : undefined,
+    canUnmanage: policy.canUnmanage,
+  };
+}
+
+function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
+  const presetId = requireNonEmptyString(meta?.presetId, 'presetId');
+  const agentId = validatePresetAgentId(
+    requireNonEmptyString(meta?.agent?.id, 'agent.id', presetId),
+  );
+  const workspace = requireNonEmptyString(meta?.agent?.workspace, 'agent.workspace', presetId);
+
+  if (meta?.managed !== true) {
+    throw new Error(`Preset "${presetId}" managed must be true`);
+  }
+
+  return {
+    presetId,
+    name: requireNonEmptyString(meta?.name, 'name', presetId),
+    description: requireNonEmptyString(meta?.description, 'description', presetId),
+    iconKey: requireNonEmptyString(meta?.iconKey, 'iconKey', presetId),
+    category: requireNonEmptyString(meta?.category, 'category', presetId),
+    managed: true,
+    agent: {
+      id: agentId,
+      workspace,
+      model: meta?.agent?.model,
+      skillScope: normalizeSkillScope(presetId, meta?.agent?.skillScope),
+    },
+    managedPolicy: normalizeManagedPolicy(presetId, meta?.managedPolicy),
+  };
 }
 
 async function readPresetFiles(presetDir: string): Promise<Record<string, string>> {
