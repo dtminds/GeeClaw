@@ -93,7 +93,7 @@ function buildContextMenu(translations: TrayTranslations, gatewayRunning: boolea
           click: () => {
             revealMainWindow();
             if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
-            mainWindowRef.webContents.send('navigate', '/');
+            mainWindowRef.webContents.send('navigate', '/chat');
           },
         },
         {
