@@ -255,24 +255,28 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
 
 async function readPresetFiles(presetId: string, presetDir: string): Promise<Record<string, string>> {
   const filesDir = join(presetDir, 'files');
-  let entries: string[] = [];
   try {
-    entries = await readdir(filesDir);
+    const entries = await readdir(filesDir);
+    const files: Record<string, string> = {};
+    for (const entry of entries) {
+      if (!RECOGNIZED_MANAGED_FILES.has(entry)) {
+        throw new Error(`Unsupported preset managed file "${entry}"`);
+      }
+      files[entry] = await readFile(join(filesDir, entry), 'utf8');
+    }
+    return files;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    const fsError = error as NodeJS.ErrnoException;
+    if (fsError.code === 'ENOENT') {
       return {};
     }
-    throw new Error(`Preset "${presetId}" managed files directory is invalid`);
-  }
-
-  const files: Record<string, string> = {};
-  for (const entry of entries) {
-    if (!RECOGNIZED_MANAGED_FILES.has(entry)) {
-      throw new Error(`Unsupported preset managed file "${entry}"`);
+    if (fsError.code) {
+      throw new Error(`Preset "${presetId}" managed files directory is invalid`, {
+        cause: error,
+      });
     }
-    files[entry] = await readFile(join(filesDir, entry), 'utf8');
+    throw error;
   }
-  return files;
 }
 
 export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
