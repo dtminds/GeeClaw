@@ -199,18 +199,41 @@ describe('managed agent config domain', () => {
     });
   });
 
-  it('blocks persona writes while the preset agent remains managed', async () => {
+  it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
     const { agentConfig } = await setupManagedPresetFixture();
     await agentConfig.installPresetAgent('stock-expert');
 
     await expect(agentConfig.updateAgentPersona('stockexpert', {
+      identity: '# updated identity\n',
+    })).rejects.toThrow('cannot edit locked persona files: identity');
+
+    await expect(agentConfig.updateAgentPersona('stockexpert', {
+      master: '# updated user\n',
+      memory: '# updated memory\n',
       soul: '# updated tone\n',
-    })).rejects.toThrow('cannot edit persona files until they are unmanaged');
+    })).resolves.toMatchObject({
+      editable: true,
+      lockedFiles: ['identity'],
+      files: {
+        master: {
+          exists: true,
+          content: '# updated user\n',
+        },
+        memory: {
+          exists: true,
+          content: '# updated memory\n',
+        },
+        soul: {
+          exists: true,
+          content: '# updated tone\n',
+        },
+      },
+    });
 
     const snapshot = await agentConfig.getAgentPersona('stockexpert');
     expect(snapshot).toMatchObject({
-      editable: false,
-      lockedFiles: ['identity', 'master', 'soul', 'memory'],
+      editable: true,
+      lockedFiles: ['identity'],
     });
   });
 

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Check, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { AlertCircle, Bot, Check, ChevronDown, Package2, Plus, RefreshCw, Search, Settings2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import { useGatewayStore } from '@/stores/gateway';
 import { useSkillsStore } from '@/stores/skills';
 import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } from '@/types/channel';
 import type { AgentSummary } from '@/types/agent';
+import type { Skill } from '@/types/skill';
 import { cn } from '@/lib/utils';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
@@ -353,6 +355,76 @@ function AgentCard({
 const inputClasses = 'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40';
 const labelClasses = 'text-[14px] text-foreground/80 font-bold';
 
+function normalizeSkillSearch(value: string): string {
+  return value
+    .normalize('NFKD')
+    .trim()
+    .toLowerCase();
+}
+
+function getSkillDescription(skill: Skill): string {
+  const description = skill.description?.trim();
+  if (description) {
+    return description;
+  }
+
+  return `/${skill.slug || skill.id}`;
+}
+
+function SkillScopeOption({
+  skill,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  skill: Skill;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation('skills');
+  const source = (skill.source || '').trim().toLowerCase();
+  const sourceLabel = skill.isCore
+    ? t('detail.coreSystem', { defaultValue: 'Core System' })
+    : skill.isBundled
+      ? t('source.badge.bundled', { defaultValue: 'Bundled' })
+      : source === 'agents-skills-personal'
+        ? t('source.badge.agentsPersonal', { defaultValue: 'Personal .agents' })
+        : source === 'agents-skills-project'
+          ? t('source.badge.agentsProject', { defaultValue: 'Project .agents' })
+          : source === 'openclaw-extra'
+            ? t('source.badge.extra', { defaultValue: 'Extra dirs' })
+            : source === 'openclaw-managed'
+              ? t('source.badge.managed', { defaultValue: 'Managed' })
+              : source === 'workspace'
+                ? t('source.badge.workspace', { defaultValue: 'Workspace' })
+                : t('source.badge.unknown', { defaultValue: 'Skill' });
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors',
+        selected ? 'surface-muted text-foreground' : 'surface-hover',
+        disabled && !selected && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <span className="flex h-6 w-4 shrink-0 items-center justify-center text-muted-foreground">
+        {selected ? <Check className="h-3.5 w-3.5 text-foreground" /> : <Package2 className="h-3.5 w-3.5" />}
+      </span>
+      <span className="min-w-0 flex flex-1 items-baseline gap-2 overflow-hidden">
+        <span className="shrink-0 truncate text-[13px] font-medium text-foreground">{skill.name}</span>
+        <span className="truncate text-[11px] text-muted-foreground">{getSkillDescription(skill)}</span>
+      </span>
+      <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
+        {sourceLabel}
+      </span>
+    </button>
+  );
+}
+
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
     case 'telegram':
@@ -492,11 +564,15 @@ function AgentSettingsModal({
   const [savingName, setSavingName] = useState(false);
   const [savingSkills, setSavingSkills] = useState(false);
   const [unmanaging, setUnmanaging] = useState(false);
+  const [unmanageConfirmStep, setUnmanageConfirmStep] = useState<'warning' | 'final' | null>(null);
   const [channelToRemove, setChannelToRemove] = useState<{ channelType: ChannelType; accountId: string } | null>(null);
   const [skillScopeMode, setSkillScopeMode] = useState<'default' | 'specified'>(agent.skillScope.mode);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(
     agent.skillScope.mode === 'specified' ? agent.skillScope.skills : [],
   );
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
+  const skillSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setName(agent.name);
@@ -511,6 +587,18 @@ function AgentSettingsModal({
     setSelectedSkills(agent.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
   }, [agent.skillScope]);
 
+  useEffect(() => {
+    if (!skillPickerOpen) {
+      setSkillSearch('');
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      skillSearchInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [skillPickerOpen]);
+
   const runtimeChannelsByType = useMemo(
     () => Object.fromEntries(channels.map((channel) => [channel.type, channel])),
     [channels],
@@ -520,6 +608,27 @@ function AgentSettingsModal({
     () => skills.filter((skill) => skill.eligible !== false && skill.hidden !== true),
     [skills],
   );
+  const availableSkillsById = useMemo(
+    () => new Map(availableSkills.map((skill) => [skill.id, skill])),
+    [availableSkills],
+  );
+  const filteredSkills = useMemo(() => {
+    const normalizedQuery = normalizeSkillSearch(skillSearch);
+    if (!normalizedQuery) {
+      return availableSkills;
+    }
+
+    return availableSkills.filter((skill) => (
+      [
+        skill.name,
+        skill.id,
+        skill.slug || '',
+        getSkillDescription(skill),
+      ]
+        .map((value) => normalizeSkillSearch(value))
+        .some((value) => value.includes(normalizedQuery))
+    ));
+  }, [availableSkills, skillSearch]);
 
   const handleSaveName = async () => {
     if (!name.trim() || name.trim() === agent.name) return;
@@ -549,6 +658,16 @@ function AgentSettingsModal({
     });
   };
 
+  const handleSelectSkill = (skillId: string) => {
+    if (selectedSkills.includes(skillId) || selectedSkills.length >= 6) {
+      return;
+    }
+
+    toggleSkill(skillId);
+    setSkillPickerOpen(false);
+    setSkillSearch('');
+  };
+
   const handleSaveSkills = async () => {
     if (skillScopeMode === 'specified' && selectedSkills.length === 0) {
       return;
@@ -573,12 +692,22 @@ function AgentSettingsModal({
     setUnmanaging(true);
     try {
       await unmanageAgent(agent.id);
+      setUnmanageConfirmStep(null);
       toast.success(t('toast.agentUnmanaged'));
     } catch (error) {
       toast.error(t('toast.agentUnmanageFailed', { error: String(error) }));
     } finally {
       setUnmanaging(false);
     }
+  };
+
+  const handleUnmanageConfirm = () => {
+    if (unmanageConfirmStep === 'warning') {
+      setUnmanageConfirmStep('final');
+      return;
+    }
+
+    void handleUnmanage();
   };
 
   const assignedChannels = agent.channelAccounts.map(({ channelType, accountId }) => {
@@ -755,46 +884,99 @@ function AgentSettingsModal({
 
                 <div className="flex flex-wrap gap-2">
                   {selectedSkills.map((skillId) => {
+                    const skill = availableSkillsById.get(skillId);
                     const locked = agent.managed && presetSkillSet.has(skillId);
+                    const label = skill?.name || skillId;
                     return (
                       <button
                         key={skillId}
                         type="button"
                         onClick={() => toggleSkill(skillId)}
                         disabled={locked}
+                        title={locked ? t('settingsDialog.skillScope.preset', 'Preset') : undefined}
                         className={cn(
-                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
                           locked
                             ? 'bg-primary/10 text-primary'
                             : 'bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08] dark:bg-white/[0.08]',
                         )}
                       >
-                        {skillId}
-                        {locked ? ` · ${t('settingsDialog.skillScope.preset', 'Preset')}` : ''}
+                        <span>{label}</span>
+                        {locked ? (
+                          <span className="text-[10px] uppercase tracking-[0.08em] text-primary/80">
+                            {t('settingsDialog.skillScope.preset', 'Preset')}
+                          </span>
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-2">
-                  {availableSkills.map((skill) => {
-                    const selected = selectedSkills.includes(skill.id);
-                    const locked = agent.managed && presetSkillSet.has(skill.id);
-                    return (
-                      <Button
-                        key={skill.id}
-                        type="button"
-                        variant={selected ? 'default' : 'outline'}
-                        disabled={(!selected && selectedSkills.length >= 6) || locked}
-                        onClick={() => toggleSkill(skill.id)}
-                        className="justify-start rounded-2xl px-4 py-3 text-left text-[13px]"
-                      >
-                        {skill.id}
-                        {locked ? ` · ${t('settingsDialog.skillScope.preset', 'Preset')}` : ''}
-                      </Button>
-                    );
-                  })}
-                </div>
+                <Popover.Root open={skillPickerOpen} onOpenChange={setSkillPickerOpen}>
+                  <Popover.Trigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="modal-field-surface surface-hover h-11 w-full justify-between rounded-2xl px-4 text-[13px] font-medium text-foreground shadow-none"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-left">
+                        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">
+                          {t('settingsDialog.skillScope.addSkill', 'Add skill')}
+                        </span>
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      align="start"
+                      side="bottom"
+                      sideOffset={8}
+                      className="z-50 w-[min(32rem,calc(100vw-5rem))] overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card"
+                    >
+                      <div className="relative px-1 pb-2">
+                        <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          ref={skillSearchInputRef}
+                          value={skillSearch}
+                          onChange={(event) => setSkillSearch(event.target.value)}
+                          aria-label={t('settingsDialog.skillScope.search', 'Search skills')}
+                          placeholder={t('settingsDialog.skillScope.searchPlaceholder', 'Search by name, slug, or description')}
+                          className="modal-field-surface h-10 rounded-xl border-0 pl-9 pr-3 text-[13px] shadow-none"
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto pr-1">
+                        {filteredSkills.length > 0 ? (
+                          filteredSkills.map((skill) => {
+                            const selected = selectedSkills.includes(skill.id);
+                            return (
+                              <SkillScopeOption
+                                key={skill.id}
+                                skill={skill}
+                                selected={selected}
+                                disabled={!selected && selectedSkills.length >= 6}
+                                onSelect={() => handleSelectSkill(skill.id)}
+                              />
+                            );
+                          })
+                        ) : (
+                          <div className="px-3 py-5 text-center text-[12px] text-muted-foreground">
+                            {t('settingsDialog.skillScope.empty', 'No matching skills')}
+                          </div>
+                        )}
+                      </div>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+
+                <p className="text-xs text-muted-foreground">
+                  {selectedSkills.length >= 6
+                    ? t('settingsDialog.skillScope.maxReached', 'Skill limit reached')
+                    : t('settingsDialog.skillScope.searchPlaceholder', 'Search by name, slug, or description')}
+                </p>
               </div>
             )}
 
@@ -820,7 +1002,7 @@ function AgentSettingsModal({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void handleUnmanage()}
+                onClick={() => setUnmanageConfirmStep('warning')}
                 disabled={!agent.canUnmanage || unmanaging}
                 className="rounded-full px-4"
               >
@@ -831,6 +1013,23 @@ function AgentSettingsModal({
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={unmanageConfirmStep !== null}
+        title={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondTitle', 'Confirm unmanage')
+          : t('settingsDialog.unmanageConfirm.firstTitle', 'Remove managed restrictions?')}
+        message={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondMessage', 'This action cannot be automatically restored. The current preset files stay as-is, but future edits will no longer be protected.')
+          : t('settingsDialog.unmanageConfirm.firstMessage', 'This will unlock preset persona files and allow preset skills to be removed.')}
+        confirmLabel={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondConfirm', 'Unmanage now')
+          : t('settingsDialog.unmanageConfirm.firstConfirm', 'Continue')}
+        cancelLabel={t('common:actions.cancel')}
+        variant="destructive"
+        onConfirm={handleUnmanageConfirm}
+        onCancel={() => setUnmanageConfirmStep(null)}
+      />
 
       <ConfirmDialog
         open={!!channelToRemove}

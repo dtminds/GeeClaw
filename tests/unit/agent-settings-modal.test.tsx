@@ -31,11 +31,22 @@ const translations: Record<string, string> = {
   'settingsDialog.skillScope.default': 'Default',
   'settingsDialog.skillScope.specified': 'Specified',
   'settingsDialog.skillScope.selected': 'Selected skills',
+  'settingsDialog.skillScope.search': 'Search skills',
+  'settingsDialog.skillScope.searchPlaceholder': 'Search by name, slug, or description',
+  'settingsDialog.skillScope.addSkill': 'Add skill',
+  'settingsDialog.skillScope.empty': 'No matching skills',
+  'settingsDialog.skillScope.maxReached': 'Skill limit reached',
   'settingsDialog.skillScope.preset': 'Preset',
   'settingsDialog.skillScope.save': 'Save Skills',
   'settingsDialog.unmanageTitle': 'Managed preset',
   'settingsDialog.unmanageDescription': 'Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.',
   'settingsDialog.unmanage': 'Unmanage',
+  'settingsDialog.unmanageConfirm.firstTitle': 'Remove managed restrictions?',
+  'settingsDialog.unmanageConfirm.firstMessage': 'This will unlock preset persona files and allow preset skills to be removed.',
+  'settingsDialog.unmanageConfirm.firstConfirm': 'Continue',
+  'settingsDialog.unmanageConfirm.secondTitle': 'Confirm unmanage',
+  'settingsDialog.unmanageConfirm.secondMessage': 'This action cannot be automatically restored. The current preset files stay as-is, but future edits will no longer be protected.',
+  'settingsDialog.unmanageConfirm.secondConfirm': 'Unmanage now',
   'toast.agentUpdated': 'Agent updated',
   'toast.agentUpdateFailed': 'Failed to update agent',
   'empty': 'No agents',
@@ -114,9 +125,9 @@ vi.mock('@/stores/skills', () => ({
   useSkillsStore: (selector?: (state: unknown) => unknown) => {
     const state = {
       skills: [
-        { id: 'stock-analyzer', name: 'stock-analyzer', description: '', enabled: true, eligible: true },
-        { id: 'web-search', name: 'web-search', description: '', enabled: true, eligible: true },
-        { id: 'calendar', name: 'calendar', description: '', enabled: true, eligible: true },
+        { id: 'stock-analyzer', name: 'Stock Analyzer', description: 'Analyze market data and filings', enabled: true, eligible: true, isBundled: true },
+        { id: 'web-search', name: 'Web Search', description: 'Search the web for current information', enabled: true, eligible: true, source: 'openclaw-managed' },
+        { id: 'calendar', name: 'Calendar Assistant', description: 'Manage calendars and schedules', enabled: true, eligible: true, source: 'agents-skills-project' },
       ],
       fetchSkills: fetchSkillsMock,
     };
@@ -137,10 +148,16 @@ describe('managed agent settings modal', () => {
     const defaultOption = screen.getByRole('button', { name: 'Default' });
     expect(defaultOption).toBeDisabled();
 
-    const presetSkillButtons = screen.getAllByRole('button', { name: /stock-analyzer/ });
-    expect(presetSkillButtons.some((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getByText('Stock Analyzer')).toBeInTheDocument();
+    expect(screen.getByText('Web Search')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'calendar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search skills' }), {
+      target: { value: 'calendar' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Calendar Assistant/ }));
+
+    expect(screen.getByText('Calendar Assistant')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save Skills' }));
 
     await waitFor(() => expect(updateAgentSettingsMock).toHaveBeenCalledWith('stockexpert', {
@@ -151,6 +168,14 @@ describe('managed agent settings modal', () => {
     }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Unmanage' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Remove managed restrictions?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(unmanageAgentMock).not.toHaveBeenCalled();
+    expect(await screen.findByText('Confirm unmanage')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmanage now' }));
     await waitFor(() => expect(unmanageAgentMock).toHaveBeenCalledWith('stockexpert'));
   });
 });

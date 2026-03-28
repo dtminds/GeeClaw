@@ -108,7 +108,7 @@ When you install a preset agent:
 - GeeClaw keeps local-only management metadata such as locked fields, managed files, preset ownership, and unmanage policy in the app store instead of leaking it into `openclaw.json`.
 - Skill scope can be either `default` or `specified`. `specified` mode must contain 1 to 6 skills.
 - Managed preset agents may add extra skills, but they cannot remove preset-defined skills until they are unmanaged.
-- If the preset locks persona files, the Persona drawer becomes read-only and shows the managed warning returned by the backend snapshot.
+- If the preset locks persona files, the backend snapshot controls per-file editing. The current managed preset policy keeps `IDENTITY.md` locked while `USER.md`, `MEMORY.md`, and `SOUL.md` stay editable, and the Persona drawer shows the managed warning returned by the backend snapshot.
 
 If you choose **Unmanage**, GeeClaw keeps the current workspace and config, but removes preset enforcement for persona files and preset skill floors. After that, the agent behaves like a normal custom agent.
 

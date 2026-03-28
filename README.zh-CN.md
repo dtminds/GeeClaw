@@ -105,7 +105,7 @@ GeeClaw 现在内置了一个智能体广场，底层由 `resources/agent-preset
 - GeeClaw 会把 preset 归属、锁定字段、受管控文件、是否允许解除管控等本地管理信息保存在应用 store 中，而不会把这些字段泄漏回 `openclaw.json`。
 - 技能范围可以是 `default` 或 `specified`。其中 `specified` 模式必须包含 1 到 6 个技能。
 - 受管控 preset agent 可以继续添加额外技能，但在解除管控前不能删除 preset 自带的技能。
-- 如果 preset 锁定了 persona 文件，那么 Persona 抽屉会切换为只读，并显示后端返回的受管控提示。
+- 如果 preset 锁定了 persona 文件，后端快照会按文件粒度控制可编辑性。当前受管控策略会锁定 `IDENTITY.md`，同时允许继续编辑 `USER.md`、`MEMORY.md` 和 `SOUL.md`，Persona 抽屉也会显示后端返回的受管控提示。
 
 点击 **解除管控** 后，GeeClaw 会保留当前工作区和配置，但移除 persona 文件和 preset 技能下限的强制规则。此后该 agent 会按普通自定义 agent 的方式继续工作。
 

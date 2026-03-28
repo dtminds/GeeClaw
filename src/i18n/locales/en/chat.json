@@ -56,6 +56,10 @@
                 "soul": "The agent reads this file to shape its persona and response style",
                 "memory": "The agent reads and writes memory here"
             },
+            "lockedManaged": {
+                "identity": "Managed agents do not support editing this file.",
+                "default": "This file is locked for managed agents."
+            },
             "placeholders": {
                 "identity": "[Agent Identity]\nName: Nova\nRole: Your always-on intelligent life assistant\nTraits: steady, clear, reliable, action-oriented",
                 "master": "[User Profile]\nPreferred name: Captain\nProfile: I am a frontend engineer who loves iced americanos and is trying indie hacking lately.",

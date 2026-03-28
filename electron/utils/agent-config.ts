@@ -85,6 +85,8 @@ interface AgentConfigDocument extends Record<string, unknown> {
 
 type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
+const LOCKED_MANAGED_PERSONA_FILES: PersonaFieldKey[] = ['identity'];
+const LOCKED_MANAGED_PERSONA_FILE_SET = new Set<PersonaFieldKey>(LOCKED_MANAGED_PERSONA_FILES);
 
 export type AgentSkillScope =
   | { mode: 'default'; skills?: never }
@@ -826,14 +828,15 @@ async function buildAgentPersonaSnapshot(
   const management = await readAgentManagementMap();
   const managedMetadata = management[agentId];
   const personaLocked = managedMetadata?.managed && managedMetadata.lockedFields.includes('persona');
+  const lockedFiles = personaLocked ? LOCKED_MANAGED_PERSONA_FILES : [];
 
   return {
     agentId: entry.id,
     workspace,
-    editable: !personaLocked,
-    lockedFiles: personaLocked ? ['identity', 'master', 'soul', 'memory'] : [],
+    editable: lockedFiles.length < Object.keys(PERSONA_FILE_MAP).length,
+    lockedFiles,
     message: personaLocked
-      ? 'Managed preset agents cannot edit persona files until they are unmanaged'
+      ? 'Managed preset agents can edit USER.md, MEMORY.md, and SOUL.md while IDENTITY.md stays locked'
       : undefined,
     files: {
       identity: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.identity),
@@ -870,7 +873,11 @@ export async function updateAgentPersona(
   const management = await readAgentManagementMap();
   const managed = management[agentId];
   if (managed?.managed && managed.lockedFields.includes('persona')) {
-    throw new Error('Managed preset agents cannot edit persona files until they are unmanaged');
+    const lockedKeys = (Object.keys(updates) as Array<keyof typeof PERSONA_FILE_MAP>)
+      .filter((key) => typeof updates[key] === 'string' && LOCKED_MANAGED_PERSONA_FILE_SET.has(key));
+    if (lockedKeys.length > 0) {
+      throw new Error(`Managed preset agents cannot edit locked persona files: ${lockedKeys.join(', ')}`);
+    }
   }
   const entry = getAgentEntryById(config, agentId);
   const workspace = getWorkspacePathForEntry(config, entry);

@@ -46,12 +46,25 @@
             "default": "Default",
             "specified": "Specified",
             "selected": "Selected skills",
+            "search": "Search skills",
+            "searchPlaceholder": "Search by name, slug, or description",
+            "addSkill": "Add skill",
+            "empty": "No matching skills",
+            "maxReached": "Skill limit reached",
             "preset": "Preset",
             "save": "Save Skills"
         },
         "unmanageTitle": "Managed preset",
         "unmanageDescription": "Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.",
-        "unmanage": "Unmanage"
+        "unmanage": "Unmanage",
+        "unmanageConfirm": {
+            "firstTitle": "Remove managed restrictions?",
+            "firstMessage": "This will unlock preset persona files and allow preset skills to be removed.",
+            "firstConfirm": "Continue",
+            "secondTitle": "Confirm unmanage",
+            "secondMessage": "This action cannot be automatically restored. The current preset files stay as-is, but future edits will no longer be protected.",
+            "secondConfirm": "Unmanage now"
+        }
     },
     "tabs": {
         "agents": "My Agents",

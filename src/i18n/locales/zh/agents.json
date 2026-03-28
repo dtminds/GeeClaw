@@ -46,12 +46,25 @@
             "default": "默认",
             "specified": "指定",
             "selected": "已选技能",
+            "search": "搜索技能",
+            "searchPlaceholder": "按名称、slug 或描述搜索",
+            "addSkill": "添加技能",
+            "empty": "没有匹配的技能",
+            "maxReached": "已达到技能上限",
             "preset": "预置",
             "save": "保存技能"
         },
         "unmanageTitle": "受管控预设",
         "unmanageDescription": "解除管控后会保留当前配置，但人物设定文件和预置技能限制将不再受控。",
-        "unmanage": "解除管控"
+        "unmanage": "解除管控",
+        "unmanageConfirm": {
+            "firstTitle": "确认解除受管控限制？",
+            "firstMessage": "这会解锁预置的人设文件，并允许移除预置技能。",
+            "firstConfirm": "继续",
+            "secondTitle": "再次确认解除管控",
+            "secondMessage": "这个操作无法自动恢复。当前预置文件会保留，但后续编辑将不再受到保护。",
+            "secondConfirm": "立即解除管控"
+        }
     },
     "tabs": {
         "agents": "我的 Agents",

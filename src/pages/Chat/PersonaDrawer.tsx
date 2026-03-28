@@ -200,6 +200,17 @@ export function PersonaDrawer({
     [snapshot?.lockedFiles],
   );
   const soulLocked = lockedFileSet.has('soul');
+  const activeTabLockedMessage = useMemo(() => {
+    if (!lockedFileSet.has(activeTab)) {
+      return null;
+    }
+
+    if (activeTab === 'identity') {
+      return t('toolbar.persona.lockedManaged.identity');
+    }
+
+    return t('toolbar.persona.lockedManaged.default');
+  }, [activeTab, lockedFileSet, t]);
 
   const applyPersonaResponse = useCallback((response: PersonaResponse) => {
     const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
@@ -512,9 +523,9 @@ export function PersonaDrawer({
             </div>
           ) : snapshot ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              {snapshot.message && (
+              {activeTabLockedMessage && (
                 <div className="modal-section-surface mb-2 rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
-                  {snapshot.message}
+                  {activeTabLockedMessage}
                 </div>
               )}
               <section className="flex min-h-0 flex-1 flex-col gap-2">
