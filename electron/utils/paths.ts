@@ -84,6 +84,13 @@ export function getResourcesDir(): string {
 }
 
 /**
+ * Get agent presets directory inside resources.
+ */
+export function getAgentPresetsDir(): string {
+  return join(getResourcesDir(), 'agent-presets');
+}
+
+/**
  * Get preload script path
  */
 export function getPreloadPath(): string {

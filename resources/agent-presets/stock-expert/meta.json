@@ -1,0 +1,25 @@
+{
+  "presetId": "stock-expert",
+  "name": "股票助手",
+  "description": "追踪个股、财报和公告，并优先调用预置股票技能。",
+  "iconKey": "stock",
+  "category": "finance",
+  "managed": true,
+  "agent": {
+    "id": "stockexpert",
+    "workspace": "~/.openclaw-geeclaw/workspace-stockexpert",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "stock-analyzer",
+        "stock-announcements",
+        "stock-explorer",
+        "web-search"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": ["id", "workspace", "persona"],
+    "canUnmanage": true
+  }
+}
