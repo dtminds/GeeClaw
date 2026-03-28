@@ -17,6 +17,7 @@ vi.mock('@electron/utils/secure-storage', () => ({
 }));
 
 vi.mock('@electron/utils/openclaw-auth', () => ({
+  removeProviderKeyFromOpenClaw: vi.fn(),
   saveOAuthTokenToOpenClaw: vi.fn(),
   saveProviderKeyToOpenClaw: vi.fn(),
 }));
@@ -44,7 +45,7 @@ vi.mock('@electron/utils/provider-registry', () => ({
     }
     return undefined;
   }),
-  getProviderDefaultModel: vi.fn((type: string) => (type === 'openai' ? 'gpt-5.2' : undefined)),
+  getProviderDefaultModel: vi.fn((type: string) => (type === 'openai' ? 'gpt-5.4' : undefined)),
 }));
 
 vi.mock('@electron/utils/logger', () => ({
@@ -60,10 +61,14 @@ import { getProviderAccount } from '@electron/services/providers/provider-store'
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import { syncDefaultProviderToRuntime } from '@electron/services/providers/provider-runtime-sync';
 import { getDefaultAgentModelConfig } from '@electron/utils/agent-config';
-import { saveOAuthTokenToOpenClaw } from '@electron/utils/openclaw-auth';
-import { setOpenClawDefaultModel } from '@electron/utils/openclaw-provider-config';
+import { removeProviderKeyFromOpenClaw, saveOAuthTokenToOpenClaw } from '@electron/utils/openclaw-auth';
+import { removeProviderFromOpenClaw, setOpenClawDefaultModel } from '@electron/utils/openclaw-provider-config';
 import type { ProviderConfig } from '@electron/utils/secure-storage';
 import { getApiKey, getProvider } from '@electron/utils/secure-storage';
+import {
+  syncDeletedProviderApiKeyToRuntime,
+  syncDeletedProviderToRuntime,
+} from '@electron/services/providers/provider-runtime-sync';
 
 function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
   return {
@@ -127,7 +132,49 @@ describe('provider runtime sync for browser OAuth', () => {
     );
     expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
       'openai-codex',
-      'openai-codex/gpt-5.3-codex',
+      'openai-codex/gpt-5.4',
+      ['anthropic/claude-sonnet-4-5'],
+    );
+  });
+
+  it('uses gemini-3-flash-preview as the Google browser OAuth fallback model', async () => {
+    vi.mocked(getProvider).mockResolvedValue({
+      ...makeProvider({
+        id: 'google-account',
+        name: 'Google',
+        type: 'google',
+      }),
+      id: 'google-account',
+      name: 'Google',
+      type: 'google',
+    });
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      id: 'google-account',
+      vendorId: 'google',
+      label: 'Google',
+    }));
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'oauth',
+      accountId: 'google-account',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: 1710000000000,
+      subject: 'google-account-id',
+    });
+
+    await syncDefaultProviderToRuntime('google-account');
+
+    expect(saveOAuthTokenToOpenClaw).toHaveBeenCalledWith(
+      'google-gemini-cli',
+      expect.objectContaining({
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: 1710000000000,
+      }),
+    );
+    expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
+      'google-gemini-cli',
+      'google-gemini-cli/gemini-3-flash-preview',
       ['anthropic/claude-sonnet-4-5'],
     );
   });
@@ -145,5 +192,30 @@ describe('provider runtime sync for browser OAuth', () => {
       'openai-codex/gpt-5.3-codex-mini',
       ['anthropic/claude-sonnet-4-5'],
     );
+  });
+
+  it('removes both runtime and stored keys when deleting a custom provider', async () => {
+    await syncDeletedProviderToRuntime(makeProvider({
+      id: 'moonshot-cn',
+      name: 'Moonshot Custom',
+      type: 'custom',
+      baseUrl: 'https://api.moonshot.cn/v1',
+    }), 'moonshot-cn');
+
+    expect(removeProviderFromOpenClaw).toHaveBeenCalledWith('custom-moonshot');
+    expect(removeProviderFromOpenClaw).toHaveBeenCalledWith('moonshot-cn');
+    expect(removeProviderFromOpenClaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('only clears the api-key auth profile when deleting a provider key', async () => {
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      authMode: 'api_key',
+      isDefault: false,
+    }));
+
+    await syncDeletedProviderApiKeyToRuntime(makeProvider(), 'openai-account');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(removeProviderFromOpenClaw).not.toHaveBeenCalled();
   });
 });

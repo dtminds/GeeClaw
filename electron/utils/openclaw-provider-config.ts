@@ -17,8 +17,7 @@ import {
 } from './provider-keys';
 import {
   discoverOpenClawAgentIds,
-  readOpenClawAuthProfiles,
-  writeOpenClawAuthProfiles,
+  removeProviderProfilesFromOpenClaw,
 } from './openclaw-auth';
 
 function getOAuthPluginId(provider: string): string {
@@ -67,19 +66,7 @@ export async function removeProviderFromOpenClaw(provider: string): Promise<void
   const agentIds = await discoverOpenClawAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of agentIds) {
-    const store = await readOpenClawAuthProfiles(id);
-    const profileId = `${provider}:default`;
-    if (store.profiles[profileId]) {
-      delete store.profiles[profileId];
-      if (store.order?.[provider]) {
-        store.order[provider] = store.order[provider].filter((aid) => aid !== profileId);
-        if (store.order[provider].length === 0) delete store.order[provider];
-      }
-      if (store.lastGood?.[provider] === profileId) delete store.lastGood[provider];
-      await writeOpenClawAuthProfiles(store, id);
-    }
-  }
+  await removeProviderProfilesFromOpenClaw(provider);
 
   for (const id of agentIds) {
     const modelsPath = join(getOpenClawConfigDir(), 'agents', id, 'agent', 'models.json');
@@ -118,6 +105,27 @@ export async function removeProviderFromOpenClaw(provider: string): Promise<void
         delete providers[provider];
         modified = true;
         console.log(`Removed OpenClaw provider config: ${provider}`);
+      }
+
+      const auth = (
+        config.auth && typeof config.auth === 'object' && !Array.isArray(config.auth)
+          ? (config.auth as Record<string, unknown>)
+          : null
+      );
+      const authProfiles = (
+        auth?.profiles && typeof auth.profiles === 'object' && !Array.isArray(auth.profiles)
+          ? (auth.profiles as Record<string, { provider?: unknown }>)
+          : null
+      );
+      if (authProfiles) {
+        for (const [profileId, profile] of Object.entries(authProfiles)) {
+          if (profile?.provider !== provider) {
+            continue;
+          }
+          delete authProfiles[profileId];
+          modified = true;
+          console.log(`Removed OpenClaw auth profile: ${profileId}`);
+        }
       }
 
       return { changed: modified, result: undefined };

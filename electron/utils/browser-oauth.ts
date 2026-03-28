@@ -12,9 +12,9 @@ import { normalizeProviderModelList } from '../shared/providers/config-models';
 export type BrowserOAuthProviderType = 'google' | 'openai';
 
 const GOOGLE_RUNTIME_PROVIDER_ID = 'google-gemini-cli';
-const GOOGLE_OAUTH_DEFAULT_MODEL = 'gemini-3-pro-preview';
+const GOOGLE_OAUTH_DEFAULT_MODEL = 'gemini-3-flash-preview';
 const OPENAI_RUNTIME_PROVIDER_ID = 'openai-codex';
-const OPENAI_OAUTH_DEFAULT_MODEL = 'gpt-5.3-codex';
+const OPENAI_OAUTH_DEFAULT_MODEL = 'gpt-5.4';
 
 function normalizeBrowserOAuthModel(
   providerType: BrowserOAuthProviderType,

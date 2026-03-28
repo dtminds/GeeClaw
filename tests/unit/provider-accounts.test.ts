@@ -52,12 +52,12 @@ describe('provider account runtime namespaces', () => {
         id: 'openai-oauth',
         label: 'OpenAI Codex',
         authMode: 'oauth_browser',
-        models: ['gpt-5.3-codex'],
+        models: ['gpt-5.4'],
       }),
       makeAccount({
         id: 'openai-api',
         label: 'OpenAI API',
-        models: ['gpt-5.2'],
+        models: ['gpt-5.4'],
       }),
     ], [], [], null);
 
