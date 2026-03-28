@@ -2,7 +2,7 @@
 
 ## Summary
 
-GeeClaw should ship a built-in agent marketplace that lets users install curated agent presets into the managed OpenClaw profile. Presets must materialize as real entries under `openclaw.json > agents.list`, including preset-defined `id`, `workspace`, and optional per-agent `skills` allowlist.
+GeeClaw should ship a built-in agent marketplace that lets users install curated agent presets into the managed OpenClaw profile. Presets must materialize as real entries under `openclaw.json > agents.list`, including preset-defined `id`, `workspace`, optional per-agent `skills` allowlist, and preset-specific workspace bootstrap files such as `AGENTS.md`, `SOUL.md`, or other locked persona content.
 
 Installed preset agents are "managed" by GeeClaw. Managed status does not mean every field is immutable. Instead, GeeClaw applies targeted product rules:
 
@@ -19,22 +19,24 @@ GeeClaw already supports multi-agent management, per-agent workspaces, and perso
 
 1. install curated preset agents from a built-in marketplace,
 2. persist preset-defined per-agent `skills` allowlists into `openclaw.json`,
-3. distinguish managed preset agents from normal custom agents,
-4. enforce product restrictions consistently across both the agent management page and the chat-side persona editor.
+3. bundle preset-specific workspace files such as `AGENTS.md` and locked persona markdown files,
+4. distinguish managed preset agents from normal custom agents,
+5. enforce product restrictions consistently across both the agent management page and the chat-side persona editor.
 
 Without that layer, "preset agents" would be little more than copy suggestions. Users could accidentally modify critical preset structure immediately after creation, and the app would have no stable way to explain which parts are template-owned versus user-owned.
 
 ## Goals
 
 1. Provide a built-in marketplace tab within the Agents workspace for installing curated preset agents.
-2. Install preset agents using the preset's declared `id`, `workspace`, persona seed, and optional per-agent `skills` allowlist.
+2. Install preset agents using the preset's declared `id`, `workspace`, preset package files, and optional per-agent `skills` allowlist.
 3. Support per-agent skill scope in a product-friendly way:
    - `Default`: do not write an agent `skills` allowlist.
    - `Specified`: write `skills: string[]` with at most 6 skill keys.
 4. Allow both managed and unmanaged agents to edit their skill scope at any time.
 5. Prevent managed agents from removing skills that come from the preset definition.
-6. Allow users to explicitly unmanage a preset agent and turn it into a fully custom agent.
-7. Enforce the same restrictions server-side so UI-only bypasses are not possible.
+6. Allow preset packages to provide locked workspace files, including `AGENTS.md` and persona markdown files.
+7. Allow users to explicitly unmanage a preset agent and turn it into a fully custom agent.
+8. Enforce the same restrictions server-side so UI-only bypasses are not possible.
 
 ## Non-Goals
 
@@ -63,8 +65,10 @@ A preset agent is a curated template bundled with GeeClaw. It defines:
 
 - marketplace metadata for discovery and presentation,
 - the OpenClaw-facing agent configuration to install,
-- initial persona file contents,
+- preset workspace files to seed into the agent workspace,
 - managed policy metadata used by GeeClaw after installation.
+
+The source of truth for a preset should be a directory package rather than a hard-coded TypeScript object. That package can include both metadata and locked workspace files.
 
 ### 2. Managed Agent
 
@@ -75,6 +79,7 @@ Managed status means:
 - the agent remains linked to a `presetId`,
 - some fields are fixed by policy,
 - persona editing is blocked,
+- preset workspace files such as `AGENTS.md` remain template-owned until unmanage,
 - preset-origin skills form a non-removable minimum set,
 - the user may still add extra skills within the v1 limit.
 
@@ -112,7 +117,7 @@ When a user installs a preset:
 1. GeeClaw creates a new agent entry with the preset's `id`.
 2. GeeClaw writes the preset's `workspace`.
 3. GeeClaw writes `skills` only if the preset declares `Specified` skill scope.
-4. GeeClaw provisions the agent filesystem and persona seed files.
+4. GeeClaw copies preset workspace files from the preset package into the agent workspace.
 5. GeeClaw stores local management metadata that links the agent to the preset.
 
 If the preset `id` already exists, installation must fail with a clear, user-friendly conflict.
@@ -124,7 +129,7 @@ For managed agents:
 - display name remains editable.
 - `id` is fixed.
 - `workspace` is fixed.
-- persona files are read-only.
+- preset workspace files are template-owned and read-only while managed.
 - `skills` are editable under policy.
 
 For unmanaged agents:
@@ -244,18 +249,46 @@ For managed agents:
 
 This rule must also be enforced on the API, not just in the UI.
 
+Note: the current UI only edits persona files (`IDENTITY.md`, `USER.md`, `SOUL.md`, `MEMORY.md`). Preset packages may also include `AGENTS.md` and other bootstrap files. Those files should still be seeded and treated as managed even if v1 does not expose a dedicated editor for them.
+
 ## Data Model
 
-### Bundled Preset Definition
+### Bundled Preset Package
 
-Add a shared preset definition module for both Electron and renderer consumption.
+The source of truth for built-in presets should be a directory package under `resources/agent-presets/<presetId>/`.
+
+Recommended layout:
+
+```text
+resources/agent-presets/
+  stock-expert/
+    meta.json
+    files/
+      AGENTS.md
+      IDENTITY.md
+      USER.md
+      SOUL.md
+      MEMORY.md
+```
+
+Rules:
+
+- `meta.json` is required.
+- `files/` is optional.
+- files under `files/` are copied into the installed agent workspace preserving file names.
+- files under `files/` are treated as preset-managed while the agent remains managed.
+- the canonical agent instruction file name is `AGENTS.md`, matching the existing runtime bootstrap behavior. v1 should not introduce a parallel `AGENT.md` naming scheme.
+
+The app may still normalize `meta.json` into an in-memory `AgentPreset` object for renderer and main-process use, but the authoring source should be the filesystem package.
+
+Suggested `meta.json` shape:
 
 ```ts
 type AgentSkillScope =
   | { mode: 'default' }
   | { mode: 'specified'; skills: string[] };
 
-interface AgentPreset {
+interface AgentPresetMeta {
   presetId: string;
   name: string;
   description: string;
@@ -268,14 +301,22 @@ interface AgentPreset {
     model?: string | { primary?: string; fallbacks?: string[] };
     skillScope: AgentSkillScope;
   };
-  personaSeed?: {
-    identity?: string;
-    master?: string;
-    soul?: string;
-    memory?: string;
+  managedPolicy?: {
+    lockedFields: Array<'id' | 'workspace' | 'persona'>;
+    canUnmanage: boolean;
   };
 }
 ```
+
+Recognized v1 preset-managed workspace files:
+
+- `AGENTS.md`
+- `IDENTITY.md`
+- `USER.md`
+- `SOUL.md`
+- `MEMORY.md`
+
+Future versions may extend this to other bootstrap files such as `BOOT.md`, `HEARTBEAT.md`, or `TOOLS.md`.
 
 ### GeeClaw Local Metadata
 
@@ -289,6 +330,7 @@ interface ManagedAgentMetadata {
   managed: boolean;
   lockedFields: Array<'id' | 'workspace' | 'persona'>;
   presetSkills: string[];
+  managedFiles: string[];
   installedAt: string;
   unmanagedAt?: string;
 }
@@ -331,6 +373,12 @@ Examples:
 
 No GeeClaw-only metadata should leak into `openclaw.json`.
 
+### Preset File Seeding
+
+During install, GeeClaw should seed any recognized files found under the preset package's `files/` directory into the target workspace. This seed step should happen before the first runtime sync that depends on those files.
+
+If a target file already exists because of a conflicting prior partial install, the install should fail rather than silently merging template-owned content.
+
 ## API Design
 
 ### `GET /api/agents`
@@ -341,6 +389,7 @@ Extend each returned `AgentSummary` with:
 - `managed: boolean`
 - `presetId?: string`
 - `lockedFields: string[]`
+- `managedFiles: string[]`
 - `skillScope: { mode: 'default' | 'specified'; skills: string[] }`
 - `presetSkills: string[]`
 - `canUseDefaultSkillScope: boolean`
@@ -364,6 +413,7 @@ Behavior:
 - validates preset,
 - ensures preset skill count `<= 6`,
 - ensures target `id` is unused,
+- resolves preset package files,
 - installs the agent,
 - persists management metadata,
 - returns the updated agent snapshot.
@@ -408,7 +458,9 @@ A preset is invalid if:
 - `agent.id` is invalid,
 - `agent.skillScope.mode === 'specified'` and skill count is 0,
 - `agent.skillScope.mode === 'specified'` and skill count is greater than 6,
-- `agent.skillScope.skills` contains duplicates.
+- `agent.skillScope.skills` contains duplicates,
+- `meta.json` references unsupported preset structure,
+- `files/` contains unsupported or duplicate managed file names.
 
 ### Agent Skill Scope Validation
 
@@ -445,11 +497,13 @@ Recommended codes:
 Main-process logic should own:
 
 - preset catalog loading,
+- preset package filesystem reads,
 - install validation,
 - managed metadata persistence,
 - server-side access rules,
 - agent skill scope validation,
-- persona write blocking.
+- persona write blocking,
+- preset file seeding.
 
 ### Renderer
 
@@ -467,10 +521,12 @@ Renderer must not decide policy on its own. It may pre-disable invalid actions, 
 
 Primary implementation areas:
 
+- `resources/agent-presets/*`
 - [electron/utils/agent-config.ts](/Users/lsave/workspace/AI/ClawX/electron/utils/agent-config.ts)
 - [electron/api/routes/agents.ts](/Users/lsave/workspace/AI/ClawX/electron/api/routes/agents.ts)
 - [electron/services/agents/store-instance.ts](/Users/lsave/workspace/AI/ClawX/electron/services/agents/store-instance.ts)
 - [electron/services/agents/agent-runtime-sync.ts](/Users/lsave/workspace/AI/ClawX/electron/services/agents/agent-runtime-sync.ts)
+- [electron/utils/paths.ts](/Users/lsave/workspace/AI/ClawX/electron/utils/paths.ts)
 - [src/types/agent.ts](/Users/lsave/workspace/AI/ClawX/src/types/agent.ts)
 - [src/stores/agents.ts](/Users/lsave/workspace/AI/ClawX/src/stores/agents.ts)
 - [src/pages/Agents/index.tsx](/Users/lsave/workspace/AI/ClawX/src/pages/Agents/index.tsx)
@@ -484,13 +540,14 @@ The runtime sync layer should continue syncing only OpenClaw-compatible agent fi
 
 1. preset installation writes `id`, `workspace`, and `skills` correctly,
 2. invalid presets with more than 6 skills fail,
-3. managed agents can add extra skills but cannot remove preset skills,
-4. managed agents with preset skills cannot switch to `Default`,
-5. managed agents with no preset skills can switch between `Default` and `Specified`,
-6. unmanaging preserves current skill selection,
-7. persona write attempts fail while managed,
-8. persona writes succeed after unmanage,
-9. GeeClaw metadata does not leak into `openclaw.json`.
+3. preset installation seeds `AGENTS.md` and persona files from the preset package,
+4. managed agents can add extra skills but cannot remove preset skills,
+5. managed agents with preset skills cannot switch to `Default`,
+6. managed agents with no preset skills can switch between `Default` and `Specified`,
+7. unmanaging preserves current skill selection,
+8. persona write attempts fail while managed,
+9. persona writes succeed after unmanage,
+10. GeeClaw metadata does not leak into `openclaw.json`.
 
 ### UI Verification
 
@@ -530,10 +587,11 @@ After v1, consider:
 The following decisions are now fixed for implementation:
 
 1. Marketplace lives inside the existing Agents workspace, not as a new top-level navigation item.
-2. Preset agents are installed as normal OpenClaw agents plus GeeClaw-local management metadata.
-3. Managed agents keep `id`, `workspace`, and persona editing locked.
-4. `skills` are editable for both managed and unmanaged agents.
-5. Managed agents cannot remove preset-defined skills until they are unmanaged.
-6. Skill scope is represented as `Default` or `Specified`.
-7. `Specified` mode supports at most 6 skills.
-8. Unmanage preserves current config and removes preset restrictions.
+2. The source of truth for a preset is a directory package under `resources/agent-presets/<presetId>/`, not a hard-coded inline object only.
+3. Preset packages may seed managed workspace files, including `AGENTS.md` and persona markdown files.
+4. Managed agents keep `id`, `workspace`, and persona editing locked.
+5. `skills` are editable for both managed and unmanaged agents.
+6. Managed agents cannot remove preset-defined skills until they are unmanaged.
+7. Skill scope is represented as `Default` or `Specified`.
+8. `Specified` mode supports at most 6 skills.
+9. Unmanage preserves current config and removes preset restrictions.
