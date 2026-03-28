@@ -96,6 +96,7 @@ interface ManagedAgentMetadata {
   presetId: string;
   managed: boolean;
   lockedFields: ManagedLockedField[];
+  canUnmanage?: boolean;
   presetSkills: string[];
   managedFiles: string[];
   installedAt: string;
@@ -122,6 +123,7 @@ export interface AgentSummary {
   managed: boolean;
   presetId?: string;
   lockedFields: ManagedLockedField[];
+  canUnmanage: boolean;
   managedFiles: string[];
   skillScope: AgentSkillScope;
   presetSkills: string[];
@@ -238,7 +240,7 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
     throw new Error('Specified skill scope must not contain duplicate skills');
   }
   if (normalized.length === 0) {
-    return { mode: 'default' };
+    throw new Error('Specified skill scope must contain at least 1 skill');
   }
   if (normalized.length > 6) {
     throw new Error('Specified skill scope must not contain more than 6 skills');
@@ -770,6 +772,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       managed: managedMetadata?.managed === true,
       presetId: managedMetadata?.presetId,
       lockedFields: managedMetadata?.managed ? [...managedMetadata.lockedFields] : [],
+      canUnmanage: managedMetadata?.managed ? managedMetadata.canUnmanage !== false : false,
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
       skillScope: readAgentSkillScope(entry),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
@@ -988,11 +991,15 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
 
   const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
   const nextScope = normalizeSkillScope(preset.meta.agent.skillScope);
+  const lockedFields = preset.meta.managedPolicy?.lockedFields
+    ? [...preset.meta.managedPolicy.lockedFields]
+    : ['id', 'workspace', 'persona'];
   const newEntry = applyAgentSkillScope({
     id: nextId,
     name: preset.meta.name,
     workspace: preset.meta.agent.workspace,
     agentDir: getDefaultAgentDirPath(nextId),
+    ...(preset.meta.agent.model !== undefined ? { model: cloneValue(preset.meta.agent.model) } : {}),
   }, nextScope);
   nextEntries.push(newEntry);
 
@@ -1013,7 +1020,8 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
     source: 'preset',
     presetId: preset.meta.presetId,
     managed: true,
-    lockedFields: ['id', 'workspace', 'persona'],
+    lockedFields,
+    canUnmanage: preset.meta.managedPolicy?.canUnmanage !== false,
     presetSkills: nextScope.mode === 'specified' ? [...nextScope.skills] : [],
     managedFiles: Object.keys(preset.files),
     installedAt: new Date().toISOString(),
@@ -1065,6 +1073,9 @@ export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
   const current = management[agentId];
   if (!current?.managed) {
     throw new Error(`Agent "${agentId}" is not managed`);
+  }
+  if (current.canUnmanage === false) {
+    throw new Error(`Managed preset agent "${agentId}" cannot be unmanaged`);
   }
 
   management[agentId] = {

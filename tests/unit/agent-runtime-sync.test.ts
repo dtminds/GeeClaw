@@ -140,6 +140,7 @@ describe('agent runtime sync', () => {
         presetId: 'stock-expert',
         managed: true,
         lockedFields: ['id', 'workspace', 'persona'],
+        canUnmanage: false,
         presetSkills: ['stock-analyzer'],
         managedFiles: ['AGENTS.md', 'SOUL.md'],
         installedAt: '2026-03-28T00:00:00.000Z',
@@ -215,6 +216,7 @@ describe('agent runtime sync', () => {
     expect(config.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
     expect(config.skills?.entries?.existing?.enabled).toBe(true);
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('managed');
+    expect(JSON.stringify(config)).not.toContain('canUnmanage');
     expect(JSON.stringify(config)).not.toContain('managedFiles');
     expect(JSON.stringify(config)).not.toContain('presetId');
   });
