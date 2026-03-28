@@ -40,14 +40,14 @@ export interface AgentPresetPackage {
 
 function normalizeSpecifiedSkills(skills: unknown): string[] {
   const list = Array.isArray(skills) ? skills : [];
-  const normalized = Array.from(
-    new Set(
-      list
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => value.trim())
-        .filter(Boolean),
-    ),
-  );
+  const normalized = list
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('Preset specified skill scope must not contain duplicate skills');
+  }
 
   if (normalized.length > 6) {
     throw new Error('Preset specified skill scope must not contain more than 6 skills');
