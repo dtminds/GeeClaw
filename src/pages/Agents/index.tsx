@@ -14,6 +14,7 @@ import { hostApiFetch } from '@/lib/host-api';
 import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
 import { useGatewayStore } from '@/stores/gateway';
+import { useSkillsStore } from '@/stores/skills';
 import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } from '@/types/channel';
 import type { AgentSummary } from '@/types/agent';
 import { cn } from '@/lib/utils';
@@ -484,19 +485,40 @@ function AgentSettingsModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation('agents');
-  const { updateAgent, fetchAgents } = useAgentsStore();
+  const { fetchAgents, updateAgent, updateAgentSettings, unmanageAgent } = useAgentsStore();
   const { fetchChannels } = useChannelsStore();
+  const { skills, fetchSkills } = useSkillsStore();
   const [name, setName] = useState(agent.name);
   const [savingName, setSavingName] = useState(false);
+  const [savingSkills, setSavingSkills] = useState(false);
+  const [unmanaging, setUnmanaging] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<{ channelType: ChannelType; accountId: string } | null>(null);
+  const [skillScopeMode, setSkillScopeMode] = useState<'default' | 'specified'>(agent.skillScope.mode);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(
+    agent.skillScope.mode === 'specified' ? agent.skillScope.skills : [],
+  );
 
   useEffect(() => {
     setName(agent.name);
   }, [agent.name]);
 
+  useEffect(() => {
+    void fetchSkills();
+  }, [fetchSkills]);
+
+  useEffect(() => {
+    setSkillScopeMode(agent.skillScope.mode);
+    setSelectedSkills(agent.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
+  }, [agent.skillScope]);
+
   const runtimeChannelsByType = useMemo(
     () => Object.fromEntries(channels.map((channel) => [channel.type, channel])),
     [channels],
+  );
+  const presetSkillSet = useMemo(() => new Set(agent.presetSkills), [agent.presetSkills]);
+  const availableSkills = useMemo(
+    () => skills.filter((skill) => skill.eligible !== false && skill.hidden !== true),
+    [skills],
   );
 
   const handleSaveName = async () => {
@@ -509,6 +531,53 @@ function AgentSettingsModal({
       toast.error(t('toast.agentUpdateFailed', { error: String(error) }));
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const toggleSkill = (skillId: string) => {
+    setSelectedSkills((current) => {
+      const currentSet = new Set(current);
+      if (currentSet.has(skillId)) {
+        if (presetSkillSet.has(skillId) && agent.managed) {
+          return current;
+        }
+        currentSet.delete(skillId);
+      } else if (currentSet.size < 6) {
+        currentSet.add(skillId);
+      }
+      return Array.from(currentSet);
+    });
+  };
+
+  const handleSaveSkills = async () => {
+    if (skillScopeMode === 'specified' && selectedSkills.length === 0) {
+      return;
+    }
+
+    setSavingSkills(true);
+    try {
+      await updateAgentSettings(agent.id, {
+        skillScope: skillScopeMode === 'default'
+          ? { mode: 'default' }
+          : { mode: 'specified', skills: selectedSkills },
+      });
+      toast.success(t('toast.agentUpdated'));
+    } catch (error) {
+      toast.error(t('toast.agentUpdateFailed', { error: String(error) }));
+    } finally {
+      setSavingSkills(false);
+    }
+  };
+
+  const handleUnmanage = async () => {
+    setUnmanaging(true);
+    try {
+      await unmanageAgent(agent.id);
+      toast.success(t('toast.agentUnmanaged'));
+    } catch (error) {
+      toast.error(t('toast.agentUnmanageFailed', { error: String(error) }));
+    } finally {
+      setUnmanaging(false);
     }
   };
 
@@ -644,6 +713,122 @@ function AgentSettingsModal({
               </div>
             )}
           </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-xl font-medium tracking-tight text-foreground">
+                {t('settingsDialog.skillsTitle', 'Skills Scope')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {agent.managed && agent.presetSkills.length > 0
+                  ? t('settingsDialog.skillsManagedHint', 'This managed agent can add extra skills, but preset skills cannot be removed until you unmanage it.')
+                  : t('settingsDialog.skillsHint', 'Choose between the default skill scope or up to 6 specific skills.')}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={skillScopeMode === 'default' ? 'default' : 'outline'}
+                disabled={!agent.canUseDefaultSkillScope}
+                onClick={() => setSkillScopeMode('default')}
+                className="h-9 rounded-full px-4 text-[13px]"
+              >
+                {t('settingsDialog.skillScope.default', 'Default')}
+              </Button>
+              <Button
+                type="button"
+                variant={skillScopeMode === 'specified' ? 'default' : 'outline'}
+                onClick={() => setSkillScopeMode('specified')}
+                className="h-9 rounded-full px-4 text-[13px]"
+              >
+                {t('settingsDialog.skillScope.specified', 'Specified')}
+              </Button>
+            </div>
+
+            {skillScopeMode === 'specified' && (
+              <div className="space-y-3 rounded-2xl border border-black/8 p-4 dark:border-white/10">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-foreground">{t('settingsDialog.skillScope.selected', 'Selected skills')}</p>
+                  <p className="text-xs text-muted-foreground">{selectedSkills.length} / 6</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {selectedSkills.map((skillId) => {
+                    const locked = agent.managed && presetSkillSet.has(skillId);
+                    return (
+                      <button
+                        key={skillId}
+                        type="button"
+                        onClick={() => toggleSkill(skillId)}
+                        disabled={locked}
+                        className={cn(
+                          'rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          locked
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08] dark:bg-white/[0.08]',
+                        )}
+                      >
+                        {skillId}
+                        {locked ? ` · ${t('settingsDialog.skillScope.preset', 'Preset')}` : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  {availableSkills.map((skill) => {
+                    const selected = selectedSkills.includes(skill.id);
+                    const locked = agent.managed && presetSkillSet.has(skill.id);
+                    return (
+                      <Button
+                        key={skill.id}
+                        type="button"
+                        variant={selected ? 'default' : 'outline'}
+                        disabled={(!selected && selectedSkills.length >= 6) || locked}
+                        onClick={() => toggleSkill(skill.id)}
+                        className="justify-start rounded-2xl px-4 py-3 text-left text-[13px]"
+                      >
+                        {skill.id}
+                        {locked ? ` · ${t('settingsDialog.skillScope.preset', 'Preset')}` : ''}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={() => void handleSaveSkills()}
+              disabled={savingSkills || (skillScopeMode === 'specified' && selectedSkills.length === 0)}
+              className="modal-primary-button"
+            >
+              {savingSkills ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t('settingsDialog.skillScope.save', 'Save Skills')}
+            </Button>
+          </div>
+
+          {agent.managed && (
+            <div className="space-y-3 rounded-2xl border border-black/8 p-4 dark:border-white/10">
+              <h3 className="text-base font-semibold text-foreground">
+                {t('settingsDialog.unmanageTitle', 'Managed preset')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {t('settingsDialog.unmanageDescription', 'Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.')}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleUnmanage()}
+                disabled={!agent.canUnmanage || unmanaging}
+                className="rounded-full px-4"
+              >
+                {unmanaging ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {t('settingsDialog.unmanage', 'Unmanage')}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

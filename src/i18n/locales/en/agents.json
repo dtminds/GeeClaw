@@ -38,7 +38,20 @@
         "modelLabel": "Model",
         "channelsTitle": "Channels",
         "addChannel": "Add Channel",
-        "noChannels": "This agent does not own any channel accounts yet."
+        "noChannels": "This agent does not own any channel accounts yet.",
+        "skillsTitle": "Skills Scope",
+        "skillsHint": "Choose between the default skill scope or up to 6 specific skills.",
+        "skillsManagedHint": "This managed agent can add extra skills, but preset skills cannot be removed until you unmanage it.",
+        "skillScope": {
+            "default": "Default",
+            "specified": "Specified",
+            "selected": "Selected skills",
+            "preset": "Preset",
+            "save": "Save Skills"
+        },
+        "unmanageTitle": "Managed preset",
+        "unmanageDescription": "Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.",
+        "unmanage": "Unmanage"
     },
     "tabs": {
         "agents": "My Agents",
@@ -69,6 +82,8 @@
         "agentDeleteFailed": "Failed to delete agent: {{error}}",
         "agentUpdated": "Agent updated",
         "agentUpdateFailed": "Failed to update agent: {{error}}",
+        "agentUnmanaged": "Managed restrictions removed",
+        "agentUnmanageFailed": "Failed to unmanage agent: {{error}}",
         "channelAssigned": "{{channel}} assigned to agent",
         "channelAssignFailed": "Failed to assign channel: {{error}}",
         "channelRemoved": "{{channel}} removed",

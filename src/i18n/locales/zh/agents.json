@@ -38,7 +38,20 @@
         "modelLabel": "模型",
         "channelsTitle": "绑定聊天工具",
         "addChannel": "添加 Channel",
-        "noChannels": "这个 Agent 还没有承接任何 Channel 账号。"
+        "noChannels": "这个 Agent 还没有承接任何 Channel 账号。",
+        "skillsTitle": "技能范围",
+        "skillsHint": "你可以选择默认技能范围，或指定最多 6 个技能。",
+        "skillsManagedHint": "这个受管控 Agent 可以添加额外技能，但在解除管控前不能移除预置技能。",
+        "skillScope": {
+            "default": "默认",
+            "specified": "指定",
+            "selected": "已选技能",
+            "preset": "预置",
+            "save": "保存技能"
+        },
+        "unmanageTitle": "受管控预设",
+        "unmanageDescription": "解除管控后会保留当前配置，但人物设定文件和预置技能限制将不再受控。",
+        "unmanage": "解除管控"
     },
     "tabs": {
         "agents": "我的 Agents",
@@ -69,6 +82,8 @@
         "agentDeleteFailed": "删除 Agent 失败：{{error}}",
         "agentUpdated": "Agent 已更新",
         "agentUpdateFailed": "更新 Agent 失败：{{error}}",
+        "agentUnmanaged": "已解除受管控限制",
+        "agentUnmanageFailed": "解除管控失败：{{error}}",
         "channelAssigned": "{{channel}} 已绑定到 Agent",
         "channelAssignFailed": "绑定 Channel 失败：{{error}}",
         "channelRemoved": "{{channel}} 已解绑",
