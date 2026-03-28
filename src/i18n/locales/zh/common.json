@@ -18,7 +18,9 @@
         "mockUserName": "访客用户",
         "loggedIn": "已登录用户",
         "login": "登录",
-        "logout": "退出"
+        "logout": "退出登录",
+        "logoutConfirmTitle": "退出登录？",
+        "logoutConfirmMessage": "确认后将退出当前账号，并返回登录页面。"
     },
     "actions": {
         "save": "保存",

@@ -18,7 +18,9 @@
         "mockUserName": "Guest User",
         "loggedIn": "Signed In",
         "login": "Login",
-        "logout": "Logout"
+        "logout": "Log out",
+        "logoutConfirmTitle": "Log out?",
+        "logoutConfirmMessage": "You will be signed out of the current account and returned to the login screen."
     },
     "actions": {
         "save": "Save",
