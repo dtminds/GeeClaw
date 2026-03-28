@@ -1,6 +1,7 @@
 export type ChannelConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
 export interface ChannelRuntimeAccountSnapshot {
+  error?: string | null;
   connected?: boolean;
   linked?: boolean;
   running?: boolean;
@@ -44,9 +45,9 @@ export function hasSuccessfulChannelProbe(
 }
 
 export function hasChannelRuntimeError(
-  account: Pick<ChannelRuntimeAccountSnapshot, 'lastError'>,
+  account: Pick<ChannelRuntimeAccountSnapshot, 'error' | 'lastError'>,
 ): boolean {
-  return hasNonEmptyError(account.lastError);
+  return hasNonEmptyError(account.error) || hasNonEmptyError(account.lastError);
 }
 
 export function hasSummaryRuntimeError(
@@ -59,6 +60,10 @@ export function hasSummaryRuntimeError(
 export function isChannelRuntimeConnected(
   account: ChannelRuntimeAccountSnapshot,
 ): boolean {
+  if (hasChannelRuntimeError(account)) {
+    return false;
+  }
+
   if (account.connected === true || account.linked === true) {
     return true;
   }
@@ -74,8 +79,8 @@ export function isChannelRuntimeConnected(
 export function computeChannelRuntimeStatus(
   account: ChannelRuntimeAccountSnapshot,
 ): ChannelConnectionStatus {
-  if (isChannelRuntimeConnected(account)) return 'connected';
   if (hasChannelRuntimeError(account)) return 'error';
+  if (isChannelRuntimeConnected(account)) return 'connected';
   if (account.running === true) return 'connecting';
   return 'disconnected';
 }

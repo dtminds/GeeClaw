@@ -49,7 +49,7 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/');
+            win?.webContents.send('navigate', '/chat');
           },
         },
         { type: 'separator' },

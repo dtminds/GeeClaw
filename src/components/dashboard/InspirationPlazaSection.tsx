@@ -103,7 +103,7 @@ export function InspirationPlazaSection() {
     await openAgentMainSession(resolvedDefaultAgentId);
     queueComposerSeed(selectedItem.prompt);
     setSelectedItem(null);
-    navigate('/');
+    navigate('/chat');
   };
 
   return (

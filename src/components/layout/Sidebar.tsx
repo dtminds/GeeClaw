@@ -24,13 +24,13 @@ import { useSettingsStore } from '@/stores/settings';
 import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
+import { useGatewayStore } from '@/stores/gateway';
 import { useSessionStore } from '@/stores/session';
 import { useBootstrapStore } from '@/stores/bootstrap';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { invokeIpc } from '@/lib/api-client';
-import { subscribeHostEvent } from '@/lib/host-events';
 import { useTranslation } from 'react-i18next';
 import { getSettingsModalPath, getSettingsModalState, isSettingsModalPath } from '@/lib/settings-modal';
 import { renderSkillMarkersAsPlainText } from '@/lib/chat-message-text';
@@ -126,13 +126,14 @@ export function Sidebar() {
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const channels = useChannelsStore((s) => s.channels);
   const fetchChannels = useChannelsStore((s) => s.fetchChannels);
+  const isGatewayRunning = useGatewayStore((s) => s.status.state === 'running');
   const sessionStatus = useSessionStore((s) => s.status);
   const sessionAccount = useSessionStore((s) => s.account);
   const logoutToLogin = useBootstrapStore((s) => s.logoutToLogin);
 
   const navigate = useNavigate();
   const location = useLocation();
-  const isOnChat = location.pathname === '/';
+  const isOnChat = location.pathname === '/chat';
   const settingsModalState = getSettingsModalState(location);
 
   const { t } = useTranslation(['common', 'chat']);
@@ -171,22 +172,10 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    if (channels.length === 0) {
+    if (isGatewayRunning) {
       void fetchChannels();
     }
-  }, [channels.length, fetchChannels]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeHostEvent('gateway:channel-status', () => {
-      void fetchChannels();
-    });
-
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
-  }, [fetchChannels]);
+  }, [fetchChannels, isGatewayRunning]);
 
   const onlineChannelAccounts = channels.reduce(
     (count, channel) => count + channel.accounts.filter((account) => account.status === 'connected').length,
@@ -329,7 +318,7 @@ export function Sidebar() {
                       type="button"
                       onClick={() => {
                         void openAgentMainSession(agent.id);
-                        navigate('/');
+                        navigate('/chat');
                       }}
                       className={cn(
                         'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
@@ -350,7 +339,7 @@ export function Sidebar() {
                     type="button"
                     onClick={() => {
                       void openAgentMainSession(agent.id);
-                      navigate('/');
+                      navigate('/chat');
                     }}
                     className={cn(
                       'w-full rounded-xl px-3 py-2 text-left transition-all duration-200',

@@ -200,7 +200,7 @@ export function DashboardSettingsSection({ className }: DashboardSettingsSection
               </Link>
             </Button>
             <Button variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
-              <Link to="/" onClick={() => trackUiEvent('dashboard.quick_action', { action: 'open_chat' })}>
+              <Link to="/chat" onClick={() => trackUiEvent('dashboard.quick_action', { action: 'open_chat' })}>
                 <HugeiconsIcon icon={AddCircleIcon} size={20} strokeWidth={1.8} />
                 <span>{t('quickActions.openChat')}</span>
               </Link>

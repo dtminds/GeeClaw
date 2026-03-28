@@ -10,6 +10,11 @@ import type { GatewayStatus } from '../types/gateway';
 
 let gatewayInitPromise: Promise<void> | null = null;
 let gatewayEventUnsubscribers: Array<() => void> | null = null;
+let channelWarmupRefreshTimers: Array<ReturnType<typeof setTimeout>> = [];
+let channelStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const CHANNEL_WARMUP_REFRESH_DELAYS_MS = [1500, 5000, 12000, 25000];
+const CHANNEL_STATUS_REFRESH_DEBOUNCE_MS = 400;
 
 interface GatewayHealth {
   ok: boolean;
@@ -32,6 +37,58 @@ interface GatewayState {
   clearError: () => void;
 }
 
+function logGatewayAsyncError(context: string, error: unknown): void {
+  console.error(`Failed to ${context}:`, error);
+}
+
+function clearChannelWarmupRefreshTimers(): void {
+  for (const timer of channelWarmupRefreshTimers) {
+    clearTimeout(timer);
+  }
+  channelWarmupRefreshTimers = [];
+}
+
+function clearChannelStatusRefreshTimer(): void {
+  if (channelStatusRefreshTimer) {
+    clearTimeout(channelStatusRefreshTimer);
+    channelStatusRefreshTimer = null;
+  }
+}
+
+function refreshChannelsSnapshot(): void {
+  import('./channels')
+    .then(({ useChannelsStore }) => {
+      void useChannelsStore.getState().fetchChannels();
+    })
+    .catch((error) => {
+      logGatewayAsyncError('refresh channels snapshot', error);
+    });
+}
+
+function scheduleChannelWarmupRefreshes(): void {
+  clearChannelWarmupRefreshTimers();
+  for (const delayMs of CHANNEL_WARMUP_REFRESH_DELAYS_MS) {
+    const timer = setTimeout(() => {
+      if (useGatewayStore.getState().status.state !== 'running') {
+        return;
+      }
+      refreshChannelsSnapshot();
+    }, delayMs);
+    channelWarmupRefreshTimers.push(timer);
+  }
+}
+
+function scheduleDebouncedChannelStatusRefresh(): void {
+  clearChannelStatusRefreshTimer();
+  channelStatusRefreshTimer = setTimeout(() => {
+    channelStatusRefreshTimer = null;
+    if (useGatewayStore.getState().status.state !== 'running') {
+      return;
+    }
+    refreshChannelsSnapshot();
+  }, CHANNEL_STATUS_REFRESH_DEBOUNCE_MS);
+}
+
 function handleGatewayNotification(notification: { method?: string; params?: Record<string, unknown> } | undefined): void {
   const payload = notification;
   if (!payload || payload.method !== 'agent' || !payload.params || typeof payload.params !== 'object') {
@@ -51,7 +108,9 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
           data,
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        logGatewayAsyncError('process gateway tool notification', error);
+      });
   }
 
   // Agent notifications also emit a separate gateway:chat-message event for
@@ -68,7 +127,9 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
           sessionKey,
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        logGatewayAsyncError('process gateway lifecycle notification', error);
+      });
   }
 
 }
@@ -90,7 +151,9 @@ function handleGatewayChatMessage(data: unknown): void {
       message: payload,
       runId: chatData.runId ?? payload.runId,
     });
-  }).catch(() => {});
+  }).catch((error) => {
+    logGatewayAsyncError('process gateway chat message', error);
+  });
 }
 
 function mapChannelStatus(status: string): 'connected' | 'connecting' | 'disconnected' | 'error' {
@@ -128,11 +191,24 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
       try {
         const status = await hostApiFetch<GatewayStatus>('/api/gateway/status');
         set({ status, isInitialized: true });
+        if (status.state === 'running') {
+          scheduleChannelWarmupRefreshes();
+        } else {
+          clearChannelWarmupRefreshTimers();
+          clearChannelStatusRefreshTimer();
+        }
 
         if (!gatewayEventUnsubscribers) {
           const unsubscribers: Array<() => void> = [];
           unsubscribers.push(subscribeHostEvent<GatewayStatus>('gateway:status', (payload) => {
             set({ status: payload });
+            if (payload.state === 'running') {
+              refreshChannelsSnapshot();
+              scheduleChannelWarmupRefreshes();
+            } else {
+              clearChannelWarmupRefreshTimers();
+              clearChannelStatusRefreshTimer();
+            }
           }));
           unsubscribers.push(subscribeHostEvent<{ message?: string }>('gateway:error', (payload) => {
             set({ lastError: payload.message || 'Gateway error' });
@@ -151,14 +227,18 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
             (update) => {
               import('./channels')
                 .then(({ useChannelsStore }) => {
-                  if (!update.channelId || !update.status) return;
                   const state = useChannelsStore.getState();
-                  const channel = state.channels.find((item) => item.type === update.channelId);
-                  if (channel) {
-                    state.updateChannel(channel.id, { status: mapChannelStatus(update.status) });
+                  if (update.channelId && update.status) {
+                    const channel = state.channels.find((item) => item.type === update.channelId);
+                    if (channel) {
+                      state.updateChannel(channel.id, { status: mapChannelStatus(update.status) });
+                    }
                   }
+                  scheduleDebouncedChannelStatusRefresh();
                 })
-                .catch(() => {});
+                .catch((error) => {
+                  logGatewayAsyncError('process gateway channel status', error);
+                });
             },
           ));
           gatewayEventUnsubscribers = unsubscribers;

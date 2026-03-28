@@ -228,7 +228,8 @@ function App() {
 
           {/* Main application routes */}
           <Route element={<MainLayout />}>
-            <Route path="/" element={<Chat />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/models" element={<Navigate to="/settings/models" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/channels" element={<Channels />} />

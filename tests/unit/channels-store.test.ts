@@ -162,4 +162,102 @@ describe('Channels Store', () => {
       }),
     ]);
   });
+
+  it('prefers account runtime errors over stale connected signals', async () => {
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      channels: {
+        wecom: {
+          defaultAccount: 'xyclaw',
+          accounts: [
+            {
+              accountId: 'xyclaw',
+              enabled: true,
+              isDefault: true,
+            },
+          ],
+        },
+      },
+    });
+
+    useGatewayStore.setState({
+      rpc: vi.fn().mockResolvedValue({
+        channels: {
+          wecom: {
+            connected: true,
+          },
+        },
+        channelAccounts: {
+          wecom: [
+            {
+              accountId: 'xyclaw',
+              configured: true,
+              connected: true,
+              lastError: 'token expired',
+            },
+          ],
+        },
+      }),
+    } as Partial<ReturnType<typeof useGatewayStore.getState>>);
+
+    await useChannelsStore.getState().fetchChannels();
+
+    expect(useChannelsStore.getState().channels[0]?.accounts).toEqual([
+      expect.objectContaining({
+        accountId: 'xyclaw',
+        status: 'error',
+        error: 'token expired',
+      }),
+    ]);
+    expect(useChannelsStore.getState().channels[0]?.status).toBe('error');
+  });
+
+  it('maps summary-level errors onto the default account status', async () => {
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      channels: {
+        wecom: {
+          defaultAccount: 'xyclaw',
+          accounts: [
+            {
+              accountId: 'xyclaw',
+              enabled: true,
+              isDefault: true,
+            },
+          ],
+        },
+      },
+    });
+
+    useGatewayStore.setState({
+      rpc: vi.fn().mockResolvedValue({
+        channels: {
+          wecom: {
+            connected: true,
+            error: 'channel bootstrap failed',
+          },
+        },
+        channelAccounts: {
+          wecom: [
+            {
+              accountId: 'xyclaw',
+              configured: true,
+              connected: true,
+            },
+          ],
+        },
+      }),
+    } as Partial<ReturnType<typeof useGatewayStore.getState>>);
+
+    await useChannelsStore.getState().fetchChannels();
+
+    expect(useChannelsStore.getState().channels[0]?.accounts).toEqual([
+      expect.objectContaining({
+        accountId: 'xyclaw',
+        status: 'error',
+        error: 'channel bootstrap failed',
+      }),
+    ]);
+    expect(useChannelsStore.getState().channels[0]?.status).toBe('error');
+  });
 });

@@ -189,7 +189,7 @@ export function Setup() {
       // Complete setup
       markSetupComplete();
       toast.success(t('complete.title'));
-      navigate('/');
+      navigate('/dashboard');
     } else {
       setCurrentStep((i) => i + 1);
     }
@@ -201,7 +201,7 @@ export function Setup() {
 
   const handleSkip = () => {
     markSetupComplete();
-    navigate('/');
+    navigate('/dashboard');
   };
 
   // Auto-proceed when installation is complete
