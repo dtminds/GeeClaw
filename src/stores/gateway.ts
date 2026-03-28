@@ -37,6 +37,10 @@ interface GatewayState {
   clearError: () => void;
 }
 
+function logGatewayAsyncError(context: string, error: unknown): void {
+  console.error(`Failed to ${context}:`, error);
+}
+
 function clearChannelWarmupRefreshTimers(): void {
   for (const timer of channelWarmupRefreshTimers) {
     clearTimeout(timer);
@@ -56,7 +60,9 @@ function refreshChannelsSnapshot(): void {
     .then(({ useChannelsStore }) => {
       void useChannelsStore.getState().fetchChannels();
     })
-    .catch(() => {});
+    .catch((error) => {
+      logGatewayAsyncError('refresh channels snapshot', error);
+    });
 }
 
 function scheduleChannelWarmupRefreshes(): void {
@@ -102,7 +108,9 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
           data,
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        logGatewayAsyncError('process gateway tool notification', error);
+      });
   }
 
   // Agent notifications also emit a separate gateway:chat-message event for
@@ -119,7 +127,9 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
           sessionKey,
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        logGatewayAsyncError('process gateway lifecycle notification', error);
+      });
   }
 
 }
@@ -141,7 +151,9 @@ function handleGatewayChatMessage(data: unknown): void {
       message: payload,
       runId: chatData.runId ?? payload.runId,
     });
-  }).catch(() => {});
+  }).catch((error) => {
+    logGatewayAsyncError('process gateway chat message', error);
+  });
 }
 
 function mapChannelStatus(status: string): 'connected' | 'connecting' | 'disconnected' | 'error' {
@@ -224,7 +236,9 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
                   }
                   scheduleDebouncedChannelStatusRefresh();
                 })
-                .catch(() => {});
+                .catch((error) => {
+                  logGatewayAsyncError('process gateway channel status', error);
+                });
             },
           ));
           gatewayEventUnsubscribers = unsubscribers;
