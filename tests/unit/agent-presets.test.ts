@@ -1,10 +1,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 const bundledPresetsDir = join(process.cwd(), 'resources', 'agent-presets');
+const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+const originalMaxListeners = process.getMaxListeners();
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -65,13 +67,57 @@ async function listPresetsFrom(root: string) {
   return listAgentPresets();
 }
 
+async function importPathsWithElectronMock(isPackaged: boolean, resourcesPath?: string) {
+  vi.doMock('electron', () => ({
+    app: {
+      isPackaged,
+      getPath: vi.fn(),
+    },
+  }));
+
+  if (resourcesPath !== undefined) {
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: resourcesPath,
+    });
+  }
+
+  return import('@electron/utils/paths');
+}
+
 afterEach(() => {
   vi.resetModules();
   vi.unmock('@electron/utils/paths');
+  vi.unmock('electron');
+  if (originalResourcesPathDescriptor) {
+    Object.defineProperty(process, 'resourcesPath', originalResourcesPathDescriptor);
+  } else {
+    delete (process as typeof process & { resourcesPath?: string }).resourcesPath;
+  }
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
+});
+
+beforeAll(() => {
+  process.setMaxListeners(Math.max(originalMaxListeners, 30));
+});
+
+afterAll(() => {
+  process.setMaxListeners(originalMaxListeners);
+});
+
+describe('agent preset paths', () => {
+  it('resolves the preset directory in development mode', async () => {
+    const { getAgentPresetsDir } = await importPathsWithElectronMock(false);
+    expect(getAgentPresetsDir()).toMatch(/resources[\\/]agent-presets$/);
+  });
+
+  it('resolves the preset directory in packaged mode', async () => {
+    const { getAgentPresetsDir } = await importPathsWithElectronMock(true, '/tmp/geeclaw-app');
+    expect(getAgentPresetsDir()).toBe(join('/tmp/geeclaw-app', 'resources', 'agent-presets'));
+  });
 });
 
 describe('agent preset loader', () => {
@@ -188,6 +234,138 @@ describe('agent preset loader', () => {
 
     await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
       'unsupported skill scope mode',
+    );
+  });
+
+  it('rejects presets when required top-level fields are missing', async () => {
+    const root = createTempRoot('agent-presets-missing-description-');
+    const meta = createPresetMeta('missing-description');
+    meta.description = ' ';
+    writePresetPackage(root, 'missing-description', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'description is required',
+    );
+  });
+
+  it('rejects presets with an empty preset id', async () => {
+    const root = createTempRoot('agent-presets-empty-id-');
+    const meta = createPresetMeta('empty-id');
+    meta.presetId = ' ';
+    writePresetPackage(root, 'empty-id', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'Preset presetId is required',
+    );
+  });
+
+  it('rejects presets with unsupported top-level keys', async () => {
+    const root = createTempRoot('agent-presets-unknown-top-level-');
+    const meta = {
+      ...createPresetMeta('unknown-top-level'),
+      extraField: true,
+    };
+    writePresetPackage(root, 'unknown-top-level', meta as never, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'has unsupported keys',
+    );
+  });
+
+  it('rejects presets with unsupported agent keys', async () => {
+    const root = createTempRoot('agent-presets-unknown-agent-key-');
+    const meta = createPresetMeta('unknown-agent-key');
+    (meta.agent as typeof meta.agent & { extraField?: boolean }).extraField = true;
+    writePresetPackage(root, 'unknown-agent-key', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'agent has unsupported keys',
+    );
+  });
+
+  it('rejects presets with missing required nested agent structure', async () => {
+    const root = createTempRoot('agent-presets-missing-agent-');
+    const meta = {
+      ...createPresetMeta('missing-agent'),
+    };
+    delete (meta as typeof meta & { agent?: unknown }).agent;
+    writePresetPackage(root, 'missing-agent', meta as never, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'agent is invalid',
+    );
+  });
+
+  it('rejects presets when managed is false', async () => {
+    const root = createTempRoot('agent-presets-unmanaged-');
+    const meta = createPresetMeta('unmanaged');
+    meta.managed = false as true;
+    writePresetPackage(root, 'unmanaged', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'managed must be true',
+    );
+  });
+
+  it('rejects presets with invalid managed policy values', async () => {
+    const root = createTempRoot('agent-presets-invalid-policy-');
+    const meta = createPresetMeta('invalid-policy');
+    meta.managedPolicy = {
+      lockedFields: ['id', 'invalid'],
+      canUnmanage: true,
+    } as never;
+    writePresetPackage(root, 'invalid-policy', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'managedPolicy.lockedFields is invalid',
+    );
+  });
+
+  it('rejects presets with invalid model config shapes', async () => {
+    const root = createTempRoot('agent-presets-invalid-model-');
+    const meta = createPresetMeta('invalid-model');
+    meta.agent.model = {
+      primary: 123,
+    } as never;
+    writePresetPackage(root, 'invalid-model', meta, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'agent.model.primary is required',
+    );
+  });
+
+  it('rejects presets whose directory name does not match preset id', async () => {
+    const root = createTempRoot('agent-presets-dir-mismatch-');
+    writePresetPackage(root, 'folder-name', createPresetMeta('declared-id'), {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'directory name must match presetId',
+    );
+  });
+
+  it('rejects duplicate preset ids across packages', async () => {
+    const root = createTempRoot('agent-presets-duplicate-id-');
+    writePresetPackage(root, 'shared-id', createPresetMeta('shared-id'), {});
+    writePresetPackage(root, 'zz-second-package', createPresetMeta('shared-id'), {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'Duplicate presetId "shared-id"',
+    );
+  });
+
+  it('rejects presets whose files path is not a directory', async () => {
+    const root = createTempRoot('agent-presets-bad-files-dir-');
+    const presetDir = join(root, 'agent-presets', 'bad-files-dir');
+    mkdirSync(presetDir, { recursive: true });
+    writeFileSync(
+      join(presetDir, 'meta.json'),
+      JSON.stringify(createPresetMeta('bad-files-dir'), null, 2),
+      'utf8',
+    );
+    writeFileSync(join(presetDir, 'files'), 'not a directory', 'utf8');
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'managed files directory is invalid',
     );
   });
 
