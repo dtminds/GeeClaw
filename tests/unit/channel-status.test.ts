@@ -33,6 +33,15 @@ describe('channel runtime status helpers', () => {
     ).toBe('error');
   });
 
+  it('returns error when runtime reports an error field', () => {
+    expect(
+      computeChannelRuntimeStatus({
+        connected: true,
+        error: 'channel auth failed',
+      }),
+    ).toBe('error');
+  });
+
   it('returns disconnected for empty runtime state', () => {
     expect(computeChannelRuntimeStatus({})).toBe('disconnected');
   });

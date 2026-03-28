@@ -10,6 +10,9 @@ import type { GatewayStatus } from '../types/gateway';
 
 let gatewayInitPromise: Promise<void> | null = null;
 let gatewayEventUnsubscribers: Array<() => void> | null = null;
+let channelWarmupRefreshTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+const CHANNEL_WARMUP_REFRESH_DELAYS_MS = [1500, 5000, 12000, 25000];
 
 interface GatewayHealth {
   ok: boolean;
@@ -30,6 +33,34 @@ interface GatewayState {
   rpc: <T>(method: string, params?: unknown, timeoutMs?: number) => Promise<T>;
   setStatus: (status: GatewayStatus) => void;
   clearError: () => void;
+}
+
+function clearChannelWarmupRefreshTimers(): void {
+  for (const timer of channelWarmupRefreshTimers) {
+    clearTimeout(timer);
+  }
+  channelWarmupRefreshTimers = [];
+}
+
+function refreshChannelsSnapshot(): void {
+  import('./channels')
+    .then(({ useChannelsStore }) => {
+      void useChannelsStore.getState().fetchChannels();
+    })
+    .catch(() => {});
+}
+
+function scheduleChannelWarmupRefreshes(): void {
+  clearChannelWarmupRefreshTimers();
+  for (const delayMs of CHANNEL_WARMUP_REFRESH_DELAYS_MS) {
+    const timer = setTimeout(() => {
+      if (useGatewayStore.getState().status.state !== 'running') {
+        return;
+      }
+      refreshChannelsSnapshot();
+    }, delayMs);
+    channelWarmupRefreshTimers.push(timer);
+  }
 }
 
 function handleGatewayNotification(notification: { method?: string; params?: Record<string, unknown> } | undefined): void {
@@ -128,11 +159,22 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
       try {
         const status = await hostApiFetch<GatewayStatus>('/api/gateway/status');
         set({ status, isInitialized: true });
+        if (status.state === 'running') {
+          scheduleChannelWarmupRefreshes();
+        } else {
+          clearChannelWarmupRefreshTimers();
+        }
 
         if (!gatewayEventUnsubscribers) {
           const unsubscribers: Array<() => void> = [];
           unsubscribers.push(subscribeHostEvent<GatewayStatus>('gateway:status', (payload) => {
             set({ status: payload });
+            if (payload.state === 'running') {
+              refreshChannelsSnapshot();
+              scheduleChannelWarmupRefreshes();
+            } else {
+              clearChannelWarmupRefreshTimers();
+            }
           }));
           unsubscribers.push(subscribeHostEvent<{ message?: string }>('gateway:error', (payload) => {
             set({ lastError: payload.message || 'Gateway error' });
@@ -151,12 +193,14 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
             (update) => {
               import('./channels')
                 .then(({ useChannelsStore }) => {
-                  if (!update.channelId || !update.status) return;
                   const state = useChannelsStore.getState();
-                  const channel = state.channels.find((item) => item.type === update.channelId);
-                  if (channel) {
-                    state.updateChannel(channel.id, { status: mapChannelStatus(update.status) });
+                  if (update.channelId && update.status) {
+                    const channel = state.channels.find((item) => item.type === update.channelId);
+                    if (channel) {
+                      state.updateChannel(channel.id, { status: mapChannelStatus(update.status) });
+                    }
                   }
+                  void state.fetchChannels();
                 })
                 .catch(() => {});
             },

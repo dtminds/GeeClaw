@@ -19,7 +19,8 @@ interface GatewayChannelAccount {
   configured?: boolean;
   connected?: boolean;
   running?: boolean;
-  lastError?: string;
+  error?: string | null;
+  lastError?: string | null;
   name?: string;
   linked?: boolean;
   lastConnectedAt?: number | null;
@@ -59,9 +60,24 @@ interface ChannelsState {
   clearError: () => void;
 }
 
+function readRuntimeError(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return value.trim().length > 0 ? value : undefined;
+}
+
+function getSummaryRuntimeError(groupSummary?: Record<string, unknown>): string | undefined {
+  return readRuntimeError(groupSummary?.error) || readRuntimeError(groupSummary?.lastError);
+}
+
+function getAccountRuntimeError(account?: GatewayChannelAccount): string | undefined {
+  if (!account) return undefined;
+  return readRuntimeError(account.error) || readRuntimeError(account.lastError);
+}
+
 function getAccountStatus(
   account?: GatewayChannelAccount,
   groupSummary?: Record<string, unknown>,
+  options?: { includeSummaryError?: boolean },
 ): ChannelStatus {
   const summarySignal: ChannelRuntimeSummarySnapshot | undefined = groupSummary
     ? {
@@ -82,6 +98,14 @@ function getAccountStatus(
     return groupError ? 'error' : 'disconnected';
   }
 
+  if (hasChannelRuntimeError(account)) {
+    return 'error';
+  }
+
+  if (options?.includeSummaryError && groupError) {
+    return 'error';
+  }
+
   const hasDirectConnectionSignal =
     account.connected === true ||
     account.linked === true ||
@@ -90,10 +114,6 @@ function getAccountStatus(
 
   if (hasDirectConnectionSignal) {
     return 'connected';
-  }
-
-  if (hasChannelRuntimeError(account)) {
-    return 'error';
   }
 
   if (account.running) {
@@ -174,12 +194,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
 
       const channels = allChannelTypes.map((channelType) => {
         const summary = runtimeChannels[channelType] as Record<string, unknown> | undefined;
-        const groupError =
-          typeof summary?.error === 'string'
-            ? summary.error
-            : typeof summary?.lastError === 'string'
-              ? summary.lastError
-              : undefined;
+        const groupError = getSummaryRuntimeError(summary);
         const runtimeEntries = runtimeAccounts[channelType] || [];
         const configSummary = configuredChannels[channelType];
         const defaultAccountId = configSummary?.defaultAccount || runtimeData?.channelDefaultAccountId?.[channelType] || 'default';
@@ -206,18 +221,17 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
           const configuredEntry = configSummary?.accounts.find(
             (entry: ConfiguredAccountSummary) => entry.accountId === accountId,
           );
+          const includeSummaryError = accountId === defaultAccountId || !runtimeEntry;
           return {
             id: `${channelType}:${accountId}`,
             channelType: channelType as ChannelType,
             accountId,
             name: runtimeEntry?.name || accountId,
-            status: getAccountStatus(runtimeEntry, summary),
+            status: getAccountStatus(runtimeEntry, summary, { includeSummaryError }),
             enabled: configuredEntry?.enabled ?? true,
             configured: configuredEntry !== undefined || runtimeEntry?.configured === true,
             isDefault: accountId === defaultAccountId,
-            error:
-              (typeof runtimeEntry?.lastError === 'string' ? runtimeEntry.lastError : undefined) ||
-              (accountId === defaultAccountId ? groupError : undefined),
+            error: getAccountRuntimeError(runtimeEntry) || (includeSummaryError ? groupError : undefined),
           };
         }).filter(acc => acc.configured);
 

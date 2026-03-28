@@ -6,6 +6,9 @@ const handleChatEventMock = vi.fn();
 const handleAgentEventMock = vi.fn();
 const loadHistoryMock = vi.fn();
 const setChatStateMock = vi.fn();
+const fetchChannelsMock = vi.fn();
+const updateChannelMock = vi.fn();
+const channelsGetStateMock = vi.fn();
 
 vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
@@ -27,10 +30,22 @@ vi.mock('@/stores/chat', () => ({
   },
 }));
 
+vi.mock('@/stores/channels', () => ({
+  useChannelsStore: {
+    getState: () => channelsGetStateMock(),
+  },
+}));
+
 describe('gateway store event wiring', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.resetModules();
     vi.clearAllMocks();
+    channelsGetStateMock.mockReturnValue({
+      channels: [],
+      fetchChannels: fetchChannelsMock,
+      updateChannel: updateChannelMock,
+    });
   });
 
   it('subscribes to host events through subscribeHostEvent on init', async () => {
@@ -53,6 +68,43 @@ describe('gateway store event wiring', () => {
 
     handlers.get('gateway:status')?.({ state: 'stopped', port: 28788 });
     expect(useGatewayStore.getState().status.state).toBe('stopped');
+  });
+
+  it('refreshes channels when gateway becomes running or channel status changes', async () => {
+    vi.useFakeTimers();
+    hostApiFetchMock.mockResolvedValueOnce({ state: 'starting', port: 28788 });
+
+    const handlers = new Map<string, (payload: unknown) => void>();
+    subscribeHostEventMock.mockImplementation((eventName: string, handler: (payload: unknown) => void) => {
+      handlers.set(eventName, handler);
+      return () => {};
+    });
+
+    channelsGetStateMock.mockReturnValue({
+      channels: [{ id: 'wecom', type: 'wecom' }],
+      fetchChannels: fetchChannelsMock,
+      updateChannel: updateChannelMock,
+    });
+
+    const { useGatewayStore } = await import('@/stores/gateway');
+    await useGatewayStore.getState().init();
+
+    handlers.get('gateway:status')?.({ state: 'running', port: 28788 });
+    await vi.dynamicImportSettled();
+
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+
+    handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connected' });
+    await vi.dynamicImportSettled();
+
+    expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connected' });
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(4);
   });
 
   it('routes agent chat payloads only through gateway:chat-message, while tool stream stays on notification', async () => {
