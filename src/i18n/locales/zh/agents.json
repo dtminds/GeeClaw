@@ -4,6 +4,8 @@
     "refresh": "刷新",
     "addAgent": "添加 Agent",
     "settings": "设置",
+    "managedBadge": "受管控",
+    "presetBadge": "来自广场",
     "gatewayWarning": "Gateway 服务未运行。Agent 变更可能需要一点时间生效。",
     "defaultBadge": "默认",
     "inherited": "继承",
@@ -37,6 +39,18 @@
         "channelsTitle": "绑定聊天工具",
         "addChannel": "添加 Channel",
         "noChannels": "这个 Agent 还没有承接任何 Channel 账号。"
+    },
+    "tabs": {
+        "agents": "我的 Agents",
+        "marketplace": "智能体广场"
+    },
+    "marketplace": {
+        "title": "内置智能体广场",
+        "description": "安装带预设工作区、指令文件和托管规则的内置 Agent。",
+        "install": "添加",
+        "installed": "已添加",
+        "managedHint": "添加后会作为受管控 Agent 安装",
+        "skillCount": "{{count}} 个预置技能"
     },
     "removeChannelDialog": {
         "title": "解绑 Channel",

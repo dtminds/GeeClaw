@@ -29,19 +29,38 @@ import qqIcon from '@/assets/channels/qq.svg';
 export function Agents() {
   const { t } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
-  const { agents, loading, error, fetchAgents, createAgent, deleteAgent } = useAgentsStore();
+  const {
+    agents,
+    presets,
+    loading,
+    error,
+    fetchAgents,
+    fetchPresets,
+    createAgent,
+    deleteAgent,
+    installPreset,
+  } = useAgentsStore();
   const { channels, fetchChannels } = useChannelsStore();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<AgentSummary | null>(null);
+  const [activeTab, setActiveTab] = useState<'agents' | 'marketplace'>('agents');
 
   useEffect(() => {
-    void Promise.all([fetchAgents(), fetchChannels()]);
-  }, [fetchAgents, fetchChannels]);
+    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
+  }, [fetchAgents, fetchChannels, fetchPresets]);
 
   const sortedAgents = useMemo(
     () => [...agents].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)),
+    [agents],
+  );
+  const installedPresetIds = useMemo(
+    () => new Set(
+      agents
+        .filter((agent) => agent.source === 'preset' && agent.presetId)
+        .map((agent) => agent.presetId as string),
+    ),
     [agents],
   );
   const activeAgent = useMemo(
@@ -50,7 +69,7 @@ export function Agents() {
   );
 
   const handleRefresh = () => {
-    void Promise.all([fetchAgents(), fetchChannels()]);
+    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
   };
 
   if (loading) {
@@ -105,7 +124,73 @@ export function Agents() {
             </div>
           )}
 
-          {sortedAgents.length === 0 ? (
+          <div
+            className="mb-6 flex items-center gap-2 rounded-full border border-black/8 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
+            role="tablist"
+          >
+            {(['agents', 'marketplace'] as const).map((tab) => {
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+                    active ? 'bg-foreground text-background' : 'text-foreground/65 hover:text-foreground',
+                  )}
+                >
+                  {tab === 'agents' ? t('tabs.agents') : t('tabs.marketplace')}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === 'marketplace' ? (
+            <div className="space-y-5">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-foreground">{t('marketplace.title')}</h2>
+                <p className="text-sm text-muted-foreground">{t('marketplace.description')}</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {presets.map((preset) => {
+                  const installed = installedPresetIds.has(preset.presetId);
+                  return (
+                    <div
+                      key={preset.presetId}
+                      className="modal-section-surface flex flex-col gap-4 rounded-3xl border p-5"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[18px] font-semibold text-foreground">{preset.name}</h3>
+                          <Badge className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shadow-none">
+                            {t('managedBadge')}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{preset.description}</p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
+                        <span>{t('marketplace.managedHint')}</span>
+                        <span>{t('marketplace.skillCount', { count: preset.presetSkills.length })}</span>
+                      </div>
+
+                      <Button
+                        onClick={() => void installPreset(preset.presetId)}
+                        disabled={installed}
+                        className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                      >
+                        {installed ? t('marketplace.installed') : t('marketplace.install')}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : sortedAgents.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-black/10 bg-black/[0.03] px-6 py-12 text-center text-sm text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]">
               {t('empty')}
             </div>
@@ -208,6 +293,19 @@ function AgentCard({
               >
                 <Check className="h-3 w-3" />
                 {t('defaultBadge')}
+              </Badge>
+            )}
+            {agent.managed && (
+              <Badge className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shadow-none">
+                {t('managedBadge')}
+              </Badge>
+            )}
+            {agent.source === 'preset' && (
+              <Badge
+                variant="secondary"
+                className="rounded-full border-0 bg-black/[0.04] px-2 py-0.5 text-[10px] font-medium text-foreground/70 shadow-none dark:bg-white/[0.08]"
+              >
+                {t('presetBadge')}
               </Badge>
             )}
           </div>

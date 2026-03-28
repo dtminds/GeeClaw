@@ -4,6 +4,8 @@
     "refresh": "Refresh",
     "addAgent": "Add Agent",
     "settings": "Settings",
+    "managedBadge": "Managed",
+    "presetBadge": "From Marketplace",
     "gatewayWarning": "Gateway service is not running. Agent changes may take a moment to apply.",
     "defaultBadge": "default",
     "inherited": "inherited",
@@ -37,6 +39,18 @@
         "channelsTitle": "Channels",
         "addChannel": "Add Channel",
         "noChannels": "This agent does not own any channel accounts yet."
+    },
+    "tabs": {
+        "agents": "My Agents",
+        "marketplace": "Marketplace"
+    },
+    "marketplace": {
+        "title": "Built-in Agent Marketplace",
+        "description": "Install curated agents with preset workspaces, instructions, and managed rules.",
+        "install": "Install",
+        "installed": "Installed",
+        "managedHint": "Installs as a managed preset agent",
+        "skillCount": "{{count}} preset skills"
     },
     "removeChannelDialog": {
         "title": "Unbind Channel",
