@@ -104,6 +104,20 @@ describe('gateway store event wiring', () => {
     await vi.dynamicImportSettled();
 
     expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connected' });
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+
+    handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connecting' });
+    handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connected' });
+    await vi.dynamicImportSettled();
+
+    expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connecting' });
+    expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connected' });
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(399);
+    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(1);
     expect(fetchChannelsMock).toHaveBeenCalledTimes(4);
   });
 
