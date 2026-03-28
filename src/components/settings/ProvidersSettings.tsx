@@ -5,7 +5,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus,
   Eye,
   EyeOff,
   Check,
@@ -428,13 +427,13 @@ export function ProvidersSettings() {
                             <img
                               src={getProviderIconUrl(entry.vendorId)}
                               alt={vendorName}
-                              className={cn('h-5 w-5', shouldInvertInDark(entry.vendorId) && 'dark:invert')}
+                              className={cn('h-4 w-4', shouldInvertInDark(entry.vendorId) && 'dark:invert')}
                             />
                           ) : (
                             <span className="text-lg">{entry.vendor?.icon || entry.typeInfo?.icon || '⚙️'}</span>
                           )}
                         </div>
-                        <div className="min-w-0 flex-1 truncate text-[14px] font-medium text-foreground">
+                        <div className="min-w-0 flex-1 truncate text-[14px] font-normal text-foreground">
                           {entry.title}
                         </div>
                         {entry.kind === 'account' && entry.isDefault ? (
@@ -605,15 +604,7 @@ function ProviderInactiveCard({
   const providerName = vendorId === 'custom'
     ? t('aiProviders.custom')
     : (vendor?.name || typeInfo?.name || vendorId);
-  const authModes: ProviderAccount['authMode'][] = vendor?.supportedAuthModes.length
-    ? vendor.supportedAuthModes
-    : vendorId === 'ollama'
-      ? ['local']
-      : vendorId === 'openai' || vendorId === 'google'
-        ? ['oauth_browser', 'api_key']
-        : typeInfo?.isOAuth
-          ? (typeInfo.supportsApiKey ? ['oauth_device', 'api_key'] : ['oauth_device'])
-          : ['api_key'];
+  const authModes = vendor?.supportedAuthModes ?? [];
 
   return (
     <div className="flex h-full flex-col p-4 md:p-5 xl:p-6">
@@ -669,14 +660,16 @@ function ProviderInactiveCard({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-black/8 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
-              {t('aiProviders.inactive.authModes')}
-            </p>
-            <p className="mt-2 text-[13px] text-foreground">
-              {authModes.map((mode) => getAuthModeLabel(mode, t)).join(' / ')}
-            </p>
-          </div>
+          {authModes.length > 0 ? (
+            <div className="rounded-2xl border border-black/8 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+                {t('aiProviders.inactive.authModes')}
+              </p>
+              <p className="mt-2 text-[13px] text-foreground">
+                {authModes.map((mode) => getAuthModeLabel(mode, t)).join(' / ')}
+              </p>
+            </div>
+          ) : null}
           {typeInfo?.defaultModelId ? (
             <div className="rounded-2xl border border-black/8 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.03]">
               <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
