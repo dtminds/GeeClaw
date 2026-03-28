@@ -8,7 +8,7 @@ Installed preset agents are "managed" by GeeClaw. Managed status does not mean e
 
 - `id` stays fixed.
 - `workspace` stays fixed.
-- persona files remain read-only until the user explicitly unmanages the agent.
+- persona file locks are enforced per file by managed policy.
 - `skills` remain editable, but preset-defined skills cannot be removed while the agent is managed.
 
 Users can later choose "Unmanage" to convert a preset agent into a normal custom agent. Unmanaging preserves the current config snapshot and removes preset-origin restrictions.
@@ -50,10 +50,10 @@ Without that layer, "preset agents" would be little more than copy suggestions. 
 
 The current app already has the major foundations needed for this feature:
 
-- [electron/utils/agent-config.ts](/Users/lsave/workspace/AI/ClawX/electron/utils/agent-config.ts) owns agent config reads, writes, and filesystem provisioning.
-- [electron/services/agents/agent-runtime-sync.ts](/Users/lsave/workspace/AI/ClawX/electron/services/agents/agent-runtime-sync.ts) syncs GeeClaw-managed agent state back into `openclaw.json`.
-- [src/pages/Agents/index.tsx](/Users/lsave/workspace/AI/ClawX/src/pages/Agents/index.tsx) already provides the main agent management UI.
-- [src/pages/Chat/PersonaDrawer.tsx](/Users/lsave/workspace/AI/ClawX/src/pages/Chat/PersonaDrawer.tsx) is a second editing surface for persona files and must therefore respect managed restrictions too.
+- [electron/utils/agent-config.ts](../../../electron/utils/agent-config.ts) owns agent config reads, writes, and filesystem provisioning.
+- [electron/services/agents/agent-runtime-sync.ts](../../../electron/services/agents/agent-runtime-sync.ts) syncs GeeClaw-managed agent state back into `openclaw.json`.
+- [src/pages/Agents/index.tsx](../../../src/pages/Agents/index.tsx) already provides the main agent management UI.
+- [src/pages/Chat/PersonaDrawer.tsx](../../../src/pages/Chat/PersonaDrawer.tsx) is a second editing surface for persona files and must therefore respect managed restrictions too.
 
 This feature should extend those foundations instead of introducing a second agent system.
 
@@ -78,7 +78,7 @@ Managed status means:
 
 - the agent remains linked to a `presetId`,
 - some fields are fixed by policy,
-- persona editing is blocked,
+- locked persona files remain protected while other persona files may still be editable,
 - preset workspace files such as `AGENTS.md` remain template-owned until unmanage,
 - preset-origin skills form a non-removable minimum set,
 - the user may still add extra skills within the v1 limit.
@@ -105,7 +105,7 @@ Validation rules:
 
 - at most 6 skills in `Specified` mode,
 - no duplicate skill keys,
-- empty `Specified` is invalid and should become `Default`,
+- empty `Specified` is invalid,
 - preset-defined skill count must also be `<= 6`.
 
 ## Product Rules
@@ -208,7 +208,7 @@ The settings modal for a managed agent should show:
 - read-only `id`,
 - read-only `workspace`,
 - a skill scope editor with managed guidance,
-- a read-only persona section with explanation,
+- a managed persona section with per-file lock explanation,
 - channel bindings,
 - a primary management action: `Unmanage`.
 
@@ -238,14 +238,17 @@ Suggested helper copy:
 
 ### Persona Editing UX
 
-The chat-side persona drawer must support read-only managed mode.
+The chat-side persona drawer must support per-file managed locks.
 
 For managed agents:
 
 - content remains visible,
-- textareas become read-only,
-- save action is hidden or disabled,
-- the drawer explains that persona files can be edited after unmanaging the agent.
+- locked persona files render read-only,
+- unlocked persona files remain editable,
+- save behavior only persists unlocked files,
+- the drawer explains the lock state only for the active locked tab.
+
+The current managed preset policy locks `IDENTITY.md` while keeping `USER.md`, `MEMORY.md`, and `SOUL.md` editable.
 
 This rule must also be enforced on the API, not just in the UI.
 
@@ -357,7 +360,7 @@ Examples:
 ```json
 {
   "id": "researcher",
-  "workspace": "/Users/lsave/.openclaw-geeclaw/workspace-researcher"
+  "workspace": "~/.openclaw-geeclaw/workspace-researcher"
 }
 ```
 
@@ -366,7 +369,7 @@ Examples:
 ```json
 {
   "id": "stockexpert",
-  "workspace": "/Users/lsave/.openclaw-geeclaw/workspace-stockexpert",
+  "workspace": "~/.openclaw-geeclaw/workspace-stockexpert",
   "skills": ["stock-analyzer", "stock-announcements", "stock-explorer"]
 }
 ```
@@ -522,15 +525,15 @@ Renderer must not decide policy on its own. It may pre-disable invalid actions, 
 Primary implementation areas:
 
 - `resources/agent-presets/*`
-- [electron/utils/agent-config.ts](/Users/lsave/workspace/AI/ClawX/electron/utils/agent-config.ts)
-- [electron/api/routes/agents.ts](/Users/lsave/workspace/AI/ClawX/electron/api/routes/agents.ts)
-- [electron/services/agents/store-instance.ts](/Users/lsave/workspace/AI/ClawX/electron/services/agents/store-instance.ts)
-- [electron/services/agents/agent-runtime-sync.ts](/Users/lsave/workspace/AI/ClawX/electron/services/agents/agent-runtime-sync.ts)
-- [electron/utils/paths.ts](/Users/lsave/workspace/AI/ClawX/electron/utils/paths.ts)
-- [src/types/agent.ts](/Users/lsave/workspace/AI/ClawX/src/types/agent.ts)
-- [src/stores/agents.ts](/Users/lsave/workspace/AI/ClawX/src/stores/agents.ts)
-- [src/pages/Agents/index.tsx](/Users/lsave/workspace/AI/ClawX/src/pages/Agents/index.tsx)
-- [src/pages/Chat/PersonaDrawer.tsx](/Users/lsave/workspace/AI/ClawX/src/pages/Chat/PersonaDrawer.tsx)
+- [electron/utils/agent-config.ts](../../../electron/utils/agent-config.ts)
+- [electron/api/routes/agents.ts](../../../electron/api/routes/agents.ts)
+- [electron/services/agents/store-instance.ts](../../../electron/services/agents/store-instance.ts)
+- [electron/services/agents/agent-runtime-sync.ts](../../../electron/services/agents/agent-runtime-sync.ts)
+- [electron/utils/paths.ts](../../../electron/utils/paths.ts)
+- [src/types/agent.ts](../../../src/types/agent.ts)
+- [src/stores/agents.ts](../../../src/stores/agents.ts)
+- [src/pages/Agents/index.tsx](../../../src/pages/Agents/index.tsx)
+- [src/pages/Chat/PersonaDrawer.tsx](../../../src/pages/Chat/PersonaDrawer.tsx)
 
 The runtime sync layer should continue syncing only OpenClaw-compatible agent fields and should not write GeeClaw management metadata into `openclaw.json`.
 

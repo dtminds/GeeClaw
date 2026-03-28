@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getAgentPresetsDir } from './paths';
+import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 
 const RECOGNIZED_MANAGED_FILES = new Set([
   'AGENTS.md',
@@ -30,10 +31,6 @@ const RECOGNIZED_SKILL_SCOPE_KEYS = new Set(['mode', 'skills']);
 const RECOGNIZED_LOCKED_FIELDS = new Set(['id', 'workspace', 'persona']);
 const RECOGNIZED_MANAGED_POLICY_KEYS = new Set(['lockedFields', 'canUnmanage']);
 const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-export type AgentSkillScope =
-  | { mode: 'default'; skills?: never }
-  | { mode: 'specified'; skills: string[] };
 
 export interface AgentPresetMeta {
   presetId: string;
@@ -111,26 +108,6 @@ function assertSupportedKeys(
   throw new Error(`Preset "${presetId}" ${field} has unsupported keys: ${unsupportedKeys.join(', ')}`);
 }
 
-function normalizeSpecifiedSkills(skills: unknown): string[] {
-  const list = Array.isArray(skills) ? skills : [];
-  if (list.some((value) => typeof value !== 'string' || !value.trim())) {
-    throw new Error('Preset specified skill scope must contain only non-empty string skills');
-  }
-  const normalized = list
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (new Set(normalized).size !== normalized.length) {
-    throw new Error('Preset specified skill scope must not contain duplicate skills');
-  }
-
-  if (normalized.length > 6) {
-    throw new Error('Preset specified skill scope must not contain more than 6 skills');
-  }
-  return normalized;
-}
-
 function normalizeModelConfig(
   presetId: string,
   model: unknown,
@@ -175,10 +152,12 @@ function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillS
     return { mode: 'default' };
   }
   if (scope.mode === 'specified') {
-    const skills = normalizeSpecifiedSkills(scope.skills);
-    if (skills.length === 0) {
-      throw new Error(`Preset "${presetId}" specified skill scope must contain at least 1 skill`);
-    }
+    const skills = normalizeSpecifiedSkillList(scope.skills, {
+      invalidEntryError: 'Preset specified skill scope must contain only non-empty string skills',
+      duplicateError: 'Preset specified skill scope must not contain duplicate skills',
+      emptyError: `Preset "${presetId}" specified skill scope must contain at least 1 skill`,
+      tooManyError: 'Preset specified skill scope must not contain more than 6 skills',
+    });
     return { mode: 'specified', skills };
   }
 

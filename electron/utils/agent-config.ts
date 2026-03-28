@@ -6,6 +6,7 @@ import { expandPath, getOpenClawConfigDir } from './paths';
 import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
+import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
@@ -87,10 +88,6 @@ type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
 const LOCKED_MANAGED_PERSONA_FILES: PersonaFieldKey[] = ['identity'];
 const LOCKED_MANAGED_PERSONA_FILE_SET = new Set<PersonaFieldKey>(LOCKED_MANAGED_PERSONA_FILES);
-
-export type AgentSkillScope =
-  | { mode: 'default'; skills?: never }
-  | { mode: 'specified'; skills: string[] };
 
 interface ManagedAgentMetadata {
   agentId: string;
@@ -233,20 +230,11 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
   const rawSkills = Array.isArray((scope as { skills?: unknown[] }).skills)
     ? (scope as { skills?: unknown[] }).skills ?? []
     : [];
-  const normalized = rawSkills
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (new Set(normalized).size !== normalized.length) {
-    throw new Error('Specified skill scope must not contain duplicate skills');
-  }
-  if (normalized.length === 0) {
-    throw new Error('Specified skill scope must contain at least 1 skill');
-  }
-  if (normalized.length > 6) {
-    throw new Error('Specified skill scope must not contain more than 6 skills');
-  }
+  const normalized = normalizeSpecifiedSkillList(rawSkills, {
+    duplicateError: 'Specified skill scope must not contain duplicate skills',
+    emptyError: 'Specified skill scope must contain at least 1 skill',
+    tooManyError: 'Specified skill scope must not contain more than 6 skills',
+  });
 
   return { mode: 'specified', skills: normalized };
 }

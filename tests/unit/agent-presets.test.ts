@@ -1,12 +1,11 @@
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 const bundledPresetsDir = join(process.cwd(), 'resources', 'agent-presets');
 const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
-const originalMaxListeners = process.getMaxListeners();
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -98,14 +97,6 @@ afterEach(() => {
     const dir = tempDirs.pop();
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
-});
-
-beforeAll(() => {
-  process.setMaxListeners(Math.max(originalMaxListeners, 30));
-});
-
-afterAll(() => {
-  process.setMaxListeners(originalMaxListeners);
 });
 
 describe('agent preset paths', () => {

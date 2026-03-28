@@ -80,8 +80,17 @@ function flushBufferSync(): void {
   writeBuffer = [];
 }
 
+type LoggerGlobalState = typeof globalThis & {
+  __geeclawLoggerExitHandlerRegistered__?: boolean;
+};
+
+const loggerGlobalState = globalThis as LoggerGlobalState;
+
 // Ensure all buffered data reaches disk before the process exits.
-process.on('exit', flushBufferSync);
+if (!loggerGlobalState.__geeclawLoggerExitHandlerRegistered__) {
+  process.on('exit', flushBufferSync);
+  loggerGlobalState.__geeclawLoggerExitHandlerRegistered__ = true;
+}
 
 // ── Initialisation ───────────────────────────────────────────────
 
