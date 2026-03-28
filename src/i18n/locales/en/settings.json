@@ -107,12 +107,28 @@
       "fallback": "Fallback Settings"
     },
     "add": "Add Provider",
+    "addAccount": "Add Account",
     "custom": "Custom",
     "notRequired": "Not required",
     "empty": {
       "title": "No providers configured",
       "desc": "Add an AI provider to start using GeeClaw",
       "cta": "Add Your First Provider"
+    },
+    "list": {
+      "enable": "Enable provider",
+      "disable": "Disable provider",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "needsSetup": "Needs setup"
+    },
+    "inactive": {
+      "title": "This provider is not enabled yet",
+      "enable": "Enable and configure",
+      "notEnabled": "Not enabled",
+      "authModes": "Authentication",
+      "defaultModel": "Default model",
+      "baseUrl": "Default base URL"
     },
     "dialog": {
       "title": "Add AI Provider",

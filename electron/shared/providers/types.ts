@@ -78,6 +78,7 @@ export interface ProviderTypeInfo {
   id: ProviderType;
   name: string;
   icon: string;
+  invertIconInDark?: boolean;
   placeholder: string;
   model?: string;
   requiresApiKey: boolean;

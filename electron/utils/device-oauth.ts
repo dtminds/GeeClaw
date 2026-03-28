@@ -269,7 +269,7 @@ class DeviceOAuthManager extends EventEmitter {
         const existing = await providerService.getAccount(accountId);
         const nameMap: Record<OAuthProviderType, string> = {
             'minimax-portal': 'MiniMax (Global)',
-            'minimax-portal-cn': 'MiniMax (CN)',
+            'minimax-portal-cn': 'MiniMax',
             'qwen-portal': 'Qwen',
         };
         const nextAccount: ProviderAccount = {

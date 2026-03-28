@@ -22,7 +22,7 @@ describe('provider metadata', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'ark',
-          name: 'ByteDance Ark',
+          name: '火山方舟',
           requiresApiKey: true,
           defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
           showBaseUrl: true,

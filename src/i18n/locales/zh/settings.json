@@ -107,12 +107,28 @@
       "fallback": "回退配置"
     },
     "add": "添加提供商",
+    "addAccount": "添加账户",
     "custom": "自定义",
     "notRequired": "非必填",
     "empty": {
       "title": "未配置提供商",
       "desc": "添加 AI 提供商以开始使用 GeeClaw",
       "cta": "添加您的第一个提供商"
+    },
+    "list": {
+      "enable": "启用提供商",
+      "disable": "停用提供商",
+      "enabled": "已启用",
+      "disabled": "未启用",
+      "needsSetup": "待完成配置"
+    },
+    "inactive": {
+      "title": "该服务提供商尚未启用",
+      "enable": "启用并配置",
+      "notEnabled": "未启用",
+      "authModes": "认证方式",
+      "defaultModel": "默认模型",
+      "baseUrl": "默认 Base URL"
     },
     "dialog": {
       "title": "添加 AI 模型提供商",
@@ -187,7 +203,7 @@
     "oauth": {
       "loginMode": "OAuth 登录",
       "apikeyMode": "API 密钥",
-      "loginPrompt": "此提供商需要通过浏览器登录授权。",
+      "loginPrompt": "此提供商需要通过浏览器登录授权",
       "loginButton": "浏览器登录",
       "getApiKey": "获取 API 密钥",
       "waiting": "等待中...",

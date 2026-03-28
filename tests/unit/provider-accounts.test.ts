@@ -35,7 +35,7 @@ describe('provider account runtime namespaces', () => {
     expect(getProviderAccountRuntimeKey(makeAccount({
       id: 'minimax-portal-cn',
       vendorId: 'minimax-portal-cn',
-      label: 'MiniMax (CN)',
+      label: 'MiniMax',
       authMode: 'oauth_device',
     }))).toBe('minimax-portal');
 
