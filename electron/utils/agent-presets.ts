@@ -9,7 +9,26 @@ const RECOGNIZED_MANAGED_FILES = new Set([
   'SOUL.md',
   'MEMORY.md',
 ]);
+const RECOGNIZED_META_KEYS = new Set([
+  'presetId',
+  'name',
+  'description',
+  'iconKey',
+  'category',
+  'managed',
+  'agent',
+  'managedPolicy',
+]);
+const RECOGNIZED_AGENT_KEYS = new Set([
+  'id',
+  'workspace',
+  'model',
+  'skillScope',
+]);
+const RECOGNIZED_MODEL_KEYS = new Set(['primary', 'fallbacks']);
+const RECOGNIZED_SKILL_SCOPE_KEYS = new Set(['mode', 'skills']);
 const RECOGNIZED_LOCKED_FIELDS = new Set(['id', 'workspace', 'persona']);
+const RECOGNIZED_MANAGED_POLICY_KEYS = new Set(['lockedFields', 'canUnmanage']);
 const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export type AgentSkillScope =
@@ -40,6 +59,21 @@ export interface AgentPresetPackage {
   files: Record<string, string>;
 }
 
+function requirePlainObject(
+  value: unknown,
+  field: string,
+  presetId?: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (presetId) {
+      throw new Error(`Preset "${presetId}" ${field} is invalid`);
+    }
+    throw new Error(`Preset ${field} is invalid`);
+  }
+
+  return value as Record<string, unknown>;
+}
+
 function requireNonEmptyString(value: unknown, field: string, presetId?: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     if (presetId) {
@@ -58,6 +92,23 @@ function validatePresetAgentId(agentId: string): string {
     throw new Error('Agent ID "main" is reserved.');
   }
   return agentId;
+}
+
+function assertSupportedKeys(
+  record: Record<string, unknown>,
+  allowedKeys: Set<string>,
+  field: string,
+  presetId: string,
+): void {
+  const unsupportedKeys = Object.keys(record).filter((key) => !allowedKeys.has(key));
+  if (unsupportedKeys.length === 0) {
+    return;
+  }
+
+  if (field === 'meta') {
+    throw new Error(`Preset "${presetId}" has unsupported keys: ${unsupportedKeys.join(', ')}`);
+  }
+  throw new Error(`Preset "${presetId}" ${field} has unsupported keys: ${unsupportedKeys.join(', ')}`);
 }
 
 function normalizeSpecifiedSkills(skills: unknown): string[] {
@@ -80,12 +131,46 @@ function normalizeSpecifiedSkills(skills: unknown): string[] {
   return normalized;
 }
 
-function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillScope {
-  if (!skillScope || typeof skillScope !== 'object' || Array.isArray(skillScope)) {
-    throw new Error(`Preset "${presetId}" agent.skillScope is required`);
+function normalizeModelConfig(
+  presetId: string,
+  model: unknown,
+): AgentPresetMeta['agent']['model'] | undefined {
+  if (model == null) {
+    return undefined;
+  }
+  if (typeof model === 'string') {
+    return requireNonEmptyString(model, 'agent.model', presetId);
   }
 
-  const scope = skillScope as { mode?: unknown; skills?: unknown };
+  const record = requirePlainObject(model, 'agent.model', presetId);
+  assertSupportedKeys(record, RECOGNIZED_MODEL_KEYS, 'agent.model', presetId);
+
+  const primary = record.primary === undefined
+    ? undefined
+    : requireNonEmptyString(record.primary, 'agent.model.primary', presetId);
+  let fallbacks: string[] | undefined;
+  if (record.fallbacks !== undefined) {
+    if (
+      !Array.isArray(record.fallbacks)
+      || record.fallbacks.some((value) => typeof value !== 'string' || !value.trim())
+    ) {
+      throw new Error(`Preset "${presetId}" agent.model.fallbacks is invalid`);
+    }
+    fallbacks = record.fallbacks.map((value) => value.trim());
+  }
+
+  return {
+    primary,
+    fallbacks,
+  };
+}
+
+function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillScope {
+  const scope = requirePlainObject(skillScope, 'agent.skillScope', presetId) as {
+    mode?: unknown;
+    skills?: unknown;
+  };
+  assertSupportedKeys(scope, RECOGNIZED_SKILL_SCOPE_KEYS, 'agent.skillScope', presetId);
   if (scope.mode === 'default') {
     return { mode: 'default' };
   }
@@ -107,11 +192,17 @@ function normalizeManagedPolicy(
   if (managedPolicy == null) {
     return undefined;
   }
-  if (typeof managedPolicy !== 'object' || Array.isArray(managedPolicy)) {
-    throw new Error(`Preset "${presetId}" managedPolicy is invalid`);
-  }
-
-  const policy = managedPolicy as AgentPresetMeta['managedPolicy'];
+  const policy = requirePlainObject(
+    managedPolicy,
+    'managedPolicy',
+    presetId,
+  ) as AgentPresetMeta['managedPolicy'];
+  assertSupportedKeys(
+    policy as unknown as Record<string, unknown>,
+    RECOGNIZED_MANAGED_POLICY_KEYS,
+    'managedPolicy',
+    presetId,
+  );
   if (policy.lockedFields !== undefined) {
     if (
       !Array.isArray(policy.lockedFields)
@@ -131,40 +222,47 @@ function normalizeManagedPolicy(
 }
 
 function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
-  const presetId = requireNonEmptyString(meta?.presetId, 'presetId');
+  const metaRecord = requirePlainObject(meta, 'meta.json');
+  const presetId = requireNonEmptyString(metaRecord.presetId, 'presetId');
+  assertSupportedKeys(metaRecord, RECOGNIZED_META_KEYS, 'meta', presetId);
+  const agentRecord = requirePlainObject(metaRecord.agent, 'agent', presetId);
+  assertSupportedKeys(agentRecord, RECOGNIZED_AGENT_KEYS, 'agent', presetId);
   const agentId = validatePresetAgentId(
-    requireNonEmptyString(meta?.agent?.id, 'agent.id', presetId),
+    requireNonEmptyString(agentRecord.id, 'agent.id', presetId),
   );
-  const workspace = requireNonEmptyString(meta?.agent?.workspace, 'agent.workspace', presetId);
+  const workspace = requireNonEmptyString(agentRecord.workspace, 'agent.workspace', presetId);
 
-  if (meta?.managed !== true) {
+  if (metaRecord.managed !== true) {
     throw new Error(`Preset "${presetId}" managed must be true`);
   }
 
   return {
     presetId,
-    name: requireNonEmptyString(meta?.name, 'name', presetId),
-    description: requireNonEmptyString(meta?.description, 'description', presetId),
-    iconKey: requireNonEmptyString(meta?.iconKey, 'iconKey', presetId),
-    category: requireNonEmptyString(meta?.category, 'category', presetId),
+    name: requireNonEmptyString(metaRecord.name, 'name', presetId),
+    description: requireNonEmptyString(metaRecord.description, 'description', presetId),
+    iconKey: requireNonEmptyString(metaRecord.iconKey, 'iconKey', presetId),
+    category: requireNonEmptyString(metaRecord.category, 'category', presetId),
     managed: true,
     agent: {
       id: agentId,
       workspace,
-      model: meta?.agent?.model,
-      skillScope: normalizeSkillScope(presetId, meta?.agent?.skillScope),
+      model: normalizeModelConfig(presetId, agentRecord.model),
+      skillScope: normalizeSkillScope(presetId, agentRecord.skillScope),
     },
-    managedPolicy: normalizeManagedPolicy(presetId, meta?.managedPolicy),
+    managedPolicy: normalizeManagedPolicy(presetId, metaRecord.managedPolicy),
   };
 }
 
-async function readPresetFiles(presetDir: string): Promise<Record<string, string>> {
+async function readPresetFiles(presetId: string, presetDir: string): Promise<Record<string, string>> {
   const filesDir = join(presetDir, 'files');
   let entries: string[] = [];
   try {
     entries = await readdir(filesDir);
-  } catch {
-    return {};
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {};
+    }
+    throw new Error(`Preset "${presetId}" managed files directory is invalid`);
   }
 
   const files: Record<string, string> = {};
@@ -181,16 +279,25 @@ export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
   const root = getAgentPresetsDir();
   const entries = await readdir(root, { withFileTypes: true });
   const packages: AgentPresetPackage[] = [];
+  const presetIds = new Set<string>();
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  for (const entry of entries.filter((item) => item.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
     const presetDir = join(root, entry.name);
     const meta = validateMeta(
       JSON.parse(await readFile(join(presetDir, 'meta.json'), 'utf8')) as AgentPresetMeta,
     );
+
+    if (presetIds.has(meta.presetId)) {
+      throw new Error(`Duplicate presetId "${meta.presetId}"`);
+    }
+    presetIds.add(meta.presetId);
+    if (meta.presetId !== entry.name) {
+      throw new Error(`Preset "${meta.presetId}" directory name must match presetId`);
+    }
+
     packages.push({
       meta,
-      files: await readPresetFiles(presetDir),
+      files: await readPresetFiles(meta.presetId, presetDir),
     });
   }
 
