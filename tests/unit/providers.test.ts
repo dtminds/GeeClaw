@@ -78,6 +78,10 @@ describe('provider metadata', () => {
       id: 'openai',
       isOAuth: true,
       supportsApiKey: true,
+      defaultModelId: 'gpt-5.4',
+      showModelId: true,
+      showModelIdInDevModeOnly: true,
+      modelIdPlaceholder: 'gpt-5.4',
       apiKeyUrl: 'https://platform.openai.com/api-keys',
     });
 
@@ -85,6 +89,21 @@ describe('provider metadata', () => {
       baseUrl: 'https://api.openai.com/v1',
       api: 'openai-responses',
       apiKeyEnv: 'OPENAI_API_KEY',
+    });
+  });
+
+  it('uses gemini-3-flash-preview for Google defaults across registries', () => {
+    const googleFrontend = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
+
+    expect(googleFrontend).toMatchObject({
+      id: 'google',
+      isOAuth: true,
+      supportsApiKey: true,
+      defaultModelId: 'gemini-3-flash-preview',
+      showModelId: true,
+      showModelIdInDevModeOnly: true,
+      modelIdPlaceholder: 'gemini-3-flash-preview',
+      apiKeyUrl: 'https://aistudio.google.com/app/apikey',
     });
   });
 
@@ -144,9 +163,21 @@ describe('provider metadata', () => {
   });
 
   it('exposes OpenRouter model overrides by default and keeps SiliconFlow developer-only', () => {
+    const openai = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openai');
+    const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
 
+    expect(openai).toMatchObject({
+      showModelId: true,
+      showModelIdInDevModeOnly: true,
+      defaultModelId: 'gpt-5.4',
+    });
+    expect(google).toMatchObject({
+      showModelId: true,
+      showModelIdInDevModeOnly: true,
+      defaultModelId: 'gemini-3-flash-preview',
+    });
     expect(openrouter).toMatchObject({
       showModelId: true,
       defaultModelId: 'openai/gpt-5.4',
@@ -157,23 +188,31 @@ describe('provider metadata', () => {
       defaultModelId: 'deepseek-ai/DeepSeek-V3',
     });
 
+    expect(shouldShowProviderModelId(openai, false)).toBe(false);
+    expect(shouldShowProviderModelId(google, false)).toBe(false);
     expect(shouldShowProviderModelId(openrouter, false)).toBe(true);
     expect(shouldShowProviderModelId(siliconflow, false)).toBe(false);
+    expect(shouldShowProviderModelId(openai, true)).toBe(true);
+    expect(shouldShowProviderModelId(google, true)).toBe(true);
     expect(shouldShowProviderModelId(openrouter, true)).toBe(true);
     expect(shouldShowProviderModelId(siliconflow, true)).toBe(true);
   });
 
   it('saves OpenRouter model overrides by default and keeps SiliconFlow developer-only', () => {
+    const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
     const ark = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'ark');
 
+    expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBeUndefined();
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBeUndefined();
 
+    expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', true)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
 
+    expect(resolveProviderModelForSave(google, '   ', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');

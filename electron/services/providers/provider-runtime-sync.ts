@@ -6,6 +6,7 @@ import type { ProviderConfig } from '../../utils/secure-storage';
 import { getApiKey, getDefaultProvider, getProvider } from '../../utils/secure-storage';
 import { getProviderConfig, getProviderDefaultModel } from '../../utils/provider-registry';
 import {
+  removeProviderKeyFromOpenClaw,
   saveOAuthTokenToOpenClaw,
   saveProviderKeyToOpenClaw,
 } from '../../utils/openclaw-auth';
@@ -22,7 +23,7 @@ import { logger } from '../../utils/logger';
 const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
 const GOOGLE_OAUTH_DEFAULT_MODEL_REF = `${GOOGLE_OAUTH_RUNTIME_PROVIDER}/gemini-3-flash-preview`;
 const OPENAI_OAUTH_RUNTIME_PROVIDER = 'openai-codex';
-const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.3-codex`;
+const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4`;
 
 type RuntimeProviderSyncContext = {
   runtimeProviderKey: string;
@@ -379,6 +380,20 @@ async function syncProviderToRuntime(
   return context;
 }
 
+async function removeDeletedProviderFromOpenClaw(
+  provider: ProviderConfig,
+  providerId: string,
+  runtimeProviderKey?: string,
+): Promise<void> {
+  const keys = new Set<string>();
+  keys.add(runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider, id: providerId }));
+  keys.add(providerId);
+
+  for (const key of keys) {
+    await removeProviderFromOpenClaw(key);
+  }
+}
+
 export async function syncSavedProviderToRuntime(
   config: ProviderConfig,
   apiKey: string | undefined,
@@ -439,7 +454,7 @@ export async function syncDeletedProviderToRuntime(
   }
 
   const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider, id: providerId });
-  await removeProviderFromOpenClaw(ock);
+  await removeDeletedProviderFromOpenClaw(provider, providerId, ock);
 
   scheduleGatewayRestart(
     gatewayManager,
@@ -452,12 +467,12 @@ export async function syncDeletedProviderApiKeyToRuntime(
   providerId: string,
   runtimeProviderKey?: string,
 ): Promise<void> {
-  if (!provider?.type) {
+  if (!provider?.type && !runtimeProviderKey) {
     return;
   }
 
-  const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider, id: providerId });
-  await removeProviderFromOpenClaw(ock);
+  const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider!, id: providerId });
+  await removeProviderKeyFromOpenClaw(ock);
 }
 
 export async function syncDefaultProviderToRuntime(

@@ -71,6 +71,84 @@ export interface AuthProfilesStore {
   lastGood?: Record<string, string>;
 }
 
+function removeProfilesForProvider(store: AuthProfilesStore, provider: string): boolean {
+  const removedProfileIds = new Set<string>();
+
+  for (const [profileId, profile] of Object.entries(store.profiles)) {
+    if (profile?.provider !== provider) {
+      continue;
+    }
+
+    delete store.profiles[profileId];
+    removedProfileIds.add(profileId);
+  }
+
+  if (removedProfileIds.size === 0) {
+    return false;
+  }
+
+  if (store.order) {
+    for (const [orderProvider, profileIds] of Object.entries(store.order)) {
+      const nextProfileIds = profileIds.filter((profileId) => !removedProfileIds.has(profileId));
+      if (nextProfileIds.length > 0) {
+        store.order[orderProvider] = nextProfileIds;
+      } else {
+        delete store.order[orderProvider];
+      }
+    }
+  }
+
+  if (store.lastGood) {
+    for (const [lastGoodProvider, profileId] of Object.entries(store.lastGood)) {
+      if (removedProfileIds.has(profileId)) {
+        delete store.lastGood[lastGoodProvider];
+      }
+    }
+  }
+
+  return true;
+}
+
+function removeProfileFromStore(
+  store: AuthProfilesStore,
+  profileId: string,
+  expectedType?: AuthProfileEntry['type'] | OAuthProfileEntry['type'],
+): boolean {
+  const profile = store.profiles[profileId];
+  let changed = false;
+  const shouldCleanReferences = !profile || !expectedType || profile.type === expectedType;
+
+  if (profile && (!expectedType || profile.type === expectedType)) {
+    delete store.profiles[profileId];
+    changed = true;
+  }
+
+  if (shouldCleanReferences && store.order) {
+    for (const [orderProvider, profileIds] of Object.entries(store.order)) {
+      const nextProfileIds = profileIds.filter((id) => id !== profileId);
+      if (nextProfileIds.length !== profileIds.length) {
+        changed = true;
+      }
+      if (nextProfileIds.length > 0) {
+        store.order[orderProvider] = nextProfileIds;
+      } else {
+        delete store.order[orderProvider];
+      }
+    }
+  }
+
+  if (shouldCleanReferences && store.lastGood) {
+    for (const [lastGoodProvider, lastGoodProfileId] of Object.entries(store.lastGood)) {
+      if (lastGoodProfileId === profileId) {
+        delete store.lastGood[lastGoodProvider];
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
 function getAuthProfilesPath(agentId = 'main'): string {
   return join(getOpenClawConfigDir(), 'agents', agentId, 'agent', AUTH_PROFILE_FILENAME);
 }
@@ -186,30 +264,35 @@ export async function saveProviderKeyToOpenClaw(
   console.log(`Saved API key for provider "${provider}" to OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
 }
 
-export async function removeProviderKeyFromOpenClaw(
+export async function removeProviderProfilesFromOpenClaw(
   provider: string,
   agentId?: string
 ): Promise<void> {
-  if (isOAuthProviderType(provider)) {
-    console.log(`Skipping auth-profiles removal for OAuth provider "${provider}" (managed by OpenClaw plugin)`);
-    return;
-  }
   const agentIds = agentId ? [agentId] : await discoverOpenClawAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
 
   for (const id of agentIds) {
     const store = await readOpenClawAuthProfiles(id);
-    const profileId = `${provider}:default`;
-
-    delete store.profiles[profileId];
-
-    if (store.order?.[provider]) {
-      store.order[provider] = store.order[provider].filter((aid) => aid !== profileId);
-      if (store.order[provider].length === 0) delete store.order[provider];
+    if (removeProfilesForProvider(store, provider)) {
+      await writeOpenClawAuthProfiles(store, id);
     }
-    if (store.lastGood?.[provider] === profileId) delete store.lastGood[provider];
+  }
 
-    await writeOpenClawAuthProfiles(store, id);
+  console.log(`Removed auth profiles for provider "${provider}" from OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
+}
+
+export async function removeProviderKeyFromOpenClaw(
+  provider: string,
+  agentId?: string
+): Promise<void> {
+  const agentIds = agentId ? [agentId] : await discoverOpenClawAgentIds();
+  if (agentIds.length === 0) agentIds.push('main');
+
+  for (const id of agentIds) {
+    const store = await readOpenClawAuthProfiles(id);
+    if (removeProfileFromStore(store, `${provider}:default`, 'api_key')) {
+      await writeOpenClawAuthProfiles(store, id);
+    }
   }
   console.log(`Removed API key for provider "${provider}" from OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
 }
