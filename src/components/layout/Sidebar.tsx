@@ -9,6 +9,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
   DashboardSpeed01Icon,
+  LogoutSquare01Icon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   Settings03Icon,
@@ -27,6 +28,7 @@ import { useSessionStore } from '@/stores/session';
 import { useBootstrapStore } from '@/stores/bootstrap';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { invokeIpc } from '@/lib/api-client';
 import { subscribeHostEvent } from '@/lib/host-events';
 import { useTranslation } from 'react-i18next';
@@ -114,6 +116,7 @@ export function Sidebar() {
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
   const [sidebarExpandedContentReady, setSidebarExpandedContentReady] = useState(!sidebarCollapsed);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const accountMenuCloseTimerRef = useRef<number | null>(null);
 
   const desktopSessions = useChatStore((s) => s.desktopSessions);
@@ -133,6 +136,8 @@ export function Sidebar() {
   const settingsModalState = getSettingsModalState(location);
 
   const { t } = useTranslation(['common', 'chat']);
+  const settingsPath = getSettingsModalPath('appearance');
+  const accountDisplayName = sessionAccount?.nickName || sessionAccount?.displayName || t('sidebar.loggedIn');
 
   useEffect(() => {
     if (!isMac) return;
@@ -379,7 +384,7 @@ export function Sidebar() {
       <div className="mt-auto px-3 pb-3 pt-2">
         {sidebarCollapsed ? (
           <NavLink
-            to={getSettingsModalPath('appearance')}
+            to={settingsPath}
             state={settingsModalState}
             className={({ isActive }) =>
               cn(
@@ -398,60 +403,26 @@ export function Sidebar() {
         ) : (
           <div className="flex items-center gap-2 px-1 py-1">
             {sessionStatus === 'authenticated' ? (
-              <DropdownMenu.Root modal={false} open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
-                <DropdownMenu.Trigger asChild>
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:hover:bg-white/6"
-                    onMouseEnter={openAccountMenu}
-                    onMouseLeave={scheduleAccountMenuClose}
-                    onFocus={openAccountMenu}
-                  >
-                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        {(sessionAccount?.displayName || sessionAccount?.nickName || 'G').slice(0, 1).toUpperCase()}
-                      </span>
-                      {sessionAccount?.avatarUrl ? (
-                        <img
-                          src={sessionAccount.avatarUrl}
-                          alt={sessionAccount.displayName || sessionAccount.nickName || 'avatar'}
-                          className="absolute inset-0 h-full w-full object-cover"
-                          onError={(event) => {
-                            event.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <p className="truncate text-[13px] font-medium text-foreground">
-                      {sessionAccount?.nickName || sessionAccount?.displayName || t('sidebar.loggedIn')}
-                    </p>
-                  </button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    side="top"
-                    align="start"
-                    sideOffset={8}
-                    collisionPadding={12}
-                    className="z-50 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[180px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
-                    onMouseEnter={openAccountMenu}
-                    onMouseLeave={scheduleAccountMenuClose}
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                    }}
-                  >
-                    <DropdownMenu.Item
-                      className="mx-1 flex cursor-default items-center rounded-lg px-3 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
-                      onSelect={() => {
-                        setAccountMenuOpen(false);
-                        void logoutToLogin().catch(() => {});
+              <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 dark:hover:bg-white/6">
+                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    {(sessionAccount?.displayName || sessionAccount?.nickName || 'G').slice(0, 1).toUpperCase()}
+                  </span>
+                  {sessionAccount?.avatarUrl ? (
+                    <img
+                      src={sessionAccount.avatarUrl}
+                      alt={sessionAccount.displayName || sessionAccount.nickName || 'avatar'}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
                       }}
-                    >
-                      {t('sidebar.logout', 'Logout')}
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
+                    />
+                  ) : null}
+                </div>
+                <p className="truncate text-[13px] font-medium text-foreground">
+                  {accountDisplayName}
+                </p>
+              </div>
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 dark:hover:bg-white/6">
                 <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
@@ -462,28 +433,117 @@ export function Sidebar() {
                 </p>
               </div>
             )}
-
-            <NavLink
-              to={getSettingsModalPath('appearance')}
-              state={settingsModalState}
-              className={({ isActive }) =>
-                cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
-                  sidebarItemBaseClass,
-                  (isActive || isSettingsModalPath(location.pathname)) && sidebarItemActiveClass,
-                )
-              }
-              title={t('sidebar.settings')}
-            >
-              {({ isActive }) => (
-                <div className={cn('flex shrink-0 items-center justify-center', isActive ? 'text-primary' : 'text-muted-foreground')}>
-                  <SidebarGlyph icon={Settings03Icon} />
-                </div>
-              )}
-            </NavLink>
+            {sessionStatus === 'authenticated' ? (
+              <DropdownMenu.Root modal={false} open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
+                      sidebarItemBaseClass,
+                      isSettingsModalPath(location.pathname) && sidebarItemActiveClass,
+                    )}
+                    title={t('sidebar.settings')}
+                    onMouseEnter={openAccountMenu}
+                    onMouseLeave={scheduleAccountMenuClose}
+                    onFocus={openAccountMenu}
+                  >
+                    <div className={cn('flex shrink-0 items-center justify-center', isSettingsModalPath(location.pathname) ? 'text-primary' : 'text-muted-foreground')}>
+                      <SidebarGlyph icon={Settings03Icon} />
+                    </div>
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="top"
+                    align="end"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className="z-50 w-[220px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
+                    onMouseEnter={openAccountMenu}
+                    onMouseLeave={scheduleAccountMenuClose}
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    <DropdownMenu.Label className="mx-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-foreground">
+                      <div className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[10px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          {(sessionAccount?.displayName || sessionAccount?.nickName || 'G').slice(0, 1).toUpperCase()}
+                        </span>
+                        {sessionAccount?.avatarUrl ? (
+                          <img
+                            src={sessionAccount.avatarUrl}
+                            alt={sessionAccount.displayName || sessionAccount.nickName || 'avatar'}
+                            className="absolute inset-0 h-full w-full object-cover"
+                            onError={(event) => {
+                              event.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <span className="truncate">{accountDisplayName}</span>
+                    </DropdownMenu.Label>
+                    <DropdownMenu.Separator className="mx-2 my-1 h-px bg-black/8 dark:bg-white/10" />
+                    <DropdownMenu.Item
+                      className="mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
+                      onSelect={() => {
+                        setAccountMenuOpen(false);
+                        navigate(settingsPath, { state: settingsModalState });
+                      }}
+                    >
+                      <SidebarGlyph icon={Settings03Icon} className="text-foreground/70" size={16} strokeWidth={1.8} />
+                      <span>{t('sidebar.settings')}</span>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
+                      onSelect={() => {
+                        setAccountMenuOpen(false);
+                        setLogoutConfirmOpen(true);
+                      }}
+                    >
+                      <SidebarGlyph icon={LogoutSquare01Icon} className="text-foreground/70" size={16} strokeWidth={1.8} />
+                      <span>{t('sidebar.logout', 'Logout')}</span>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            ) : (
+              <NavLink
+                to={settingsPath}
+                state={settingsModalState}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
+                    sidebarItemBaseClass,
+                    (isActive || isSettingsModalPath(location.pathname)) && sidebarItemActiveClass,
+                  )
+                }
+                title={t('sidebar.settings')}
+              >
+                {({ isActive }) => (
+                  <div className={cn('flex shrink-0 items-center justify-center', isActive ? 'text-primary' : 'text-muted-foreground')}>
+                    <SidebarGlyph icon={Settings03Icon} />
+                  </div>
+                )}
+              </NavLink>
+            )}
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title={t('sidebar.logoutConfirmTitle', '退出登录？')}
+        message={t('sidebar.logoutConfirmMessage', '确认后将退出当前账号，并返回登录页面。')}
+        confirmLabel={t('sidebar.logout', '退出登录')}
+        cancelLabel={t('actions.cancel', '取消')}
+        variant="destructive"
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          void logoutToLogin().catch(() => {});
+        }}
+        onCancel={() => setLogoutConfirmOpen(false)}
+      />
     </aside>
   );
 }
