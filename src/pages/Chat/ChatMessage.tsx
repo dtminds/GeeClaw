@@ -4,12 +4,13 @@
  * with markdown, thinking sections, images, and tool cards.
  */
 import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo, type CSSProperties } from 'react';
-import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, X, FolderOpen, ZoomIn } from 'lucide-react';
-import { Streamdown, defaultRemarkPlugins, type LinkSafetyModalProps } from 'streamdown';
+import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, X, FolderOpen, FolderSymlink, ZoomIn } from 'lucide-react';
+import { Streamdown, defaultRehypePlugins, defaultRemarkPlugins, type LinkSafetyModalProps } from 'streamdown';
 import { code } from '@streamdown/code';
 import { mermaid } from '@streamdown/mermaid';
 import { math } from '@streamdown/math';
 import { cjk } from '@streamdown/cjk';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkBreaks from 'remark-breaks';
 import spinners from 'unicode-animations';
 import 'katex/dist/katex.min.css';
@@ -35,6 +36,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import * as Popover from '@radix-ui/react-popover';
+import type { Pluggable } from 'unified';
 
 interface ChatMessageProps {
   message: RawMessage;
@@ -68,16 +70,28 @@ const STREAMDOWN_PLUGINS = {
 } as const;
 
 const STREAMDOWN_REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkBreaks];
+const STREAMDOWN_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    href: Array.from(new Set([...(defaultSchema.protocols?.href ?? []), 'tel', 'file'])),
+  },
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(Array.isArray(defaultSchema.attributes?.code) ? defaultSchema.attributes.code : []), 'metastring'],
+  },
+};
+const STREAMDOWN_REHYPE_SANITIZE_PLUGIN: Pluggable = [rehypeSanitize, STREAMDOWN_SANITIZE_SCHEMA];
+const STREAMDOWN_REHYPE_PLUGINS: Pluggable[] = [
+  defaultRehypePlugins.raw,
+  STREAMDOWN_REHYPE_SANITIZE_PLUGIN,
+];
+const FILE_NOT_FOUND_ERROR_REGEX = /path not found|no such file|does not exist/i;
 
 const MESSAGE_VISIBILITY_STYLE: CSSProperties = {
   contentVisibility: 'auto',
   containIntrinsicSize: '320px',
 };
-
-const STREAMDOWN_LINK_SAFETY = {
-  enabled: true,
-  renderModal: (props: LinkSafetyModalProps) => <ExternalLinkSafetyModal {...props} />,
-} as const;
 
 type SpinnerName = keyof typeof spinners;
 
@@ -946,6 +960,49 @@ function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: numb
 
 // ── Message Bubble ──────────────────────────────────────────────
 
+function getPathDisplayName(filePath: string): string {
+  const normalized = filePath.replace(/[\\/]+$/, '');
+  const parts = normalized.split(/[\\/]/);
+  return parts[parts.length - 1] || filePath;
+}
+
+function fileHrefToPath(href: string): string | null {
+  try {
+    const url = new URL(href);
+    if (url.protocol !== 'file:') {
+      return null;
+    }
+
+    const pathname = decodeURIComponent(url.pathname);
+    if (url.host) {
+      return `//${url.host}${pathname}`;
+    }
+    if (/^\/[A-Za-z]:/.test(pathname)) {
+      return pathname.slice(1);
+    }
+    return pathname || null;
+  } catch {
+    return null;
+  }
+}
+
+async function openLocalPath(filePath: string, displayName = getPathDisplayName(filePath)): Promise<void> {
+  try {
+    const errorMessage = await invokeIpc<string>('shell:openPath', filePath);
+    if (typeof errorMessage === 'string' && errorMessage.trim()) {
+      await invokeIpc('shell:showItemInFolder', filePath);
+      if (FILE_NOT_FOUND_ERROR_REGEX.test(errorMessage)) {
+        toast.error(`${displayName} 不存在`);
+        return;
+      }
+      toast.error(`无法直接打开 ${displayName}，已在文件夹中定位`);
+    }
+  } catch (error) {
+    console.error('Failed to open local path', error);
+    toast.error(`打开 ${displayName} 失败`);
+  }
+}
+
 function ExternalLinkSafetyModal({
   isOpen,
   onClose,
@@ -1094,6 +1151,77 @@ function ExternalLinkSafetyModal({
   );
 }
 
+function MarkdownLink({
+  children,
+  className,
+  href,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  href?: string;
+}) {
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const filePath = useMemo(() => (href ? fileHrefToPath(href) : null), [href]);
+  const isIncomplete = href === 'streamdown:incomplete-link';
+  const linkClassName = cn('wrap-anywhere font-medium text-primary underline', className);
+  const buttonClassName = cn('wrap-anywhere appearance-none text-left font-medium text-primary underline', className);
+
+  const handleOpenFile = useCallback(async () => {
+    if (!filePath) {
+      return;
+    }
+    await openLocalPath(filePath);
+  }, [filePath]);
+
+  const handleOpenExternal = useCallback(() => {
+    if (href) {
+      window.open(href, '_blank', 'noreferrer');
+    }
+  }, [href]);
+
+  const handleClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (isIncomplete || !href) {
+      return;
+    }
+    if (filePath) {
+      void handleOpenFile();
+      return;
+    }
+    setIsConfirmOpen(true);
+  }, [filePath, handleOpenFile, href, isIncomplete]);
+
+  if (isIncomplete || !href) {
+    return <span className={linkClassName}>{children}</span>;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={cn(buttonClassName, filePath && 'inline-flex items-center gap-1')}
+        data-streamdown="link"
+        onClick={handleClick}
+      >
+        <span>{children}</span>
+        {filePath ? <FolderSymlink data-testid="markdown-file-link-icon" className="h-3 w-3 shrink-0" /> : null}
+      </button>
+      {!filePath ? (
+        <ExternalLinkSafetyModal
+          isOpen={isConfirmOpen}
+          onClose={() => setIsConfirmOpen(false)}
+          onConfirm={handleOpenExternal}
+          url={href}
+        />
+      ) : null}
+    </>
+  );
+}
+
+const STREAMDOWN_COMPONENTS = {
+  a: MarkdownLink,
+} as const;
+
 function MessageBubble({
   text,
   isUser,
@@ -1142,8 +1270,9 @@ function MessageBubble({
             animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
             isAnimating={isStreaming}
             plugins={STREAMDOWN_PLUGINS}
+            components={STREAMDOWN_COMPONENTS}
+            rehypePlugins={STREAMDOWN_REHYPE_PLUGINS}
             remarkPlugins={STREAMDOWN_REMARK_PLUGINS}
-            linkSafety={STREAMDOWN_LINK_SAFETY}
           >
             {text}
           </Streamdown>
@@ -1185,6 +1314,8 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
               mode={isStreaming ? undefined : 'static'}
               animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
               isAnimating={isStreaming}
+              components={STREAMDOWN_COMPONENTS}
+              rehypePlugins={STREAMDOWN_REHYPE_PLUGINS}
               remarkPlugins={STREAMDOWN_REMARK_PLUGINS}
             >
               {content}
@@ -1210,21 +1341,7 @@ function FileIcon({ mimeType, className }: { mimeType: string; className?: strin
 function FileCard({ file }: { file: AttachedFileMeta }) {
   const handleOpen = useCallback(async () => {
     if (!file.filePath) return;
-
-    try {
-      const errorMessage = await invokeIpc<string>('shell:openPath', file.filePath);
-      if (typeof errorMessage === 'string' && errorMessage.trim()) {
-        await invokeIpc('shell:showItemInFolder', file.filePath);
-        if (/path not found|no such file|does not exist/i.test(errorMessage)) {
-          toast.error(`${file.fileName} 不存在`);
-          return;
-        }
-        toast.error(`无法直接打开 ${file.fileName}，已在文件夹中定位`);
-      }
-    } catch (error) {
-      console.error('Failed to open attached file', error);
-      toast.error(`打开 ${file.fileName} 失败`);
-    }
+    await openLocalPath(file.filePath, file.fileName);
   }, [file.fileName, file.filePath]);
 
   return (
