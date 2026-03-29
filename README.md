@@ -94,25 +94,10 @@ Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials s
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
 
 ### 📦 Bundled OpenClaw Runtime
-GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`. On first launch, after the app resolves session state, it rewrites `~/.openclaw-geeclaw/openclaw.json` so `agents.defaults.workspace` points to `~/geeclaw/workspace` on macOS/Linux and `%USERPROFILE%\geeclaw\workspace` on Windows, `agents.defaults.heartbeat.every` is fixed to `"2h"`, and `agents.defaults.maxConcurrent` is fixed to `3`, then runs `openclaw.mjs --profile geeclaw setup`, then starts the Gateway with `openclaw.mjs --profile geeclaw gateway --port 28788`. Existing system `openclaw` installations and `~/Library/LaunchAgents/ai.openclaw.gateway.plist` are left untouched.
-
-You can inspect the managed OpenClaw state directory from **Settings → Safety**. GeeClaw keeps `openclaw.json -> tools.fs.workspaceOnly` fixed at `false`, and that page controls the deny/exec/elevated safety policy written under `tools`. These safety values are persisted in the app settings store and validated back into `openclaw.json` on startup.
-Open **Settings → Advanced** to copy a terminal command that runs GeeClaw's bundled OpenClaw with the managed `geeclaw` profile, or install a user-level `geeclaw` command for terminal use without registering `openclaw` on your global PATH.
+GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
 
 ### 🧩 Managed Preset Agents
-GeeClaw now includes a built-in agent marketplace backed by bundled preset packages under `resources/agent-presets/<presetId>/`. A preset can define the installed agent `id`, `workspace`, optional `model`, per-agent skill allowlist, and managed persona files such as `AGENTS.md`, `IDENTITY.md`, `USER.md`, `SOUL.md`, and `MEMORY.md`.
-
-In the marketplace, every preset stays visible even when it only supports a subset of platforms. GeeClaw shows the supported-platform badges directly on the preset card, lets you open **View Details** to inspect the preset's agent ID, workspace, preset skills, managed files, and platform availability, and disables installation when the current OS is unsupported.
-
-When you install a preset agent:
-
-- GeeClaw writes the preset's portable runtime config into `~/.openclaw-geeclaw/openclaw.json`.
-- GeeClaw keeps local-only management metadata such as locked fields, managed files, preset ownership, and unmanage policy in the app store instead of leaking it into `openclaw.json`.
-- Skill scope can be either `default` or `specified`. `specified` mode must contain 1 to 6 skills.
-- Managed preset agents may add extra skills, but they cannot remove preset-defined skills until they are unmanaged.
-- If the preset locks persona files, the backend snapshot controls per-file editing. The current managed preset policy keeps `IDENTITY.md` locked while `USER.md`, `MEMORY.md`, and `SOUL.md` stay editable, and the Persona drawer shows the managed warning returned by the backend snapshot.
-
-If you choose **Unmanage**, GeeClaw keeps the current workspace and config, but removes preset enforcement for persona files and preset skill floors. After that, the agent behaves like a normal custom agent.
+GeeClaw now includes a built-in agent marketplace backed by bundled preset packages under `resources/agent-presets/<presetId>/`. 
 
 ---
 
