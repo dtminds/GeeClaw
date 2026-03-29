@@ -1,8 +1,16 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatMessage } from '@/pages/Chat/ChatMessage';
 import { buildChatItems } from '@/pages/Chat/build-chat-items';
 import type { RawMessage } from '@/stores/chat';
+
+const { invokeIpcMock } = vi.hoisted(() => ({
+  invokeIpcMock: vi.fn(),
+}));
+
+vi.mock('@/lib/api-client', () => ({
+  invokeIpc: invokeIpcMock,
+}));
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-i18next')>();
@@ -19,6 +27,10 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 describe('chat live rendering', () => {
+  beforeEach(() => {
+    invokeIpcMock.mockReset();
+  });
+
   it('renders text-tool-text as three separate live items', () => {
     const liveToolMessage: RawMessage = {
       role: 'assistant',
@@ -79,5 +91,30 @@ describe('chat live rendering', () => {
 
     const markdownBlocks = container.querySelectorAll('.chat-markdown');
     expect(markdownBlocks).toHaveLength(2);
+  });
+
+  it('renders file links as clickable actions that open local paths', () => {
+    const message: RawMessage = {
+      role: 'assistant',
+      id: 'assistant-file-link',
+      timestamp: 1,
+      content: '[project plan](file:///tmp/project%20plan.md)',
+    };
+
+    const { container } = render(
+      <ChatMessage
+        message={message}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.textContent).not.toContain('[blocked]');
+
+    const fileLink = screen.getByRole('button', { name: 'project plan' });
+    expect(screen.getByTestId('markdown-file-link-icon')).toBeInTheDocument();
+    fireEvent.click(fileLink);
+
+    expect(invokeIpcMock).toHaveBeenCalledWith('shell:openPath', '/tmp/project plan.md');
   });
 });
