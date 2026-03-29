@@ -86,6 +86,7 @@ const STREAMDOWN_REHYPE_PLUGINS: Pluggable[] = [
   defaultRehypePlugins.raw,
   STREAMDOWN_REHYPE_SANITIZE_PLUGIN,
 ];
+const FILE_NOT_FOUND_ERROR_REGEX = /path not found|no such file|does not exist/i;
 
 const MESSAGE_VISIBILITY_STYLE: CSSProperties = {
   contentVisibility: 'auto',
@@ -974,7 +975,7 @@ function fileHrefToPath(href: string): string | null {
 
     const pathname = decodeURIComponent(url.pathname);
     if (url.host) {
-      return `//${decodeURIComponent(url.host)}${pathname}`;
+      return `//${url.host}${pathname}`;
     }
     if (/^\/[A-Za-z]:/.test(pathname)) {
       return pathname.slice(1);
@@ -990,7 +991,7 @@ async function openLocalPath(filePath: string, displayName = getPathDisplayName(
     const errorMessage = await invokeIpc<string>('shell:openPath', filePath);
     if (typeof errorMessage === 'string' && errorMessage.trim()) {
       await invokeIpc('shell:showItemInFolder', filePath);
-      if (/path not found|no such file|does not exist/i.test(errorMessage)) {
+      if (FILE_NOT_FOUND_ERROR_REGEX.test(errorMessage)) {
         toast.error(`${displayName} 不存在`);
         return;
       }
