@@ -30,6 +30,10 @@ function restorePlatform(): void {
   }
 }
 
+function getExpectedWorkspacePath(homeDir: string, agentId: string): string {
+  return join(homeDir, 'geeclaw', agentId === 'main' ? 'workspace' : `workspace-${agentId}`);
+}
+
 async function setupManagedPresetFixture(options?: {
   presetMeta?: {
     name?: string;
@@ -67,6 +71,8 @@ async function setupManagedPresetFixture(options?: {
       getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
       expandPath: (value: string) => value.startsWith('~')
         ? value.replace('~', homeDir)
+        : value.startsWith('%USERPROFILE%')
+          ? value.replace('%USERPROFILE%', homeDir)
         : value,
     };
   });
@@ -74,7 +80,7 @@ async function setupManagedPresetFixture(options?: {
   const configDir = join(homeDir, '.openclaw-geeclaw');
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
-    agents: { defaults: { workspace: join(configDir, 'workspace') } },
+    agents: { defaults: { workspace: getExpectedWorkspacePath(homeDir, 'main') } },
   }, null, 2), 'utf8');
 
   const storeState: Record<string, unknown> = {};
@@ -99,7 +105,7 @@ async function setupManagedPresetFixture(options?: {
     managed: true,
     agent: {
       id: 'stockexpert',
-      workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+      workspace: '~/geeclaw/workspace-stockexpert',
       skillScope: {
         mode: 'specified' as const,
         skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -181,11 +187,11 @@ describe('managed agent config domain', () => {
   });
 
   it('installs a preset agent, seeds managed files, and writes skills into agents.list', async () => {
-    const { configDir, agentConfig } = await setupManagedPresetFixture();
+    const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
     const snapshot = await agentConfig.installPresetAgent('stock-expert');
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
-      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+      agents?: { list?: Array<{ id?: string; skills?: string[]; agentDir?: string }> };
     };
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
@@ -202,7 +208,12 @@ describe('managed agent config domain', () => {
       'stock-explorer',
       'web-search',
     ]);
-    expect(readFileSync(join(configDir, 'workspace-stockexpert', 'AGENTS.md'), 'utf8')).toContain('stock expert');
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('agentDir');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8')).toContain('stock expert');
+    expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
+      workspace: '~/geeclaw/workspace-stockexpert',
+      agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
+    });
   });
 
   it('preserves preset model config on the installed agent entry', async () => {
@@ -362,12 +373,12 @@ describe('managed agent config domain', () => {
 
   it('rejects installing presets that are unsupported on the current platform', async () => {
     setPlatform('win32');
-    const { agentConfig, configDir } = await setupManagedPresetFixture({
+    const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
       presetMeta: {
         platforms: ['darwin'],
       },
     });
-    const workspaceDir = join(configDir, 'workspace-stockexpert');
+    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
 
     await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
       'Preset "stock-expert" is only available on macOS',
@@ -379,5 +390,40 @@ describe('managed agent config domain', () => {
 
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
     expect(existsSync(workspaceDir)).toBe(false);
+  });
+
+  it('creates and deletes custom agents under the managed geeclaw workspace root', async () => {
+    const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
+
+    const created = await agentConfig.createAgent('Research Helper', 'research-helper');
+    expect(created.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      workspace: '~/geeclaw/workspace-research-helper',
+      agentDir: '~/.openclaw-geeclaw/agents/research-helper/agent',
+    });
+    const configAfterCreate = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        defaults?: { workspace?: string };
+        list?: Array<{ id?: string; workspace?: string; agentDir?: string }>;
+      };
+    };
+    expect(configAfterCreate.agents?.defaults?.workspace).toBe(getExpectedWorkspacePath(homeDir, 'main'));
+    expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'main')).not.toHaveProperty('workspace');
+    expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'main')).not.toHaveProperty('agentDir');
+    expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'research-helper')).not.toHaveProperty('agentDir');
+    expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
+
+    await agentConfig.deleteAgentConfig('research-helper');
+    expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(false);
+  });
+
+  it('uses %USERPROFILE%-based workspace defaults on Windows', async () => {
+    setPlatform('win32');
+    const { agentConfig } = await setupManagedPresetFixture();
+
+    const created = await agentConfig.createAgent('Windows Helper', 'windows-helper');
+    expect(created.agents.find((agent) => agent.id === 'windows-helper')).toMatchObject({
+      workspace: '%USERPROFILE%\\geeclaw\\workspace-windows-helper',
+      agentDir: '~/.openclaw-geeclaw/agents/windows-helper/agent',
+    });
   });
 });

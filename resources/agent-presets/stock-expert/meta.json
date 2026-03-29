@@ -8,7 +8,7 @@
   "platforms": ["darwin"],
   "agent": {
     "id": "stockexpert",
-    "workspace": "~/.openclaw-geeclaw/workspace-stockexpert",
+    "workspace": "~/geeclaw/workspace-stockexpert",
     "skillScope": {
       "mode": "specified",
       "skills": [
