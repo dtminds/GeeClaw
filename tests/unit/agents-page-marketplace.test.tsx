@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const fetchAgentsMock = vi.fn(async () => undefined);
@@ -54,6 +54,10 @@ vi.mock('react-i18next', () => ({
         return `Available on ${options?.platforms ?? ''}`;
       }
       return translations[key] || key;
+    },
+    i18n: {
+      resolvedLanguage: 'en',
+      language: 'en',
     },
   }),
 }));
@@ -112,6 +116,20 @@ vi.mock('@/stores/agents', () => ({
           managedFiles: ['AGENTS.md'],
           supportedOnCurrentPlatform: true,
         },
+        {
+          presetId: 'alpha-researcher',
+          name: 'Alpha Researcher',
+          description: '套利信号与候选池',
+          iconKey: 'research',
+          category: 'research',
+          managed: true,
+          agentId: 'alpha-researcher',
+          workspace: '~/.openclaw-geeclaw/workspace-alpha-researcher',
+          skillScope: { mode: 'specified' as const, skills: ['web-search', 'stock-analyzer'] },
+          presetSkills: ['web-search', 'stock-analyzer'],
+          managedFiles: ['AGENTS.md', 'USER.md'],
+          supportedOnCurrentPlatform: true,
+        },
       ],
       loading: false,
       error: null,
@@ -148,7 +166,7 @@ vi.mock('@/stores/gateway', () => ({
 }));
 
 describe('Agents marketplace view', () => {
-  it('opens preset details and disables unsupported installs with platform guidance', async () => {
+  it('opens preset details, disables unsupported installs, and still installs supported presets', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(<Agents />);
 
@@ -163,10 +181,13 @@ describe('Agents marketplace view', () => {
 
     expect(screen.getByText('Built-in Agent Marketplace')).toBeInTheDocument();
     expect(screen.getByText('捕捉热点和市场趋势')).toBeInTheDocument();
+    expect(screen.getByText('套利信号与候选池')).toBeInTheDocument();
     expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
     expect(screen.getByText('Available on macOS')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unavailable' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Installed' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(installPresetMock).toHaveBeenCalledWith('alpha-researcher');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
 
@@ -179,6 +200,5 @@ describe('Agents marketplace view', () => {
     expect(within(dialog).getByText('macOS')).toBeInTheDocument();
     expect(within(dialog).getByText('Available on macOS')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
-
   });
 });

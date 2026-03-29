@@ -20,6 +20,7 @@ export function getPresetPlatformLabels(
 
 export function getPresetAvailabilityCopy(
   t: TFunction<'agents'>,
+  locale: string | undefined,
   platforms?: AgentPresetPlatform[],
 ): string | null {
   if (!platforms || platforms.length === 0) {
@@ -28,7 +29,7 @@ export function getPresetAvailabilityCopy(
 
   const labels = getPresetPlatformLabels(t, platforms);
   const joined = typeof Intl !== 'undefined' && 'ListFormat' in Intl
-    ? new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' }).format(labels)
+    ? new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(labels)
     : labels.join(', ');
 
   return t('marketplace.availableOn', { platforms: joined });

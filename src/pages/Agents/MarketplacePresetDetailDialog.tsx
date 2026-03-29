@@ -20,7 +20,7 @@ export function MarketplacePresetDetailDialog({
   onClose,
   onInstall,
 }: MarketplacePresetDetailDialogProps) {
-  const { t } = useTranslation('agents');
+  const { t, i18n } = useTranslation('agents');
 
   if (!preset) {
     return null;
@@ -28,7 +28,7 @@ export function MarketplacePresetDetailDialog({
 
   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
   const availabilityCopy = !preset.supportedOnCurrentPlatform
-    ? getPresetAvailabilityCopy(t, preset.platforms)
+    ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
     : null;
 
   return (

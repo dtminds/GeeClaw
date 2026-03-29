@@ -102,6 +102,8 @@ Open **Settings → Advanced** to copy a terminal command that runs GeeClaw's bu
 ### 🧩 Managed Preset Agents
 GeeClaw now includes a built-in agent marketplace backed by bundled preset packages under `resources/agent-presets/<presetId>/`. A preset can define the installed agent `id`, `workspace`, optional `model`, per-agent skill allowlist, and managed persona files such as `AGENTS.md`, `IDENTITY.md`, `USER.md`, `SOUL.md`, and `MEMORY.md`.
 
+In the marketplace, every preset stays visible even when it only supports a subset of platforms. GeeClaw shows the supported-platform badges directly on the preset card, lets you open **View Details** to inspect the preset's agent ID, workspace, preset skills, managed files, and platform availability, and disables installation when the current OS is unsupported.
+
 When you install a preset agent:
 
 - GeeClaw writes the preset's portable runtime config into `~/.openclaw-geeclaw/openclaw.json`.

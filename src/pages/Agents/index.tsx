@@ -32,7 +32,7 @@ import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
 export function Agents() {
-  const { t } = useTranslation('agents');
+  const { t, i18n } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
   const {
     agents,
@@ -171,7 +171,7 @@ export function Agents() {
                   const installDisabled = installed || !preset.supportedOnCurrentPlatform;
                   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
                   const availabilityCopy = !preset.supportedOnCurrentPlatform
-                    ? getPresetAvailabilityCopy(t, preset.platforms)
+                    ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
                     : null;
                   return (
                     <div
