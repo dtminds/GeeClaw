@@ -6,6 +6,13 @@ const PRESET_PLATFORM_LABELS: Record<AgentPresetPlatform, string> = {
   linux: 'Linux',
 };
 
+function requireNonEmptyPresetPlatforms(platforms: AgentPresetPlatform[]): AgentPresetPlatform[] {
+  if (platforms.length === 0) {
+    throw new Error('Preset platforms must contain at least 1 platform');
+  }
+  return platforms;
+}
+
 export function normalizePresetPlatforms(
   presetId: string,
   platforms: unknown,
@@ -38,14 +45,16 @@ export function isPresetSupportedOnPlatform(
   platforms: AgentPresetPlatform[] | undefined,
   platform: NodeJS.Platform,
 ): boolean {
-  if (!platforms || platforms.length === 0) {
+  if (!platforms) {
     return true;
   }
-  return platforms.includes(platform as AgentPresetPlatform);
+  return requireNonEmptyPresetPlatforms(platforms).includes(platform as AgentPresetPlatform);
 }
 
 export function formatPresetPlatforms(platforms: AgentPresetPlatform[]): string {
-  const labels = platforms.map((platform) => PRESET_PLATFORM_LABELS[platform]);
+  const labels = requireNonEmptyPresetPlatforms(platforms).map(
+    (platform) => PRESET_PLATFORM_LABELS[platform],
+  );
   if (labels.length === 1) {
     return labels[0];
   }

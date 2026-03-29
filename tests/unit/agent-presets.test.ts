@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { formatPresetPlatforms, isPresetSupportedOnPlatform } from '@electron/utils/agent-preset-platforms';
 
 const tempDirs: string[] = [];
 const bundledPresetsDir = join(process.cwd(), 'resources', 'agent-presets');
@@ -112,6 +113,20 @@ describe('agent preset paths', () => {
   });
 });
 
+describe('agent preset platform helpers', () => {
+  it('rejects empty platform lists when checking platform support', () => {
+    expect(() => isPresetSupportedOnPlatform([], 'darwin')).toThrow(
+      'Preset platforms must contain at least 1 platform',
+    );
+  });
+
+  it('rejects empty platform lists when formatting platform labels', () => {
+    expect(() => formatPresetPlatforms([])).toThrow(
+      'Preset platforms must contain at least 1 platform',
+    );
+  });
+});
+
 describe('agent preset loader', () => {
   it('loads the bundled stock-expert preset package from resources/agent-presets', async () => {
     const presets = await listPresetsFrom(bundledPresetsDir);
@@ -124,6 +139,7 @@ describe('agent preset loader', () => {
       mode: 'specified',
       skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
     });
+    expect(preset?.meta.platforms).toEqual(['darwin']);
     expect(Object.keys(preset?.files ?? {}).sort()).toEqual([
       'AGENTS.md',
       'IDENTITY.md',
