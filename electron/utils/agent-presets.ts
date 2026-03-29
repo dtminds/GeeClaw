@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getAgentPresetsDir } from './paths';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
+import { normalizePresetPlatforms, type AgentPresetPlatform } from './agent-preset-platforms';
 
 const RECOGNIZED_MANAGED_FILES = new Set([
   'AGENTS.md',
@@ -17,6 +18,7 @@ const RECOGNIZED_META_KEYS = new Set([
   'iconKey',
   'category',
   'managed',
+  'platforms',
   'agent',
   'managedPolicy',
 ]);
@@ -39,6 +41,7 @@ export interface AgentPresetMeta {
   iconKey: string;
   category: string;
   managed: true;
+  platforms?: AgentPresetPlatform[];
   agent: {
     id: string;
     workspace: string;
@@ -222,6 +225,7 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
     iconKey: requireNonEmptyString(metaRecord.iconKey, 'iconKey', presetId),
     category: requireNonEmptyString(metaRecord.category, 'category', presetId),
     managed: true,
+    platforms: normalizePresetPlatforms(presetId, metaRecord.platforms),
     agent: {
       id: agentId,
       workspace,

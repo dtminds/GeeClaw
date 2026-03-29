@@ -54,6 +54,7 @@ function writePresetPackage(
 }
 
 async function listPresetsFrom(root: string) {
+  vi.resetModules();
   vi.doMock('@electron/utils/paths', async () => {
     const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
     return {
@@ -159,6 +160,54 @@ describe('agent preset loader', () => {
       'AGENTS.md': '# Stock Expert\n',
       'SOUL.md': '# Tone\n',
     });
+  });
+
+  it('loads preset platforms when declared in meta.json', async () => {
+    const root = createTempRoot('agent-presets-platforms-');
+    const meta = {
+      ...createPresetMeta('mac-only'),
+      platforms: ['darwin'],
+    };
+    writePresetPackage(root, 'mac-only', meta as never, {});
+
+    const presets = await listPresetsFrom(join(root, 'agent-presets'));
+
+    expect(presets[0].meta.platforms).toEqual(['darwin']);
+  });
+
+  it('rejects presets with an empty platforms array', async () => {
+    const root = createTempRoot('agent-presets-empty-platforms-');
+    const meta = {
+      ...createPresetMeta('empty-platforms'),
+      platforms: [],
+    };
+    writePresetPackage(root, 'empty-platforms', meta as never, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'platforms must contain at least 1 platform',
+    );
+  });
+
+  it('rejects presets with unsupported or duplicate platforms', async () => {
+    const badRoot = createTempRoot('agent-presets-bad-platform-');
+    writePresetPackage(badRoot, 'bad-platform', {
+      ...createPresetMeta('bad-platform'),
+      platforms: ['android'],
+    } as never, {});
+
+    await expect(listPresetsFrom(join(badRoot, 'agent-presets'))).rejects.toThrow(
+      'unsupported platform "android"',
+    );
+
+    const duplicateRoot = createTempRoot('agent-presets-duplicate-platforms-');
+    writePresetPackage(duplicateRoot, 'duplicate-platforms', {
+      ...createPresetMeta('duplicate-platforms'),
+      platforms: ['darwin', 'darwin'],
+    } as never, {});
+
+    await expect(listPresetsFrom(join(duplicateRoot, 'agent-presets'))).rejects.toThrow(
+      'platforms must not contain duplicates',
+    );
   });
 
   it('rejects presets with an empty specified skill scope', async () => {

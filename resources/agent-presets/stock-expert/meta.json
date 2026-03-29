@@ -5,6 +5,7 @@
   "iconKey": "stock",
   "category": "finance",
   "managed": true,
+  "platforms": ["darwin"],
   "agent": {
     "id": "stockexpert",
     "workspace": "~/.openclaw-geeclaw/workspace-stockexpert",
