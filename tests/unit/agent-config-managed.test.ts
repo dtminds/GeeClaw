@@ -1,13 +1,33 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
-const originalPlatform = process.platform;
+const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
 
 function setPlatform(platform: NodeJS.Platform): void {
-  Object.defineProperty(process, 'platform', { value: platform, writable: true });
+  if (originalPlatformDescriptor && 'value' in originalPlatformDescriptor) {
+    Object.defineProperty(process, 'platform', {
+      ...originalPlatformDescriptor,
+      value: platform,
+      writable: true,
+    });
+    return;
+  }
+
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    enumerable: true,
+    value: platform,
+    writable: true,
+  });
+}
+
+function restorePlatform(): void {
+  if (originalPlatformDescriptor) {
+    Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+  }
 }
 
 async function setupManagedPresetFixture(options?: {
@@ -120,7 +140,7 @@ async function setupManagedPresetFixture(options?: {
 }
 
 afterEach(() => {
-  Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+  restorePlatform();
   vi.resetModules();
   vi.unmock('electron');
   vi.unmock('os');
@@ -135,18 +155,27 @@ afterEach(() => {
 
 describe('managed agent config domain', () => {
   it('reports preset summary platforms and current platform support', async () => {
-    setPlatform('darwin');
     const { agentConfig } = await setupManagedPresetFixture({
       presetMeta: {
         platforms: ['darwin'],
       },
     });
 
+    setPlatform('darwin');
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
         presetId: 'stock-expert',
         platforms: ['darwin'],
         supportedOnCurrentPlatform: true,
+      }),
+    ]);
+
+    setPlatform('win32');
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        presetId: 'stock-expert',
+        platforms: ['darwin'],
+        supportedOnCurrentPlatform: false,
       }),
     ]);
   });
@@ -333,14 +362,22 @@ describe('managed agent config domain', () => {
 
   it('rejects installing presets that are unsupported on the current platform', async () => {
     setPlatform('win32');
-    const { agentConfig } = await setupManagedPresetFixture({
+    const { agentConfig, configDir } = await setupManagedPresetFixture({
       presetMeta: {
         platforms: ['darwin'],
       },
     });
+    const workspaceDir = join(configDir, 'workspace-stockexpert');
 
     await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
       'Preset "stock-expert" is only available on macOS',
     );
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string }> };
+    };
+
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
+    expect(existsSync(workspaceDir)).toBe(false);
   });
 });
