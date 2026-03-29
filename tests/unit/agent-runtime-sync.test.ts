@@ -115,6 +115,13 @@ describe('agent runtime sync', () => {
           workspace: '~/.openclaw-geeclaw/workspace-helper',
           agentDir: '~/.openclaw-geeclaw/agents/helper/agent',
         },
+        {
+          id: 'stockexpert',
+          name: 'Stock Expert',
+          workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+          agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
+          skills: ['stock-analyzer'],
+        },
       ],
     });
     agentStore.set('bindings', [
@@ -126,6 +133,19 @@ describe('agent runtime sync', () => {
         },
       },
     ]);
+    agentStore.set('management', {
+      stockexpert: {
+        agentId: 'stockexpert',
+        source: 'preset',
+        presetId: 'stock-expert',
+        managed: true,
+        lockedFields: ['id', 'workspace', 'persona'],
+        canUnmanage: false,
+        presetSkills: ['stock-analyzer'],
+        managedFiles: ['AGENTS.md', 'SOUL.md'],
+        installedAt: '2026-03-28T00:00:00.000Z',
+      },
+    });
 
     channelStore.set('channels', {
       wecom: {
@@ -182,7 +202,7 @@ describe('agent runtime sync', () => {
 
     expect(config.agents?.defaults?.workspace).toBe('/managed/workspace');
     expect(config.agents?.defaults?.model?.primary).toBe('openrouter/model');
-    expect(config.agents?.list?.map((entry) => entry.id)).toEqual(['main', 'helper']);
+    expect(config.agents?.list?.map((entry) => entry.id)).toEqual(['main', 'helper', 'stockexpert']);
     expect(config.bindings).toEqual([
       {
         agentId: 'helper',
@@ -195,5 +215,9 @@ describe('agent runtime sync', () => {
     expect(config.channels?.wecom?.enabled).toBe(true);
     expect(config.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
     expect(config.skills?.entries?.existing?.enabled).toBe(true);
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('managed');
+    expect(JSON.stringify(config)).not.toContain('canUnmanage');
+    expect(JSON.stringify(config)).not.toContain('managedFiles');
+    expect(JSON.stringify(config)).not.toContain('presetId');
   });
 });

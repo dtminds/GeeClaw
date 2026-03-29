@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Check, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { AlertCircle, Bot, Check, ChevronDown, Package2, Plus, RefreshCw, Search, Settings2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -14,9 +15,13 @@ import { hostApiFetch } from '@/lib/host-api';
 import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
 import { useGatewayStore } from '@/stores/gateway';
+import { useSkillsStore } from '@/stores/skills';
 import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } from '@/types/channel';
 import type { AgentSummary } from '@/types/agent';
+import type { Skill } from '@/types/skill';
 import { cn } from '@/lib/utils';
+import { MarketplacePresetDetailDialog } from './MarketplacePresetDetailDialog';
+import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
 import whatsappIcon from '@/assets/channels/whatsapp.svg';
@@ -27,30 +32,54 @@ import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
 export function Agents() {
-  const { t } = useTranslation('agents');
+  const { t, i18n } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
-  const { agents, loading, error, fetchAgents, createAgent, deleteAgent } = useAgentsStore();
+  const {
+    agents,
+    presets,
+    loading,
+    error,
+    fetchAgents,
+    fetchPresets,
+    createAgent,
+    deleteAgent,
+    installPreset,
+  } = useAgentsStore();
   const { channels, fetchChannels } = useChannelsStore();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<AgentSummary | null>(null);
+  const [activeTab, setActiveTab] = useState<'agents' | 'marketplace'>('agents');
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([fetchAgents(), fetchChannels()]);
-  }, [fetchAgents, fetchChannels]);
+    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
+  }, [fetchAgents, fetchChannels, fetchPresets]);
 
   const sortedAgents = useMemo(
     () => [...agents].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)),
+    [agents],
+  );
+  const installedPresetIds = useMemo(
+    () => new Set(
+      agents
+        .filter((agent) => agent.source === 'preset' && agent.presetId)
+        .map((agent) => agent.presetId as string),
+    ),
     [agents],
   );
   const activeAgent = useMemo(
     () => agents.find((agent) => agent.id === activeAgentId) ?? null,
     [activeAgentId, agents],
   );
+  const activePreset = useMemo(
+    () => presets.find((preset) => preset.presetId === activePresetId) ?? null,
+    [activePresetId, presets],
+  );
 
   const handleRefresh = () => {
-    void Promise.all([fetchAgents(), fetchChannels()]);
+    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
   };
 
   if (loading) {
@@ -105,7 +134,104 @@ export function Agents() {
             </div>
           )}
 
-          {sortedAgents.length === 0 ? (
+          <div
+            className="mb-6 flex items-center gap-2 rounded-full border border-black/8 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
+            role="tablist"
+          >
+            {(['agents', 'marketplace'] as const).map((tab) => {
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+                    active ? 'bg-foreground text-background' : 'text-foreground/65 hover:text-foreground',
+                  )}
+                >
+                  {tab === 'agents' ? t('tabs.agents') : t('tabs.marketplace')}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === 'marketplace' ? (
+            <div className="space-y-5">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-foreground">{t('marketplace.title')}</h2>
+                <p className="text-sm text-muted-foreground">{t('marketplace.description')}</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {presets.map((preset) => {
+                  const installed = installedPresetIds.has(preset.presetId);
+                  const installDisabled = installed || !preset.supportedOnCurrentPlatform;
+                  const platformLabels = getPresetPlatformLabels(t, preset.platforms);
+                  const availabilityCopy = !preset.supportedOnCurrentPlatform
+                    ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
+                    : null;
+                  return (
+                    <div
+                      key={preset.presetId}
+                      className="modal-section-surface flex flex-col gap-4 rounded-3xl border p-5"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[18px] font-semibold text-foreground">{preset.name}</h3>
+                          <Badge className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shadow-none">
+                            {t('managedBadge')}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{preset.description}</p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {platformLabels.map((label) => (
+                          <Badge
+                            key={label}
+                            variant="secondary"
+                            className="rounded-full border-0 bg-black/[0.05] px-2 py-0.5 text-[11px] font-medium text-foreground/70 shadow-none dark:bg-white/[0.08]"
+                          >
+                            {label}
+                          </Badge>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
+                        <span>{t('marketplace.managedHint')}</span>
+                        <span>{t('marketplace.skillCount', { count: preset.presetSkills.length })}</span>
+                        {availabilityCopy && <span>{availabilityCopy}</span>}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setActivePresetId(preset.presetId)}
+                          className="h-9 rounded-full px-4 text-[13px] font-medium"
+                        >
+                          {t('marketplace.viewDetails')}
+                        </Button>
+                        <Button
+                          onClick={() => void installPreset(preset.presetId)}
+                          disabled={installDisabled}
+                          className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                        >
+                          {installed
+                            ? t('marketplace.installed')
+                            : preset.supportedOnCurrentPlatform
+                              ? t('marketplace.install')
+                              : t('marketplace.unavailable')}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : sortedAgents.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-black/10 bg-black/[0.03] px-6 py-12 text-center text-sm text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]">
               {t('empty')}
             </div>
@@ -143,6 +269,14 @@ export function Agents() {
           onClose={() => setActiveAgentId(null)}
         />
       )}
+
+      <MarketplacePresetDetailDialog
+        preset={activePreset}
+        open={!!activePreset}
+        installed={activePreset ? installedPresetIds.has(activePreset.presetId) : false}
+        onClose={() => setActivePresetId(null)}
+        onInstall={(presetId) => void installPreset(presetId)}
+      />
 
       <ConfirmDialog
         open={!!agentToDelete}
@@ -210,6 +344,19 @@ function AgentCard({
                 {t('defaultBadge')}
               </Badge>
             )}
+            {agent.managed && (
+              <Badge className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shadow-none">
+                {t('managedBadge')}
+              </Badge>
+            )}
+            {agent.source === 'preset' && (
+              <Badge
+                variant="secondary"
+                className="rounded-full border-0 bg-black/[0.04] px-2 py-0.5 text-[10px] font-medium text-foreground/70 shadow-none dark:bg-white/[0.08]"
+              >
+                {t('presetBadge')}
+              </Badge>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {!agent.isDefault && (
@@ -253,6 +400,76 @@ function AgentCard({
 
 const inputClasses = 'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40';
 const labelClasses = 'text-[14px] text-foreground/80 font-bold';
+
+function normalizeSkillSearch(value: string): string {
+  return value
+    .normalize('NFKD')
+    .trim()
+    .toLowerCase();
+}
+
+function getSkillDescription(skill: Skill): string {
+  const description = skill.description?.trim();
+  if (description) {
+    return description;
+  }
+
+  return `/${skill.slug || skill.id}`;
+}
+
+function SkillScopeOption({
+  skill,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  skill: Skill;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation('skills');
+  const source = (skill.source || '').trim().toLowerCase();
+  const sourceLabel = skill.isCore
+    ? t('detail.coreSystem', { defaultValue: 'Core System' })
+    : skill.isBundled
+      ? t('source.badge.bundled', { defaultValue: 'Bundled' })
+      : source === 'agents-skills-personal'
+        ? t('source.badge.agentsPersonal', { defaultValue: 'Personal .agents' })
+        : source === 'agents-skills-project'
+          ? t('source.badge.agentsProject', { defaultValue: 'Project .agents' })
+          : source === 'openclaw-extra'
+            ? t('source.badge.extra', { defaultValue: 'Extra dirs' })
+            : source === 'openclaw-managed'
+              ? t('source.badge.managed', { defaultValue: 'Managed' })
+              : source === 'workspace'
+                ? t('source.badge.workspace', { defaultValue: 'Workspace' })
+                : t('source.badge.unknown', { defaultValue: 'Skill' });
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors',
+        selected ? 'surface-muted text-foreground' : 'surface-hover',
+        disabled && !selected && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <span className="flex h-6 w-4 shrink-0 items-center justify-center text-muted-foreground">
+        {selected ? <Check className="h-3.5 w-3.5 text-foreground" /> : <Package2 className="h-3.5 w-3.5" />}
+      </span>
+      <span className="min-w-0 flex flex-1 items-baseline gap-2 overflow-hidden">
+        <span className="shrink-0 truncate text-[13px] font-medium text-foreground">{skill.name}</span>
+        <span className="truncate text-[11px] text-muted-foreground">{getSkillDescription(skill)}</span>
+      </span>
+      <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
+        {sourceLabel}
+      </span>
+    </button>
+  );
+}
 
 function ChannelLogo({ type }: { type: ChannelType }) {
   switch (type) {
@@ -386,20 +603,78 @@ function AgentSettingsModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation('agents');
-  const { updateAgent, fetchAgents } = useAgentsStore();
+  const { fetchAgents, updateAgent, updateAgentSettings, unmanageAgent } = useAgentsStore();
   const { fetchChannels } = useChannelsStore();
+  const { skills, fetchSkills } = useSkillsStore();
   const [name, setName] = useState(agent.name);
   const [savingName, setSavingName] = useState(false);
+  const [savingSkills, setSavingSkills] = useState(false);
+  const [unmanaging, setUnmanaging] = useState(false);
+  const [unmanageConfirmStep, setUnmanageConfirmStep] = useState<'warning' | 'final' | null>(null);
   const [channelToRemove, setChannelToRemove] = useState<{ channelType: ChannelType; accountId: string } | null>(null);
+  const [skillScopeMode, setSkillScopeMode] = useState<'default' | 'specified'>(agent.skillScope.mode);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(
+    agent.skillScope.mode === 'specified' ? agent.skillScope.skills : [],
+  );
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
+  const skillSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setName(agent.name);
   }, [agent.name]);
 
+  useEffect(() => {
+    void fetchSkills();
+  }, [fetchSkills]);
+
+  useEffect(() => {
+    setSkillScopeMode(agent.skillScope.mode);
+    setSelectedSkills(agent.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
+  }, [agent.skillScope]);
+
+  useEffect(() => {
+    if (!skillPickerOpen) {
+      setSkillSearch('');
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      skillSearchInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [skillPickerOpen]);
+
   const runtimeChannelsByType = useMemo(
     () => Object.fromEntries(channels.map((channel) => [channel.type, channel])),
     [channels],
   );
+  const presetSkillSet = useMemo(() => new Set(agent.presetSkills), [agent.presetSkills]);
+  const availableSkills = useMemo(
+    () => skills.filter((skill) => skill.eligible !== false && skill.hidden !== true),
+    [skills],
+  );
+  const availableSkillsById = useMemo(
+    () => new Map(availableSkills.map((skill) => [skill.id, skill])),
+    [availableSkills],
+  );
+  const filteredSkills = useMemo(() => {
+    const normalizedQuery = normalizeSkillSearch(skillSearch);
+    if (!normalizedQuery) {
+      return availableSkills;
+    }
+
+    return availableSkills.filter((skill) => (
+      [
+        skill.name,
+        skill.id,
+        skill.slug || '',
+        getSkillDescription(skill),
+      ]
+        .map((value) => normalizeSkillSearch(value))
+        .some((value) => value.includes(normalizedQuery))
+    ));
+  }, [availableSkills, skillSearch]);
 
   const handleSaveName = async () => {
     if (!name.trim() || name.trim() === agent.name) return;
@@ -412,6 +687,73 @@ function AgentSettingsModal({
     } finally {
       setSavingName(false);
     }
+  };
+
+  const toggleSkill = (skillId: string) => {
+    setSelectedSkills((current) => {
+      const currentSet = new Set(current);
+      if (currentSet.has(skillId)) {
+        if (presetSkillSet.has(skillId) && agent.managed) {
+          return current;
+        }
+        currentSet.delete(skillId);
+      } else if (currentSet.size < 6) {
+        currentSet.add(skillId);
+      }
+      return Array.from(currentSet);
+    });
+  };
+
+  const handleSelectSkill = (skillId: string) => {
+    if (selectedSkills.includes(skillId) || selectedSkills.length >= 6) {
+      return;
+    }
+
+    toggleSkill(skillId);
+    setSkillPickerOpen(false);
+    setSkillSearch('');
+  };
+
+  const handleSaveSkills = async () => {
+    if (skillScopeMode === 'specified' && selectedSkills.length === 0) {
+      return;
+    }
+
+    setSavingSkills(true);
+    try {
+      await updateAgentSettings(agent.id, {
+        skillScope: skillScopeMode === 'default'
+          ? { mode: 'default' }
+          : { mode: 'specified', skills: selectedSkills },
+      });
+      toast.success(t('toast.agentUpdated'));
+    } catch (error) {
+      toast.error(t('toast.agentUpdateFailed', { error: String(error) }));
+    } finally {
+      setSavingSkills(false);
+    }
+  };
+
+  const handleUnmanage = async () => {
+    setUnmanaging(true);
+    try {
+      await unmanageAgent(agent.id);
+      setUnmanageConfirmStep(null);
+      toast.success(t('toast.agentUnmanaged'));
+    } catch (error) {
+      toast.error(t('toast.agentUnmanageFailed', { error: String(error) }));
+    } finally {
+      setUnmanaging(false);
+    }
+  };
+
+  const handleUnmanageConfirm = () => {
+    if (unmanageConfirmStep === 'warning') {
+      setUnmanageConfirmStep('final');
+      return;
+    }
+
+    void handleUnmanage();
   };
 
   const assignedChannels = agent.channelAccounts.map(({ channelType, accountId }) => {
@@ -546,8 +888,194 @@ function AgentSettingsModal({
               </div>
             )}
           </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-xl font-medium tracking-tight text-foreground">
+                {t('settingsDialog.skillsTitle', 'Skills Scope')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {agent.managed && agent.presetSkills.length > 0
+                  ? t('settingsDialog.skillsManagedHint', 'This managed agent can add extra skills, but preset skills cannot be removed until you unmanage it.')
+                  : t('settingsDialog.skillsHint', 'Choose between the default skill scope or up to 6 specific skills.')}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={skillScopeMode === 'default' ? 'default' : 'outline'}
+                disabled={!agent.canUseDefaultSkillScope}
+                onClick={() => setSkillScopeMode('default')}
+                className="h-9 rounded-full px-4 text-[13px]"
+              >
+                {t('settingsDialog.skillScope.default', 'Default')}
+              </Button>
+              <Button
+                type="button"
+                variant={skillScopeMode === 'specified' ? 'default' : 'outline'}
+                onClick={() => setSkillScopeMode('specified')}
+                className="h-9 rounded-full px-4 text-[13px]"
+              >
+                {t('settingsDialog.skillScope.specified', 'Specified')}
+              </Button>
+            </div>
+
+            {skillScopeMode === 'specified' && (
+              <div className="space-y-3 rounded-2xl border border-black/8 p-4 dark:border-white/10">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-foreground">{t('settingsDialog.skillScope.selected', 'Selected skills')}</p>
+                  <p className="text-xs text-muted-foreground">{selectedSkills.length} / 6</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {selectedSkills.map((skillId) => {
+                    const skill = availableSkillsById.get(skillId);
+                    const locked = agent.managed && presetSkillSet.has(skillId);
+                    const label = skill?.name || skillId;
+                    return (
+                      <button
+                        key={skillId}
+                        type="button"
+                        onClick={() => toggleSkill(skillId)}
+                        disabled={locked}
+                        title={locked ? t('settingsDialog.skillScope.preset', 'Preset') : undefined}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors',
+                          locked
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-black/[0.04] text-foreground/80 hover:bg-black/[0.08] dark:bg-white/[0.08]',
+                        )}
+                      >
+                        <span>{label}</span>
+                        {locked ? (
+                          <span className="text-[10px] uppercase tracking-[0.08em] text-primary/80">
+                            {t('settingsDialog.skillScope.preset', 'Preset')}
+                          </span>
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <Popover.Root open={skillPickerOpen} onOpenChange={setSkillPickerOpen}>
+                  <Popover.Trigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="modal-field-surface surface-hover h-11 w-full justify-between rounded-2xl px-4 text-[13px] font-medium text-foreground shadow-none"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-left">
+                        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">
+                          {t('settingsDialog.skillScope.addSkill', 'Add skill')}
+                        </span>
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      align="start"
+                      side="bottom"
+                      sideOffset={8}
+                      className="z-50 w-[min(32rem,calc(100vw-5rem))] overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card"
+                    >
+                      <div className="relative px-1 pb-2">
+                        <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          ref={skillSearchInputRef}
+                          value={skillSearch}
+                          onChange={(event) => setSkillSearch(event.target.value)}
+                          aria-label={t('settingsDialog.skillScope.search', 'Search skills')}
+                          placeholder={t('settingsDialog.skillScope.searchPlaceholder', 'Search by name, slug, or description')}
+                          className="modal-field-surface h-10 rounded-xl border-0 pl-9 pr-3 text-[13px] shadow-none"
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto pr-1">
+                        {filteredSkills.length > 0 ? (
+                          filteredSkills.map((skill) => {
+                            const selected = selectedSkills.includes(skill.id);
+                            return (
+                              <SkillScopeOption
+                                key={skill.id}
+                                skill={skill}
+                                selected={selected}
+                                disabled={!selected && selectedSkills.length >= 6}
+                                onSelect={() => handleSelectSkill(skill.id)}
+                              />
+                            );
+                          })
+                        ) : (
+                          <div className="px-3 py-5 text-center text-[12px] text-muted-foreground">
+                            {t('settingsDialog.skillScope.empty', 'No matching skills')}
+                          </div>
+                        )}
+                      </div>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+
+                <p className="text-xs text-muted-foreground">
+                  {selectedSkills.length >= 6
+                    ? t('settingsDialog.skillScope.maxReached', 'Skill limit reached')
+                    : t('settingsDialog.skillScope.searchPlaceholder', 'Search by name, slug, or description')}
+                </p>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={() => void handleSaveSkills()}
+              disabled={savingSkills || (skillScopeMode === 'specified' && selectedSkills.length === 0)}
+              className="modal-primary-button"
+            >
+              {savingSkills ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t('settingsDialog.skillScope.save', 'Save Skills')}
+            </Button>
+          </div>
+
+          {agent.managed && (
+            <div className="space-y-3 rounded-2xl border border-black/8 p-4 dark:border-white/10">
+              <h3 className="text-base font-semibold text-foreground">
+                {t('settingsDialog.unmanageTitle', 'Managed preset')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {t('settingsDialog.unmanageDescription', 'Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.')}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setUnmanageConfirmStep('warning')}
+                disabled={!agent.canUnmanage || unmanaging}
+                className="rounded-full px-4"
+              >
+                {unmanaging ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {t('settingsDialog.unmanage', 'Unmanage')}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={unmanageConfirmStep !== null}
+        title={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondTitle', 'Confirm unmanage')
+          : t('settingsDialog.unmanageConfirm.firstTitle', 'Remove managed restrictions?')}
+        message={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondMessage', 'This action cannot be automatically restored. The current preset files stay as-is, but future edits will no longer be protected.')
+          : t('settingsDialog.unmanageConfirm.firstMessage', 'This will unlock preset persona files and allow preset skills to be removed.')}
+        confirmLabel={unmanageConfirmStep === 'final'
+          ? t('settingsDialog.unmanageConfirm.secondConfirm', 'Unmanage now')
+          : t('settingsDialog.unmanageConfirm.firstConfirm', 'Continue')}
+        cancelLabel={t('common:actions.cancel')}
+        variant="destructive"
+        onConfirm={handleUnmanageConfirm}
+        onCancel={() => setUnmanageConfirmStep(null)}
+      />
 
       <ConfirmDialog
         open={!!channelToRemove}

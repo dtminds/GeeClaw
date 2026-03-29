@@ -29,6 +29,9 @@ type SoulTemplate = {
 type PersonaResponse = {
   agentId: string;
   workspace: string;
+  editable: boolean;
+  lockedFiles: PersonaFileKey[];
+  message?: string;
   files: Record<PersonaFileKey, {
     exists: boolean;
     content: string;
@@ -192,6 +195,22 @@ export function PersonaDrawer({
       label: t('toolbar.persona.tabs.memory'),
     },
   }), [t]);
+  const lockedFileSet = useMemo(
+    () => new Set(snapshot?.lockedFiles ?? []),
+    [snapshot?.lockedFiles],
+  );
+  const soulLocked = lockedFileSet.has('soul');
+  const activeTabLockedMessage = useMemo(() => {
+    if (!lockedFileSet.has(activeTab)) {
+      return null;
+    }
+
+    if (activeTab === 'identity') {
+      return t('toolbar.persona.lockedManaged.identity');
+    }
+
+    return t('toolbar.persona.lockedManaged.default');
+  }, [activeTab, lockedFileSet, t]);
 
   const applyPersonaResponse = useCallback((response: PersonaResponse) => {
     const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
@@ -256,8 +275,8 @@ export function PersonaDrawer({
 
   const hasChanges = useMemo(() => {
     if (!snapshot) return false;
-    return FILE_ORDER.some((key) => drafts[key] !== snapshot.files[key].content);
-  }, [drafts, snapshot]);
+    return FILE_ORDER.some((key) => !lockedFileSet.has(key) && drafts[key] !== snapshot.files[key].content);
+  }, [drafts, lockedFileSet, snapshot]);
 
   const handleReload = async () => {
     if (!agentId) return;
@@ -274,6 +293,9 @@ export function PersonaDrawer({
   };
 
   const handleSelectSoulTemplate = (nextTemplateId: SoulTemplateId) => {
+    if (soulLocked) {
+      return;
+    }
     if (nextTemplateId === 'custom') {
       if (soulTemplateId !== 'custom') {
         setCustomSoulDraft((current) => current || '');
@@ -301,11 +323,11 @@ export function PersonaDrawer({
   };
 
   const handleSave = async () => {
-    if (!snapshot) return;
+    if (!snapshot || !snapshot.editable) return;
 
     const payload: Partial<Record<PersonaFileKey, string>> = {};
     for (const key of FILE_ORDER) {
-      if (drafts[key] !== snapshot.files[key].content) {
+      if (!lockedFileSet.has(key) && drafts[key] !== snapshot.files[key].content) {
         payload[key] = drafts[key];
       }
     }
@@ -340,6 +362,7 @@ export function PersonaDrawer({
     value,
     onChange,
     fillHeight = false,
+    readOnly = false,
   }: {
     fileKey: PersonaFileKey;
     fileLabel: string;
@@ -347,6 +370,7 @@ export function PersonaDrawer({
     value: string;
     onChange: (value: string) => void;
     fillHeight?: boolean;
+    readOnly?: boolean;
   }) => {
     const tone = sectionTones[fileKey];
     const exists = snapshot?.files[fileKey].exists ?? false;
@@ -385,6 +409,7 @@ export function PersonaDrawer({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder={t(`toolbar.persona.placeholders.${fileKey}`)}
+            disabled={readOnly}
             className={cn(
               'min-h-[96px] resize-none border-0 bg-transparent px-0 py-0 text-sm leading-5 text-foreground shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
               fillHeight && 'h-full min-h-0 flex-1',
@@ -498,6 +523,11 @@ export function PersonaDrawer({
             </div>
           ) : snapshot ? (
             <div className="flex min-h-0 flex-1 flex-col">
+              {activeTabLockedMessage && (
+                <div className="modal-section-surface mb-2 rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                  {activeTabLockedMessage}
+                </div>
+              )}
               <section className="flex min-h-0 flex-1 flex-col gap-2">
                 {activeTab === 'identity' && renderFilePanel({
                   fileKey: 'identity',
@@ -506,6 +536,7 @@ export function PersonaDrawer({
                   value: drafts.identity,
                   onChange: (value) => setDrafts((current) => ({ ...current, identity: value })),
                   fillHeight: true,
+                  readOnly: lockedFileSet.has('identity'),
                 })}
 
                 {activeTab === 'master' && renderFilePanel({
@@ -515,6 +546,7 @@ export function PersonaDrawer({
                   value: drafts.master,
                   onChange: (value) => setDrafts((current) => ({ ...current, master: value })),
                   fillHeight: true,
+                  readOnly: lockedFileSet.has('master'),
                 })}
 
                 {activeTab === 'memory' && renderFilePanel({
@@ -524,6 +556,7 @@ export function PersonaDrawer({
                   value: drafts.memory,
                   onChange: (value) => setDrafts((current) => ({ ...current, memory: value })),
                   fillHeight: true,
+                  readOnly: lockedFileSet.has('memory'),
                 })}
 
                 {activeTab === 'soul' && (
@@ -536,6 +569,7 @@ export function PersonaDrawer({
                             key={template.id}
                             type="button"
                             onClick={() => handleSelectSoulTemplate(template.id)}
+                            disabled={soulLocked}
                             className={cn(
                               'relative min-h-[86px] rounded-[16px] border bg-white px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-[1px] dark:bg-[#18141f]',
                               selected
@@ -580,6 +614,7 @@ export function PersonaDrawer({
                             setDrafts((current) => ({ ...current, soul: value }));
                           },
                           fillHeight: true,
+                          readOnly: soulLocked,
                         })
                         : renderReadOnlyPanel({
                           fileKey: 'soul',
@@ -609,7 +644,7 @@ export function PersonaDrawer({
           </Button>
           <Button
             onClick={() => void handleSave()}
-            disabled={!snapshot || loading || saving || !hasChanges}
+            disabled={!snapshot || loading || saving || !hasChanges || !snapshot.editable}
             className="h-8 rounded-full px-3.5 text-[12px] font-medium"
           >
             {saving ? (

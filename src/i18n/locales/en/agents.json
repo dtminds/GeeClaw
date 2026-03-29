@@ -4,6 +4,8 @@
     "refresh": "Refresh",
     "addAgent": "Add Agent",
     "settings": "Settings",
+    "managedBadge": "Managed",
+    "presetBadge": "From Marketplace",
     "gatewayWarning": "Gateway service is not running. Agent changes may take a moment to apply.",
     "defaultBadge": "default",
     "inherited": "inherited",
@@ -36,7 +38,59 @@
         "modelLabel": "Model",
         "channelsTitle": "Channels",
         "addChannel": "Add Channel",
-        "noChannels": "This agent does not own any channel accounts yet."
+        "noChannels": "This agent does not own any channel accounts yet.",
+        "skillsTitle": "Skills Scope",
+        "skillsHint": "Choose between the default skill scope or up to 6 specific skills.",
+        "skillsManagedHint": "This managed agent can add extra skills, but preset skills cannot be removed until you unmanage it.",
+        "skillScope": {
+            "default": "Default",
+            "specified": "Specified",
+            "selected": "Selected skills",
+            "search": "Search skills",
+            "searchPlaceholder": "Search by name, slug, or description",
+            "addSkill": "Add skill",
+            "empty": "No matching skills",
+            "maxReached": "Skill limit reached",
+            "preset": "Preset",
+            "save": "Save Skills"
+        },
+        "unmanageTitle": "Managed preset",
+        "unmanageDescription": "Unmanaging keeps the current config but removes preset restrictions on persona files and preset skills.",
+        "unmanage": "Unmanage",
+        "unmanageConfirm": {
+            "firstTitle": "Remove managed restrictions?",
+            "firstMessage": "This will unlock preset persona files and allow preset skills to be removed.",
+            "firstConfirm": "Continue",
+            "secondTitle": "Confirm unmanage",
+            "secondMessage": "This action cannot be automatically restored. The current preset files stay as-is, but future edits will no longer be protected.",
+            "secondConfirm": "Unmanage now"
+        }
+    },
+    "tabs": {
+        "agents": "My Agents",
+        "marketplace": "Marketplace"
+    },
+    "marketplace": {
+        "title": "Built-in Agent Marketplace",
+        "description": "Install curated agents with preset workspaces, instructions, and managed rules.",
+        "install": "Install",
+        "installed": "Installed",
+        "unavailable": "Unavailable",
+        "viewDetails": "View Details",
+        "managedHint": "Installs as a managed preset agent",
+        "skillCount": "{{count}} preset skills",
+        "availableOn": "Available on {{platforms}}",
+        "platforms": {
+            "all": "All Platforms",
+            "darwin": "macOS",
+            "win32": "Windows",
+            "linux": "Linux"
+        },
+        "detail": {
+            "summary": "Preset summary",
+            "skills": "Preset skills",
+            "files": "Managed files"
+        }
     },
     "removeChannelDialog": {
         "title": "Unbind Channel",
@@ -55,6 +109,8 @@
         "agentDeleteFailed": "Failed to delete agent: {{error}}",
         "agentUpdated": "Agent updated",
         "agentUpdateFailed": "Failed to update agent: {{error}}",
+        "agentUnmanaged": "Managed restrictions removed",
+        "agentUnmanageFailed": "Failed to unmanage agent: {{error}}",
         "channelAssigned": "{{channel}} assigned to agent",
         "channelAssignFailed": "Failed to assign channel: {{error}}",
         "channelRemoved": "{{channel}} removed",

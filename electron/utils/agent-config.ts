@@ -6,8 +6,16 @@ import { expandPath, getOpenClawConfigDir } from './paths';
 import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
+import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
+import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
+import { getAgentPreset, listAgentPresets } from './agent-presets';
+import {
+  formatPresetPlatforms,
+  isPresetSupportedOnPlatform,
+  type AgentPresetPlatform,
+} from './agent-preset-platforms';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -81,6 +89,29 @@ interface AgentConfigDocument extends Record<string, unknown> {
   };
 }
 
+type ManagedLockedField = 'id' | 'workspace' | 'persona';
+type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
+const LOCKED_MANAGED_PERSONA_FILES: PersonaFieldKey[] = ['identity'];
+const LOCKED_MANAGED_PERSONA_FILE_SET = new Set<PersonaFieldKey>(LOCKED_MANAGED_PERSONA_FILES);
+
+interface ManagedAgentMetadata {
+  agentId: string;
+  source: 'preset';
+  presetId: string;
+  managed: boolean;
+  lockedFields: ManagedLockedField[];
+  canUnmanage?: boolean;
+  presetSkills: string[];
+  managedFiles: string[];
+  installedAt: string;
+  unmanagedAt?: string;
+}
+
+export interface AgentSettingsUpdate {
+  name?: string;
+  skillScope?: AgentSkillScope;
+}
+
 export interface AgentSummary {
   id: string;
   name: string;
@@ -92,6 +123,15 @@ export interface AgentSummary {
   mainSessionKey: string;
   channelTypes: string[];
   channelAccounts: Array<{ channelType: string; accountId: string }>;
+  source: 'custom' | 'preset';
+  managed: boolean;
+  presetId?: string;
+  lockedFields: ManagedLockedField[];
+  canUnmanage: boolean;
+  managedFiles: string[];
+  skillScope: AgentSkillScope;
+  presetSkills: string[];
+  canUseDefaultSkillScope: boolean;
 }
 
 export interface AgentsSnapshot {
@@ -111,6 +151,9 @@ export interface AgentPersonaFileSnapshot {
 export interface AgentPersonaSnapshot {
   agentId: string;
   workspace: string;
+  editable: boolean;
+  lockedFiles: PersonaFieldKey[];
+  message?: string;
   files: {
     identity: AgentPersonaFileSnapshot;
     master: AgentPersonaFileSnapshot;
@@ -137,6 +180,10 @@ const PERSONA_FILE_MAP = {
   soul: 'SOUL.md',
   memory: 'MEMORY.md',
 } as const;
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
 
 function formatModelLabel(model: unknown): string | null {
   if (typeof model === 'string' && model.trim()) {
@@ -175,6 +222,47 @@ function validateAgentId(agentId: string): void {
   }
 }
 
+function normalizeSkillScope(scope: unknown): AgentSkillScope {
+  if (!scope || typeof scope !== 'object') {
+    return { mode: 'default' };
+  }
+
+  const mode = (scope as { mode?: unknown }).mode;
+  if (mode !== 'specified') {
+    return { mode: 'default' };
+  }
+
+  const rawSkills = Array.isArray((scope as { skills?: unknown[] }).skills)
+    ? (scope as { skills?: unknown[] }).skills ?? []
+    : [];
+  const normalized = normalizeSpecifiedSkillList(rawSkills, {
+    duplicateError: 'Specified skill scope must not contain duplicate skills',
+    emptyError: 'Specified skill scope must contain at least 1 skill',
+    tooManyError: 'Specified skill scope must not contain more than 6 skills',
+  });
+
+  return { mode: 'specified', skills: normalized };
+}
+
+export function validateManagedSkillScope(
+  presetSkills: string[],
+  nextScope: AgentSkillScope,
+): void {
+  if (nextScope.mode === 'default') {
+    if (presetSkills.length > 0) {
+      throw new Error('Managed preset agents with preset skills cannot use the default skill scope');
+    }
+    return;
+  }
+
+  const nextSkills = new Set(nextScope.skills);
+  for (const presetSkill of presetSkills) {
+    if (!nextSkills.has(presetSkill)) {
+      throw new Error('Managed agents cannot remove preset-defined skills');
+    }
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path, constants.F_OK);
@@ -187,6 +275,63 @@ async function fileExists(path: string): Promise<boolean> {
 async function ensureDir(path: string): Promise<void> {
   if (!(await fileExists(path))) {
     await mkdir(path, { recursive: true });
+  }
+}
+
+async function readAgentManagementMap(): Promise<Record<string, ManagedAgentMetadata>> {
+  const store = await getGeeClawAgentStore();
+  const value = store.get('management');
+  return value && typeof value === 'object'
+    ? cloneValue(value as Record<string, ManagedAgentMetadata>)
+    : {};
+}
+
+async function writeAgentManagementMap(nextMap: Record<string, ManagedAgentMetadata>): Promise<void> {
+  const store = await getGeeClawAgentStore();
+  if (Object.keys(nextMap).length === 0) {
+    store.delete('management');
+    return;
+  }
+
+  store.set('management', cloneValue(nextMap));
+}
+
+function readAgentSkillScope(entry: AgentListEntry): AgentSkillScope {
+  const skills = Array.isArray(entry.skills)
+    ? entry.skills
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+    : [];
+
+  return skills.length === 0
+    ? { mode: 'default' }
+    : { mode: 'specified', skills };
+}
+
+function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): AgentListEntry {
+  const nextEntry = { ...entry };
+  if (scope.mode === 'default') {
+    delete nextEntry.skills;
+    return nextEntry;
+  }
+
+  nextEntry.skills = [...scope.skills];
+  return nextEntry;
+}
+
+async function seedPresetFilesIntoWorkspace(
+  workspace: string,
+  files: Record<string, string>,
+): Promise<void> {
+  await ensureDir(workspace);
+
+  for (const [fileName, content] of Object.entries(files)) {
+    const destination = join(workspace, fileName);
+    if (await fileExists(destination)) {
+      throw new Error(`Preset-managed file "${fileName}" already exists in the target workspace`);
+    }
+    await writeFile(destination, content, 'utf-8');
   }
 }
 
@@ -545,6 +690,7 @@ function listConfiguredAccountIdsForChannel(config: AgentConfigDocument, channel
 
 async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<AgentsSnapshot> {
   const { entries, defaultAgentId } = normalizeAgentsConfig(config);
+  const management = await readAgentManagementMap();
   const configuredChannels = await listConfiguredChannels();
   const { channelToAgent, accountToAgent } = getChannelBindingMap(config.bindings);
   const defaultAgentIdNorm = normalizeAgentIdForBinding(defaultAgentId);
@@ -595,6 +741,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
 
   const defaultModelLabel = formatModelLabel((config.agents as AgentsConfig | undefined)?.defaults?.model);
   const agents: AgentSummary[] = entries.map((entry) => {
+    const managedMetadata = management[entry.id];
     const modelLabel = formatModelLabel(entry.model) || defaultModelLabel || 'Not configured';
     const inheritedModel = !formatModelLabel(entry.model) && Boolean(defaultModelLabel);
     const entryIdNorm = normalizeAgentIdForBinding(entry.id);
@@ -616,6 +763,15 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       mainSessionKey: buildAgentMainSessionKey(config, entry.id),
       channelTypes: configuredChannels.filter((ct) => ownedChannels.has(ct)),
       channelAccounts: ownedChannelAccounts,
+      source: managedMetadata?.source === 'preset' ? 'preset' : 'custom',
+      managed: managedMetadata?.managed === true,
+      presetId: managedMetadata?.presetId,
+      lockedFields: managedMetadata?.managed ? [...managedMetadata.lockedFields] : [],
+      canUnmanage: managedMetadata?.managed ? managedMetadata.canUnmanage !== false : false,
+      managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
+      skillScope: readAgentSkillScope(entry),
+      presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
+      canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
     };
   });
 
@@ -662,10 +818,19 @@ async function buildAgentPersonaSnapshot(
 ): Promise<AgentPersonaSnapshot> {
   const entry = getAgentEntryById(config, agentId);
   const workspace = getWorkspacePathForEntry(config, entry);
+  const management = await readAgentManagementMap();
+  const managedMetadata = management[agentId];
+  const personaLocked = managedMetadata?.managed && managedMetadata.lockedFields.includes('persona');
+  const lockedFiles = personaLocked ? LOCKED_MANAGED_PERSONA_FILES : [];
 
   return {
     agentId: entry.id,
     workspace,
+    editable: lockedFiles.length < Object.keys(PERSONA_FILE_MAP).length,
+    lockedFiles,
+    message: personaLocked
+      ? 'Managed preset agents can edit USER.md, MEMORY.md, and SOUL.md while IDENTITY.md stays locked'
+      : undefined,
     files: {
       identity: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.identity),
       master: await readPersonaFileSnapshot(workspace, PERSONA_FILE_MAP.master),
@@ -698,6 +863,15 @@ export async function updateAgentPersona(
   updates: Partial<Record<keyof typeof PERSONA_FILE_MAP, string>>,
 ): Promise<AgentPersonaSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
+  const management = await readAgentManagementMap();
+  const managed = management[agentId];
+  if (managed?.managed && managed.lockedFields.includes('persona')) {
+    const lockedKeys = (Object.keys(updates) as Array<keyof typeof PERSONA_FILE_MAP>)
+      .filter((key) => typeof updates[key] === 'string' && LOCKED_MANAGED_PERSONA_FILE_SET.has(key));
+    if (lockedKeys.length > 0) {
+      throw new Error(`Managed preset agents cannot edit locked persona files: ${lockedKeys.join(', ')}`);
+    }
+  }
   const entry = getAgentEntryById(config, agentId);
   const workspace = getWorkspacePathForEntry(config, entry);
 
@@ -770,6 +944,175 @@ export async function updateDefaultAgentFallbacks(
   };
 }
 
+export async function listAgentPresetSummaries(): Promise<Array<{
+  presetId: string;
+  name: string;
+  description: string;
+  iconKey: string;
+  category: string;
+  managed: boolean;
+  platforms?: AgentPresetPlatform[];
+  supportedOnCurrentPlatform: boolean;
+  agentId: string;
+  workspace: string;
+  skillScope: AgentSkillScope;
+  presetSkills: string[];
+  managedFiles: string[];
+}>> {
+  const presets = await listAgentPresets();
+  return presets.map((preset) => ({
+    presetId: preset.meta.presetId,
+    name: preset.meta.name,
+    description: preset.meta.description,
+    iconKey: preset.meta.iconKey,
+    category: preset.meta.category,
+    managed: true,
+    platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
+    supportedOnCurrentPlatform: isPresetSupportedOnPlatform(preset.meta.platforms, process.platform),
+    agentId: preset.meta.agent.id,
+    workspace: preset.meta.agent.workspace,
+    skillScope: preset.meta.agent.skillScope,
+    presetSkills: preset.meta.agent.skillScope.mode === 'specified'
+      ? [...preset.meta.agent.skillScope.skills]
+      : [],
+    managedFiles: Object.keys(preset.files),
+  }));
+}
+
+function assertPresetSupportedOnCurrentPlatform(preset: {
+  meta: {
+    presetId: string;
+    platforms?: AgentPresetPlatform[];
+  };
+}): void {
+  const { platforms, presetId } = preset.meta;
+  if (!platforms || isPresetSupportedOnPlatform(platforms, process.platform)) {
+    return;
+  }
+
+  throw new Error(
+    `Preset "${presetId}" is only available on ${formatPresetPlatforms(platforms)}`,
+  );
+}
+
+export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
+  const preset = await getAgentPreset(presetId);
+  assertPresetSupportedOnCurrentPlatform(preset);
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
+  const management = await readAgentManagementMap();
+  const nextId = normalizeAgentId(preset.meta.agent.id);
+  validateAgentId(nextId);
+
+  const existingIds = new Set(entries.map((entry) => entry.id));
+  const diskIds = await listExistingAgentIdsOnDisk();
+  if (existingIds.has(nextId) || diskIds.has(nextId)) {
+    throw new Error(`Preset agent "${nextId}" is already installed`);
+  }
+
+  const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
+  const nextScope = normalizeSkillScope(preset.meta.agent.skillScope);
+  const lockedFields = preset.meta.managedPolicy?.lockedFields
+    ? [...preset.meta.managedPolicy.lockedFields]
+    : ['id', 'workspace', 'persona'];
+  const newEntry = applyAgentSkillScope({
+    id: nextId,
+    name: preset.meta.name,
+    workspace: preset.meta.agent.workspace,
+    agentDir: getDefaultAgentDirPath(nextId),
+    ...(preset.meta.agent.model !== undefined ? { model: cloneValue(preset.meta.agent.model) } : {}),
+  }, nextScope);
+  nextEntries.push(newEntry);
+
+  config.agents = {
+    ...agentsConfig,
+    list: nextEntries,
+  };
+
+  await seedPresetFilesIntoWorkspace(
+    expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
+    preset.files,
+  );
+  await provisionAgentFilesystem(config, newEntry);
+  await persistAgentConfigAndPatchRuntime(config);
+
+  management[nextId] = {
+    agentId: nextId,
+    source: 'preset',
+    presetId: preset.meta.presetId,
+    managed: true,
+    lockedFields,
+    canUnmanage: preset.meta.managedPolicy?.canUnmanage !== false,
+    presetSkills: nextScope.mode === 'specified' ? [...nextScope.skills] : [],
+    managedFiles: Object.keys(preset.files),
+    installedAt: new Date().toISOString(),
+  };
+  await writeAgentManagementMap(management);
+
+  logger.info('Installed preset agent', { agentId: nextId, presetId: preset.meta.presetId });
+  return buildSnapshotFromConfig(config);
+}
+
+export async function updateAgentSettings(
+  agentId: string,
+  updates: AgentSettingsUpdate,
+): Promise<AgentsSnapshot> {
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const management = await readAgentManagementMap();
+  const managed = management[agentId];
+  const { agentsConfig, entries } = normalizeAgentsConfig(config);
+  const index = entries.findIndex((entry) => entry.id === agentId);
+  if (index === -1) {
+    throw new Error(`Agent "${agentId}" not found`);
+  }
+
+  let nextEntry = { ...entries[index] };
+  if (typeof updates.name === 'string' && updates.name.trim()) {
+    nextEntry.name = normalizeAgentName(updates.name);
+  }
+  if (updates.skillScope) {
+    const nextScope = normalizeSkillScope(updates.skillScope);
+    if (managed?.managed) {
+      validateManagedSkillScope(managed.presetSkills, nextScope);
+    }
+    nextEntry = applyAgentSkillScope(nextEntry, nextScope);
+  }
+
+  entries[index] = nextEntry;
+  config.agents = {
+    ...agentsConfig,
+    list: entries,
+  };
+
+  await persistAgentConfigAndPatchRuntime(config);
+  logger.info('Updated agent settings', { agentId });
+  return buildSnapshotFromConfig(config);
+}
+
+export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
+  const management = await readAgentManagementMap();
+  const current = management[agentId];
+  if (!current?.managed) {
+    throw new Error(`Agent "${agentId}" is not managed`);
+  }
+  if (current.canUnmanage === false) {
+    throw new Error(`Managed preset agent "${agentId}" cannot be unmanaged`);
+  }
+
+  management[agentId] = {
+    ...current,
+    managed: false,
+    presetSkills: [],
+    managedFiles: [],
+    unmanagedAt: new Date().toISOString(),
+  };
+  await writeAgentManagementMap(management);
+
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  logger.info('Unmanaged preset agent', { agentId });
+  return buildSnapshotFromConfig(config);
+}
+
 export async function createAgent(name: string, requestedId: string): Promise<AgentsSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
   const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
@@ -837,6 +1180,7 @@ export async function deleteAgentConfig(agentId: string): Promise<AgentsSnapshot
   }
 
   const config = await readOpenClawConfig() as AgentConfigDocument;
+  const management = await readAgentManagementMap();
   const { agentsConfig, entries, defaultAgentId } = normalizeAgentsConfig(config);
   const removedEntry = entries.find((entry) => entry.id === agentId);
   const nextEntries = entries.filter((entry) => entry.id !== agentId);
@@ -860,6 +1204,10 @@ export async function deleteAgentConfig(agentId: string): Promise<AgentsSnapshot
   }
 
   await persistAgentConfigAndPatchRuntime(config);
+  if (management[agentId]) {
+    delete management[agentId];
+    await writeAgentManagementMap(management);
+  }
   await removeAgentRuntimeDirectory(agentId);
   await removeAgentWorkspaceDirectory(removedEntry);
   logger.info('Deleted agent config entry', { agentId });

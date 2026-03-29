@@ -9,9 +9,10 @@ export async function getGeeClawAgentStore() {
       projectName: 'GeeClaw',
       name: 'geeclaw-agents',
       defaults: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         agents: {} as Record<string, unknown>,
         bindings: [] as Array<Record<string, unknown>>,
+        management: {} as Record<string, unknown>,
       },
     });
   }

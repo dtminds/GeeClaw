@@ -7,13 +7,16 @@ import {
   assignChannelToAgent,
   clearChannelBinding,
   createAgent,
+  deleteAgentConfig,
   getDefaultAgentModelConfig,
   getAgentPersona,
-  deleteAgentConfig,
+  installPresetAgent,
+  listAgentPresetSummaries,
   listAgentsSnapshot,
+  unmanageAgent,
   updateAgentPersona,
+  updateAgentSettings,
   updateDefaultAgentFallbacks,
-  updateAgentName,
 } from '../../utils/agent-config';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -124,6 +127,11 @@ export async function handleAgentRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/agents/presets' && req.method === 'GET') {
+    sendJson(res, 200, { success: true, presets: await listAgentPresetSummaries() });
+    return true;
+  }
+
   if (url.pathname === '/api/agents/default-model' && req.method === 'GET') {
     sendJson(res, 200, { success: true, ...(await getDefaultAgentModelConfig()) });
     return true;
@@ -153,19 +161,56 @@ export async function handleAgentRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/agents/presets/install' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ presetId: string }>(req);
+      const snapshot = await installPresetAgent(body.presetId);
+      scheduleGatewayReload(ctx, 'install-preset-agent');
+      sendJson(res, 200, { success: true, ...snapshot });
+    } catch (error) {
+      sendJson(res, 400, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname.startsWith('/api/agents/') && req.method === 'POST') {
+    const suffix = url.pathname.slice('/api/agents/'.length);
+    const parts = suffix.split('/').filter(Boolean);
+
+    if (parts.length === 2 && parts[1] === 'unmanage') {
+      try {
+        const snapshot = await unmanageAgent(decodeURIComponent(parts[0]));
+        sendJson(res, 200, { success: true, ...snapshot });
+      } catch (error) {
+        sendJson(res, 400, { success: false, error: String(error) });
+      }
+      return true;
+    }
+  }
+
   if (url.pathname.startsWith('/api/agents/') && req.method === 'PUT') {
     const suffix = url.pathname.slice('/api/agents/'.length);
     const parts = suffix.split('/').filter(Boolean);
 
     if (parts.length === 1) {
       try {
-        const body = await parseJsonBody<{ name: string }>(req);
+        const body = await parseJsonBody<{
+          name?: string;
+          skillScope?: { mode: 'default' | 'specified'; skills?: string[] };
+        }>(req);
         const agentId = decodeURIComponent(parts[0]);
-        const snapshot = await updateAgentName(agentId, body.name);
-        scheduleGatewayReload(ctx, 'update-agent');
+        const snapshot = await updateAgentSettings(agentId, {
+          name: body.name,
+          skillScope: body.skillScope?.mode === 'specified'
+            ? { mode: 'specified', skills: body.skillScope.skills ?? [] }
+            : body.skillScope?.mode === 'default'
+              ? { mode: 'default' }
+              : undefined,
+        });
+        scheduleGatewayReload(ctx, 'update-agent-settings');
         sendJson(res, 200, { success: true, ...snapshot });
       } catch (error) {
-        sendJson(res, 500, { success: false, error: String(error) });
+        sendJson(res, 400, { success: false, error: String(error) });
       }
       return true;
     }
