@@ -75,8 +75,22 @@
         "description": "Install curated agents with preset workspaces, instructions, and managed rules.",
         "install": "Install",
         "installed": "Installed",
+        "unavailable": "Unavailable",
+        "viewDetails": "View Details",
         "managedHint": "Installs as a managed preset agent",
-        "skillCount": "{{count}} preset skills"
+        "skillCount": "{{count}} preset skills",
+        "availableOn": "Available on {{platforms}}",
+        "platforms": {
+            "all": "All Platforms",
+            "darwin": "macOS",
+            "win32": "Windows",
+            "linux": "Linux"
+        },
+        "detail": {
+            "summary": "Preset summary",
+            "skills": "Preset skills",
+            "files": "Managed files"
+        }
     },
     "removeChannelDialog": {
         "title": "Unbind Channel",

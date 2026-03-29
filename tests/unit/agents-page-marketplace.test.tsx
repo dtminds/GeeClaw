@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const fetchAgentsMock = vi.fn(async () => undefined);
@@ -25,7 +25,19 @@ const translations: Record<string, string> = {
   'marketplace.description': 'Install curated agents.',
   'marketplace.install': 'Install',
   'marketplace.installed': 'Installed',
+  'marketplace.unavailable': 'Unavailable',
+  'marketplace.viewDetails': 'View Details',
+  'marketplace.availableOn': 'Available on {{platforms}}',
   'marketplace.managedHint': 'Installs as a managed preset agent',
+  'marketplace.platforms.all': 'All Platforms',
+  'marketplace.platforms.darwin': 'macOS',
+  'marketplace.platforms.win32': 'Windows',
+  'marketplace.platforms.linux': 'Linux',
+  'marketplace.detail.summary': 'Preset summary',
+  'marketplace.detail.skills': 'Preset skills',
+  'marketplace.detail.files': 'Managed files',
+  'fields.agentId': 'Agent ID',
+  'fields.workspace': 'Workspace',
 };
 
 vi.mock('react-i18next', () => ({
@@ -34,9 +46,12 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number }) => {
+    t: (key: string, options?: { count?: number; platforms?: string }) => {
       if (key === 'marketplace.skillCount') {
         return `${options?.count ?? 0} preset skills`;
+      }
+      if (key === 'marketplace.availableOn') {
+        return `Available on ${options?.platforms ?? ''}`;
       }
       return translations[key] || key;
     },
@@ -47,24 +62,24 @@ vi.mock('@/stores/agents', () => ({
   useAgentsStore: (selector?: (state: unknown) => unknown) => {
     const state = {
       agents: [{
-        id: 'stockexpert',
-        name: '股票助手',
+        id: 'trendfinder',
+        name: '趋势助手',
         isDefault: false,
         modelDisplay: 'gemini-3-flash-preview',
         inheritedModel: true,
-        workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
-        agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
-        mainSessionKey: 'agent:stockexpert:main',
+        workspace: '~/.openclaw-geeclaw/workspace-trendfinder',
+        agentDir: '~/.openclaw-geeclaw/agents/trendfinder/agent',
+        mainSessionKey: 'agent:trendfinder:main',
         channelTypes: [],
         channelAccounts: [],
         source: 'preset' as const,
         managed: true,
-        presetId: 'stock-expert',
+        presetId: 'trend-finder',
         lockedFields: ['id', 'workspace', 'persona'],
         canUnmanage: true,
-        managedFiles: ['AGENTS.md', 'SOUL.md'],
-        skillScope: { mode: 'specified' as const, skills: ['stock-analyzer', 'web-search'] },
-        presetSkills: ['stock-analyzer'],
+        managedFiles: ['AGENTS.md'],
+        skillScope: { mode: 'specified' as const, skills: ['web-search'] },
+        presetSkills: ['web-search'],
         canUseDefaultSkillScope: false,
       }],
       presets: [
@@ -80,6 +95,8 @@ vi.mock('@/stores/agents', () => ({
           skillScope: { mode: 'specified' as const, skills: ['stock-analyzer', 'stock-announcements'] },
           presetSkills: ['stock-analyzer', 'stock-announcements'],
           managedFiles: ['AGENTS.md', 'SOUL.md'],
+          platforms: ['darwin'] as const,
+          supportedOnCurrentPlatform: false,
         },
         {
           presetId: 'trend-finder',
@@ -93,6 +110,7 @@ vi.mock('@/stores/agents', () => ({
           skillScope: { mode: 'specified' as const, skills: ['web-search'] },
           presetSkills: ['web-search'],
           managedFiles: ['AGENTS.md'],
+          supportedOnCurrentPlatform: true,
         },
       ],
       loading: false,
@@ -130,14 +148,14 @@ vi.mock('@/stores/gateway', () => ({
 }));
 
 describe('Agents marketplace view', () => {
-  it('renders marketplace presets and managed badges', async () => {
+  it('opens preset details and disables unsupported installs with platform guidance', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(<Agents />);
 
     expect(fetchAgentsMock).toHaveBeenCalledTimes(1);
     expect(fetchPresetsMock).toHaveBeenCalledTimes(1);
     expect(fetchChannelsMock).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('股票助手')).toBeInTheDocument();
+    expect(await screen.findByText('趋势助手')).toBeInTheDocument();
     expect(screen.getByText('Managed')).toBeInTheDocument();
     expect(screen.getByText('From Marketplace')).toBeInTheDocument();
 
@@ -145,9 +163,22 @@ describe('Agents marketplace view', () => {
 
     expect(screen.getByText('Built-in Agent Marketplace')).toBeInTheDocument();
     expect(screen.getByText('捕捉热点和市场趋势')).toBeInTheDocument();
+    expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
+    expect(screen.getByText('Available on macOS')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unavailable' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Installed' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
-    await waitFor(() => expect(installPresetMock).toHaveBeenCalledWith('trend-finder'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Preset summary')).toBeInTheDocument();
+    expect(within(dialog).getByText('Preset skills')).toBeInTheDocument();
+    expect(within(dialog).getByText('stock-announcements')).toBeInTheDocument();
+    expect(within(dialog).getByText('Managed files')).toBeInTheDocument();
+    expect(within(dialog).getByText('AGENTS.md')).toBeInTheDocument();
+    expect(within(dialog).getByText('macOS')).toBeInTheDocument();
+    expect(within(dialog).getByText('Available on macOS')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
+
   });
 });

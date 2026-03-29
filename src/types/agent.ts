@@ -2,6 +2,8 @@ export type AgentSkillScope =
   | { mode: 'default' }
   | { mode: 'specified'; skills: string[] };
 
+export type AgentPresetPlatform = 'darwin' | 'win32' | 'linux';
+
 export interface AgentPresetSummary {
   presetId: string;
   name: string;
@@ -14,6 +16,8 @@ export interface AgentPresetSummary {
   skillScope: AgentSkillScope;
   presetSkills: string[];
   managedFiles: string[];
+  platforms?: AgentPresetPlatform[];
+  supportedOnCurrentPlatform: boolean;
 }
 
 export interface AgentSummary {

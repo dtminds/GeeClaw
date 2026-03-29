@@ -20,6 +20,8 @@ import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } fro
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
 import { cn } from '@/lib/utils';
+import { MarketplacePresetDetailDialog } from './MarketplacePresetDetailDialog';
+import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
 import whatsappIcon from '@/assets/channels/whatsapp.svg';
@@ -49,6 +51,7 @@ export function Agents() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<AgentSummary | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'marketplace'>('agents');
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
@@ -69,6 +72,10 @@ export function Agents() {
   const activeAgent = useMemo(
     () => agents.find((agent) => agent.id === activeAgentId) ?? null,
     [activeAgentId, agents],
+  );
+  const activePreset = useMemo(
+    () => presets.find((preset) => preset.presetId === activePresetId) ?? null,
+    [activePresetId, presets],
   );
 
   const handleRefresh = () => {
@@ -161,6 +168,11 @@ export function Agents() {
               <div className="grid gap-4 md:grid-cols-2">
                 {presets.map((preset) => {
                   const installed = installedPresetIds.has(preset.presetId);
+                  const installDisabled = installed || !preset.supportedOnCurrentPlatform;
+                  const platformLabels = getPresetPlatformLabels(t, preset.platforms);
+                  const availabilityCopy = !preset.supportedOnCurrentPlatform
+                    ? getPresetAvailabilityCopy(t, preset.platforms)
+                    : null;
                   return (
                     <div
                       key={preset.presetId}
@@ -176,18 +188,44 @@ export function Agents() {
                         <p className="text-sm text-muted-foreground">{preset.description}</p>
                       </div>
 
+                      <div className="flex flex-wrap gap-2">
+                        {platformLabels.map((label) => (
+                          <Badge
+                            key={label}
+                            variant="secondary"
+                            className="rounded-full border-0 bg-black/[0.05] px-2 py-0.5 text-[11px] font-medium text-foreground/70 shadow-none dark:bg-white/[0.08]"
+                          >
+                            {label}
+                          </Badge>
+                        ))}
+                      </div>
+
                       <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
                         <span>{t('marketplace.managedHint')}</span>
                         <span>{t('marketplace.skillCount', { count: preset.presetSkills.length })}</span>
+                        {availabilityCopy && <span>{availabilityCopy}</span>}
                       </div>
 
-                      <Button
-                        onClick={() => void installPreset(preset.presetId)}
-                        disabled={installed}
-                        className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
-                      >
-                        {installed ? t('marketplace.installed') : t('marketplace.install')}
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setActivePresetId(preset.presetId)}
+                          className="h-9 rounded-full px-4 text-[13px] font-medium"
+                        >
+                          {t('marketplace.viewDetails')}
+                        </Button>
+                        <Button
+                          onClick={() => void installPreset(preset.presetId)}
+                          disabled={installDisabled}
+                          className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                        >
+                          {installed
+                            ? t('marketplace.installed')
+                            : preset.supportedOnCurrentPlatform
+                              ? t('marketplace.install')
+                              : t('marketplace.unavailable')}
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -231,6 +269,14 @@ export function Agents() {
           onClose={() => setActiveAgentId(null)}
         />
       )}
+
+      <MarketplacePresetDetailDialog
+        preset={activePreset}
+        open={!!activePreset}
+        installed={activePreset ? installedPresetIds.has(activePreset.presetId) : false}
+        onClose={() => setActivePresetId(null)}
+        onInstall={(presetId) => void installPreset(presetId)}
+      />
 
       <ConfirmDialog
         open={!!agentToDelete}

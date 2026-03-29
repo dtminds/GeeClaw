@@ -75,8 +75,22 @@
         "description": "安装带预设工作区、指令文件和托管规则的内置 Agent。",
         "install": "添加",
         "installed": "已添加",
+        "unavailable": "当前不可用",
+        "viewDetails": "查看详情",
         "managedHint": "添加后会作为受管控 Agent 安装",
-        "skillCount": "{{count}} 个预置技能"
+        "skillCount": "{{count}} 个预置技能",
+        "availableOn": "支持平台：{{platforms}}",
+        "platforms": {
+            "all": "全平台",
+            "darwin": "macOS",
+            "win32": "Windows",
+            "linux": "Linux"
+        },
+        "detail": {
+            "summary": "预设摘要",
+            "skills": "预置技能",
+            "files": "受管文件"
+        }
     },
     "removeChannelDialog": {
         "title": "解绑 Channel",
