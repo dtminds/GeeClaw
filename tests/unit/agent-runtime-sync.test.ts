@@ -109,6 +109,12 @@ describe('agent runtime sync', () => {
       },
       list: [
         {
+          id: 'main',
+          name: 'Main',
+          workspace: '/managed/workspace',
+          agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        },
+        {
           id: 'helper',
           name: 'Helper',
           default: true,
@@ -203,6 +209,10 @@ describe('agent runtime sync', () => {
     expect(config.agents?.defaults?.workspace).toBe('/managed/workspace');
     expect(config.agents?.defaults?.model?.primary).toBe('openrouter/model');
     expect(config.agents?.list?.map((entry) => entry.id)).toEqual(['main', 'helper', 'stockexpert']);
+    expect(config.agents?.list?.find((entry) => entry.id === 'main')).not.toHaveProperty('workspace');
+    expect(config.agents?.list?.find((entry) => entry.id === 'main')).not.toHaveProperty('agentDir');
+    expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('agentDir');
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('agentDir');
     expect(config.bindings).toEqual([
       {
         agentId: 'helper',

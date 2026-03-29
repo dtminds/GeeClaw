@@ -2,6 +2,9 @@ import { getGeeClawAgentStore } from './store-instance';
 import { readOpenClawConfig, type OpenClawConfig } from '../../utils/channel-config';
 import { mutateOpenClawConfigDocument } from '../../utils/openclaw-config-coordinator';
 import { isDeepStrictEqual } from 'node:util';
+import { getManagedAgentDirPath, getManagedAgentWorkspacePath } from '../../utils/managed-agent-workspace';
+import { expandPath } from '../../utils/paths';
+import { normalize } from 'node:path';
 
 interface StoredAgentRuntimeConfig {
   agents?: Record<string, unknown>;
@@ -10,7 +13,6 @@ interface StoredAgentRuntimeConfig {
 
 const MAIN_AGENT_ID = 'main';
 const MAIN_AGENT_NAME = 'Main';
-const MANAGED_OPENCLAW_HOME = '~/.openclaw-geeclaw';
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -19,16 +21,44 @@ function cloneValue<T>(value: T): T {
 function getManagedMainWorkspace(defaults: Record<string, unknown>): string {
   return typeof defaults.workspace === 'string' && defaults.workspace.trim()
     ? defaults.workspace
-    : `${MANAGED_OPENCLAW_HOME}/workspace`;
+    : getManagedAgentWorkspacePath(MAIN_AGENT_ID);
+}
+
+function readLegacyMainWorkspace(
+  entries: Array<Record<string, unknown>>,
+): string | undefined {
+  const mainEntry = entries.find((entry) => entry.id === MAIN_AGENT_ID);
+  return typeof mainEntry?.workspace === 'string' && mainEntry.workspace.trim()
+    ? mainEntry.workspace
+    : undefined;
 }
 
 function getManagedMainAgentDir(): string {
-  return `${MANAGED_OPENCLAW_HOME}/agents/${MAIN_AGENT_ID}/agent`;
+  return getManagedAgentDirPath(MAIN_AGENT_ID);
+}
+
+function trimTrailingSeparators(path: string): string {
+  return path.replace(/[\\/]+$/, '');
+}
+
+function isRedundantDefaultAgentDir(agentId: string, agentDir: unknown): boolean {
+  if (typeof agentDir !== 'string' || !agentDir.trim()) {
+    return false;
+  }
+
+  const configuredValue = trimTrailingSeparators(agentDir.trim());
+  const defaultValue = trimTrailingSeparators(getManagedAgentDirPath(agentId));
+  if (configuredValue === defaultValue) {
+    return true;
+  }
+
+  return trimTrailingSeparators(normalize(expandPath(configuredValue)))
+    === trimTrailingSeparators(normalize(expandPath(defaultValue)));
 }
 
 function normalizeAgentListWithMainEntry(
   entries: unknown,
-  defaults: Record<string, unknown>,
+  _defaults: Record<string, unknown>,
 ): Array<Record<string, unknown>> {
   const normalizedEntries = Array.isArray(entries)
     ? entries
@@ -42,7 +72,6 @@ function normalizeAgentListWithMainEntry(
     id: MAIN_AGENT_ID,
     name: MAIN_AGENT_NAME,
     default: !hasDefaultAgent,
-    workspace: getManagedMainWorkspace(defaults),
     agentDir: getManagedMainAgentDir(),
   } satisfies Record<string, unknown>;
 
@@ -55,13 +84,17 @@ function normalizeAgentListWithMainEntry(
       ...existing,
       id: MAIN_AGENT_ID,
       name: typeof existing.name === 'string' && existing.name.trim() ? existing.name : MAIN_AGENT_NAME,
-      workspace: typeof existing.workspace === 'string' && existing.workspace.trim()
-        ? existing.workspace
-        : mainEntry.workspace,
       agentDir: typeof existing.agentDir === 'string' && existing.agentDir.trim()
         ? existing.agentDir
         : mainEntry.agentDir,
     };
+    delete normalizedEntries[mainIndex].workspace;
+  }
+
+  for (const entry of normalizedEntries) {
+    if (isRedundantDefaultAgentDir(String(entry.id ?? ''), entry.agentDir)) {
+      delete entry.agentDir;
+    }
   }
 
   if (!normalizedEntries.some((entry) => entry.default === true)) {
@@ -134,6 +167,18 @@ function applyStoredAgentRuntimeConfig(
 
     const nextAgents = { ...currentAgents };
     const nextDefaults = { ...existingDefaults, ...storedDefaults };
+    const migratedMainWorkspace = readLegacyMainWorkspace(
+      Array.isArray(stored.list)
+        ? stored.list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+        : [],
+    );
+
+    if (!(typeof nextDefaults.workspace === 'string' && nextDefaults.workspace.trim()) && migratedMainWorkspace) {
+      nextDefaults.workspace = migratedMainWorkspace;
+    }
+    if (!(typeof nextDefaults.workspace === 'string' && nextDefaults.workspace.trim())) {
+      nextDefaults.workspace = getManagedMainWorkspace(nextDefaults);
+    }
 
     nextAgents.defaults = nextDefaults;
 

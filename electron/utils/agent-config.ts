@@ -3,6 +3,11 @@ import { constants } from 'fs';
 import { join, normalize } from 'path';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
+import {
+  getManagedAgentDirPath,
+  getManagedAgentWorkspacePath,
+  resolveManagedAgentWorkspacePath,
+} from './managed-agent-workspace';
 import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
@@ -21,8 +26,6 @@ import * as logger from './logger';
 const MAIN_AGENT_ID = 'main';
 const MAIN_AGENT_NAME = 'Main';
 const DEFAULT_ACCOUNT_ID = 'default';
-const MANAGED_OPENCLAW_HOME = '~/.openclaw-geeclaw';
-const DEFAULT_WORKSPACE_PATH = `${MANAGED_OPENCLAW_HOME}/workspace`;
 const AGENT_BOOTSTRAP_FILES = [
   'AGENTS.md',
   'SOUL.md',
@@ -341,28 +344,50 @@ function getDefaultWorkspacePath(config: AgentConfigDocument): string {
     : undefined);
   return typeof defaults?.workspace === 'string' && defaults.workspace.trim()
     ? defaults.workspace
-    : DEFAULT_WORKSPACE_PATH;
+    : readLegacyMainWorkspaceFromConfig(config)
+      ?? getManagedAgentWorkspacePath(MAIN_AGENT_ID);
+}
+
+function readLegacyMainWorkspaceFromConfig(config: AgentConfigDocument): string | undefined {
+  const entries = (
+    config.agents && typeof config.agents === 'object' && Array.isArray((config.agents as AgentsConfig).list)
+      ? (config.agents as AgentsConfig).list
+      : []
+  ) as AgentListEntry[];
+  const mainEntry = entries.find((entry) => entry.id === MAIN_AGENT_ID);
+  return typeof mainEntry?.workspace === 'string' && mainEntry.workspace.trim()
+    ? mainEntry.workspace
+    : undefined;
 }
 
 function getDefaultAgentDirPath(agentId: string): string {
-  return `${MANAGED_OPENCLAW_HOME}/agents/${agentId}/agent`;
+  return getManagedAgentDirPath(agentId);
+}
+
+function isRedundantDefaultAgentDir(agentId: string, agentDir: unknown): boolean {
+  if (typeof agentDir !== 'string' || !agentDir.trim()) {
+    return false;
+  }
+
+  const configuredValue = trimTrailingSeparators(agentDir.trim());
+  const defaultValue = trimTrailingSeparators(getDefaultAgentDirPath(agentId));
+  if (configuredValue === defaultValue) {
+    return true;
+  }
+
+  return trimTrailingSeparators(normalize(expandPath(configuredValue)))
+    === trimTrailingSeparators(normalize(expandPath(defaultValue)));
 }
 
 function getDefaultWorkspacePathForAgent(agentId: string): string {
-  if (agentId === MAIN_AGENT_ID) {
-    return DEFAULT_WORKSPACE_PATH;
-  }
-
-  return `${MANAGED_OPENCLAW_HOME}/workspace-${agentId}`;
+  return getManagedAgentWorkspacePath(agentId);
 }
 
-function createImplicitMainEntry(config: AgentConfigDocument): AgentListEntry {
+function createImplicitMainEntry(_config: AgentConfigDocument): AgentListEntry {
   return {
     id: MAIN_AGENT_ID,
     name: MAIN_AGENT_NAME,
     default: true,
-    workspace: getDefaultWorkspacePath(config),
-    agentDir: getDefaultAgentDirPath(MAIN_AGENT_ID),
   };
 }
 
@@ -375,13 +400,37 @@ function normalizeAgentsConfig(config: AgentConfigDocument): {
   const agentsConfig = (config.agents && typeof config.agents === 'object'
     ? { ...(config.agents as AgentsConfig) }
     : {}) as AgentsConfig;
+  const defaults = (
+    agentsConfig.defaults && typeof agentsConfig.defaults === 'object'
+      ? { ...(agentsConfig.defaults as AgentDefaultsConfig) }
+      : {}
+  ) as AgentDefaultsConfig;
   const rawEntries = Array.isArray(agentsConfig.list)
     ? agentsConfig.list.filter((entry): entry is AgentListEntry => (
       Boolean(entry) && typeof entry === 'object' && typeof entry.id === 'string' && entry.id.trim().length > 0
     ))
     : [];
+  const rawMainEntry = rawEntries.find((entry) => entry.id === MAIN_AGENT_ID);
+  const migratedMainWorkspace = typeof rawMainEntry?.workspace === 'string' && rawMainEntry.workspace.trim()
+    ? rawMainEntry.workspace
+    : undefined;
+  if (!(typeof defaults.workspace === 'string' && defaults.workspace.trim())) {
+    defaults.workspace = migratedMainWorkspace ?? getManagedAgentWorkspacePath(MAIN_AGENT_ID);
+  }
+  agentsConfig.defaults = defaults;
 
-  if (rawEntries.length === 0) {
+  const normalizedEntries = rawEntries.map((entry) => {
+    const nextEntry = { ...entry };
+    if (nextEntry.id === MAIN_AGENT_ID) {
+      delete nextEntry.workspace;
+    }
+    if (isRedundantDefaultAgentDir(nextEntry.id, nextEntry.agentDir)) {
+      delete nextEntry.agentDir;
+    }
+    return nextEntry;
+  });
+
+  if (normalizedEntries.length === 0) {
     const main = createImplicitMainEntry(config);
     return {
       agentsConfig,
@@ -391,10 +440,10 @@ function normalizeAgentsConfig(config: AgentConfigDocument): {
     };
   }
 
-  const defaultEntry = rawEntries.find((entry) => entry.default) ?? rawEntries[0];
+  const defaultEntry = normalizedEntries.find((entry) => entry.default) ?? normalizedEntries[0];
   return {
     agentsConfig,
-    entries: rawEntries.map((entry) => ({ ...entry })),
+    entries: normalizedEntries,
     defaultAgentId: defaultEntry.id,
     syntheticMain: false,
   };
@@ -592,12 +641,18 @@ function trimTrailingSeparators(path: string): string {
 function getManagedWorkspaceDirectory(agent: AgentListEntry): string | null {
   if (agent.id === MAIN_AGENT_ID) return null;
 
-  const configuredWorkspace = expandPath(agent.workspace || getDefaultWorkspacePathForAgent(agent.id));
-  const managedWorkspace = join(getOpenClawConfigDir(), `workspace-${agent.id}`);
+  const configuredWorkspaceValue = agent.workspace || getDefaultWorkspacePathForAgent(agent.id);
+  const configuredWorkspace = expandPath(configuredWorkspaceValue);
+  const managedWorkspaceValue = getDefaultWorkspacePathForAgent(agent.id);
+  const managedWorkspace = resolveManagedAgentWorkspacePath(agent.id);
+  const normalizedConfiguredValue = trimTrailingSeparators(configuredWorkspaceValue);
+  const normalizedManagedValue = trimTrailingSeparators(managedWorkspaceValue);
   const normalizedConfigured = trimTrailingSeparators(normalize(configuredWorkspace));
   const normalizedManaged = trimTrailingSeparators(normalize(managedWorkspace));
 
-  return normalizedConfigured === normalizedManaged ? configuredWorkspace : null;
+  return normalizedConfiguredValue === normalizedManagedValue || normalizedConfigured === normalizedManaged
+    ? configuredWorkspace
+    : null;
 }
 
 async function removeAgentWorkspaceDirectory(agent: AgentListEntry): Promise<void> {
@@ -970,7 +1025,7 @@ export async function listAgentPresetSummaries(): Promise<Array<{
     platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
     supportedOnCurrentPlatform: isPresetSupportedOnPlatform(preset.meta.platforms, process.platform),
     agentId: preset.meta.agent.id,
-    workspace: preset.meta.agent.workspace,
+    workspace: getManagedAgentWorkspacePath(preset.meta.agent.id),
     skillScope: preset.meta.agent.skillScope,
     presetSkills: preset.meta.agent.skillScope.mode === 'specified'
       ? [...preset.meta.agent.skillScope.skills]
@@ -1018,8 +1073,7 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
   const newEntry = applyAgentSkillScope({
     id: nextId,
     name: preset.meta.name,
-    workspace: preset.meta.agent.workspace,
-    agentDir: getDefaultAgentDirPath(nextId),
+    workspace: getManagedAgentWorkspacePath(nextId),
     ...(preset.meta.agent.model !== undefined ? { model: cloneValue(preset.meta.agent.model) } : {}),
   }, nextScope);
   nextEntries.push(newEntry);
@@ -1131,7 +1185,6 @@ export async function createAgent(name: string, requestedId: string): Promise<Ag
     id: nextId,
     name: normalizedName,
     workspace: getDefaultWorkspacePathForAgent(nextId),
-    agentDir: getDefaultAgentDirPath(nextId),
   };
 
   if (!nextEntries.some((entry) => entry.id === MAIN_AGENT_ID) && syntheticMain) {

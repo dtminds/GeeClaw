@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
-import { tmpdir } from 'os';
+import { tmpdir } from 'node:os';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 
 const forkMock = vi.fn();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
+let homeDir = '/Users/test';
 
 vi.mock('electron', () => ({
   app: {
@@ -47,6 +48,15 @@ vi.mock('@electron/utils/openclaw-runtime', () => ({
 
 vi.mock('@electron/utils/paths', () => ({
   getOpenClawConfigDir: vi.fn(() => openclawConfigDir),
+}));
+
+vi.mock('@electron/utils/managed-agent-workspace', () => ({
+  getManagedAgentWorkspacePath: vi.fn((agentId: string) => (
+    agentId === 'main' ? '~/geeclaw/workspace' : `~/geeclaw/workspace-${agentId}`
+  )),
+  resolveManagedAgentWorkspacePath: vi.fn((agentId: string) => (
+    join(homeDir, 'geeclaw', agentId === 'main' ? 'workspace' : `workspace-${agentId}`)
+  )),
 }));
 
 vi.mock('@electron/utils/uv-env', () => ({
@@ -113,6 +123,7 @@ vi.mock('@electron/utils/logger', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   openclawConfigDir = '/Users/test/.openclaw-geeclaw';
+  homeDir = '/Users/test';
 });
 
 describe('buildGatewayForkEnv', () => {
@@ -167,9 +178,10 @@ describe('buildGatewayForkEnv', () => {
 
 describe('prepareGatewayLaunchContext', () => {
   it('rewrites managed agent defaults into the managed state dir before rerunning setup', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
     const configPath = join(openclawConfigDir, 'openclaw.json');
-    const managedWorkspaceDir = join(openclawConfigDir, 'workspace');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
     const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
 
     writeFileSync(configPath, JSON.stringify({
@@ -212,7 +224,7 @@ describe('prepareGatewayLaunchContext', () => {
                 };
                 gateway?: { port?: number };
               };
-              expect(config.agents?.defaults?.workspace).toBe(managedWorkspaceDir);
+              expect(config.agents?.defaults?.workspace).toBe('~/geeclaw/workspace');
               expect(config.agents?.defaults?.heartbeat).toEqual({
                 every: '2h',
                 jitter: '5m',
@@ -249,13 +261,15 @@ describe('prepareGatewayLaunchContext', () => {
       );
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
     }
   });
 
   it('continues once setup stdout confirms readiness even if the setup process has not exited yet', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
     const configPath = join(openclawConfigDir, 'openclaw.json');
-    const managedWorkspaceDir = join(openclawConfigDir, 'workspace');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
     const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
 
     writeFileSync(configPath, JSON.stringify({
@@ -306,6 +320,7 @@ describe('prepareGatewayLaunchContext', () => {
       ]);
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
     }
   });
 });

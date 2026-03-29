@@ -7,9 +7,12 @@
 import { access, readFile, writeFile, readdir, mkdir, unlink } from 'fs/promises';
 import { constants, Dirent } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { logger } from './logger';
-import { getResourcesDir, getOpenClawConfigDir } from './paths';
+import { getResourcesDir, getOpenClawConfigDir, expandPath } from './paths';
+import {
+  getManagedAgentWorkspaceRootDir,
+  resolveManagedAgentWorkspacePath,
+} from './managed-agent-workspace';
 
 const GEECLAW_BEGIN = '<!-- geeclaw:begin -->';
 const GEECLAW_END = '<!-- geeclaw:end -->';
@@ -48,10 +51,11 @@ export function mergeGeeClawSection(existing: string, section: string): string {
 /**
  * Collect all unique workspace directories from the openclaw config:
  * the defaults workspace, each agent's workspace, and any workspace-*
- * directories that already exist under ~/.openclaw-geeclaw/.
+ * directories that already exist under the managed GeeClaw workspace root.
  */
 async function resolveAllWorkspaceDirs(): Promise<string[]> {
   const openclawDir = getOpenClawConfigDir();
+  const managedWorkspaceRootDir = getManagedAgentWorkspaceRootDir();
   const dirs = new Set<string>();
 
   const configPath = join(openclawDir, 'openclaw.json');
@@ -61,7 +65,7 @@ async function resolveAllWorkspaceDirs(): Promise<string[]> {
 
       const defaultWs = config?.agents?.defaults?.workspace;
       if (typeof defaultWs === 'string' && defaultWs.trim()) {
-        dirs.add(defaultWs.replace(/^~/, homedir()));
+        dirs.add(expandPath(defaultWs));
       }
 
       const agents = config?.agents?.list;
@@ -69,13 +73,24 @@ async function resolveAllWorkspaceDirs(): Promise<string[]> {
         for (const agent of agents) {
           const ws = agent?.workspace;
           if (typeof ws === 'string' && ws.trim()) {
-            dirs.add(ws.replace(/^~/, homedir()));
+            dirs.add(expandPath(ws));
           }
         }
       }
     }
   } catch {
     // ignore config parse errors
+  }
+
+  try {
+    const entries: Dirent[] = await readdir(managedWorkspaceRootDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith('workspace')) {
+        dirs.add(join(managedWorkspaceRootDir, entry.name));
+      }
+    }
+  } catch {
+    // ignore read errors
   }
 
   try {
@@ -90,7 +105,7 @@ async function resolveAllWorkspaceDirs(): Promise<string[]> {
   }
 
   if (dirs.size === 0) {
-    dirs.add(join(openclawDir, 'workspace'));
+    dirs.add(resolveManagedAgentWorkspacePath('main'));
   }
 
   return [...dirs];

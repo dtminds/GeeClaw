@@ -95,6 +95,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 
 ### 📦 内置 OpenClaw Runtime
 GeeClaw 固定使用内置 OpenClaw Runtime，避免依赖系统 PATH 或覆盖已有的系统 OpenClaw 安装。
+首次启动时，在应用解析完会话状态后，会重写 `~/.openclaw-geeclaw/openclaw.json`，将 `agents.defaults.workspace` 固定为 macOS/Linux 上的 `~/geeclaw/workspace`、Windows 上的 `%USERPROFILE%\geeclaw\workspace`，同时将 `agents.defaults.heartbeat.every` 固定为 `"2h"`、`agents.defaults.maxConcurrent` 固定为 `3`，随后运行 `openclaw.mjs --profile geeclaw setup`，再启动 `openclaw.mjs --profile geeclaw gateway --port 28788`。
 
 ### 🧩 受管控的预设 Agent
 GeeClaw 现在内置了一个智能体广场，底层由 `resources/agent-presets/<presetId>/` 下的 preset 包驱动。一个 preset 可以定义安装后的 agent `id`、`workspace`、可选 `model`、Per-agent skill allowlist，以及受管控的人设文件，例如 `AGENTS.md`、`IDENTITY.md`、`USER.md`、`SOUL.md`、`MEMORY.md`。

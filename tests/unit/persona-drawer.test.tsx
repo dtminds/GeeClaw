@@ -56,7 +56,7 @@ describe('PersonaDrawer managed mode', () => {
     hostApiFetchMock
       .mockResolvedValueOnce({
         agentId: 'stockexpert',
-        workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+        workspace: '~/geeclaw/workspace-stockexpert',
         editable: true,
         lockedFiles: ['identity'],
         files: {
@@ -68,7 +68,7 @@ describe('PersonaDrawer managed mode', () => {
       })
       .mockResolvedValueOnce({
       agentId: 'stockexpert',
-      workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+      workspace: '~/geeclaw/workspace-stockexpert',
       editable: true,
       lockedFiles: ['identity'],
       files: {

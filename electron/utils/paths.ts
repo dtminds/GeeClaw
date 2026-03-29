@@ -23,6 +23,10 @@ export function expandPath(path: string): string {
   if (path.startsWith('~')) {
     return path.replace('~', homedir());
   }
+  if (/^%USERPROFILE%(?=[\\/]|$)/i.test(path)) {
+    const userProfile = process.env.USERPROFILE?.trim() || homedir();
+    return path.replace(/^%USERPROFILE%/i, userProfile);
+  }
   return path;
 }
 

@@ -33,6 +33,10 @@ import {
   getManagedOpenClawConfigPath,
   MANAGED_OPENCLAW_PROFILE,
 } from '../utils/openclaw-managed-profile';
+import {
+  getManagedAgentWorkspacePath,
+  resolveManagedAgentWorkspacePath,
+} from '../utils/managed-agent-workspace';
 import { logger } from '../utils/logger';
 import { prependPathEntries, setPathEnvValue } from '../utils/env-path';
 import { getBundledPathEntries } from '../utils/managed-bin';
@@ -95,8 +99,8 @@ export function buildGatewayForkEnv(options: {
   };
 }
 
-function getManagedWorkspaceDir(openclawConfigDir: string): string {
-  return path.join(openclawConfigDir, 'workspace');
+function getManagedWorkspaceDir(): string {
+  return resolveManagedAgentWorkspacePath('main');
 }
 
 function getManagedSessionsDir(openclawConfigDir: string): string {
@@ -105,7 +109,6 @@ function getManagedSessionsDir(openclawConfigDir: string): string {
 
 async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPort: number): Promise<void> {
   const configPath = getManagedOpenClawConfigPath(openclawConfigDir);
-  const workspaceDir = getManagedWorkspaceDir(openclawConfigDir);
 
   await mkdir(openclawConfigDir, { recursive: true });
 
@@ -136,7 +139,7 @@ async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPo
       : {}
   ) as Record<string, unknown>;
 
-  defaults.workspace = workspaceDir;
+  defaults.workspace = getManagedAgentWorkspacePath('main');
   heartbeat.every = MANAGED_AGENT_HEARTBEAT_EVERY;
   defaults.heartbeat = heartbeat;
   defaults.maxConcurrent = MANAGED_AGENT_MAX_CONCURRENT;
@@ -163,7 +166,7 @@ async function ensureManagedProfileSetup(options: {
   proxyEnv: Record<string, string | undefined>;
   gatewayPort: number;
 }): Promise<void> {
-  const workspaceDir = getManagedWorkspaceDir(options.openclawConfigDir);
+  const workspaceDir = getManagedWorkspaceDir();
   const sessionsDir = getManagedSessionsDir(options.openclawConfigDir);
   if (existsSync(workspaceDir)) {
     return;

@@ -508,7 +508,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
 });
 
 describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
-  const MANAGED_WORKSPACE = '/managed/state/.openclaw-geeclaw/workspace';
+  const MANAGED_WORKSPACE = '/managed/home/geeclaw/workspace';
   const MANAGED_HEARTBEAT_EVERY = '2h';
   const MANAGED_MAX_CONCURRENT = 3;
 

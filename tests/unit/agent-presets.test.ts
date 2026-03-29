@@ -24,7 +24,7 @@ function createPresetMeta(presetId: string) {
     managed: true,
     agent: {
       id: presetId,
-      workspace: `~/.openclaw-geeclaw/workspace-${presetId}`,
+      workspace: `~/geeclaw/workspace-${presetId}`,
       skillScope: {
         mode: 'specified' as const,
         skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -134,7 +134,7 @@ describe('agent preset loader', () => {
 
     expect(preset).toBeDefined();
     expect(preset?.meta.agent.id).toBe('stockexpert');
-    expect(preset?.meta.agent.workspace).toBe('~/.openclaw-geeclaw/workspace-stockexpert');
+    expect(preset?.meta.agent.workspace).toBe('~/geeclaw/workspace-stockexpert');
     expect(preset?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -156,7 +156,7 @@ describe('agent preset loader', () => {
       ...createPresetMeta('stock-expert'),
       agent: {
         id: 'stockexpert',
-        workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+        workspace: '~/geeclaw/workspace-stockexpert',
         skillScope: {
           mode: 'specified',
           skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],

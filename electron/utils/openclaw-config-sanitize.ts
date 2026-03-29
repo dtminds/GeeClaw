@@ -1,8 +1,7 @@
 import { access } from 'fs/promises';
 import { constants } from 'fs';
-import { join } from 'path';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
-import { getOpenClawConfigDir } from './paths';
+import { getManagedAgentWorkspacePath } from './managed-agent-workspace';
 import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
@@ -65,7 +64,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
   const modified = await mutateOpenClawConfigDocument<boolean>(async (config) => {
     let changed = false;
 
-    const managedWorkspaceDir = join(getOpenClawConfigDir(), 'workspace');
+    const managedWorkspaceDir = getManagedAgentWorkspacePath('main');
     const agentsForDefaults = (
       config.agents && typeof config.agents === 'object'
         ? (config.agents as Record<string, unknown>)

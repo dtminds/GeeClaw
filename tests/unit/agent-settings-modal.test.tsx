@@ -71,7 +71,7 @@ vi.mock('@/stores/agents', () => ({
         isDefault: false,
         modelDisplay: 'gemini-3-flash-preview',
         inheritedModel: true,
-        workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
+        workspace: '~/geeclaw/workspace-stockexpert',
         agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
         mainSessionKey: 'agent:stockexpert:main',
         channelTypes: [],
