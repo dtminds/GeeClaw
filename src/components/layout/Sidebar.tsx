@@ -3,7 +3,7 @@
  * Navigation sidebar with menu items.
  * No longer fixed - sits inside the flex layout below the title bar.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
@@ -115,9 +115,7 @@ export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
   const [sidebarExpandedContentReady, setSidebarExpandedContentReady] = useState(!sidebarCollapsed);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const accountMenuCloseTimerRef = useRef<number | null>(null);
 
   const desktopSessions = useChatStore((s) => s.desktopSessions);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
@@ -164,14 +162,6 @@ export function Sidebar() {
   }, [agents.length, fetchAgents]);
 
   useEffect(() => {
-    return () => {
-      if (accountMenuCloseTimerRef.current !== null) {
-        window.clearTimeout(accountMenuCloseTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (isGatewayRunning) {
       void fetchChannels();
     }
@@ -215,23 +205,6 @@ export function Sidebar() {
     { to: '/channels', icon: <SidebarGlyph icon={SmartPhone03Icon} />, label: t('sidebar.channels'), trailing: channelsTrailing },
   ];
   const agentSectionHidden = !sidebarCollapsed && !sidebarExpandedContentReady;
-  const clearAccountMenuCloseTimer = () => {
-    if (accountMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(accountMenuCloseTimerRef.current);
-      accountMenuCloseTimerRef.current = null;
-    }
-  };
-  const openAccountMenu = () => {
-    clearAccountMenuCloseTimer();
-    setAccountMenuOpen(true);
-  };
-  const scheduleAccountMenuClose = () => {
-    clearAccountMenuCloseTimer();
-    accountMenuCloseTimerRef.current = window.setTimeout(() => {
-      setAccountMenuOpen(false);
-      accountMenuCloseTimerRef.current = null;
-    }, 120);
-  };
 
   return (
     <aside
@@ -423,7 +396,7 @@ export function Sidebar() {
               </div>
             )}
             {sessionStatus === 'authenticated' ? (
-              <DropdownMenu.Root modal={false} open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
+              <DropdownMenu.Root modal={false}>
                 <DropdownMenu.Trigger asChild>
                   <button
                     type="button"
@@ -433,9 +406,6 @@ export function Sidebar() {
                       isSettingsModalPath(location.pathname) && sidebarItemActiveClass,
                     )}
                     title={t('sidebar.settings')}
-                    onMouseEnter={openAccountMenu}
-                    onMouseLeave={scheduleAccountMenuClose}
-                    onFocus={openAccountMenu}
                   >
                     <div className={cn('flex shrink-0 items-center justify-center', isSettingsModalPath(location.pathname) ? 'text-primary' : 'text-muted-foreground')}>
                       <SidebarGlyph icon={Settings03Icon} />
@@ -449,8 +419,6 @@ export function Sidebar() {
                     sideOffset={8}
                     collisionPadding={12}
                     className="z-50 w-[220px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
-                    onMouseEnter={openAccountMenu}
-                    onMouseLeave={scheduleAccountMenuClose}
                     onCloseAutoFocus={(event) => {
                       event.preventDefault();
                     }}
@@ -477,7 +445,6 @@ export function Sidebar() {
                     <DropdownMenu.Item
                       className="mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
                       onSelect={() => {
-                        setAccountMenuOpen(false);
                         navigate(settingsPath, { state: settingsModalState });
                       }}
                     >
@@ -487,7 +454,6 @@ export function Sidebar() {
                     <DropdownMenu.Item
                       className="mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
                       onSelect={() => {
-                        setAccountMenuOpen(false);
                         setLogoutConfirmOpen(true);
                       }}
                     >
