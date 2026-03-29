@@ -11,6 +11,11 @@ import { listProviderAccounts, providerAccountToConfig } from '../services/provi
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import { getAgentPreset, listAgentPresets } from './agent-presets';
+import {
+  formatPresetPlatforms,
+  isPresetSupportedOnPlatform,
+  type AgentPresetPlatform,
+} from './agent-preset-platforms';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -946,6 +951,8 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   iconKey: string;
   category: string;
   managed: boolean;
+  platforms?: AgentPresetPlatform[];
+  supportedOnCurrentPlatform: boolean;
   agentId: string;
   workspace: string;
   skillScope: AgentSkillScope;
@@ -960,6 +967,8 @@ export async function listAgentPresetSummaries(): Promise<Array<{
     iconKey: preset.meta.iconKey,
     category: preset.meta.category,
     managed: true,
+    platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
+    supportedOnCurrentPlatform: isPresetSupportedOnPlatform(preset.meta.platforms, process.platform),
     agentId: preset.meta.agent.id,
     workspace: preset.meta.agent.workspace,
     skillScope: preset.meta.agent.skillScope,
@@ -970,8 +979,25 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   }));
 }
 
+function assertPresetSupportedOnCurrentPlatform(preset: {
+  meta: {
+    presetId: string;
+    platforms?: AgentPresetPlatform[];
+  };
+}): void {
+  const { platforms, presetId } = preset.meta;
+  if (!platforms || isPresetSupportedOnPlatform(platforms, process.platform)) {
+    return;
+  }
+
+  throw new Error(
+    `Preset "${presetId}" is only available on ${formatPresetPlatforms(platforms)}`,
+  );
+}
+
 export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
   const preset = await getAgentPreset(presetId);
+  assertPresetSupportedOnCurrentPlatform(preset);
   const config = await readOpenClawConfig() as AgentConfigDocument;
   const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
   const management = await readAgentManagementMap();

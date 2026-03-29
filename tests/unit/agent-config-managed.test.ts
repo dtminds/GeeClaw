@@ -4,10 +4,16 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
+const originalPlatform = process.platform;
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, writable: true });
+}
 
 async function setupManagedPresetFixture(options?: {
   presetMeta?: {
     name?: string;
+    platforms?: Array<'darwin' | 'win32' | 'linux'>;
     managedPolicy?: {
       lockedFields?: Array<'id' | 'workspace' | 'persona'>;
       canUnmanage?: boolean;
@@ -96,16 +102,17 @@ async function setupManagedPresetFixture(options?: {
       ? baseMeta.managedPolicy
       : options.presetMeta.managedPolicy,
   };
+  const presetPackage = {
+    meta: presetMeta,
+    files: {
+      'AGENTS.md': '# stock expert\n',
+      'SOUL.md': '# tone\n',
+    },
+  };
 
   vi.doMock('@electron/utils/agent-presets', () => ({
-    getAgentPreset: vi.fn(async () => ({
-      meta: presetMeta,
-      files: {
-        'AGENTS.md': '# stock expert\n',
-        'SOUL.md': '# tone\n',
-      },
-    })),
-    listAgentPresets: vi.fn(async () => []),
+    getAgentPreset: vi.fn(async () => presetPackage),
+    listAgentPresets: vi.fn(async () => [presetPackage]),
   }));
 
   const agentConfig = await import('@electron/utils/agent-config');
@@ -113,6 +120,7 @@ async function setupManagedPresetFixture(options?: {
 }
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
   vi.resetModules();
   vi.unmock('electron');
   vi.unmock('os');
@@ -126,6 +134,23 @@ afterEach(() => {
 });
 
 describe('managed agent config domain', () => {
+  it('reports preset summary platforms and current platform support', async () => {
+    setPlatform('darwin');
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        platforms: ['darwin'],
+      },
+    });
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        presetId: 'stock-expert',
+        platforms: ['darwin'],
+        supportedOnCurrentPlatform: true,
+      }),
+    ]);
+  });
+
   it('installs a preset agent, seeds managed files, and writes skills into agents.list', async () => {
     const { configDir, agentConfig } = await setupManagedPresetFixture();
     const snapshot = await agentConfig.installPresetAgent('stock-expert');
@@ -304,5 +329,18 @@ describe('managed agent config domain', () => {
       [],
       { mode: 'default' },
     )).not.toThrow();
+  });
+
+  it('rejects installing presets that are unsupported on the current platform', async () => {
+    setPlatform('win32');
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        platforms: ['darwin'],
+      },
+    });
+
+    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
+      'Preset "stock-expert" is only available on macOS',
+    );
   });
 });

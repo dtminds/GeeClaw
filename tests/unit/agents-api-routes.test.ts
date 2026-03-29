@@ -33,7 +33,12 @@ const {
     channelAccountOwners: {},
     explicitChannelAccountBindings: {},
   })),
-  listAgentPresetSummaries: vi.fn(async () => [{ presetId: 'stock-expert', name: '股票助手' }]),
+  listAgentPresetSummaries: vi.fn(async () => [{
+    presetId: 'stock-expert',
+    name: '股票助手',
+    platforms: ['darwin'],
+    supportedOnCurrentPlatform: true,
+  }]),
   listAgentsSnapshot: vi.fn(async () => ({
     agents: [],
     defaultAgentId: 'main',
@@ -111,7 +116,12 @@ describe('agent API routes', () => {
     expect(listAgentPresetSummaries).toHaveBeenCalledTimes(1);
     expect(sendJson).toHaveBeenNthCalledWith(1, res, 200, expect.objectContaining({
       success: true,
-      presets: [{ presetId: 'stock-expert', name: '股票助手' }],
+      presets: [{
+        presetId: 'stock-expert',
+        name: '股票助手',
+        platforms: ['darwin'],
+        supportedOnCurrentPlatform: true,
+      }],
     }));
 
     parseJsonBody.mockResolvedValueOnce({ presetId: 'stock-expert' });
