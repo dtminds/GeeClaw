@@ -20,8 +20,48 @@ import {
   removeProviderProfilesFromOpenClaw,
 } from './openclaw-auth';
 
-function getOAuthPluginId(provider: string): string {
-  return `${provider}-auth`;
+function getOAuthPluginBinding(provider: string): { activeId: string; legacyIds: string[] } {
+  if (provider === 'minimax-portal') {
+    return {
+      activeId: 'minimax',
+      legacyIds: ['minimax-portal-auth'],
+    };
+  }
+
+  return {
+    activeId: `${provider}-auth`,
+    legacyIds: [],
+  };
+}
+
+function ensureOAuthPluginEnabled(config: Record<string, unknown>, provider: string): void {
+  const plugins = (config.plugins || {}) as Record<string, unknown>;
+  const allow = Array.isArray(plugins.allow) ? [...plugins.allow as string[]] : [];
+  const entries = (plugins.entries || {}) as Record<string, unknown>;
+  const { activeId, legacyIds } = getOAuthPluginBinding(provider);
+
+  const nextAllow = allow.filter((pluginId) => !legacyIds.includes(pluginId));
+  if (!nextAllow.includes(activeId)) {
+    nextAllow.push(activeId);
+  }
+
+  for (const legacyId of legacyIds) {
+    delete entries[legacyId];
+  }
+
+  const existingEntry = (
+    entries[activeId] && typeof entries[activeId] === 'object'
+      ? (entries[activeId] as Record<string, unknown>)
+      : {}
+  );
+  entries[activeId] = {
+    ...existingEntry,
+    enabled: true,
+  };
+
+  plugins.allow = nextAllow;
+  plugins.entries = entries;
+  config.plugins = plugins;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -92,8 +132,12 @@ export async function removeProviderFromOpenClaw(provider: string): Promise<void
 
       const plugins = config.plugins as Record<string, unknown> | undefined;
       const entries = (plugins?.entries ?? {}) as Record<string, Record<string, unknown>>;
-      const pluginName = `${provider}-auth`;
-      if (entries[pluginName]) {
+      const { activeId, legacyIds } = getOAuthPluginBinding(provider);
+      for (const pluginName of [activeId, ...legacyIds]) {
+        if (!entries[pluginName]) {
+          continue;
+        }
+
         entries[pluginName].enabled = false;
         modified = true;
         console.log(`Disabled OpenClaw plugin: ${pluginName}`);
@@ -350,17 +394,7 @@ export async function syncProviderConfigToOpenClaw(
     }
 
     if (isOpenClawOAuthPluginProviderKey(provider)) {
-      const plugins = (config.plugins || {}) as Record<string, unknown>;
-      const allow = Array.isArray(plugins.allow) ? [...plugins.allow as string[]] : [];
-      const pEntries = (plugins.entries || {}) as Record<string, unknown>;
-      const pluginId = getOAuthPluginId(provider);
-      if (!allow.includes(pluginId)) {
-        allow.push(pluginId);
-      }
-      pEntries[pluginId] = { enabled: true };
-      plugins.allow = allow;
-      plugins.entries = pEntries;
-      config.plugins = plugins;
+      ensureOAuthPluginEnabled(config, provider);
     }
 
     return { changed: true, result: undefined };
@@ -410,17 +444,7 @@ export async function setOpenClawDefaultModelWithOverride(
     config.gateway = gateway;
 
     if (isOpenClawOAuthPluginProviderKey(provider)) {
-      const plugins = (config.plugins || {}) as Record<string, unknown>;
-      const allow = Array.isArray(plugins.allow) ? [...plugins.allow as string[]] : [];
-      const pEntries = (plugins.entries || {}) as Record<string, unknown>;
-      const pluginId = getOAuthPluginId(provider);
-      if (!allow.includes(pluginId)) {
-        allow.push(pluginId);
-      }
-      pEntries[pluginId] = { enabled: true };
-      plugins.allow = allow;
-      plugins.entries = pEntries;
-      config.plugins = plugins;
+      ensureOAuthPluginEnabled(config, provider);
     }
 
     return { changed: true, result: undefined };

@@ -228,4 +228,66 @@ describe('removeProviderFromOpenClaw', () => {
       },
     });
   });
+
+  it('maps MiniMax OAuth provider sync to the canonical minimax plugin id', async () => {
+    await writeOpenClawJson({
+      plugins: {
+        allow: ['minimax-portal-auth'],
+        entries: {
+          'minimax-portal-auth': { enabled: true },
+        },
+      },
+    });
+
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('minimax-portal', ['MiniMax-M2.7'], {
+      baseUrl: 'https://api.minimax.io/anthropic',
+      api: 'anthropic-messages',
+      apiKeyEnv: 'minimax-oauth',
+      authHeader: true,
+    });
+
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as {
+      allow?: string[];
+      entries?: Record<string, { enabled?: boolean }>;
+    };
+
+    expect(plugins.allow).toContain('minimax');
+    expect(plugins.allow).not.toContain('minimax-portal-auth');
+    expect(plugins.entries?.minimax?.enabled).toBe(true);
+    expect(plugins.entries?.['minimax-portal-auth']).toBeUndefined();
+  });
+
+  it('maps MiniMax OAuth default-model writes to the canonical minimax plugin id', async () => {
+    await writeOpenClawJson({
+      plugins: {
+        allow: ['minimax-portal-auth'],
+        entries: {
+          'minimax-portal-auth': { enabled: true },
+        },
+      },
+    });
+
+    const { setOpenClawDefaultModelWithOverride } = await import('@electron/utils/openclaw-provider-config');
+
+    await setOpenClawDefaultModelWithOverride('minimax-portal', 'minimax-portal/MiniMax-M2.7', {
+      baseUrl: 'https://api.minimax.io/anthropic',
+      api: 'anthropic-messages',
+      apiKeyEnv: 'minimax-oauth',
+      authHeader: true,
+    });
+
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as {
+      allow?: string[];
+      entries?: Record<string, { enabled?: boolean }>;
+    };
+
+    expect(plugins.allow).toContain('minimax');
+    expect(plugins.allow).not.toContain('minimax-portal-auth');
+    expect(plugins.entries?.minimax?.enabled).toBe(true);
+    expect(plugins.entries?.['minimax-portal-auth']).toBeUndefined();
+  });
 });
