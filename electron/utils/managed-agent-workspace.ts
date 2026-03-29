@@ -1,5 +1,5 @@
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, posix, win32 } from 'path';
 
 const WINDOWS_HOME_TOKEN = '%USERPROFILE%';
 const UNIX_HOME_TOKEN = '~';
@@ -10,17 +10,19 @@ function getManagedWorkspaceHomeToken(): string {
   return process.platform === 'win32' ? WINDOWS_HOME_TOKEN : UNIX_HOME_TOKEN;
 }
 
+function getManagedWorkspaceSeparator(): string {
+  return process.platform === 'win32' ? win32.sep : posix.sep;
+}
+
 export function getManagedAgentWorkspaceRootPath(): string {
   const homeToken = getManagedWorkspaceHomeToken();
-  const separator = process.platform === 'win32' ? '\\' : '/';
-  return `${homeToken}${separator}${MANAGED_WORKSPACE_ROOT_NAME}`;
+  return `${homeToken}${getManagedWorkspaceSeparator()}${MANAGED_WORKSPACE_ROOT_NAME}`;
 }
 
 export function getManagedAgentWorkspacePath(agentId: string): string {
   const root = getManagedAgentWorkspaceRootPath();
-  const separator = process.platform === 'win32' ? '\\' : '/';
   const workspaceName = agentId === MAIN_AGENT_ID ? 'workspace' : `workspace-${agentId}`;
-  return `${root}${separator}${workspaceName}`;
+  return `${root}${getManagedWorkspaceSeparator()}${workspaceName}`;
 }
 
 export function getManagedAgentWorkspaceRootDir(): string {
