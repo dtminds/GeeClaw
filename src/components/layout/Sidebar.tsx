@@ -10,13 +10,13 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
   DashboardSpeed01Icon,
   LogoutSquare01Icon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
   Settings03Icon,
   ThreeDViewIcon,
   SmartPhone03Icon,
   AppleIntelligenceIcon,
   TimeScheduleIcon,
+  LayoutAlignLeftIcon,
+  PanelLeftIcon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { formatShortDateTime } from '@/lib/utils';
@@ -234,9 +234,9 @@ export function Sidebar() {
           title={sidebarCollapsed ? t('sidebar.expand', 'Expand sidebar') : t('sidebar.collapse', 'Collapse sidebar')}
         >
           {sidebarCollapsed ? (
-            <SidebarGlyph icon={PanelLeftCloseIcon} />
+            <SidebarGlyph icon={PanelLeftIcon} />
           ) : (
-            <SidebarGlyph icon={PanelLeftOpenIcon} />
+            <SidebarGlyph icon={LayoutAlignLeftIcon} />
           )}
         </Button>
       </div>
