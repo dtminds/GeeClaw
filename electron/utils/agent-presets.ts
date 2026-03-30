@@ -265,23 +265,24 @@ async function readPresetFiles(presetId: string, presetDir: string): Promise<Rec
 
 async function readDirectoryFiles(rootDir: string, currentDir = rootDir): Promise<Record<string, string>> {
   const entries = await readdir(currentDir, { withFileTypes: true });
-  const files: Record<string, string> = {};
+  const nestedEntries = await Promise.all(
+    entries
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(async (entry) => {
+        const absolutePath = join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          return Object.entries(await readDirectoryFiles(rootDir, absolutePath));
+        }
+        if (!entry.isFile()) {
+          return [] as Array<[string, string]>;
+        }
 
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const absolutePath = join(currentDir, entry.name);
-    if (entry.isDirectory()) {
-      Object.assign(files, await readDirectoryFiles(rootDir, absolutePath));
-      continue;
-    }
-    if (!entry.isFile()) {
-      continue;
-    }
+        const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
+        return [[relativePath, await readFile(absolutePath, 'utf8')]] as Array<[string, string]>;
+      }),
+  );
 
-    const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
-    files[relativePath] = await readFile(absolutePath, 'utf8');
-  }
-
-  return files;
+  return Object.fromEntries(nestedEntries.flat());
 }
 
 async function readPresetSkills(
@@ -292,22 +293,24 @@ async function readPresetSkills(
 
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true });
-    const skills: Record<string, Record<string, string>> = {};
+    const skills = await Promise.all(
+      entries
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map(async (entry) => {
+          if (!entry.isDirectory()) {
+            throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
+          }
 
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.isDirectory()) {
-        throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
-      }
+          const skillDir = join(skillsDir, entry.name);
+          const files = await readDirectoryFiles(skillDir);
+          if (!files['SKILL.md']) {
+            throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
+          }
+          return [entry.name, files] as const;
+        }),
+    );
 
-      const skillDir = join(skillsDir, entry.name);
-      const files = await readDirectoryFiles(skillDir);
-      if (!files['SKILL.md']) {
-        throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
-      }
-      skills[entry.name] = files;
-    }
-
-    return skills;
+    return Object.fromEntries(skills);
   } catch (error) {
     const fsError = error as NodeJS.ErrnoException;
     if (fsError.code === 'ENOENT') {

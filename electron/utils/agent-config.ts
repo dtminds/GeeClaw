@@ -355,11 +355,13 @@ async function seedPresetSkillsIntoWorkspace(
       throw new Error(`Preset skill "${skillSlug}" already exists in the target workspace`);
     }
 
-    for (const [relativePath, content] of Object.entries(files)) {
-      const destination = join(targetDir, relativePath);
-      await ensureDir(dirname(destination));
-      await writeFile(destination, content, 'utf-8');
-    }
+    await Promise.all(
+      Object.entries(files).map(async ([relativePath, content]) => {
+        const destination = join(targetDir, relativePath);
+        await ensureDir(dirname(destination));
+        await writeFile(destination, content, 'utf-8');
+      }),
+    );
   }
 }
 
