@@ -1,6 +1,6 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { constants } from 'fs';
-import { join, normalize } from 'path';
+import { dirname, join, normalize } from 'path';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
 import {
@@ -335,6 +335,31 @@ async function seedPresetFilesIntoWorkspace(
       throw new Error(`Preset-managed file "${fileName}" already exists in the target workspace`);
     }
     await writeFile(destination, content, 'utf-8');
+  }
+}
+
+async function seedPresetSkillsIntoWorkspace(
+  workspace: string,
+  skills: Record<string, Record<string, string>>,
+): Promise<void> {
+  if (Object.keys(skills).length === 0) {
+    return;
+  }
+
+  const skillsRoot = join(workspace, 'SKILLS');
+  await ensureDir(skillsRoot);
+
+  for (const [skillSlug, files] of Object.entries(skills)) {
+    const targetDir = join(skillsRoot, skillSlug);
+    if (await fileExists(targetDir)) {
+      throw new Error(`Preset skill "${skillSlug}" already exists in the target workspace`);
+    }
+
+    for (const [relativePath, content] of Object.entries(files)) {
+      const destination = join(targetDir, relativePath);
+      await ensureDir(dirname(destination));
+      await writeFile(destination, content, 'utf-8');
+    }
   }
 }
 
@@ -1086,6 +1111,10 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
   await seedPresetFilesIntoWorkspace(
     expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
     preset.files,
+  );
+  await seedPresetSkillsIntoWorkspace(
+    expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
+    preset.skills,
   );
   await provisionAgentFilesystem(config, newEntry);
   await persistAgentConfigAndPatchRuntime(config);

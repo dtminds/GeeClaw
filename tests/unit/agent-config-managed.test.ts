@@ -134,6 +134,15 @@ async function setupManagedPresetFixture(options?: {
       'AGENTS.md': '# stock expert\n',
       'SOUL.md': '# tone\n',
     },
+    skills: {
+      'stock-analyzer': {
+        'SKILL.md': '# Stock Analyzer\nUse this skill for stock analysis.\n',
+      },
+      'web-search': {
+        'SKILL.md': '# Web Search\nUse this skill for current information.\n',
+        'README.md': '# Web Search docs\n',
+      },
+    },
   };
 
   vi.doMock('@electron/utils/agent-presets', () => ({
@@ -186,7 +195,7 @@ describe('managed agent config domain', () => {
     ]);
   });
 
-  it('installs a preset agent, seeds managed files, and writes skills into agents.list', async () => {
+  it('installs a preset agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/SKILLS', async () => {
     const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
     const snapshot = await agentConfig.installPresetAgent('stock-expert');
 
@@ -210,6 +219,8 @@ describe('managed agent config domain', () => {
     ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('agentDir');
     expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8')).toContain('stock expert');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'web-search', 'README.md'), 'utf8')).toContain('Web Search docs');
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       workspace: '~/geeclaw/workspace-stockexpert',
       agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
@@ -251,7 +262,7 @@ describe('managed agent config domain', () => {
   });
 
   it('clears active managed restrictions after unmanage', async () => {
-    const { agentConfig } = await setupManagedPresetFixture();
+    const { agentConfig, homeDir } = await setupManagedPresetFixture();
     await agentConfig.installPresetAgent('stock-expert');
 
     const snapshot = await agentConfig.unmanageAgent('stockexpert');
@@ -262,6 +273,7 @@ describe('managed agent config domain', () => {
       managedFiles: [],
       canUseDefaultSkillScope: true,
     });
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
   });
 
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
