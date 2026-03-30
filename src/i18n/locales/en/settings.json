@@ -18,7 +18,19 @@
     "installed": "Installed",
     "missing": "Not installed",
     "install": "Install",
-    "reinstall": "Reinstall"
+    "reinstall": "Reinstall",
+    "uninstall": "Uninstall",
+    "moreActions": "More actions",
+    "job": {
+      "title": {
+        "install": "Install CLI",
+        "uninstall": "Uninstall CLI"
+      },
+      "running": "Running",
+      "succeeded": "Completed",
+      "failed": "Failed",
+      "close": "Close"
+    }
   },
   "safety": {
     "navTitle": "Safety",

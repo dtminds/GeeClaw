@@ -48,6 +48,7 @@ vi.mock('@electron/utils/openclaw-runtime', () => ({
 
 vi.mock('@electron/utils/paths', () => ({
   getOpenClawConfigDir: vi.fn(() => openclawConfigDir),
+  getGeeClawConfigDir: vi.fn(() => join(homeDir, '.geeclaw')),
 }));
 
 vi.mock('@electron/utils/managed-agent-workspace', () => ({
@@ -173,6 +174,22 @@ describe('buildGatewayForkEnv', () => {
       'gateway-token',
       '--allow-unconfigured',
     ]);
+  });
+
+  it('prepends the GeeClaw managed npm bin to the OpenClaw runtime PATH', async () => {
+    const { buildGatewayForkEnv } = await import('@electron/gateway/config-sync');
+
+    const forkEnv = buildGatewayForkEnv({
+      baseEnv: {
+        PATH: '/usr/bin:/bin',
+      },
+      finalPath: '/opt/geeclaw/bin:/usr/bin:/bin',
+      injectedEnv: {},
+      openclawConfigDir: '/Users/test/.openclaw-geeclaw',
+      gatewayPort: 28788,
+    });
+
+    expect(forkEnv.PATH).toBe('/Users/test/.geeclaw/npm-global/bin:/opt/geeclaw/bin:/usr/bin:/bin');
   });
 });
 

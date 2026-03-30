@@ -101,6 +101,7 @@ describe('cli marketplace service', () => {
 
   it('installs a curated package into the GeeClaw prefix', async () => {
     const installWithBundledNpm = vi.fn(async () => undefined);
+    const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
     const ensureManagedPrefixOnUserPath = vi.fn(async () => 'updated');
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
 
@@ -108,11 +109,18 @@ describe('cli marketplace service', () => {
 
     const service = new CliMarketplaceService({
       catalogEntries: [
-        { id: 'wecom', title: 'WeCom CLI', packageName: '@geeclaw-test/wecom-cli', binNames: ['wecom'] },
+        {
+          id: 'wecom',
+          title: 'WeCom CLI',
+          packageName: '@geeclaw-test/wecom-cli',
+          binNames: ['wecom'],
+          postInstallSkills: ['WeComTeam/wecom-cli'],
+        },
       ],
       findCommand: vi.fn(async () => null),
       commandExistsInManagedPrefix: vi.fn(async () => true),
       installWithBundledNpm,
+      runSkillCommandWithBundledNpx,
       ensureManagedPrefixOnUserPath,
       managedPrefixDir,
     });
@@ -124,7 +132,55 @@ describe('cli marketplace service', () => {
       [],
       expect.objectContaining({ prefixDir: expect.any(String) }),
     );
+    expect(runSkillCommandWithBundledNpx).toHaveBeenCalledWith(
+      'add',
+      'WeComTeam/wecom-cli',
+      expect.objectContaining({ prefixDir: managedPrefixDir }),
+    );
     expect(ensureManagedPrefixOnUserPath).toHaveBeenCalledWith(managedPrefixDir);
+  });
+
+  it('uninstalls managed CLI packages and their skills', async () => {
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const managedPrefixDir = join(process.cwd(), 'tmp', 'cli-marketplace-prefix-uninstall');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'feishu',
+          title: 'Feishu CLI',
+          packageName: '@geeclaw-test/feishu-cli',
+          binNames: ['feishu'],
+          postUninstallSkills: ['larksuite/cli'],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      uninstallWithBundledNpm,
+      runSkillCommandWithBundledNpx,
+      managedPrefixDir,
+    });
+
+    await expect(service.uninstall({ id: 'feishu' })).resolves.toEqual(
+      expect.objectContaining({
+        id: 'feishu',
+        installed: false,
+        actionLabel: 'install',
+      }),
+    );
+
+    expect(runSkillCommandWithBundledNpx).toHaveBeenCalledWith(
+      'remove',
+      'larksuite/cli',
+      expect.objectContaining({ prefixDir: managedPrefixDir }),
+    );
+    expect(uninstallWithBundledNpm).toHaveBeenCalledWith(
+      '@geeclaw-test/feishu-cli',
+      expect.objectContaining({ prefixDir: managedPrefixDir }),
+    );
   });
 
   it('throws when catalog entries fail validation', async () => {

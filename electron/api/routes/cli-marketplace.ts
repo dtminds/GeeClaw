@@ -15,7 +15,19 @@ export async function handleCliMarketplaceRoutes(
 
   if (url.pathname === '/api/cli-marketplace/install' && req.method === 'POST') {
     const body = await parseJsonBody<{ id: string }>(req);
-    sendJson(res, 200, await ctx.cliMarketplaceService.install(body));
+    sendJson(res, 200, await ctx.cliMarketplaceService.startInstallJob(body));
+    return true;
+  }
+
+  if (url.pathname === '/api/cli-marketplace/uninstall' && req.method === 'POST') {
+    const body = await parseJsonBody<{ id: string }>(req);
+    sendJson(res, 200, await ctx.cliMarketplaceService.startUninstallJob(body));
+    return true;
+  }
+
+  if (url.pathname.startsWith('/api/cli-marketplace/jobs/') && req.method === 'GET') {
+    const jobId = decodeURIComponent(url.pathname.slice('/api/cli-marketplace/jobs/'.length));
+    sendJson(res, 200, ctx.cliMarketplaceService.getJob(jobId));
     return true;
   }
 

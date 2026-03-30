@@ -183,13 +183,15 @@ Open **Settings → MCP** to review whether `mcporter` is installed on your syst
 
 ### CLI Market
 
-Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect and reinstall.
+Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect, install, reinstall, and uninstall.
 
 - GeeClaw first checks whether the command already exists on your system and marks it as installed if found.
 - If the command is missing, GeeClaw installs it with the bundled Node/npm runtime into a GeeClaw-managed user-level prefix instead of requiring a system-wide `npm install -g`.
 - On the first managed install, GeeClaw also adds that managed directory to your user PATH so newly opened terminals can use the command directly.
-- The current UI intentionally keeps this simple: it shows only `Installed` / `Not installed` plus `Install` / `Reinstall`.
+- The current UI intentionally keeps the status simple: it shows only `Installed` / `Not installed`. Missing CLIs show an `Install` button; installed CLIs move `Reinstall` and `Uninstall` into a compact actions menu.
 - GeeClaw does not compare versions in this view yet. Reinstall always uses the latest package version available from npm at the time you click it.
+- Some catalog entries can also declare follow-up Skills. GeeClaw automatically runs `npx skills add ... -y -g` after install and `npx skills remove ... -y -g` during uninstall.
+- Install and uninstall open a live log dialog so you can watch the full bundled `npm` and `npx skills` output in one place.
 
 Managed install locations:
 

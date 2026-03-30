@@ -1,11 +1,12 @@
 import { execFile, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { ensureDir, getGeeClawConfigDir, getResourcesDir } from './paths';
-import { getBundledNpmPath } from './managed-bin';
+import { getBundledNpmPath, getBundledNpxPath } from './managed-bin';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
 import { ensureManagedNpmPrefixOnUserPath, type UserPathUpdateStatus } from './user-path';
@@ -21,6 +22,8 @@ export type CliMarketplaceCatalogItem = {
   homepage?: string;
   platforms?: Array<'darwin' | 'win32' | 'linux'>;
   installArgs?: string[];
+  postInstallSkills?: string[];
+  postUninstallSkills?: string[];
 };
 
 export type CliMarketplaceActionLabel = 'install' | 'reinstall';
@@ -36,6 +39,22 @@ export type CliMarketplaceStatusItem = {
 };
 
 type CliMarketplaceSource = CliMarketplaceStatusItem['source'];
+type CliMarketplaceJobOperation = 'install' | 'uninstall';
+type CliMarketplaceJobStatus = 'running' | 'succeeded' | 'failed';
+type CliMarketplaceSkillCommand = 'add' | 'remove';
+type CliMarketplaceLogAppender = (chunk: string) => void;
+
+export type CliMarketplaceJobSnapshot = {
+  id: string;
+  itemId: string;
+  title: string;
+  operation: CliMarketplaceJobOperation;
+  status: CliMarketplaceJobStatus;
+  logs: string;
+  startedAt: string;
+  finishedAt: string | null;
+  error?: string;
+};
 
 export interface CliMarketplaceServiceOptions {
   catalogPath?: string;
@@ -45,7 +64,16 @@ export interface CliMarketplaceServiceOptions {
   installWithBundledNpm?: (
     packageName: string,
     installArgs: string[],
-    options: { prefixDir: string },
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
+  uninstallWithBundledNpm?: (
+    packageName: string,
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
+  runSkillCommandWithBundledNpx?: (
+    command: CliMarketplaceSkillCommand,
+    source: string,
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
   ) => Promise<void>;
   ensureManagedPrefixOnUserPath?: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   managedPrefixDir?: string;
@@ -78,6 +106,16 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
         throw new Error(`[cli-marketplace] Entry ${label} has an invalid bin name`);
       }
     }
+    if (entry.postInstallSkills !== undefined) {
+      if (!Array.isArray(entry.postInstallSkills) || entry.postInstallSkills.some((skill) => !skill || typeof skill !== 'string')) {
+        throw new Error(`[cli-marketplace] Entry ${label} has an invalid "postInstallSkills" array`);
+      }
+    }
+    if (entry.postUninstallSkills !== undefined) {
+      if (!Array.isArray(entry.postUninstallSkills) || entry.postUninstallSkills.some((skill) => !skill || typeof skill !== 'string')) {
+        throw new Error(`[cli-marketplace] Entry ${label} has an invalid "postUninstallSkills" array`);
+      }
+    }
   });
 }
 
@@ -89,10 +127,20 @@ export class CliMarketplaceService {
   private readonly installWithBundledNpm: (
     packageName: string,
     installArgs: string[],
-    options: { prefixDir: string },
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
+  private readonly uninstallWithBundledNpm: (
+    packageName: string,
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
+  private readonly runSkillCommandWithBundledNpx: (
+    command: CliMarketplaceSkillCommand,
+    source: string,
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
   ) => Promise<void>;
   private readonly ensureManagedPrefixOnUserPath: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   private readonly managedPrefixDir: string;
+  private readonly jobs = new Map<string, CliMarketplaceJobSnapshot>();
 
   constructor(options?: CliMarketplaceServiceOptions) {
     this.catalogPath = options?.catalogPath ?? DEFAULT_CATALOG_PATH;
@@ -100,6 +148,8 @@ export class CliMarketplaceService {
     this.findCommand = options?.findCommand ?? defaultFindCommand;
     this.commandExistsInManagedPrefix = options?.commandExistsInManagedPrefix ?? defaultCommandExistsInManagedPrefix;
     this.installWithBundledNpm = options?.installWithBundledNpm ?? defaultInstallWithBundledNpm;
+    this.uninstallWithBundledNpm = options?.uninstallWithBundledNpm ?? defaultUninstallWithBundledNpm;
+    this.runSkillCommandWithBundledNpx = options?.runSkillCommandWithBundledNpx ?? defaultRunSkillCommandWithBundledNpx;
     this.ensureManagedPrefixOnUserPath = options?.ensureManagedPrefixOnUserPath ?? ensureManagedNpmPrefixOnUserPath;
     this.managedPrefixDir = options?.managedPrefixDir ?? getDefaultManagedPrefixDir();
   }
@@ -112,6 +162,44 @@ export class CliMarketplaceService {
 
   async install({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
     const entry = await this.getEntryById(id);
+    return this.installEntry(entry);
+  }
+
+  async uninstall({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
+    const entry = await this.getEntryById(id);
+    return this.uninstallEntry(entry);
+  }
+
+  async startInstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
+    const entry = await this.getEntryById(id);
+    const job = this.createJob(entry, 'install');
+    void this.runJob(job, async () => {
+      await this.installEntry(entry, this.appendJobLog(job));
+    });
+    return this.getJob(job.id);
+  }
+
+  async startUninstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
+    const entry = await this.getEntryById(id);
+    const job = this.createJob(entry, 'uninstall');
+    void this.runJob(job, async () => {
+      await this.uninstallEntry(entry, this.appendJobLog(job));
+    });
+    return this.getJob(job.id);
+  }
+
+  getJob(jobId: string): CliMarketplaceJobSnapshot {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      throw new Error(`CLI marketplace job "${jobId}" was not found`);
+    }
+    return { ...job };
+  }
+
+  private async installEntry(
+    entry: CliMarketplaceCatalogItem,
+    appendLog?: CliMarketplaceLogAppender,
+  ): Promise<CliMarketplaceStatusItem> {
     ensureDir(this.managedPrefixDir);
     if (process.platform !== 'win32') {
       ensureDir(join(this.managedPrefixDir, 'bin'));
@@ -119,13 +207,22 @@ export class CliMarketplaceService {
 
     await this.installWithBundledNpm(entry.packageName, entry.installArgs ?? [], {
       prefixDir: this.managedPrefixDir,
+      appendLog,
     });
+
+    for (const source of entry.postInstallSkills ?? []) {
+      await this.runSkillCommandWithBundledNpx('add', source, {
+        prefixDir: this.managedPrefixDir,
+        appendLog,
+      });
+    }
 
     try {
       const pathStatus = await this.ensureManagedPrefixOnUserPath(this.managedPrefixDir);
       logger.info(`[cli-marketplace] ensured managed npm PATH (${pathStatus}) for "${entry.id}"`);
     } catch (error) {
       logger.warn(`[cli-marketplace] Failed to update user PATH for managed npm prefix ${this.managedPrefixDir}:`, error);
+      appendLog?.(`[warn] Failed to update user PATH automatically: ${formatUnknownError(error)}\n`);
     }
 
     const installedStatus = await this.resolveEntryStatus(entry);
@@ -134,6 +231,80 @@ export class CliMarketplaceService {
     }
 
     return installedStatus;
+  }
+
+  private async uninstallEntry(
+    entry: CliMarketplaceCatalogItem,
+    appendLog?: CliMarketplaceLogAppender,
+  ): Promise<CliMarketplaceStatusItem> {
+    for (const source of entry.postUninstallSkills ?? []) {
+      await this.runSkillCommandWithBundledNpx('remove', source, {
+        prefixDir: this.managedPrefixDir,
+        appendLog,
+      });
+    }
+
+    await this.uninstallWithBundledNpm(entry.packageName, {
+      prefixDir: this.managedPrefixDir,
+      appendLog,
+    });
+
+    const status = await this.resolveEntryStatus(entry);
+    if (!status) {
+      throw new Error(`Unable to resolve status for "${entry.id}" after uninstall`);
+    }
+
+    return status;
+  }
+
+  private createJob(
+    entry: CliMarketplaceCatalogItem,
+    operation: CliMarketplaceJobOperation,
+  ): CliMarketplaceJobSnapshot {
+    const job: CliMarketplaceJobSnapshot = {
+      id: randomUUID(),
+      itemId: entry.id,
+      title: entry.title,
+      operation,
+      status: 'running',
+      logs: '',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+    };
+    this.jobs.set(job.id, job);
+    return job;
+  }
+
+  private appendJobLog(job: CliMarketplaceJobSnapshot): CliMarketplaceLogAppender {
+    return (chunk: string) => {
+      const current = this.jobs.get(job.id);
+      if (!current || !chunk) {
+        return;
+      }
+      current.logs += normalizeLogChunk(chunk);
+    };
+  }
+
+  private async runJob(
+    job: CliMarketplaceJobSnapshot,
+    task: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await task();
+      const current = this.jobs.get(job.id);
+      if (current) {
+        current.status = 'succeeded';
+        current.finishedAt = new Date().toISOString();
+      }
+    } catch (error) {
+      const current = this.jobs.get(job.id);
+      if (current) {
+        current.status = 'failed';
+        current.finishedAt = new Date().toISOString();
+        current.error = formatUnknownError(error);
+        current.logs += `[error] ${current.error}\n`;
+      }
+    }
   }
 
   private async loadCatalogEntries(): Promise<CliMarketplaceCatalogItem[]> {
@@ -354,7 +525,7 @@ async function defaultCommandExistsInManagedPrefix(binName: string): Promise<boo
 async function defaultInstallWithBundledNpm(
   packageName: string,
   installArgs: string[],
-  options: { prefixDir: string },
+  options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
 ): Promise<void> {
   const npmPath = getBundledNpmPath();
   if (!npmPath) {
@@ -362,6 +533,63 @@ async function defaultInstallWithBundledNpm(
   }
 
   const args = ['install', '--global', packageName, ...installArgs];
+  await runBundledCommand({
+    executablePath: npmPath,
+    displayCommand: 'npm',
+    args,
+    prefixDir: options.prefixDir,
+    appendLog: options.appendLog,
+    failureMessage: 'npm install exited',
+  });
+}
+
+async function defaultUninstallWithBundledNpm(
+  packageName: string,
+  options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+): Promise<void> {
+  const npmPath = getBundledNpmPath();
+  if (!npmPath) {
+    throw new Error('Bundled npm runtime is missing');
+  }
+
+  await runBundledCommand({
+    executablePath: npmPath,
+    displayCommand: 'npm',
+    args: ['uninstall', '--global', packageName],
+    prefixDir: options.prefixDir,
+    appendLog: options.appendLog,
+    failureMessage: 'npm uninstall exited',
+  });
+}
+
+async function defaultRunSkillCommandWithBundledNpx(
+  command: CliMarketplaceSkillCommand,
+  source: string,
+  options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+): Promise<void> {
+  const npxPath = getBundledNpxPath();
+  if (!npxPath) {
+    throw new Error('Bundled npx runtime is missing');
+  }
+
+  await runBundledCommand({
+    executablePath: npxPath,
+    displayCommand: 'npx',
+    args: ['skills', command, source, '-y', '-g'],
+    prefixDir: options.prefixDir,
+    appendLog: options.appendLog,
+    failureMessage: `npx skills ${command} exited`,
+  });
+}
+
+async function runBundledCommand(options: {
+  executablePath: string;
+  displayCommand: string;
+  args: string[];
+  prefixDir: string;
+  appendLog?: CliMarketplaceLogAppender;
+  failureMessage: string;
+}): Promise<void> {
   const env = {
     ...process.env,
     npm_config_prefix: options.prefixDir,
@@ -370,17 +598,42 @@ async function defaultInstallWithBundledNpm(
     npm_config_audit: 'false',
   };
 
+  options.appendLog?.(`$ ${options.displayCommand} ${options.args.join(' ')}\n`);
+
   await new Promise<void>((resolve, reject) => {
-    const forceShell = process.platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(npmPath);
-    const { command, args: spawnArgs, shell } = prepareWinSpawn(npmPath, args, forceShell);
-    const child = spawn(command, spawnArgs, { env, windowsHide: true, stdio: 'inherit', shell });
+    const forceShell = process.platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(options.executablePath);
+    const { command, args: spawnArgs, shell } = prepareWinSpawn(options.executablePath, options.args, forceShell);
+    const child = spawn(command, spawnArgs, {
+      env,
+      windowsHide: true,
+      shell,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    child.stdout?.on('data', (chunk) => {
+      options.appendLog?.(String(chunk));
+    });
+    child.stderr?.on('data', (chunk) => {
+      options.appendLog?.(String(chunk));
+    });
     child.once('error', reject);
     child.once('close', (code) => {
       if (code === 0) {
         resolve();
         return;
       }
-      reject(new Error(`npm install exited with code ${code}`));
+      reject(new Error(`${options.failureMessage} with code ${code ?? 'unknown'}`));
     });
   });
+}
+
+function normalizeLogChunk(chunk: string): string {
+  return chunk.replace(/\r\n?/g, '\n');
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
