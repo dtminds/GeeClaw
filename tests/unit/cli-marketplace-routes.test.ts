@@ -155,6 +155,32 @@ describe('handleCliMarketplaceRoutes', () => {
     );
   });
 
+  it('returns 404 for missing CLI marketplace jobs', async () => {
+    const getJob = vi.fn(() => {
+      throw new Error('CLI marketplace job "missing-job" was not found');
+    });
+
+    const { handleCliMarketplaceRoutes } = await import('@electron/api/routes/cli-marketplace');
+
+    const handled = await handleCliMarketplaceRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:3210/api/cli-marketplace/jobs/missing-job'),
+      { cliMarketplaceService: { getJob } } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(getJob).toHaveBeenCalledWith('missing-job');
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      404,
+      {
+        success: false,
+        error: 'CLI marketplace job "missing-job" was not found',
+      },
+    );
+  });
+
   it('ignores unrelated routes', async () => {
     const { handleCliMarketplaceRoutes } = await import('@electron/api/routes/cli-marketplace');
 

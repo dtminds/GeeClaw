@@ -27,7 +27,14 @@ export async function handleCliMarketplaceRoutes(
 
   if (url.pathname.startsWith('/api/cli-marketplace/jobs/') && req.method === 'GET') {
     const jobId = decodeURIComponent(url.pathname.slice('/api/cli-marketplace/jobs/'.length));
-    sendJson(res, 200, ctx.cliMarketplaceService.getJob(jobId));
+    try {
+      sendJson(res, 200, ctx.cliMarketplaceService.getJob(jobId));
+    } catch (error) {
+      sendJson(res, 404, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return true;
   }
 
