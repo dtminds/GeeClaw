@@ -39,9 +39,6 @@
         "postInstallSkills": [
             "larksuite/cli"
         ],
-        "postUninstallSkills": [
-            "larksuite/cli"
-        ],
         "description": "飞书/Lark 开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作飞书。覆盖消息、文档、多维表格、电子表格、日历、邮箱、任务、会议等核心业务域，提供 200+ 命令及 19 个 AI Agent Skills",
         "homepage": "https://github.com/larksuite/cli",
         "platforms": [
@@ -58,9 +55,6 @@
             "wecom-cli"
         ],
         "postInstallSkills": [
-            "WeComTeam/wecom-cli"
-        ],
-        "postUninstallSkills": [
             "WeComTeam/wecom-cli"
         ],
         "description": "企业微信开放企业微信消息、日程、文档、智能表格、会议、待办、通讯录等核心产品能力 — 让人类和 AI Agent 都能在终端中操作企业微信",
