@@ -184,6 +184,20 @@ GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill 
 
 打开 **设置 → MCP** 可以查看系统 PATH 中是否已经按标准方式安装 `mcporter`。如果 GeeClaw 还没有检测到标准安装，页面会引导你打开官方安装说明，同时也会显示内置兜底运行时是否可用。
 
+### CLI 市场
+
+打开 **设置 → CLI 市场** 可以查看一组 GeeClaw 已知如何检测和重装的 npm CLI。
+
+- GeeClaw 会先检测系统里是否已经存在对应命令；如果已存在，就直接标记为已安装。
+- 如果命令不存在，GeeClaw 会使用应用内置的 Node/npm，把它安装到 GeeClaw 自己管理的用户级前缀目录，而不是要求你执行系统级 `npm install -g`。
+- 当前界面刻意保持简洁，只显示 `已安装 / 未安装` 和 `安装 / 重新安装`。
+- 这个页面暂时不会比较版本；每次点击重新安装时，都会按当时 npm 上可获取到的最新包版本重新安装。
+
+托管安装目录：
+
+- macOS / Linux：`~/.geeclaw/npm-global`
+- Windows：`%APPDATA%\\GeeClaw\\npm-global`
+
 ---
 
 ## 系统架构
