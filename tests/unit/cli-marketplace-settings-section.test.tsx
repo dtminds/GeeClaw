@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostApiFetchMock = vi.fn();
@@ -90,6 +90,72 @@ describe('CliMarketplaceSettingsSection', () => {
 
     await waitFor(() => {
       expect(hostApiFetchMock).toHaveBeenCalledWith('/api/cli-marketplace/catalog');
+    });
+  });
+
+  it('opens the more-actions dropdown for installed items and runs reinstall', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'feishu',
+            title: 'Feishu CLI',
+            description: 'Docs',
+            installed: true,
+            actionLabel: 'reinstall',
+          },
+        ];
+      }
+
+      if (path === '/api/cli-marketplace/install') {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toBe(JSON.stringify({ id: 'feishu' }));
+        return {
+          id: 'job-install-2',
+          itemId: 'feishu',
+          title: 'Feishu CLI',
+          operation: 'install',
+          status: 'running',
+          logs: '$ npm install --global @larksuite/cli\n',
+          startedAt: '2026-03-30T00:00:00.000Z',
+          finishedAt: null,
+        };
+      }
+
+      if (path === '/api/cli-marketplace/jobs/job-install-2') {
+        return {
+          id: 'job-install-2',
+          itemId: 'feishu',
+          title: 'Feishu CLI',
+          operation: 'install',
+          status: 'succeeded',
+          logs: '$ npm install --global @larksuite/cli\n',
+          startedAt: '2026-03-30T00:00:00.000Z',
+          finishedAt: '2026-03-30T00:00:10.000Z',
+        };
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByText('重新安装'));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith(
+        '/api/cli-marketplace/install',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ id: 'feishu' }),
+        }),
+      );
     });
   });
 
