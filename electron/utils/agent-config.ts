@@ -276,9 +276,7 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 async function ensureDir(path: string): Promise<void> {
-  if (!(await fileExists(path))) {
-    await mkdir(path, { recursive: true });
-  }
+  await mkdir(path, { recursive: true });
 }
 
 async function readAgentManagementMap(): Promise<Record<string, ManagedAgentMetadata>> {
