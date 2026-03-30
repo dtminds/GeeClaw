@@ -129,7 +129,7 @@ describe('handleCliMarketplaceRoutes', () => {
       title: 'WeCom CLI',
       operation: 'install',
       status: 'succeeded',
-      logs: '$ npm install --global @wecom/cli\n$ npx skills add WeComTeam/wecom-cli -y -g\n',
+      logs: '$ npm install --global @wecom/cli\n$ npx -y skills add WeComTeam/wecom-cli -y -g\n',
       startedAt: '2026-03-30T00:00:00.000Z',
       finishedAt: '2026-03-30T00:00:30.000Z',
     }));

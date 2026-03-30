@@ -194,7 +194,7 @@ describe('CliMarketplaceSettingsSection', () => {
           title: 'Feishu CLI',
           operation: 'install',
           status: 'succeeded',
-          logs: '$ npm install --global @larksuite/cli\n$ npx skills add larksuite/cli -y -g\n',
+          logs: '$ npm install --global @larksuite/cli\n$ npx -y skills add larksuite/cli -y -g\n',
           startedAt: '2026-03-30T00:00:00.000Z',
           finishedAt: '2026-03-30T00:00:10.000Z',
         };
@@ -212,6 +212,6 @@ describe('CliMarketplaceSettingsSection', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(await screen.findByText('安装 CLI')).toBeInTheDocument();
     expect(await screen.findByText(/\$ npm install --global @larksuite\/cli/)).toBeInTheDocument();
-    expect(await screen.findByText(/\$ npx skills add larksuite\/cli -y -g/)).toBeInTheDocument();
+    expect(await screen.findByText(/\$ npx -y skills add larksuite\/cli -y -g/)).toBeInTheDocument();
   });
 });
