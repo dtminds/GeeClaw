@@ -6,6 +6,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger } from './logger';
 import { prepareWinSpawn } from './paths';
+import { getGeeClawCommandSearchDirs } from './runtime-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -46,23 +47,6 @@ function normalizeExistingPath(pathValue: string): string {
   }
 }
 
-function getPosixSearchDirs(): string[] {
-  const envDirs = (process.env.PATH ?? '')
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const commonDirs = [
-    join(homedir(), '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/snap/bin',
-  ];
-
-  return [...new Set([...envDirs, ...commonDirs])];
-}
-
 async function listCommandCandidates(command: string): Promise<string[]> {
   const candidates: string[] = [];
 
@@ -81,10 +65,11 @@ async function listCommandCandidates(command: string): Promise<string[]> {
     } catch {
       // Ignore missing where.exe results and fall through to manual candidates.
     }
-
-    const appData = process.env.APPDATA;
-    if (appData) {
-      candidates.push(join(appData, 'npm', `${command}.cmd`));
+    for (const dir of getGeeClawCommandSearchDirs()) {
+      candidates.push(join(dir, `${command}.cmd`));
+      candidates.push(join(dir, `${command}.exe`));
+      candidates.push(join(dir, `${command}.bat`));
+      candidates.push(join(dir, command));
     }
   } else {
     try {
@@ -102,7 +87,7 @@ async function listCommandCandidates(command: string): Promise<string[]> {
       // Ignore missing which results and fall through to manual candidates.
     }
 
-    for (const dir of getPosixSearchDirs()) {
+    for (const dir of getGeeClawCommandSearchDirs()) {
       candidates.push(join(dir, command));
     }
   }

@@ -10,6 +10,7 @@ import { getBundledNpmPath, getBundledNpxPath } from './managed-bin';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
 import { ensureManagedNpmPrefixOnUserPath, type UserPathUpdateStatus } from './user-path';
+import { getGeeClawCommandSearchDirs } from './runtime-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -408,23 +409,6 @@ async function defaultFindCommand(binName: string): Promise<string | null> {
   return candidates[0] ?? null;
 }
 
-function getPosixSearchDirs(): string[] {
-  const pathEntries = (process.env.PATH ?? '')
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const fallbackDirs = [
-    join(homedir(), '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/snap/bin',
-  ];
-
-  return Array.from(new Set([...pathEntries, ...fallbackDirs]));
-}
-
 async function listCommandCandidates(command: string): Promise<string[]> {
   const candidates: string[] = [];
 
@@ -443,13 +427,10 @@ async function listCommandCandidates(command: string): Promise<string[]> {
     } catch {
       // ignore
     }
-
-    const appData = process.env.APPDATA;
-    if (appData) {
-      candidates.push(join(appData, 'npm', `${command}.cmd`));
-      candidates.push(join(appData, 'npm', command));
-      candidates.push(join(appData, 'npm-cache', `${command}.cmd`));
-      candidates.push(join(appData, 'npm-cache', command));
+    for (const dir of getGeeClawCommandSearchDirs()) {
+      candidates.push(join(dir, `${command}.cmd`));
+      candidates.push(join(dir, command));
+      candidates.push(join(dir, `${command}.ps1`));
     }
   } else {
     try {
@@ -467,8 +448,9 @@ async function listCommandCandidates(command: string): Promise<string[]> {
       // ignore
     }
 
-    for (const dir of getPosixSearchDirs()) {
+    for (const dir of getGeeClawCommandSearchDirs()) {
       candidates.push(join(dir, command));
+      candidates.push(join(dir, `${command}.sh`));
     }
   }
 

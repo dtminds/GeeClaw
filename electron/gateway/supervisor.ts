@@ -11,8 +11,8 @@ import {
 } from '../utils/openclaw-managed-profile';
 import { PORTS } from '../utils/config';
 import { logger } from '../utils/logger';
-import { prependPathEntries } from '../utils/env-path';
-import { getBundledPathEntries } from '../utils/managed-bin';
+import { setPathEnvValue } from '../utils/env-path';
+import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 import type { ManagedGatewayProcess } from './process-launcher';
 
 export function warmupManagedPythonReadiness(): void {
@@ -290,9 +290,9 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
   }
 
   const baseProcessEnv = process.env as Record<string, string | undefined>;
-  const pathEntries = getBundledPathEntries();
+  const pathEntries = getGeeClawRuntimePathEntries(baseProcessEnv);
   const binPathExists = pathEntries.length > 0;
-  const baseEnvPatched = prependPathEntries(baseProcessEnv, pathEntries).env;
+  const baseEnvPatched = setPathEnvValue(baseProcessEnv, getGeeClawRuntimePath(baseProcessEnv));
 
   const uvEnv = await getUvMirrorEnv();
   const openclawConfigDir = getOpenClawConfigDir();

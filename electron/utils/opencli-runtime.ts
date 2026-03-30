@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { logger } from './logger';
 import { prepareWinSpawn } from './paths';
-import { getManagedNpmBinDir } from './user-path';
+import { getGeeClawCommandSearchDirs } from './runtime-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -66,48 +66,6 @@ function normalizeExistingPath(pathValue: string): string {
   }
 }
 
-function getPosixSearchDirs(): string[] {
-  const envDirs = (process.env.PATH ?? '')
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const commonDirs = [
-    join(homedir(), '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/snap/bin',
-  ];
-
-  return [...new Set([...envDirs, ...commonDirs])];
-}
-
-function getDefaultManagedPrefixDir(): string {
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
-    return join(appData, 'GeeClaw', 'npm-global');
-  }
-
-  return join(homedir(), '.geeclaw', 'npm-global');
-}
-
-function getManagedPrefixCandidates(command: string): string[] {
-  const managedBinDir = getManagedNpmBinDir(getDefaultManagedPrefixDir());
-  if (process.platform === 'win32') {
-    return [
-      join(managedBinDir, `${command}.cmd`),
-      join(managedBinDir, command),
-      join(managedBinDir, `${command}.ps1`),
-    ];
-  }
-
-  return [
-    join(managedBinDir, command),
-    join(managedBinDir, `${command}.sh`),
-  ];
-}
-
 async function listCommandCandidates(command: string): Promise<string[]> {
   const candidates: string[] = [];
 
@@ -126,11 +84,10 @@ async function listCommandCandidates(command: string): Promise<string[]> {
     } catch {
       // Ignore missing where.exe results and fall through to manual candidates.
     }
-
-    const appData = process.env.APPDATA;
-    if (appData) {
-      candidates.push(join(appData, 'npm', `${command}.cmd`));
-      candidates.push(join(appData, 'npm', command));
+    for (const dir of getGeeClawCommandSearchDirs()) {
+      candidates.push(join(dir, `${command}.cmd`));
+      candidates.push(join(dir, command));
+      candidates.push(join(dir, `${command}.ps1`));
     }
   } else {
     try {
@@ -148,12 +105,11 @@ async function listCommandCandidates(command: string): Promise<string[]> {
       // Ignore missing which results and fall through to manual candidates.
     }
 
-    for (const dir of getPosixSearchDirs()) {
+    for (const dir of getGeeClawCommandSearchDirs()) {
       candidates.push(join(dir, command));
+      candidates.push(join(dir, `${command}.sh`));
     }
   }
-
-  candidates.push(...getManagedPrefixCandidates(command));
 
   const seen = new Set<string>();
   return candidates.filter((candidate) => {

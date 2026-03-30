@@ -6,7 +6,7 @@ import { getAllSettings } from '../utils/store';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
-import { getGeeClawConfigDir, getOpenClawConfigDir } from '../utils/paths';
+import { getOpenClawConfigDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { listConfiguredChannels } from '../utils/channel-config';
 import { syncGatewayTokenToConfig, syncBrowserConfigToOpenClaw } from '../utils/openclaw-gateway-config';
@@ -38,9 +38,8 @@ import {
   resolveManagedAgentWorkspacePath,
 } from '../utils/managed-agent-workspace';
 import { logger } from '../utils/logger';
-import { prependPathEntries, setPathEnvValue } from '../utils/env-path';
-import { getBundledPathEntries } from '../utils/managed-bin';
-import { getManagedNpmBinDir } from '../utils/user-path';
+import { setPathEnvValue } from '../utils/env-path';
+import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
@@ -90,7 +89,7 @@ export function buildGatewayForkEnv(options: {
   const forwardedEnvRecord = forwardedEnv as Record<string, string | undefined>;
   const forwardedEnvWithPath = setPathEnvValue(
     forwardedEnvRecord,
-    prependManagedNpmBinIfNeeded(options.finalPath),
+    getGeeClawRuntimePath({ ...forwardedEnvRecord, PATH: options.finalPath }, { includeBundled: false }),
   );
 
   return {
@@ -101,33 +100,6 @@ export function buildGatewayForkEnv(options: {
     OPENCLAW_GATEWAY_PORT: String(options.gatewayPort),
     OPENCLAW_NO_RESPAWN: '1',
   };
-}
-
-function getManagedNpmPrefixDir(): string {
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming');
-    return path.join(appData, 'GeeClaw', 'npm-global');
-  }
-
-  return path.join(getGeeClawConfigDir(), 'npm-global');
-}
-
-function prependManagedNpmBinIfNeeded(pathValue: string): string {
-  const managedBinDir = getManagedNpmBinDir(getManagedNpmPrefixDir());
-  const delimiter = process.platform === 'win32' ? ';' : ':';
-  const normalize = (value: string) => (
-    process.platform === 'win32' ? value.trim().toLowerCase() : value.trim()
-  );
-  const currentEntries = pathValue
-    .split(delimiter)
-    .map(normalize)
-    .filter(Boolean);
-
-  if (currentEntries.includes(normalize(managedBinDir))) {
-    return pathValue;
-  }
-
-  return pathValue ? `${managedBinDir}${delimiter}${pathValue}` : managedBinDir;
 }
 
 function getManagedWorkspaceDir(): string {
@@ -495,9 +467,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const mode = app.isPackaged ? 'packaged' : 'dev';
 
   const baseProcessEnv = process.env as Record<string, string | undefined>;
-  const pathEntries = getBundledPathEntries();
+  const pathEntries = getGeeClawRuntimePathEntries(baseProcessEnv);
   const binPathExists = pathEntries.length > 0;
-  const finalPath = prependPathEntries(baseProcessEnv, pathEntries).path;
+  const finalPath = getGeeClawRuntimePath(baseProcessEnv);
 
   const appSettings = await getAllSettings();
   const uvEnv = await getUvMirrorEnv();
