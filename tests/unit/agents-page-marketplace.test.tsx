@@ -165,7 +165,7 @@ vi.mock('@/stores/gateway', () => ({
 }));
 
 describe('Agents marketplace view', () => {
-  it('shows the temporary install hold in marketplace cards and preset details', async () => {
+  it('allows installing supported presets from marketplace cards and preset details while keeping unsupported presets unavailable', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(
       <TooltipProvider delayDuration={0}>
@@ -189,6 +189,11 @@ describe('Agents marketplace view', () => {
     expect(screen.getByText('🧪')).toBeInTheDocument();
     expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
 
+    const alphaCard = screen.getByText('Alpha Researcher').closest('div.modal-section-surface');
+    expect(alphaCard).not.toBeNull();
+    fireEvent.click(within(alphaCard as HTMLElement).getByRole('button', { name: 'Install' }));
+    expect(installPresetMock).toHaveBeenCalledWith('alpha-researcher');
+
     fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
 
     const dialog = await screen.findByRole('dialog');
@@ -207,10 +212,8 @@ describe('Agents marketplace view', () => {
 
     const supportedDialog = await screen.findByRole('dialog');
     const supportedInstallButton = within(supportedDialog).getByRole('button', { name: 'Install' });
-    expect(supportedInstallButton).toBeDisabled();
-
-    fireEvent.pointerMove(supportedInstallButton.closest('span') ?? supportedInstallButton);
-    expect((await screen.findAllByText('Not open yet')).length).toBeGreaterThan(0);
-    expect(installPresetMock).not.toHaveBeenCalled();
+    expect(supportedInstallButton).toBeEnabled();
+    fireEvent.click(supportedInstallButton);
+    expect(installPresetMock).toHaveBeenCalledWith('alpha-researcher');
   });
 });

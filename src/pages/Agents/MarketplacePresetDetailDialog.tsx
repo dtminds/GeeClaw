@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentPresetSummary } from '@/types/agent';
 import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
 
@@ -31,7 +30,6 @@ export function MarketplacePresetDetailDialog({
   const availabilityCopy = !preset.supportedOnCurrentPlatform
     ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
     : null;
-  const installOnHold = !installed && preset.supportedOnCurrentPlatform;
   const installLabel = installed
     ? t('marketplace.installed')
     : preset.supportedOnCurrentPlatform
@@ -106,31 +104,13 @@ export function MarketplacePresetDetailDialog({
           </div>
 
           <div className="modal-footer justify-end px-8 py-5">
-            {installOnHold ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex cursor-not-allowed">
-                    <Button
-                      className="modal-primary-button"
-                      disabled
-                    >
-                      {installLabel}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {t('marketplace.comingSoon')}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Button
-                className="modal-primary-button"
-                disabled={installed || !preset.supportedOnCurrentPlatform}
-                onClick={() => onInstall(preset.presetId)}
-              >
-                {installLabel}
-              </Button>
-            )}
+            <Button
+              className="modal-primary-button"
+              disabled={installed || !preset.supportedOnCurrentPlatform}
+              onClick={() => onInstall(preset.presetId)}
+            >
+              {installLabel}
+            </Button>
           </div>
         </div>
       </DialogContent>

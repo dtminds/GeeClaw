@@ -164,6 +164,12 @@ export function Agents() {
               <div className="grid gap-4 md:grid-cols-3">
                 {presets.map((preset) => {
                   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
+                  const installLabel = installedPresetIds.has(preset.presetId)
+                    ? t('marketplace.installed')
+                    : preset.supportedOnCurrentPlatform
+                      ? t('marketplace.install')
+                      : t('marketplace.unavailable');
+                  const installDisabled = installedPresetIds.has(preset.presetId) || !preset.supportedOnCurrentPlatform;
                   return (
                     <div
                       key={preset.presetId}
@@ -199,31 +205,13 @@ export function Agents() {
                         >
                           {t('marketplace.viewDetails')}
                         </Button>
-                        {/* {installOnHold ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex cursor-not-allowed">
-                                <Button
-                                  disabled={installDisabled}
-                                  className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
-                                >
-                                  {installLabel}
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">
-                              {t('marketplace.comingSoon')}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Button
-                            onClick={() => void installPreset(preset.presetId)}
-                            disabled={installDisabled}
-                            className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
-                          >
-                            {installLabel}
-                          </Button>
-                        )} */}
+                        <Button
+                          onClick={() => void installPreset(preset.presetId)}
+                          disabled={installDisabled}
+                          className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                        >
+                          {installLabel}
+                        </Button>
                       </div>
                     </div>
                   );
@@ -775,9 +763,6 @@ function AgentSettingsModal({
             <CardTitle className="modal-title">
               {t('settingsDialog.title', { name: agent.name })}
             </CardTitle>
-            <CardDescription className="modal-description">
-              {t('settingsDialog.description')}
-            </CardDescription>
           </div>
           <Button
             variant="ghost"
@@ -797,19 +782,16 @@ function AgentSettingsModal({
                   id="agent-settings-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  readOnly={agent.isDefault}
                   className={inputClasses}
                 />
-                {!agent.isDefault && (
-                  <Button
-                    variant="outline"
-                    onClick={() => void handleSaveName()}
-                    disabled={savingName || !name.trim() || name.trim() === agent.name}
-                    className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
-                  >
-                    {savingName ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={() => void handleSaveName()}
+                  disabled={savingName || !name.trim() || name.trim() === agent.name}
+                  className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
+                >
+                  {savingName ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
+                </Button>
               </div>
             </div>
 
