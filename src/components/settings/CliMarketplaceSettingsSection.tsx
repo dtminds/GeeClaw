@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Loader2, MoreHorizontal, RefreshCw, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -72,6 +72,7 @@ export function CliMarketplaceSettingsSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeJob, setActiveJob] = useState<CliMarketplaceJob | null>(null);
   const [openActionsMenuId, setOpenActionsMenuId] = useState<string | null>(null);
+  const actionsMenuRootRef = useRef<HTMLDivElement | null>(null);
 
   const loadCatalog = useCallback(async (background = false) => {
     if (background) {
@@ -152,6 +153,37 @@ export function CliMarketplaceSettingsSection() {
       }
     };
   }, [activeJobId, activeJobStatus, loadCatalog]);
+
+  useEffect(() => {
+    if (!openActionsMenuId) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!actionsMenuRootRef.current?.contains(target)) {
+        setOpenActionsMenuId(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenActionsMenuId(null);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openActionsMenuId]);
 
   const startJob = async (item: CliMarketplaceItem, operation: CliMarketplaceJobOperation) => {
     try {
@@ -237,32 +269,41 @@ export function CliMarketplaceSettingsSection() {
 
                     {item.installed ? (
                       <div
-                        className="relative"
-                        onMouseLeave={() => setOpenActionsMenuId((current) => current === item.id ? null : current)}
-                        onBlur={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                            setOpenActionsMenuId((current) => current === item.id ? null : current);
+                        ref={(node) => {
+                          if (openActionsMenuId === item.id) {
+                            actionsMenuRootRef.current = node;
+                          } else if (actionsMenuRootRef.current === node) {
+                            actionsMenuRootRef.current = null;
                           }
                         }}
+                        className="relative"
                       >
                         <Button
                           type="button"
                           variant="outline"
                           className="rounded-full px-3"
                           aria-label={t('cliMarketplace.moreActions')}
+                          aria-haspopup="menu"
                           aria-expanded={openActionsMenuId === item.id}
-                          onMouseEnter={() => setOpenActionsMenuId(item.id)}
+                          aria-controls={openActionsMenuId === item.id ? `cli-marketplace-menu-${item.id}` : undefined}
                           onClick={() => setOpenActionsMenuId((current) => current === item.id ? null : item.id)}
                           disabled={isJobRunning}
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                         {openActionsMenuId === item.id && (
-                          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[160px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10">
+                          <div
+                            id={`cli-marketplace-menu-${item.id}`}
+                            role="menu"
+                            aria-label={t('cliMarketplace.moreActions')}
+                            className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[160px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10"
+                          >
                             <Button
                               type="button"
                               variant="ghost"
+                              role="menuitem"
                               className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                              autoFocus
                               onClick={() => {
                                 setOpenActionsMenuId(null);
                                 void startJob(item, 'install');
@@ -273,6 +314,7 @@ export function CliMarketplaceSettingsSection() {
                             <Button
                               type="button"
                               variant="ghost"
+                              role="menuitem"
                               className="w-full justify-start rounded-xl px-3 py-2 text-sm"
                               onClick={() => {
                                 setOpenActionsMenuId(null);
