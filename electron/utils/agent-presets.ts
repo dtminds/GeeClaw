@@ -268,24 +268,23 @@ async function readPresetFiles(presetId: string, presetDir: string): Promise<Rec
 
 async function readDirectoryFiles(rootDir: string, currentDir = rootDir): Promise<Record<string, string>> {
   const entries = await readdir(currentDir, { withFileTypes: true });
-  const nestedEntries = await mapWithConcurrency(
-    entries.sort((left, right) => left.name.localeCompare(right.name)),
-    PRESET_SKILL_IO_CONCURRENCY,
-    async (entry) => {
-      const absolutePath = join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        return Object.entries(await readDirectoryFiles(rootDir, absolutePath));
-      }
-      if (!entry.isFile()) {
-        return [] as Array<[string, string]>;
-      }
+  const files: Record<string, string> = {};
 
-      const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
-      return [[relativePath, await readFile(absolutePath, 'utf8')]] as Array<[string, string]>;
-    },
-  );
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const absolutePath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(files, await readDirectoryFiles(rootDir, absolutePath));
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
 
-  return Object.fromEntries(nestedEntries.flat());
+    const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
+    files[relativePath] = await readFile(absolutePath, 'utf8');
+  }
+
+  return files;
 }
 
 async function readPresetSkills(
