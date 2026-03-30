@@ -52,7 +52,7 @@
     "license": "MIT",
     "private": true,
     "scripts": {
-        "init": "pnpm install && pnpm run uv:download",
+        "init": "pnpm install && pnpm run uv:download && pnpm run node:download",
         "dev": "vite",
         "build": "pnpm run node:download && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-opencli.mjs && zx scripts/bundle-mcporter.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder",
         "build:vite": "vite build",

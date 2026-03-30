@@ -247,7 +247,15 @@ export async function main() {
   echo(chalk.green`\n🎉 Done!`);
 }
 
-const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+export function shouldRunAsMainModule(argv, importMetaUrl) {
+  const scriptPath = fileURLToPath(importMetaUrl);
+  return argv
+    .slice(1)
+    .filter(arg => typeof arg === 'string' && arg.length > 0 && !arg.startsWith('-'))
+    .some(arg => path.resolve(arg) === scriptPath);
+}
+
+const isMainModule = shouldRunAsMainModule(process.argv, import.meta.url);
 
 if (isMainModule) {
   await main();

@@ -7,6 +7,8 @@ import { promisify } from 'node:util';
 import { ensureDir, getGeeClawConfigDir, getResourcesDir } from './paths';
 import { getBundledNpmPath } from './managed-bin';
 import { prepareWinSpawn } from './win-shell';
+import { logger } from './logger';
+import { ensureManagedNpmPrefixOnUserPath, type UserPathUpdateStatus } from './user-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -45,6 +47,7 @@ export interface CliMarketplaceServiceOptions {
     installArgs: string[],
     options: { prefixDir: string },
   ) => Promise<void>;
+  ensureManagedPrefixOnUserPath?: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   managedPrefixDir?: string;
 }
 
@@ -88,6 +91,7 @@ export class CliMarketplaceService {
     installArgs: string[],
     options: { prefixDir: string },
   ) => Promise<void>;
+  private readonly ensureManagedPrefixOnUserPath: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   private readonly managedPrefixDir: string;
 
   constructor(options?: CliMarketplaceServiceOptions) {
@@ -96,6 +100,7 @@ export class CliMarketplaceService {
     this.findCommand = options?.findCommand ?? defaultFindCommand;
     this.commandExistsInManagedPrefix = options?.commandExistsInManagedPrefix ?? defaultCommandExistsInManagedPrefix;
     this.installWithBundledNpm = options?.installWithBundledNpm ?? defaultInstallWithBundledNpm;
+    this.ensureManagedPrefixOnUserPath = options?.ensureManagedPrefixOnUserPath ?? ensureManagedNpmPrefixOnUserPath;
     this.managedPrefixDir = options?.managedPrefixDir ?? getDefaultManagedPrefixDir();
   }
 
@@ -115,6 +120,13 @@ export class CliMarketplaceService {
     await this.installWithBundledNpm(entry.packageName, entry.installArgs ?? [], {
       prefixDir: this.managedPrefixDir,
     });
+
+    try {
+      const pathStatus = await this.ensureManagedPrefixOnUserPath(this.managedPrefixDir);
+      logger.info(`[cli-marketplace] ensured managed npm PATH (${pathStatus}) for "${entry.id}"`);
+    } catch (error) {
+      logger.warn(`[cli-marketplace] Failed to update user PATH for managed npm prefix ${this.managedPrefixDir}:`, error);
+    }
 
     const installedStatus = await this.resolveEntryStatus(entry);
     if (!installedStatus) {

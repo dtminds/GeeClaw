@@ -101,6 +101,7 @@ describe('cli marketplace service', () => {
 
   it('installs a curated package into the GeeClaw prefix', async () => {
     const installWithBundledNpm = vi.fn(async () => undefined);
+    const ensureManagedPrefixOnUserPath = vi.fn(async () => 'updated');
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
 
     const managedPrefixDir = join(process.cwd(), 'tmp', 'cli-marketplace-prefix');
@@ -112,6 +113,7 @@ describe('cli marketplace service', () => {
       findCommand: vi.fn(async () => null),
       commandExistsInManagedPrefix: vi.fn(async () => true),
       installWithBundledNpm,
+      ensureManagedPrefixOnUserPath,
       managedPrefixDir,
     });
 
@@ -122,6 +124,7 @@ describe('cli marketplace service', () => {
       [],
       expect.objectContaining({ prefixDir: expect.any(String) }),
     );
+    expect(ensureManagedPrefixOnUserPath).toHaveBeenCalledWith(managedPrefixDir);
   });
 
   it('throws when catalog entries fail validation', async () => {
@@ -146,6 +149,7 @@ describe('cli marketplace service', () => {
   it('forces shell execution for absolute npm.cmd installs on Windows', async () => {
     setPlatform('win32');
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+    const ensureManagedPrefixOnUserPath = vi.fn(async () => 'updated');
 
     const service = new CliMarketplaceService({
       catalogEntries: [
@@ -153,6 +157,7 @@ describe('cli marketplace service', () => {
       ],
       findCommand: vi.fn(async () => null),
       commandExistsInManagedPrefix: vi.fn(async () => true),
+      ensureManagedPrefixOnUserPath,
       managedPrefixDir: join(process.cwd(), 'tmp', 'cli-marketplace-prefix-win'),
     });
 
@@ -162,6 +167,33 @@ describe('cli marketplace service', () => {
       'C:\\Program Files\\GeeClaw\\resources\\bin\\npm.cmd',
       ['install', '--global', '@geeclaw-test/wecom-cli'],
       true,
+    );
+  });
+
+  it('keeps install successful when PATH update fails', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const ensureManagedPrefixOnUserPath = vi.fn(async () => {
+      throw new Error('failed to update PATH');
+    });
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        { id: 'wecom', title: 'WeCom CLI', packageName: '@geeclaw-test/wecom-cli', binNames: ['wecom'] },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => true),
+      installWithBundledNpm,
+      ensureManagedPrefixOnUserPath,
+      managedPrefixDir: join(process.cwd(), 'tmp', 'cli-marketplace-prefix-warn'),
+    });
+
+    await expect(service.install({ id: 'wecom' })).resolves.toEqual(
+      expect.objectContaining({
+        id: 'wecom',
+        installed: true,
+        source: 'geeclaw',
+      }),
     );
   });
 });

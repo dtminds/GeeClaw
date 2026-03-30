@@ -10,7 +10,7 @@
   },
   "cliMarketplace": {
     "title": "CLI Market",
-    "description": "Install curated command line tools that GeeClaw already knows how to detect. If they are missing, you can reinstall them into GeeClaw's managed user-level prefix.",
+    "description": "Install curated command line tools that GeeClaw already knows how to detect. Missing tools are installed into GeeClaw's managed user-level prefix and added to the user PATH on first install.",
     "refresh": "Refresh Status",
     "loadFailed": "Failed to load the CLI market",
     "installFailed": "Failed to install the CLI",

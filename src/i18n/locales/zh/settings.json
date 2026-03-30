@@ -10,7 +10,7 @@
   },
   "cliMarketplace": {
     "title": "CLI 市场",
-    "description": "安装 GeeClaw 已适配的命令行工具。GeeClaw 会自动检测本机是否已安装，没有时可直接重新安装到受控用户目录。",
+    "description": "安装 GeeClaw 已适配的命令行工具。GeeClaw 会自动检测本机是否已安装，没有时会安装到受控用户目录，并在首次安装后自动加入用户 PATH。",
     "refresh": "刷新状态",
     "loadFailed": "加载 CLI 市场失败",
     "installFailed": "安装 CLI 失败",

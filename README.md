@@ -189,6 +189,7 @@ Open **Settings → CLI Market** to review a curated set of npm-based CLIs that 
 
 - GeeClaw first checks whether the command already exists on your system and marks it as installed if found.
 - If the command is missing, GeeClaw installs it with the bundled Node/npm runtime into a GeeClaw-managed user-level prefix instead of requiring a system-wide `npm install -g`.
+- On the first managed install, GeeClaw also adds that managed directory to your user PATH so newly opened terminals can use the command directly.
 - The current UI intentionally keeps this simple: it shows only `Installed` / `Not installed` plus `Install` / `Reinstall`.
 - GeeClaw does not compare versions in this view yet. Reinstall always uses the latest package version available from npm at the time you click it.
 
@@ -279,7 +280,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 
 ```bash
 # Development
-pnpm run init             # Install dependencies + download uv
+pnpm run init             # Install dependencies + download uv and bundled Node/npm
 pnpm dev                  # Start with hot reload
 
 # Quality

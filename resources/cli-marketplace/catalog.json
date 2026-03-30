@@ -1,1 +1,47 @@
-[]
+[
+    {
+        "id": "feishu",
+        "title": "飞书 CLI",
+        "packageName": "@larksuite/cli",
+        "binNames": [
+            "lark-cli"
+        ],
+        "description": "飞书/Lark 开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作飞书。覆盖消息、文档、多维表格、电子表格、日历、邮箱、任务、会议等核心业务域，提供 200+ 命令及 19 个 AI Agent Skills",
+        "homepage": "https://github.com/larksuite/cli",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
+    },
+    {
+        "id": "wecom",
+        "title": "企业微信 CLI",
+        "packageName": "@wecom/cli",
+        "binNames": [
+            "wecom-cli"
+        ],
+        "description": "企业微信开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作企业微信",
+        "homepage": "https://github.com/WecomTeam/wecom-cli",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
+    },
+    {
+        "id": "opencli",
+        "title": "OpenCLI",
+        "packageName": "@jackwener/opencli",
+        "binNames": [
+            "opencli"
+        ],
+        "description": "让任何网站或 Electron 应用成为你的 CLI",
+        "homepage": "https://opencli.info/",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
+    }
+]
