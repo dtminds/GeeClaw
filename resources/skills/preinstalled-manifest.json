@@ -155,14 +155,6 @@
       "autoEnable": true
     },
     {
-      "slug": "opencli",
-      "repo": "jackwener/opencli",
-      "repoPath": "./",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": true
-    },
-    {
       "slug": "xiaohongshu-cli",
       "repo": "jackwener/xiaohongshu-cli",
       "repoPath": "./",
