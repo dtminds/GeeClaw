@@ -128,6 +128,120 @@ describe('agent preset platform helpers', () => {
 });
 
 describe('agent preset loader', () => {
+  it('ships a curated premium preset catalog with full persona files', async () => {
+    const presets = await listPresetsFrom(bundledPresetsDir);
+    const presetIds = presets.map((preset) => preset.meta.presetId).sort();
+    const requiredFiles = [
+      'AGENTS.md',
+      'IDENTITY.md',
+      'MEMORY.md',
+      'SOUL.md',
+      'USER.md',
+    ];
+    const categories = new Set(presets.map((preset) => preset.meta.category));
+
+    expect(presets).toHaveLength(13);
+    expect(presetIds).toEqual([
+      'automation-systems-architect',
+      'campaign-growth-studio',
+      'customer-insights-lab',
+      'decision-analytics-lab',
+      'delivery-program-manager',
+      'engineering-commander',
+      'founder-ops-chief',
+      'incident-response-commander',
+      'knowledge-synthesis-lab',
+      'market-intelligence-chief',
+      'product-strategy-architect',
+      'stock-expert',
+      'ux-experience-director',
+    ]);
+
+    for (const preset of presets) {
+      expect(Object.keys(preset.files).sort()).toEqual(requiredFiles);
+    }
+
+    for (const category of [
+      'engineering',
+      'design',
+      'research',
+      'analytics',
+      'product',
+      'marketing',
+      'operations',
+      'finance',
+      'support',
+      'productivity',
+    ]) {
+      expect(categories.has(category)).toBe(true);
+    }
+
+    const engineeringCommander = presets.find((preset) => preset.meta.presetId === 'engineering-commander');
+    expect(engineeringCommander?.meta.agent.skillScope).toEqual({
+      mode: 'specified',
+      skills: [
+        'autoplan',
+        'codex',
+        'review',
+        'qa',
+        'ship',
+        'investigate',
+      ],
+    });
+
+    const automationArchitect = presets.find((preset) => preset.meta.presetId === 'automation-systems-architect');
+    expect(automationArchitect?.meta.agent.skillScope).toEqual({
+      mode: 'specified',
+      skills: [
+        'automation-workflows',
+        'api-gateway',
+        'opencli',
+        'schedule-skill',
+        'proactive-agent',
+        'self-improving-agent',
+      ],
+    });
+
+    const productArchitect = presets.find((preset) => preset.meta.presetId === 'product-strategy-architect');
+    expect(productArchitect?.meta.agent.skillScope).toEqual({
+      mode: 'specified',
+      skills: [
+        'office-hours',
+        'plan-ceo-review',
+        'plan-eng-review',
+        'plan-design-review',
+        'autoplan',
+        'design-consultation',
+      ],
+    });
+
+    const deliveryManager = presets.find((preset) => preset.meta.presetId === 'delivery-program-manager');
+    expect(deliveryManager?.meta.agent.skillScope).toEqual({
+      mode: 'specified',
+      skills: [
+        'ship',
+        'land-and-deploy',
+        'canary',
+        'document-release',
+        'retro',
+        'guard',
+      ],
+    });
+
+    const uxDirector = presets.find((preset) => preset.meta.presetId === 'ux-experience-director');
+    expect(uxDirector?.meta.agent.skillScope).toEqual({
+      mode: 'specified',
+      skills: [
+        'design-consultation',
+        'ui-ux-pro-max',
+        'plan-design-review',
+        'design-review',
+        'browse',
+        'benchmark',
+      ],
+    });
+  });
+
   it('loads the bundled stock-expert preset package from resources/agent-presets', async () => {
     const presets = await listPresetsFrom(bundledPresetsDir);
     const preset = presets.find((entry) => entry.meta.presetId === 'stock-expert');

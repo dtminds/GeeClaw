@@ -1,0 +1,31 @@
+{
+  "presetId": "campaign-growth-studio",
+  "name": "增长活动工作室",
+  "description": "负责活动创意、渠道内容、执行排期和分发节奏，面向内容增长与 campaign 落地。",
+  "iconKey": "trend",
+  "category": "marketing",
+  "managed": true,
+  "agent": {
+    "id": "campaign-growth-studio",
+    "workspace": "~/geeclaw/workspace-campaign-growth-studio",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "content-factory",
+        "content-repurposer",
+        "video-script",
+        "xiaohongshu-cli",
+        "weibo-cli",
+        "schedule-skill"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

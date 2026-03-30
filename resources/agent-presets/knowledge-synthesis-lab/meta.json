@@ -1,0 +1,31 @@
+{
+  "presetId": "knowledge-synthesis-lab",
+  "name": "知识萃取实验室",
+  "description": "把文档、报告、纪要和资料库整理成可检索、可复用、可更新的知识资产。",
+  "iconKey": "research",
+  "category": "operations",
+  "managed": true,
+  "agent": {
+    "id": "knowledge-synthesis-lab",
+    "workspace": "~/geeclaw/workspace-knowledge-synthesis-lab",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "obsidian",
+        "notion",
+        "summarize",
+        "pdf",
+        "docx",
+        "file-skill"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

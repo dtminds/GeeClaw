@@ -1,0 +1,31 @@
+{
+  "presetId": "decision-analytics-lab",
+  "name": "经营分析实验室",
+  "description": "从表格、报告和材料中抽出关键指标、异常点和经营判断，服务管理层决策。",
+  "iconKey": "research",
+  "category": "analytics",
+  "managed": true,
+  "agent": {
+    "id": "decision-analytics-lab",
+    "workspace": "~/geeclaw/workspace-decision-analytics-lab",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "xlsx",
+        "pdf",
+        "docx",
+        "pptx",
+        "summarize",
+        "file-skill"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}
