@@ -32,7 +32,6 @@
     },
     "settingsDialog": {
         "title": "Agent Settings: {{name}}",
-        "description": "Manage this agent's name and review the channel accounts currently routed here.",
         "nameLabel": "Agent Name",
         "agentIdLabel": "Agent ID",
         "modelLabel": "Model",

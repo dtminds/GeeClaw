@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const updateAgentSettingsMock = vi.fn(async () => undefined);
+const updateAgentMock = vi.fn(async () => undefined);
 const unmanageAgentMock = vi.fn(async () => undefined);
 const fetchSkillsMock = vi.fn(async () => undefined);
 
@@ -49,6 +50,8 @@ const translations: Record<string, string> = {
   'settingsDialog.unmanageConfirm.secondConfirm': 'Unmanage now',
   'toast.agentUpdated': 'Agent updated',
   'toast.agentUpdateFailed': 'Failed to update agent',
+  'common:actions.save': 'Save',
+  'common:actions.cancel': 'Cancel',
   'empty': 'No agents',
 };
 
@@ -66,6 +69,25 @@ vi.mock('@/stores/agents', () => ({
   useAgentsStore: (selector?: (state: unknown) => unknown) => {
     const state = {
       agents: [{
+        id: 'main',
+        name: '主 Agent',
+        isDefault: true,
+        modelDisplay: 'gemini-3-flash-preview',
+        inheritedModel: true,
+        workspace: '~/geeclaw/workspace',
+        agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        mainSessionKey: 'agent:main:main',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom' as const,
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' as const },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+      }, {
         id: 'stockexpert',
         name: '股票助手',
         isDefault: false,
@@ -94,7 +116,7 @@ vi.mock('@/stores/agents', () => ({
       createAgent: vi.fn(),
       deleteAgent: vi.fn(),
       installPreset: vi.fn(),
-      updateAgent: vi.fn(),
+      updateAgent: updateAgentMock,
       updateAgentSettings: updateAgentSettingsMock,
       unmanageAgent: unmanageAgentMock,
     };
@@ -136,11 +158,26 @@ vi.mock('@/stores/skills', () => ({
 }));
 
 describe('managed agent settings modal', () => {
+  it('allows renaming the default main agent', async () => {
+    const { Agents } = await import('@/pages/Agents');
+    render(<Agents />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+
+    const nameInput = screen.getByLabelText('Agent Name');
+    expect(nameInput).not.toHaveAttribute('readonly');
+
+    fireEvent.change(nameInput, { target: { value: 'Chief Agent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateAgentMock).toHaveBeenCalledWith('main', 'Chief Agent'));
+  });
+
   it('keeps preset skills locked and disables default mode while managed', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(<Agents />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[1]);
 
     expect(fetchSkillsMock).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Skills Scope')).toBeInTheDocument();

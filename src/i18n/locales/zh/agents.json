@@ -6,7 +6,7 @@
     "settings": "设置",
     "managedBadge": "受管控",
     "presetBadge": "来自广场",
-    "gatewayWarning": "Gateway 服务未运行。Agent 变更可能需要一点时间生效。",
+    "gatewayWarning": "Gateway 服务未运行。Agent 变更可能需要一点时间生效",
     "defaultBadge": "默认",
     "inherited": "继承",
     "none": "无",
@@ -17,7 +17,7 @@
     "rename": "重命名",
     "createDialog": {
         "title": "添加 Agent",
-        "description": "创建 Agent 时需要填写名称和 ID。Agent ID 必须唯一，且仅允许小写英文、数字和连字符。",
+        "description": "创建 Agent 时需要填写名称和 ID。Agent ID 必须唯一，且仅允许小写英文、数字和连字符",
         "nameLabel": "Agent 名称",
         "namePlaceholder": "Coding Helper",
         "idLabel": "Agent ID",
@@ -28,20 +28,19 @@
     },
     "deleteDialog": {
         "title": "删除 Agent",
-        "message": "确认从 GeeClaw 删除“{{name}}”？该 Agent 的受管工作区和运行时目录也会一并删除。"
+        "message": "确认从 GeeClaw 删除“{{name}}”？该 Agent 的受管工作区和运行时目录也会一并删除"
     },
     "settingsDialog": {
         "title": "Agent 设置：{{name}}",
-        "description": "管理这个 Agent 的名称，并查看当前承接的 Channel 账号。",
         "nameLabel": "Agent 名称",
         "agentIdLabel": "Agent ID",
         "modelLabel": "模型",
         "channelsTitle": "绑定聊天工具",
         "addChannel": "添加 Channel",
-        "noChannels": "这个 Agent 还没有承接任何 Channel 账号。",
+        "noChannels": "这个 Agent 还没有承接任何 Channel 账号",
         "skillsTitle": "技能范围",
         "skillsHint": "你可以选择默认技能范围，或指定最多 6 个技能。",
-        "skillsManagedHint": "这个受管控 Agent 可以添加额外技能，但在解除管控前不能移除预置技能。",
+        "skillsManagedHint": "这个受管控 Agent 可以添加额外技能，但在解除管控前不能移除预置技能",
         "skillScope": {
             "default": "默认",
             "specified": "指定",
@@ -55,14 +54,14 @@
             "save": "保存技能"
         },
         "unmanageTitle": "受管控预设",
-        "unmanageDescription": "解除管控后会保留当前配置，但人物设定文件和预置技能限制将不再受控。",
+        "unmanageDescription": "解除管控后会保留当前配置，但人物设定文件和预置技能限制将不再受控",
         "unmanage": "解除管控",
         "unmanageConfirm": {
             "firstTitle": "确认解除受管控限制？",
-            "firstMessage": "这会解锁预置的人设文件，并允许移除预置技能。",
+            "firstMessage": "这会解锁预置的人设文件，并允许移除预置技能",
             "firstConfirm": "继续",
             "secondTitle": "再次确认解除管控",
-            "secondMessage": "这个操作无法自动恢复。当前预置文件会保留，但后续编辑将不再受到保护。",
+            "secondMessage": "这个操作无法自动恢复。当前预置文件会保留，但后续编辑将不再受到保护",
             "secondConfirm": "立即解除管控"
         }
     },
@@ -93,7 +92,7 @@
     },
     "removeChannelDialog": {
         "title": "解绑 Channel",
-        "message": "确认将 {{name}} 从这个 Agent 上解绑？账号配置会保留在 Channels 页面中。"
+        "message": "确认将 {{name}} 从这个 Agent 上解绑？账号配置会保留在 Channels 页面中"
     },
     "fields": {
         "agentId": "Agent ID",
