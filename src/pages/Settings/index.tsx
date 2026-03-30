@@ -66,6 +66,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ModelsSettingsSection } from '@/components/settings/ModelsSettingsSection';
 import { OpenCliSettingsSection } from '@/components/settings/OpenCliSettingsSection';
 import { McpSettingsSection } from '@/components/settings/McpSettingsSection';
+import { CliMarketplaceSettingsSection } from '@/components/settings/CliMarketplaceSettingsSection';
 import {
   getSettingsModalPath,
   getSettingsModalState,
@@ -1369,6 +1370,7 @@ export function Settings({ embedded = false }: SettingsProps) {
     { key: 'models', title: t('common:sidebar.models', 'Models'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
     { key: 'safety', title: t('safety.navTitle'), icon: <HugeiconsIcon icon={AiSecurity02Icon} size={16} strokeWidth={1.9} /> },
     { key: 'gateway', title: t('nav.gateway'), icon: <Server className="h-4 w-4" /> },
+    { key: 'cliMarketplace', title: t('nav.cliMarketplace'), icon: <Download className="h-4 w-4" /> },
     { key: 'opencli', title: t('nav.opencli'), icon: <Terminal className="h-4 w-4" /> },
     { key: 'mcp', title: t('nav.mcp'), icon: <Box className="h-4 w-4" /> },
     { key: 'general', title: t('nav.general'), icon: <SlidersHorizontal className="h-4 w-4" /> },
@@ -1432,6 +1434,7 @@ export function Settings({ embedded = false }: SettingsProps) {
               onOpenSessions={() => navigate('/gateway-sessions', { replace: true })}
             />
           )}
+          {section === 'cliMarketplace' && <CliMarketplaceSettingsSection />}
           {section === 'opencli' && <OpenCliSettingsSection />}
           {section === 'mcp' && <McpSettingsSection />}
           {section === 'general' && <AppSettingsPanel section="general" />}

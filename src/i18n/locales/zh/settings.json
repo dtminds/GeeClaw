@@ -4,8 +4,21 @@
   "nav": {
     "general": "关于",
     "gateway": "OpenClaw",
+    "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
     "mcp": "MCP"
+  },
+  "cliMarketplace": {
+    "title": "CLI 市场",
+    "description": "安装 GeeClaw 已适配的命令行工具。GeeClaw 会自动检测本机是否已安装，没有时可直接重新安装到受控用户目录。",
+    "refresh": "刷新状态",
+    "loadFailed": "加载 CLI 市场失败",
+    "installFailed": "安装 CLI 失败",
+    "empty": "当前还没有可安装的 CLI",
+    "installed": "已安装",
+    "missing": "未安装",
+    "install": "安装",
+    "reinstall": "重新安装"
   },
   "safety": {
     "navTitle": "安全",
