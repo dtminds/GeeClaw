@@ -12,6 +12,7 @@ import { getConfiguredProviderModels, normalizeProviderModelList } from '../shar
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
+import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
@@ -40,6 +41,7 @@ const AGENT_RUNTIME_FILES = [
   'auth-profiles.json',
   'models.json',
 ];
+const PRESET_SKILL_WRITE_CONCURRENCY = 16;
 
 interface AgentModelConfig {
   primary?: string;
@@ -353,12 +355,14 @@ async function seedPresetSkillsIntoWorkspace(
       throw new Error(`Preset skill "${skillSlug}" already exists in the target workspace`);
     }
 
-    await Promise.all(
-      Object.entries(files).map(async ([relativePath, content]) => {
+    await mapWithConcurrency(
+      Object.entries(files),
+      PRESET_SKILL_WRITE_CONCURRENCY,
+      async ([relativePath, content]) => {
         const destination = join(targetDir, relativePath);
         await ensureDir(dirname(destination));
         await writeFile(destination, content, 'utf-8');
-      }),
+      },
     );
   }
 }

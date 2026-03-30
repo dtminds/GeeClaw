@@ -3,6 +3,9 @@ import { join, relative } from 'node:path';
 import { getAgentPresetsDir } from './paths';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { normalizePresetPlatforms, type AgentPresetPlatform } from './agent-preset-platforms';
+import { mapWithConcurrency } from './promise-pool';
+
+const PRESET_SKILL_IO_CONCURRENCY = 16;
 
 const RECOGNIZED_MANAGED_FILES = new Set([
   'AGENTS.md',
@@ -265,21 +268,21 @@ async function readPresetFiles(presetId: string, presetDir: string): Promise<Rec
 
 async function readDirectoryFiles(rootDir: string, currentDir = rootDir): Promise<Record<string, string>> {
   const entries = await readdir(currentDir, { withFileTypes: true });
-  const nestedEntries = await Promise.all(
-    entries
-      .sort((left, right) => left.name.localeCompare(right.name))
-      .map(async (entry) => {
-        const absolutePath = join(currentDir, entry.name);
-        if (entry.isDirectory()) {
-          return Object.entries(await readDirectoryFiles(rootDir, absolutePath));
-        }
-        if (!entry.isFile()) {
-          return [] as Array<[string, string]>;
-        }
+  const nestedEntries = await mapWithConcurrency(
+    entries.sort((left, right) => left.name.localeCompare(right.name)),
+    PRESET_SKILL_IO_CONCURRENCY,
+    async (entry) => {
+      const absolutePath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        return Object.entries(await readDirectoryFiles(rootDir, absolutePath));
+      }
+      if (!entry.isFile()) {
+        return [] as Array<[string, string]>;
+      }
 
-        const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
-        return [[relativePath, await readFile(absolutePath, 'utf8')]] as Array<[string, string]>;
-      }),
+      const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
+      return [[relativePath, await readFile(absolutePath, 'utf8')]] as Array<[string, string]>;
+    },
   );
 
   return Object.fromEntries(nestedEntries.flat());
@@ -293,21 +296,21 @@ async function readPresetSkills(
 
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true });
-    const skills = await Promise.all(
-      entries
-        .sort((left, right) => left.name.localeCompare(right.name))
-        .map(async (entry) => {
-          if (!entry.isDirectory()) {
-            throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
-          }
+    const skills = await mapWithConcurrency(
+      entries.sort((left, right) => left.name.localeCompare(right.name)),
+      PRESET_SKILL_IO_CONCURRENCY,
+      async (entry) => {
+        if (!entry.isDirectory()) {
+          throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
+        }
 
-          const skillDir = join(skillsDir, entry.name);
-          const files = await readDirectoryFiles(skillDir);
-          if (!files['SKILL.md']) {
-            throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
-          }
-          return [entry.name, files] as const;
-        }),
+        const skillDir = join(skillsDir, entry.name);
+        const files = await readDirectoryFiles(skillDir);
+        if (!files['SKILL.md']) {
+          throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
+        }
+        return [entry.name, files] as const;
+      },
     );
 
     return Object.fromEntries(skills);
