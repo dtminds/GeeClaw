@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { getAgentPresetsDir } from './paths';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { normalizePresetPlatforms, type AgentPresetPlatform } from './agent-preset-platforms';
@@ -57,6 +57,7 @@ export interface AgentPresetMeta {
 export interface AgentPresetPackage {
   meta: AgentPresetMeta;
   files: Record<string, string>;
+  skills: Record<string, Record<string, string>>;
 }
 
 function requirePlainObject(
@@ -262,6 +263,65 @@ async function readPresetFiles(presetId: string, presetDir: string): Promise<Rec
   }
 }
 
+async function readDirectoryFiles(rootDir: string, currentDir = rootDir): Promise<Record<string, string>> {
+  const entries = await readdir(currentDir, { withFileTypes: true });
+  const files: Record<string, string> = {};
+
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const absolutePath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(files, await readDirectoryFiles(rootDir, absolutePath));
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const relativePath = relative(rootDir, absolutePath).replace(/\\/g, '/');
+    files[relativePath] = await readFile(absolutePath, 'utf8');
+  }
+
+  return files;
+}
+
+async function readPresetSkills(
+  presetId: string,
+  presetDir: string,
+): Promise<Record<string, Record<string, string>>> {
+  const skillsDir = join(presetDir, 'skills');
+
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+    const skills: Record<string, Record<string, string>> = {};
+
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!entry.isDirectory()) {
+        throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
+      }
+
+      const skillDir = join(skillsDir, entry.name);
+      const files = await readDirectoryFiles(skillDir);
+      if (!files['SKILL.md']) {
+        throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
+      }
+      skills[entry.name] = files;
+    }
+
+    return skills;
+  } catch (error) {
+    const fsError = error as NodeJS.ErrnoException;
+    if (fsError.code === 'ENOENT') {
+      return {};
+    }
+    if (fsError.code) {
+      throw new Error(`Preset "${presetId}" skills directory is invalid`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
+}
+
 export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
   const root = getAgentPresetsDir();
   const entries = await readdir(root, { withFileTypes: true });
@@ -285,6 +345,7 @@ export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
     packages.push({
       meta,
       files: await readPresetFiles(meta.presetId, presetDir),
+      skills: await readPresetSkills(meta.presetId, presetDir),
     });
   }
 

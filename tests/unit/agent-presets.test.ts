@@ -45,12 +45,21 @@ function writePresetPackage(
     'AGENTS.md': '# Stock Expert\n',
     'SOUL.md': '# Tone\n',
   },
+  skills: Record<string, Record<string, string>> = {},
 ): void {
   const presetDir = join(root, 'agent-presets', presetId);
   mkdirSync(join(presetDir, 'files'), { recursive: true });
+  mkdirSync(join(presetDir, 'skills'), { recursive: true });
   writeFileSync(join(presetDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
   for (const [filename, content] of Object.entries(files)) {
     writeFileSync(join(presetDir, 'files', filename), content, 'utf8');
+  }
+  for (const [skillSlug, skillFiles] of Object.entries(skills)) {
+    const skillDir = join(presetDir, 'skills', skillSlug);
+    mkdirSync(skillDir, { recursive: true });
+    for (const [filename, content] of Object.entries(skillFiles)) {
+      writeFileSync(join(skillDir, filename), content, 'utf8');
+    }
   }
 }
 
@@ -148,6 +157,11 @@ describe('agent preset loader', () => {
       'USER.md',
     ]);
     expect(preset?.files['AGENTS.md']).toContain('股票助手');
+    expect(preset?.skills).toEqual({
+      'stock-analyzer': {
+        'SKILL.md': expect.stringContaining('# Stock Analyzer'),
+      },
+    });
   });
 
   it('loads preset packages and managed files from a mocked resources directory', async () => {
@@ -162,6 +176,11 @@ describe('agent preset loader', () => {
           skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
         },
       },
+    }, undefined, {
+      'stock-analyzer': {
+        'SKILL.md': '# Analyzer\n',
+        'README.md': '# Docs\n',
+      },
     });
 
     const presets = await listPresetsFrom(join(root, 'agent-presets'));
@@ -175,6 +194,12 @@ describe('agent preset loader', () => {
     expect(presets[0].files).toEqual({
       'AGENTS.md': '# Stock Expert\n',
       'SOUL.md': '# Tone\n',
+    });
+    expect(presets[0].skills).toEqual({
+      'stock-analyzer': {
+        'SKILL.md': '# Analyzer\n',
+        'README.md': '# Docs\n',
+      },
     });
   });
 
@@ -433,6 +458,19 @@ describe('agent preset loader', () => {
 
     await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
       'Unsupported preset managed file "AGENT.md"',
+    );
+  });
+
+  it('rejects presets with skill entries missing SKILL.md', async () => {
+    const root = createTempRoot('agent-presets-missing-skill-manifest-');
+    writePresetPackage(root, 'missing-skill-manifest', createPresetMeta('missing-skill-manifest'), {}, {
+      'stock-analyzer': {
+        'README.md': '# Docs only\n',
+      },
+    });
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'must contain SKILL.md',
     );
   });
 });
