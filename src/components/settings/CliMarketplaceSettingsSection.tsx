@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CheckCircle2, Loader2, MoreHorizontal, RefreshCw, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -72,6 +71,7 @@ export function CliMarketplaceSettingsSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeJob, setActiveJob] = useState<CliMarketplaceJob | null>(null);
+  const [openActionsMenuId, setOpenActionsMenuId] = useState<string | null>(null);
 
   const loadCatalog = useCallback(async (background = false) => {
     if (background) {
@@ -236,43 +236,54 @@ export function CliMarketplaceSettingsSection() {
                     </div>
 
                     {item.installed ? (
-                      <DropdownMenu.Root modal={false}>
-                        <DropdownMenu.Trigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="rounded-full px-3"
-                            aria-label={t('cliMarketplace.moreActions')}
-                            disabled={isJobRunning}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Portal>
-                          <DropdownMenu.Content
-                            align="end"
-                            sideOffset={10}
-                            className="z-[140] min-w-[160px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10"
-                          >
-                            <DropdownMenu.Item
-                              className="flex cursor-pointer items-center rounded-xl px-3 py-2 text-sm text-foreground outline-none transition-colors hover:bg-accent focus:bg-accent"
-                              onSelect={() => {
+                      <div
+                        className="relative"
+                        onMouseLeave={() => setOpenActionsMenuId((current) => current === item.id ? null : current)}
+                        onBlur={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setOpenActionsMenuId((current) => current === item.id ? null : current);
+                          }
+                        }}
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-full px-3"
+                          aria-label={t('cliMarketplace.moreActions')}
+                          aria-expanded={openActionsMenuId === item.id}
+                          onMouseEnter={() => setOpenActionsMenuId(item.id)}
+                          onClick={() => setOpenActionsMenuId((current) => current === item.id ? null : item.id)}
+                          disabled={isJobRunning}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                        {openActionsMenuId === item.id && (
+                          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[160px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                              onClick={() => {
+                                setOpenActionsMenuId(null);
                                 void startJob(item, 'install');
                               }}
                             >
                               {t('cliMarketplace.reinstall')}
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                              className="flex cursor-pointer items-center rounded-xl px-3 py-2 text-sm text-foreground outline-none transition-colors hover:bg-accent focus:bg-accent"
-                              onSelect={() => {
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                              onClick={() => {
+                                setOpenActionsMenuId(null);
                                 void startJob(item, 'uninstall');
                               }}
                             >
                               {t('cliMarketplace.uninstall')}
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Content>
-                        </DropdownMenu.Portal>
-                      </DropdownMenu.Root>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <Button
                         type="button"

@@ -124,7 +124,7 @@ describe('OpenCliSettingsSection', () => {
     render(<OpenCliSettingsSection />);
 
     expect(await screen.findByText('安装引导')).toBeInTheDocument();
-    expect(screen.getByText('未检测到系统 PATH 中的 opencli')).toBeInTheDocument();
+    expect(screen.getByTitle('未检测到系统 PATH 中的 opencli')).toBeInTheDocument();
     expect(screen.queryByText('支持的站点与命令')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '前往 CLI 市场安装' }));

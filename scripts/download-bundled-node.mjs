@@ -249,10 +249,19 @@ export async function main() {
 
 export function shouldRunAsMainModule(argv, importMetaUrl) {
   const scriptPath = fileURLToPath(importMetaUrl);
+  const normalizedScriptPath = path.normalize(scriptPath);
   return argv
     .slice(1)
     .filter(arg => typeof arg === 'string' && arg.length > 0 && !arg.startsWith('-'))
-    .some(arg => path.resolve(arg) === scriptPath);
+    .some((arg) => {
+      const candidatePath = arg.startsWith('file://')
+        ? fileURLToPath(arg)
+        : path.resolve(arg);
+      const normalizedCandidatePath = path.normalize(candidatePath);
+
+      return normalizedCandidatePath === normalizedScriptPath
+        || normalizedScriptPath.endsWith(`${path.sep}${path.normalize(arg)}`);
+    });
 }
 
 const isMainModule = shouldRunAsMainModule(process.argv, import.meta.url);
