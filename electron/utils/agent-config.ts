@@ -1032,13 +1032,12 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   presetId: string;
   name: string;
   description: string;
-  iconKey: string;
+  emoji: string;
   category: string;
   managed: boolean;
   platforms?: AgentPresetPlatform[];
   supportedOnCurrentPlatform: boolean;
   agentId: string;
-  workspace: string;
   skillScope: AgentSkillScope;
   presetSkills: string[];
   managedFiles: string[];
@@ -1048,13 +1047,12 @@ export async function listAgentPresetSummaries(): Promise<Array<{
     presetId: preset.meta.presetId,
     name: preset.meta.name,
     description: preset.meta.description,
-    iconKey: preset.meta.iconKey,
+    emoji: preset.meta.emoji,
     category: preset.meta.category,
     managed: true,
     platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
     supportedOnCurrentPlatform: isPresetSupportedOnPlatform(preset.meta.platforms, process.platform),
     agentId: preset.meta.agent.id,
-    workspace: getManagedAgentWorkspacePath(preset.meta.agent.id),
     skillScope: preset.meta.agent.skillScope,
     presetSkills: preset.meta.agent.skillScope.mode === 'specified'
       ? [...preset.meta.agent.skillScope.skills]

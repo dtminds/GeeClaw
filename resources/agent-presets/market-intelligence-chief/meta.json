@@ -2,12 +2,11 @@
   "presetId": "market-intelligence-chief",
   "name": "市场情报总监",
   "description": "完成赛道扫描、竞品格局、趋势判断和机会定位，服务策略与增长决策。",
-  "iconKey": "trend",
+  "emoji": "🔎",
   "category": "research",
   "managed": true,
   "agent": {
     "id": "market-intelligence-chief",
-    "workspace": "~/geeclaw/workspace-market-intelligence-chief",
     "skillScope": {
       "mode": "specified",
       "skills": [

@@ -8,11 +8,10 @@ export interface AgentPresetSummary {
   presetId: string;
   name: string;
   description: string;
-  iconKey: string;
+  emoji: string;
   category: string;
   managed: boolean;
   agentId: string;
-  workspace: string;
   skillScope: AgentSkillScope;
   presetSkills: string[];
   managedFiles: string[];

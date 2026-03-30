@@ -2,12 +2,11 @@
   "presetId": "product-strategy-architect",
   "name": "产品策略架构师",
   "description": "把模糊业务机会整理成明确的问题定义、产品方向和落地计划。",
-  "iconKey": "research",
+  "emoji": "🧭",
   "category": "product",
   "managed": true,
   "agent": {
     "id": "product-strategy-architect",
-    "workspace": "~/geeclaw/workspace-product-strategy-architect",
     "skillScope": {
       "mode": "specified",
       "skills": [

@@ -19,12 +19,11 @@ function createPresetMeta(presetId: string) {
     presetId,
     name: 'Stock Expert',
     description: 'Analyze listed companies with preset skills.',
-    iconKey: 'stock',
+    emoji: '📈',
     category: 'finance',
     managed: true,
     agent: {
       id: presetId,
-      workspace: `~/geeclaw/workspace-${presetId}`,
       skillScope: {
         mode: 'specified' as const,
         skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -256,8 +255,9 @@ describe('agent preset loader', () => {
     const preset = presets.find((entry) => entry.meta.presetId === 'stock-expert');
 
     expect(preset).toBeDefined();
+    expect(preset?.meta.emoji).toBe('📈');
     expect(preset?.meta.agent.id).toBe('stockexpert');
-    expect(preset?.meta.agent.workspace).toBe('~/geeclaw/workspace-stockexpert');
+    expect(preset?.meta.agent).not.toHaveProperty('workspace');
     expect(preset?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -284,7 +284,6 @@ describe('agent preset loader', () => {
       ...createPresetMeta('stock-expert'),
       agent: {
         id: 'stockexpert',
-        workspace: '~/geeclaw/workspace-stockexpert',
         skillScope: {
           mode: 'specified',
           skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -300,7 +299,9 @@ describe('agent preset loader', () => {
     const presets = await listPresetsFrom(join(root, 'agent-presets'));
 
     expect(presets).toHaveLength(1);
+    expect(presets[0].meta.emoji).toBe('📈');
     expect(presets[0].meta.agent.id).toBe('stockexpert');
+    expect(presets[0].meta.agent).not.toHaveProperty('workspace');
     expect(presets[0].meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -407,14 +408,33 @@ describe('agent preset loader', () => {
     await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow('Invalid Agent ID');
   });
 
-  it('rejects presets without a workspace', async () => {
+  it('accepts presets without an explicit workspace', async () => {
     const root = createTempRoot('agent-presets-no-workspace-');
     const meta = createPresetMeta('missing-workspace');
-    meta.agent.workspace = ' ';
     writePresetPackage(root, 'missing-workspace', meta, {});
 
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).resolves.toEqual([
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          presetId: 'missing-workspace',
+          agent: expect.objectContaining({
+            id: 'missing-workspace',
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('rejects presets that still use iconKey', async () => {
+    const root = createTempRoot('agent-presets-icon-key-');
+    const meta = {
+      ...createPresetMeta('legacy-icon'),
+      iconKey: 'stock',
+    };
+    writePresetPackage(root, 'legacy-icon', meta as never, {});
+
     await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
-      'agent.workspace is required',
+      'has unsupported keys: iconKey',
     );
   });
 

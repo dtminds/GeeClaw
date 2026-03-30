@@ -2,12 +2,11 @@
   "presetId": "automation-systems-architect",
   "name": "自动化系统架构师",
   "description": "设计跨工具自动化流程、触发链路和运营编排，适合高频业务自动化。",
-  "iconKey": "trend",
+  "emoji": "🤖",
   "category": "operations",
   "managed": true,
   "agent": {
     "id": "automation-systems-architect",
-    "workspace": "~/geeclaw/workspace-automation-systems-architect",
     "skillScope": {
       "mode": "specified",
       "skills": [
