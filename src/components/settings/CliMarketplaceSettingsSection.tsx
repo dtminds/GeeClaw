@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CheckCircle2, Loader2, MoreHorizontal, RefreshCw, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -73,7 +73,7 @@ export function CliMarketplaceSettingsSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeJob, setActiveJob] = useState<CliMarketplaceJob | null>(null);
 
-  const loadCatalog = async (background = false) => {
+  const loadCatalog = useCallback(async (background = false) => {
     if (background) {
       setRefreshing(true);
     } else {
@@ -92,14 +92,17 @@ export function CliMarketplaceSettingsSection() {
         setLoading(false);
       }
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void loadCatalog();
-  }, []);
+  }, [loadCatalog]);
+
+  const activeJobId = activeJob?.id ?? null;
+  const activeJobStatus = activeJob?.status ?? null;
 
   useEffect(() => {
-    if (!activeJob || activeJob.status !== 'running') {
+    if (!activeJobId || activeJobStatus !== 'running') {
       return undefined;
     }
 
@@ -108,7 +111,7 @@ export function CliMarketplaceSettingsSection() {
 
     const pollJob = async () => {
       try {
-        const nextJob = await hostApiFetch<CliMarketplaceJob>(`/api/cli-marketplace/jobs/${encodeURIComponent(activeJob.id)}`);
+        const nextJob = await hostApiFetch<CliMarketplaceJob>(`/api/cli-marketplace/jobs/${encodeURIComponent(activeJobId)}`);
         if (cancelled) {
           return;
         }
@@ -148,16 +151,17 @@ export function CliMarketplaceSettingsSection() {
         window.clearTimeout(timer);
       }
     };
-  }, [activeJob?.id, activeJob?.status]);
+  }, [activeJobId, activeJobStatus, loadCatalog]);
 
   const startJob = async (item: CliMarketplaceItem, operation: CliMarketplaceJobOperation) => {
     try {
       const job = await hostApiFetch<CliMarketplaceJob>(
         operation === 'install' ? '/api/cli-marketplace/install' : '/api/cli-marketplace/uninstall',
         {
-        method: 'POST',
-        body: JSON.stringify({ id: item.id }),
-      });
+          method: 'POST',
+          body: JSON.stringify({ id: item.id }),
+        },
+      );
       setActiveJob(job);
     } catch (error) {
       toast.error(`${t('cliMarketplace.installFailed')}: ${toUserMessage(error)}`);

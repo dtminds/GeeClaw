@@ -1,4 +1,3 @@
-import { app } from 'electron';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
