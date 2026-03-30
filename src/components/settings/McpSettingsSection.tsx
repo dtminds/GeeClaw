@@ -185,7 +185,7 @@ export function McpSettingsSection() {
         </div>
       </section>
 
-      {true && (
+      {!loading && !status?.system?.exists && (
         <section className="modal-section-surface rounded-3xl border p-5">
           <div className="flex flex-col gap-4">
             <div>

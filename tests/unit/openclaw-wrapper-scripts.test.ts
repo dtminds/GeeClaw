@@ -35,16 +35,6 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
   });
 
-  it('routes bundled posix opencli through the shared node shim', () => {
-    const opencliScript = readFileSync('resources/managed-bin/posix/opencli', 'utf8');
-
-    expect(opencliScript).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
-    expect(opencliScript).toContain('Resources/bin"');
-    expect(opencliScript).toContain('Resources/bin/bin');
-    expect(opencliScript).toContain('exec "$NODE_SHIM" "$CLI" "$@"');
-    expect(opencliScript).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
-  });
-
   it('prefers the bundled node runtime in the shared posix node shim', () => {
     const script = readFileSync('resources/managed-bin/posix/node', 'utf8');
 
@@ -56,14 +46,4 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
   });
 
-  it('routes Windows opencli wrappers through bundled node only', () => {
-    const opencliSh = readFileSync('resources/managed-bin/win32/opencli', 'utf8');
-    const opencliCmd = readFileSync('resources/managed-bin/win32/opencli.cmd', 'utf8');
-
-    expect(opencliSh).toContain('exec "$NODE_EXE" "$OPENCLI_ENTRY" "$@"');
-    expect(opencliSh).not.toContain('GeeClaw.exe');
-    expect(opencliCmd).toContain('"%NODE_EXE%" "%OPENCLI_ENTRY%" %*');
-    expect(opencliCmd).toContain(':finish');
-    expect(opencliCmd).not.toContain('GeeClaw.exe');
-  });
 });

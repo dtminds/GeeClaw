@@ -54,9 +54,8 @@
     "scripts": {
         "init": "pnpm install && pnpm run uv:download && pnpm run node:download",
         "dev": "vite",
-        "build": "pnpm run node:download && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-opencli.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder",
+        "build": "pnpm run node:download && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder",
         "build:vite": "vite build",
-        "bundle:opencli": "zx scripts/bundle-opencli.mjs",
         "bundle:openclaw-plugins": "zx scripts/bundle-openclaw-plugins.mjs",
         "bundle:preinstalled-skills": "zx scripts/bundle-preinstalled-skills.mjs",
         "lint": "eslint . --fix",
@@ -75,7 +74,7 @@
         "prep:mac-binaries": "pnpm run node:download:mac",
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win",
         "icons": "zx scripts/generate-icons.mjs",
-        "package": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-opencli.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
+        "package": "vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
         "package:mac": "pnpm run prep:mac-binaries && pnpm run package && electron-builder --mac --publish never",
         "package:win": "pnpm run prep:win-binaries && pnpm run package && electron-builder --win --publish never",
         "package:linux": "pnpm run package && electron-builder --linux --publish never",
@@ -110,7 +109,6 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@jackwener/opencli": "1.5.5",
         "@larksuite/openclaw-lark": "2026.3.29",
         "@martian-engineering/lossless-claw": "0.5.2",
         "@radix-ui/react-dialog": "^1.1.15",

@@ -1,15 +1,17 @@
-import { app } from 'electron';
-import { existsSync, readFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { existsSync, realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { logger } from './logger';
-import { prependPathEntries } from './env-path';
-import { getBundledNodePath, getBundledPathEntries, getManagedCommandWrapperPath } from './managed-bin';
+import { prepareWinSpawn } from './paths';
+import { getManagedNpmBinDir } from './user-path';
+
+const execFileAsync = promisify(execFile);
 
 const OPENCLI_RELEASES_URL = 'https://github.com/jackwener/opencli/releases';
 const OPENCLI_README_URL = 'https://github.com/jackwener/opencli/blob/main/README.zh-CN.md';
 const DEFAULT_DOCTOR_TIMEOUT_MS = 20_000;
-const DEFAULT_LIST_TIMEOUT_MS = 30_000;
 const ANSI_ESCAPE_PREFIX = String.fromCharCode(27);
 
 export interface OpenCliDoctorStatus {
@@ -26,11 +28,6 @@ export interface OpenCliDoctorStatus {
 export interface OpenCliStatus {
   binaryExists: boolean;
   binaryPath: string | null;
-  wrapperPath: string | null;
-  entryPath: string | null;
-  runtimeDir: string | null;
-  extensionDir: string | null;
-  extensionDirExists: boolean;
   version: string | null;
   command: string | null;
   releasesUrl: string;
@@ -38,214 +35,222 @@ export interface OpenCliStatus {
   doctor: OpenCliDoctorStatus | null;
 }
 
-export interface OpenCliCatalogArg {
-  name: string;
-  type: string;
-  required: boolean;
-  positional: boolean;
-  choices: string[];
-  default: unknown;
-  help: string;
-}
-
-export interface OpenCliCatalogCommand {
-  command: string;
-  site: string;
-  name: string;
-  description: string;
-  strategy: string;
-  browser: boolean;
-  args: OpenCliCatalogArg[];
-  columns: string[];
-  domain: string | null;
-}
-
-export interface OpenCliCatalogSite {
-  site: string;
-  domains: string[];
-  strategies: string[];
-  commands: OpenCliCatalogCommand[];
-}
-
-export interface OpenCliCatalog {
-  totalSites: number;
-  totalCommands: number;
-  sites: OpenCliCatalogSite[];
-}
-
-interface OpenCliExecutionSpec {
-  command: string;
-  argsPrefix: string[];
-  env: NodeJS.ProcessEnv;
-  displayCommand: string;
-}
-
-interface OpenCliCatalogCommandOverrides {
-  site?: string;
-  strategy?: string;
-  browser?: boolean;
-  domain?: string | null;
-}
-
 let openCliDoctorInFlight: Promise<OpenCliDoctorStatus> | null = null;
-let openCliCatalogInFlight: Promise<OpenCliCatalog> | null = null;
-let openCliCatalogCache: OpenCliCatalog | null = null;
-
-function escapeForDoubleQuotes(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function quoteForPosix(value: string): string {
-  return `"${escapeForDoubleQuotes(value)}"`;
-}
-
-function quoteForPowerShell(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
 
 function stripAnsi(value: string): string {
   return value.replace(new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;]*[A-Za-z]`, 'g'), '');
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function normalizeOpenCliOutput(stdout: string, stderr: string): string {
+  return stripAnsi([stdout, stderr].filter(Boolean).join('\n'))
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-function toStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-}
-
-function compareSiteNames(left: string, right: string): number {
-  const leftShared = left.startsWith('_');
-  const rightShared = right.startsWith('_');
-  if (leftShared !== rightShared) {
-    return leftShared ? 1 : -1;
-  }
-  return left.localeCompare(right);
-}
-
-function getOpenCliRuntimeDir(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'opencli');
-  }
-  return join(process.cwd(), 'build', 'opencli');
-}
-
-function getOpenCliEntryPath(): string {
-  return join(getOpenCliRuntimeDir(), 'dist', 'main.js');
-}
-
-function getOpenCliExtensionDir(): string {
-  return join(getOpenCliRuntimeDir(), 'extension');
-}
-
-function getOpenCliManifestPath(): string {
-  return join(getOpenCliRuntimeDir(), 'cli-manifest.json');
-}
-
-function getOpenCliWrapperPath(): string | null {
-  if (!app.isPackaged) {
+function normalizeVersionOutput(output: string): string | null {
+  const line = output.trim().split(/\r?\n/, 1)[0]?.trim();
+  if (!line) {
     return null;
   }
-  return getManagedCommandWrapperPath('opencli');
+
+  const match = line.match(/(\d+\.\d+\.\d+(?:[-+._][A-Za-z0-9.-]+)?)/);
+  return match?.[1] ?? line;
 }
 
-function readOpenCliVersion(runtimeDir: string): string | null {
+function normalizeExistingPath(pathValue: string): string {
   try {
-    const raw = readFileSync(join(runtimeDir, 'package.json'), 'utf-8');
-    const parsed = JSON.parse(raw) as { version?: unknown };
-    return typeof parsed.version === 'string' && parsed.version.trim()
-      ? parsed.version.trim()
-      : null;
+    return realpathSync(pathValue);
   } catch {
-    return null;
+    return pathValue;
   }
 }
 
-function resolveExecutionSpec(): OpenCliExecutionSpec | null {
-  const entryPath = getOpenCliEntryPath();
-  if (!existsSync(entryPath)) {
-    return null;
+function getPosixSearchDirs(): string[] {
+  const envDirs = (process.env.PATH ?? '')
+    .split(':')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const commonDirs = [
+    join(homedir(), '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/snap/bin',
+  ];
+
+  return [...new Set([...envDirs, ...commonDirs])];
+}
+
+function getDefaultManagedPrefixDir(): string {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
+    return join(appData, 'GeeClaw', 'npm-global');
   }
 
-  let env: NodeJS.ProcessEnv = {
-    ...process.env,
-    OPENCLI_EMBEDDED_IN: 'GeeClaw',
-  };
+  return join(homedir(), '.geeclaw', 'npm-global');
+}
 
-  if (app.isPackaged) {
-    env = prependPathEntries(env, getBundledPathEntries()).env as NodeJS.ProcessEnv;
+function getManagedPrefixCandidates(command: string): string[] {
+  const managedBinDir = getManagedNpmBinDir(getDefaultManagedPrefixDir());
+  if (process.platform === 'win32') {
+    return [
+      join(managedBinDir, `${command}.cmd`),
+      join(managedBinDir, command),
+      join(managedBinDir, `${command}.ps1`),
+    ];
   }
 
-  const bundledNode = getBundledNodePath();
-  if (bundledNode) {
-    if (process.platform === 'win32') {
-      return {
-        command: bundledNode,
-        argsPrefix: [entryPath],
-        env,
-        displayCommand: `& ${quoteForPowerShell(bundledNode)} ${quoteForPowerShell(entryPath)}`,
-      };
-    }
+  return [
+    join(managedBinDir, command),
+    join(managedBinDir, `${command}.sh`),
+  ];
+}
 
-    return {
-      command: bundledNode,
-      argsPrefix: [entryPath],
-      env,
-      displayCommand: `${quoteForPosix(bundledNode)} ${quoteForPosix(entryPath)}`,
-    };
-  }
-
-  if (app.isPackaged && process.platform !== 'win32') {
-    return null;
-  }
-
-  if (process.versions.electron) {
-    env.ELECTRON_RUN_AS_NODE = '1';
-  }
+async function listCommandCandidates(command: string): Promise<string[]> {
+  const candidates: string[] = [];
 
   if (process.platform === 'win32') {
-    return {
-      command: process.execPath,
-      argsPrefix: [entryPath],
-      env,
-      displayCommand: `& ${quoteForPowerShell(process.execPath)} ${quoteForPowerShell(entryPath)}`,
-    };
+    try {
+      const { stdout } = await execFileAsync('where.exe', [command], {
+        timeout: 5000,
+        windowsHide: true,
+      });
+      candidates.push(
+        ...stdout
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      // Ignore missing where.exe results and fall through to manual candidates.
+    }
+
+    const appData = process.env.APPDATA;
+    if (appData) {
+      candidates.push(join(appData, 'npm', `${command}.cmd`));
+      candidates.push(join(appData, 'npm', command));
+    }
+  } else {
+    try {
+      const { stdout } = await execFileAsync('which', ['-a', command], {
+        timeout: 5000,
+        windowsHide: true,
+      });
+      candidates.push(
+        ...stdout
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      // Ignore missing which results and fall through to manual candidates.
+    }
+
+    for (const dir of getPosixSearchDirs()) {
+      candidates.push(join(dir, command));
+    }
   }
 
-  const envPrefix = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : '';
-  return {
-    command: process.execPath,
-    argsPrefix: [entryPath],
-    env,
-    displayCommand: `${envPrefix}${quoteForPosix(process.execPath)} ${quoteForPosix(entryPath)}`,
-  };
+  candidates.push(...getManagedPrefixCandidates(command));
+
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (!candidate || !existsSync(candidate)) {
+      return false;
+    }
+
+    const normalized = normalizeExistingPath(candidate);
+    if (seen.has(normalized)) {
+      return false;
+    }
+
+    seen.add(normalized);
+    return true;
+  });
+}
+
+async function resolveSystemOpenCliCommandPath(): Promise<string | null> {
+  const candidates = await listCommandCandidates('opencli');
+  return candidates[0] ?? null;
+}
+
+async function runCapturedCommand(command: string, args: string[], timeoutMs = 5000): Promise<{ stdout: string; stderr: string }> {
+  const forceShell = process.platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(command);
+  const prepared = prepareWinSpawn(command, args, forceShell);
+
+  return await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(prepared.command, prepared.args, {
+      cwd: homedir(),
+      env: process.env,
+      windowsHide: true,
+      shell: prepared.shell,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.kill('SIGTERM');
+      rejectPromise(new Error(`Command timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      rejectPromise(error);
+    });
+
+    child.on('close', (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+
+      if (code === 0) {
+        resolvePromise({ stdout, stderr });
+        return;
+      }
+
+      rejectPromise(new Error(stderr.trim() || stdout.trim() || `Command exited with code ${code}`));
+    });
+  });
 }
 
 async function runOpenCliCommand(
+  command: string,
   args: string[],
   timeoutMs = DEFAULT_DOCTOR_TIMEOUT_MS,
 ): Promise<{ output: string; exitCode: number | null; error?: string; durationMs: number }> {
-  const spec = resolveExecutionSpec();
-  if (!spec) {
-    return {
-      output: '',
-      exitCode: null,
-      error: existsSync(getOpenCliEntryPath())
-        ? 'Bundled Node.js runtime not found for OpenCLI'
-        : 'OpenCLI runtime entry not found',
-      durationMs: 0,
-    };
-  }
-
+  const forceShell = process.platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(command);
+  const prepared = prepareWinSpawn(command, args, forceShell);
   const startedAt = Date.now();
 
   return await new Promise((resolve) => {
-    const child = spawn(spec.command, [...spec.argsPrefix, ...args], {
-      env: spec.env,
+    const child = spawn(prepared.command, prepared.args, {
+      cwd: homedir(),
+      env: process.env,
       windowsHide: true,
+      shell: prepared.shell,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -304,265 +309,14 @@ async function runOpenCliCommand(
   });
 }
 
-function normalizeOpenCliOutput(stdout: string, stderr: string): string {
-  return stripAnsi([stdout, stderr].filter(Boolean).join('\n'))
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function parseOpenCliCatalogArg(value: unknown): OpenCliCatalogArg | null {
-  if (!isRecord(value) || typeof value.name !== 'string') {
-    return null;
-  }
-
-  return {
-    name: value.name,
-    type: typeof value.type === 'string' ? value.type : 'unknown',
-    required: Boolean(value.required),
-    positional: Boolean(value.positional),
-    choices: toStringArray(value.choices),
-    default: value.default,
-    help: typeof value.help === 'string' ? value.help : '',
-  };
-}
-
-function parseOpenCliCatalogCommand(
-  value: unknown,
-  overrides: OpenCliCatalogCommandOverrides = {},
-): OpenCliCatalogCommand | null {
-  if (
-    !isRecord(value)
-    || typeof value.name !== 'string'
-  ) {
-    return null;
-  }
-
-  const site = typeof value.site === 'string' ? value.site : overrides.site;
-  if (!site) {
-    return null;
-  }
-
-  const command = typeof value.command === 'string' && value.command.trim()
-    ? value.command
-    : `${site}/${value.name}`;
-  const derivedDomain = typeof value.domain === 'string' && value.domain.trim()
-    ? value.domain
-    : overrides.domain ?? null;
-
-  return {
-    command,
-    site,
-    name: value.name,
-    description: typeof value.description === 'string' ? value.description : '',
-    strategy: typeof value.strategy === 'string' ? value.strategy : (overrides.strategy ?? 'unknown'),
-    browser: typeof value.browser === 'boolean' ? value.browser : Boolean(overrides.browser),
-    args: Array.isArray(value.args)
-      ? value.args
-        .map((arg) => parseOpenCliCatalogArg(arg))
-        .filter((arg): arg is OpenCliCatalogArg => arg !== null)
-      : [],
-    columns: toStringArray(value.columns),
-    domain: derivedDomain,
-  };
-}
-
-function parseOpenCliCatalogSiteCommands(value: unknown): OpenCliCatalogCommand[] {
-  if (!isRecord(value) || typeof value.site !== 'string' || !Array.isArray(value.commands)) {
-    return [];
-  }
-
-  const inheritedStrategy = toStringArray(value.strategies).find((item) => item.trim()) ?? undefined;
-  const inheritedDomain = toStringArray(value.domains).find((item) => item.trim()) ?? null;
-
-  return value.commands
-    .map((command) => parseOpenCliCatalogCommand(command, {
-      site: value.site,
-      strategy: inheritedStrategy,
-      domain: inheritedDomain,
-    }))
-    .filter((command): command is OpenCliCatalogCommand => command !== null);
-}
-
-function collectOpenCliCatalogCommands(value: unknown): OpenCliCatalogCommand[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const directCommand = parseOpenCliCatalogCommand(item);
-      if (directCommand) {
-        return [directCommand];
-      }
-
-      return parseOpenCliCatalogSiteCommands(item);
-    });
-  }
-
-  if (!isRecord(value)) {
-    return [];
-  }
-
-  if (Array.isArray(value.commands)) {
-    if (typeof value.site === 'string') {
-      const siteCommands = parseOpenCliCatalogSiteCommands(value);
-      if (siteCommands.length > 0) {
-        return siteCommands;
-      }
-    }
-
-    const nestedCommands = collectOpenCliCatalogCommands(value.commands);
-    if (nestedCommands.length > 0) {
-      return nestedCommands;
-    }
-  }
-
-  if (Array.isArray(value.sites)) {
-    const siteCommands = value.sites.flatMap((site) => parseOpenCliCatalogSiteCommands(site));
-    if (siteCommands.length > 0) {
-      return siteCommands;
-    }
-  }
-
-  for (const key of ['items', 'rows', 'results', 'data', 'catalog', 'list']) {
-    if (!(key in value)) {
-      continue;
-    }
-
-    const nestedCommands = collectOpenCliCatalogCommands(value[key]);
-    if (nestedCommands.length > 0) {
-      return nestedCommands;
-    }
-  }
-
-  return [];
-}
-
-function extractBalancedJsonValue(value: string, startIndex: number): string | null {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = startIndex; index < value.length; index += 1) {
-    const char = value[index];
-
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-
-    if (char === '[' || char === '{') {
-      depth += 1;
-      continue;
-    }
-
-    if (char === ']' || char === '}') {
-      depth -= 1;
-      if (depth === 0) {
-        return value.slice(startIndex, index + 1);
-      }
-      if (depth < 0) {
-        return null;
-      }
-    }
-  }
-
-  return null;
-}
-
-function parseOpenCliJsonOutput(output: string): unknown {
-  const trimmed = output.trim();
-  if (!trimmed) {
-    throw new Error('OpenCLI output was empty');
-  }
-
+async function getSystemOpenCliVersion(commandPath: string): Promise<string | null> {
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    for (let index = 0; index < trimmed.length; index += 1) {
-      const char = trimmed[index];
-      if (char !== '[' && char !== '{') {
-        continue;
-      }
-
-      const candidate = extractBalancedJsonValue(trimmed, index);
-      if (!candidate) {
-        continue;
-      }
-
-      try {
-        return JSON.parse(candidate);
-      } catch {
-        continue;
-      }
-    }
-  }
-
-  throw new Error('No valid JSON payload found in OpenCLI output');
-}
-
-function loadOpenCliCatalogFromManifest(): OpenCliCatalog | null {
-  const manifestPath = getOpenCliManifestPath();
-  if (!existsSync(manifestPath)) {
+    const { stdout, stderr } = await runCapturedCommand(commandPath, ['--version']);
+    return normalizeVersionOutput(stdout || stderr);
+  } catch (error) {
+    logger.debug('Failed to read system opencli version:', error);
     return null;
   }
-
-  try {
-    const raw = readFileSync(manifestPath, 'utf-8');
-    const parsed = parseOpenCliJsonOutput(raw);
-    const commands = collectOpenCliCatalogCommands(parsed);
-    return commands.length > 0 ? groupOpenCliCatalog(commands) : null;
-  } catch {
-    return null;
-  }
-}
-
-function groupOpenCliCatalog(commands: OpenCliCatalogCommand[]): OpenCliCatalog {
-  const bySite = new Map<string, OpenCliCatalogSite>();
-
-  for (const command of commands) {
-    const existing = bySite.get(command.site);
-    if (existing) {
-      existing.commands.push(command);
-      if (command.domain && !existing.domains.includes(command.domain)) {
-        existing.domains.push(command.domain);
-      }
-      if (!existing.strategies.includes(command.strategy)) {
-        existing.strategies.push(command.strategy);
-      }
-      continue;
-    }
-
-    bySite.set(command.site, {
-      site: command.site,
-      domains: command.domain ? [command.domain] : [],
-      strategies: [command.strategy],
-      commands: [command],
-    });
-  }
-
-  const sites = [...bySite.values()]
-    .map((site) => ({
-      ...site,
-      domains: [...site.domains].sort((left, right) => left.localeCompare(right)),
-      strategies: [...site.strategies].sort((left, right) => left.localeCompare(right)),
-      commands: [...site.commands].sort((left, right) => left.name.localeCompare(right.name)),
-    }))
-    .sort((left, right) => compareSiteNames(left.site, right.site));
-
-  return {
-    totalSites: sites.length,
-    totalCommands: commands.length,
-    sites,
-  };
 }
 
 function parseDoctorIssues(lines: string[]): string[] {
@@ -642,8 +396,8 @@ export function parseOpenCliDoctorOutput(output: string): Omit<OpenCliDoctorStat
   };
 }
 
-async function runOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
-  const result = await runOpenCliCommand(['doctor', '--no-live']);
+async function runOpenCliDoctor(commandPath: string): Promise<OpenCliDoctorStatus> {
+  const result = await runOpenCliCommand(commandPath, ['doctor', '--no-live']);
   const parsed = parseOpenCliDoctorOutput(result.output);
 
   return {
@@ -653,40 +407,6 @@ async function runOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
     error: result.error ?? (result.exitCode && result.exitCode !== 0 ? `OpenCLI doctor exited with code ${result.exitCode}` : undefined),
     durationMs: result.durationMs,
   };
-}
-
-async function runOpenCliCatalog(): Promise<OpenCliCatalog> {
-  try {
-    const result = await runOpenCliCommand(['list', '--json'], DEFAULT_LIST_TIMEOUT_MS);
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    if (result.exitCode !== 0) {
-      throw new Error(`OpenCLI list exited with code ${result.exitCode}. Output: ${result.output}`);
-    }
-
-    const parsed = parseOpenCliJsonOutput(result.output);
-    const commands = collectOpenCliCatalogCommands(parsed);
-    if (commands.length > 0) {
-      return groupOpenCliCatalog(commands);
-    }
-
-    throw new Error('OpenCLI list output did not contain any catalog commands');
-  } catch (error) {
-    const fallbackCatalog = loadOpenCliCatalogFromManifest();
-    if (fallbackCatalog) {
-      return fallbackCatalog;
-    }
-
-    if (error instanceof Error && (
-      error.message === 'OpenCLI output was empty'
-      || error.message === 'No valid JSON payload found in OpenCLI output'
-    )) {
-      throw new Error(`Failed to parse OpenCLI list output: ${error.message}`, { cause: error });
-    }
-
-    throw error instanceof Error ? error : new Error(String(error));
-  }
 }
 
 function logDoctorIssues(doctor: OpenCliDoctorStatus): void {
@@ -702,13 +422,13 @@ function logDoctorIssues(doctor: OpenCliDoctorStatus): void {
   });
 }
 
-async function runSharedOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
+async function runSharedOpenCliDoctor(commandPath: string): Promise<OpenCliDoctorStatus> {
   if (openCliDoctorInFlight) {
     return await openCliDoctorInFlight;
   }
 
   openCliDoctorInFlight = (async () => {
-    const doctor = await runOpenCliDoctor();
+    const doctor = await runOpenCliDoctor(commandPath);
     logDoctorIssues(doctor);
     return doctor;
   })();
@@ -721,81 +441,37 @@ async function runSharedOpenCliDoctor(): Promise<OpenCliDoctorStatus> {
 }
 
 export async function warmupOpenCliDoctor(): Promise<OpenCliDoctorStatus | null> {
-  if (!existsSync(getOpenCliEntryPath())) {
+  const systemPath = await resolveSystemOpenCliCommandPath();
+  if (!systemPath) {
     return null;
   }
 
-  return await runSharedOpenCliDoctor();
-}
-
-export async function getOpenCliCatalog(): Promise<OpenCliCatalog> {
-  if (!existsSync(getOpenCliEntryPath())) {
-    return {
-      totalSites: 0,
-      totalCommands: 0,
-      sites: [],
-    };
-  }
-
-  if (openCliCatalogCache) {
-    return openCliCatalogCache;
-  }
-
-  if (openCliCatalogInFlight) {
-    return await openCliCatalogInFlight;
-  }
-
-  openCliCatalogInFlight = (async () => {
-    const catalog = await runOpenCliCatalog();
-    openCliCatalogCache = catalog;
-    return catalog;
-  })();
-
-  try {
-    return await openCliCatalogInFlight;
-  } finally {
-    openCliCatalogInFlight = null;
-  }
+  return await runSharedOpenCliDoctor(systemPath);
 }
 
 export async function getOpenCliStatus(): Promise<OpenCliStatus> {
-  const runtimeDir = getOpenCliRuntimeDir();
-  const entryPath = getOpenCliEntryPath();
-  const extensionDir = getOpenCliExtensionDir();
-  const wrapperPath = getOpenCliWrapperPath();
-  const executionSpec = resolveExecutionSpec();
-  const binaryExists = existsSync(entryPath);
-  const version = binaryExists ? readOpenCliVersion(runtimeDir) : null;
+  const systemPath = await resolveSystemOpenCliCommandPath();
+  const version = systemPath ? await getSystemOpenCliVersion(systemPath) : null;
 
-  if (!binaryExists) {
+  if (!systemPath) {
     return {
       binaryExists: false,
       binaryPath: null,
-      wrapperPath,
-      entryPath: existsSync(entryPath) ? entryPath : null,
-      runtimeDir,
-      extensionDir,
-      extensionDirExists: existsSync(extensionDir),
-      version,
-      command: executionSpec?.displayCommand ?? null,
+      version: null,
+      command: null,
       releasesUrl: OPENCLI_RELEASES_URL,
       readmeUrl: OPENCLI_README_URL,
       doctor: null,
     };
   }
 
-  const doctor = await runSharedOpenCliDoctor();
+  const doctor = await runSharedOpenCliDoctor(systemPath);
 
   return {
     binaryExists: true,
-    binaryPath: wrapperPath ?? entryPath,
-    wrapperPath,
-    entryPath,
-    runtimeDir,
-    extensionDir,
-    extensionDirExists: existsSync(extensionDir),
+    binaryPath: systemPath,
     version,
-    command: executionSpec?.displayCommand ?? null,
+    command: systemPath,
     releasesUrl: OPENCLI_RELEASES_URL,
     readmeUrl: OPENCLI_README_URL,
     doctor,

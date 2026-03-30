@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 const getOpenCliStatusMock = vi.fn();
-const getOpenCliCatalogMock = vi.fn();
 const sendJsonMock = vi.fn();
 
 vi.mock('@electron/utils/opencli-runtime', () => ({
   getOpenCliStatus: (...args: unknown[]) => getOpenCliStatusMock(...args),
-  getOpenCliCatalog: (...args: unknown[]) => getOpenCliCatalogMock(...args),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -19,11 +17,12 @@ describe('handleOpenCliRoutes', () => {
     vi.resetAllMocks();
   });
 
-  it('returns bundled opencli status for GET /api/opencli/status', async () => {
+  it('returns system opencli status for GET /api/opencli/status', async () => {
     getOpenCliStatusMock.mockResolvedValue({
       binaryExists: true,
-      binaryPath: '/tmp/opencli',
-      command: 'node dist/main.js',
+      binaryPath: '/usr/local/bin/opencli',
+      version: '1.5.5',
+      command: '/usr/local/bin/opencli',
       releasesUrl: 'https://github.com/jackwener/opencli/releases',
       readmeUrl: 'https://github.com/jackwener/opencli/blob/main/README.zh-CN.md',
       doctor: { ok: true },
@@ -45,45 +44,8 @@ describe('handleOpenCliRoutes', () => {
       200,
       expect.objectContaining({
         binaryExists: true,
+        binaryPath: '/usr/local/bin/opencli',
         doctor: { ok: true },
-      }),
-    );
-  });
-
-  it('returns grouped opencli catalog for GET /api/opencli/catalog', async () => {
-    getOpenCliCatalogMock.mockResolvedValue({
-      totalSites: 1,
-      totalCommands: 2,
-      sites: [
-        {
-          site: 'bilibili',
-          domains: ['www.bilibili.com'],
-          strategies: ['cookie'],
-          commands: [
-            { command: 'bilibili/hot', name: 'hot' },
-            { command: 'bilibili/search', name: 'search' },
-          ],
-        },
-      ],
-    });
-
-    const { handleOpenCliRoutes } = await import('@electron/api/routes/opencli');
-
-    const handled = await handleOpenCliRoutes(
-      { method: 'GET' } as IncomingMessage,
-      {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/opencli/catalog'),
-      {} as never,
-    );
-
-    expect(handled).toBe(true);
-    expect(getOpenCliCatalogMock).toHaveBeenCalledTimes(1);
-    expect(sendJsonMock).toHaveBeenCalledWith(
-      expect.anything(),
-      200,
-      expect.objectContaining({
-        totalSites: 1,
-        totalCommands: 2,
       }),
     );
   });

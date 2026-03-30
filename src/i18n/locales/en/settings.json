@@ -10,7 +10,7 @@
   },
   "cliMarketplace": {
     "title": "CLI Market",
-    "description": "Install curated command line tools that GeeClaw already knows how to detect. Missing tools are installed into GeeClaw's managed user-level prefix and added to the user PATH on first install.",
+    "description": "Curated command-line tools to extend the capabilities of GeeClaw",
     "refresh": "Refresh Status",
     "loadFailed": "Failed to load the CLI market",
     "installFailed": "Failed to install the CLI",
@@ -307,17 +307,19 @@
     "refresh": "Refresh Status",
     "loadFailed": "Failed to load OpenCLI status",
     "runtime": {
-      "title": "Bundled Runtime",
-      "description": "GeeClaw has already prepared OpenCLI for you. You only need to confirm that the current environment is ready.",
-      "present": "Runtime Ready",
-      "missing": "Runtime Missing",
+      "title": "System Runtime",
+      "description": "GeeClaw only checks for opencli on your system PATH, including installs completed through CLI Market.",
+      "present": "Installed",
+      "missing": "Missing",
       "version": "Version",
-      "doctor": "Status",
-      "binaryPath": "Runtime Path",
-      "emptyPath": "No bundled OpenCLI runtime found",
-      "command": "Launch Command",
-      "emptyCommand": "Command unavailable",
+      "binaryPath": "Path",
+      "emptyPath": "No opencli command was found on your system PATH",
       "unknown": "Unknown"
+    },
+    "install": {
+      "title": "Install Guide",
+      "description": "opencli is not available on your system PATH yet. Install it from CLI Market first so GeeClaw can continue with doctor checks.",
+      "marketplace": "Open CLI Market"
     },
     "doctor": {
       "title": "Environment Check",
@@ -333,37 +335,12 @@
     "extension": {
       "title": "Chrome Extension",
       "description": "If the extension is not connected yet, download the latest package and install it into Chrome.",
-      "folder": "Bundled Extension Folder",
-      "empty": "Extension folder unavailable",
-      "opening": "Opening...",
-      "openFolder": "Open Folder",
-      "openFailed": "Failed to open extension folder",
-      "bundleMissing": "This build does not contain the bundled Browser Bridge extension. Rebuild GeeClaw or download the extension from OpenCLI Releases.",
       "step1": "1. Click the button above to download the latest `opencli-extension.zip` package.",
       "step2": "2. Unzip it, then open Chrome and visit chrome://extensions with Developer mode enabled.",
       "step3": "3. Click \"Load unpacked\" and choose the extracted extension folder.",
       "step4": "4. Come back here and refresh after Chrome shows the OpenCLI extension as enabled."
     },
-    "catalog": {
-      "title": "Supported Sites & Commands",
-      "description": "Browse the sites OpenCLI already supports and see what each command can do before you dive into setup details.",
-      "site": "Site",
-      "commands": "Commands",
-      "searchPlaceholder": "Search sites like bilibili, youtube, or zhihu",
-      "searchAriaLabel": "Search OpenCLI sites",
-      "searchResults": "Filtered by: {{query}}",
-      "summarySites": "{{count}} sites",
-      "summaryCommands": "{{count}} commands",
-      "commandCount": "{{count}} commands",
-      "loading": "Loading the OpenCLI site catalog...",
-      "empty": "No OpenCLI site catalog is available right now.",
-      "emptySearch": "No sites match that search yet.",
-      "loadFailed": "Failed to load the OpenCLI site catalog",
-      "noDescription": "No description available"
-    },
     "actions": {
-      "copyPath": "Copy Path",
-      "copyCommand": "Copy Command",
       "downloadExtension": "Download Extension Package",
       "openGuide": "Open Setup Guide"
     },

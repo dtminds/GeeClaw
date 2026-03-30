@@ -51,7 +51,7 @@
         "binNames": [
             "wecom-cli"
         ],
-        "description": "企业微信开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作企业微信",
+        "description": "企业微信开放企业微信消息、日程、文档、智能表格、会议、待办、通讯录等核心产品能力 — 让人类和 AI Agent 都能在终端中操作企业微信",
         "homepage": "https://github.com/WecomTeam/wecom-cli",
         "platforms": [
             "darwin",

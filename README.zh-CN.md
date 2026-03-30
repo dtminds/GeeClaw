@@ -85,8 +85,6 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 - `TAVILY_API_KEY`：用于 `tavily-search`（上游运行时也可能支持 OAuth）
 - `BOCHA_API_KEY`：用于 `bocha-skill`
 
-打包版本仍会把托管的 `opencli` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
-
 ### 🔐 安全的供应商集成
 连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。OpenAI 同时支持 API Key 与浏览器 OAuth（Codex 订阅）登录。
 
@@ -172,12 +170,12 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 
 ### OpenCLI Browser Bridge 检查
 
-GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill / exec 环境使用。打开 **设置 → OpenCLI** 可以：
+打开 **设置 → OpenCLI** 可以：
 
-- 检查内置 OpenCLI 运行时是否存在
-- 查看内置运行时版本、后台服务状态，以及 Chrome Browser Bridge 插件连通状态
+- 检查系统 PATH 中是否已经有 `opencli`
+- 查看检测到的 OpenCLI 版本、后台服务状态，以及 Chrome Browser Bridge 插件连通状态
 - 在 Gateway 启动后由 GeeClaw 后台预热一次 `opencli doctor --no-live`，让 daemon 在进入设置页前就先拉起
-- 在设置页按站点查看 OpenCLI 当前支持的命令目录
+- 如果还没安装 `opencli`，直接跳到 **设置 → CLI 市场**
 - 在 Chrome 未连通时，直接下载 Chrome 插件包或跳转到上游安装说明
 
 ### MCP Runtime 检查
@@ -295,7 +293,6 @@ pnpm run verify           # 运行 lint + typecheck + 单元测试
 
 # 构建与打包
 pnpm run build:vite       # 仅构建前端
-pnpm run bundle:opencli   # 重新生成内置 opencli 运行时
 pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包

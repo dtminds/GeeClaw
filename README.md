@@ -85,8 +85,6 @@ Environment variables for bundled search skills:
 - `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
 - `BOCHA_API_KEY` for `bocha-skill`
 
-Packaged builds still ship a managed `opencli` CLI on the internal PATH so bundled skill / exec flows do not depend on a separate system install.
-
 ### 🔐 Secure Provider Integration
 Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 
@@ -171,12 +169,12 @@ Notes:
 
 ### OpenCLI Browser Bridge Check
 
-GeeClaw also ships a bundled `opencli` runtime for skill/exec environments that rely on OpenCLI. Open **Settings → OpenCLI** to:
+Open **Settings → OpenCLI** to:
 
-- verify that the bundled OpenCLI runtime is present
-- inspect the bundled runtime version, daemon status, and Chrome Browser Bridge connectivity
+- verify whether `opencli` is installed on your system PATH
+- inspect the detected OpenCLI version, daemon status, and Chrome Browser Bridge connectivity
 - let GeeClaw warm up `opencli doctor --no-live` in the background after Gateway startup so the daemon is ready before you open the page
-- browse supported OpenCLI sites and commands grouped by site from the Settings page
+- jump to **Settings → CLI Market** when `opencli` is missing
 - download the Chrome extension package or jump to the upstream install guide when Chrome is not connected
 
 ### MCP Runtime Check
@@ -294,7 +292,6 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
-pnpm run bundle:opencli   # Refresh the bundled opencli runtime
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
