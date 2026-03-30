@@ -9,6 +9,8 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('OPENCLAW_CONFIG_PATH="$CONFIG_PATH"');
     expect(script).toContain('--profile "$PROFILE_NAME"');
     expect(script).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
+    expect(script).toContain('Resources/bin"');
+    expect(script).toContain('Resources/bin/bin');
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
   });
 
@@ -38,10 +40,14 @@ describe('managed openclaw wrapper scripts', () => {
     const mcporterScript = readFileSync('resources/managed-bin/posix/mcporter', 'utf8');
 
     expect(opencliScript).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
+    expect(opencliScript).toContain('Resources/bin"');
+    expect(opencliScript).toContain('Resources/bin/bin');
     expect(opencliScript).toContain('exec "$NODE_SHIM" "$CLI" "$@"');
     expect(opencliScript).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
 
     expect(mcporterScript).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
+    expect(mcporterScript).toContain('Resources/bin"');
+    expect(mcporterScript).toContain('Resources/bin/bin');
     expect(mcporterScript).toContain('exec "$NODE_SHIM" "$CLI" "$@"');
     expect(mcporterScript).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
   });
@@ -50,6 +56,8 @@ describe('managed openclaw wrapper scripts', () => {
     const script = readFileSync('resources/managed-bin/posix/node', 'utf8');
 
     expect(script).toContain('find_bundled_node()');
+    expect(script).toContain('resources/bin/$(uname | tr \'[:upper:]\' \'[:lower:]\')-$(bin_arch)/bin/node');
+    expect(script).toContain('Resources/bin/bin/node');
     expect(script).toContain('BUNDLED_NODE="$(find_bundled_node)"');
     expect(script).toContain('exec "$BUNDLED_NODE" "$@"');
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');

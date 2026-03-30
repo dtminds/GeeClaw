@@ -29,7 +29,11 @@ PROFILE_NAME="geeclaw"
 
 if [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
   CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
-  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
+  DEV_BUNDLED_ROOT="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
+  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin"
+  if [ -d "$DEV_BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_ROOT"
+  fi
   if [ -d "$DEV_BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
   fi
@@ -38,7 +42,11 @@ elif [ "$(uname)" = "Darwin" ]; then
   # SCRIPT_DIR = .../Contents/Resources/managed-bin
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"
-  BUNDLED_BIN="$CONTENTS_DIR/Resources/bin"
+  BUNDLED_ROOT="$CONTENTS_DIR/Resources/bin"
+  BUNDLED_BIN="$CONTENTS_DIR/Resources/bin/bin"
+  if [ -d "$BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_ROOT"
+  fi
   if [ -d "$BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
   fi
@@ -47,7 +55,11 @@ else
   # SCRIPT_DIR = .../resources/managed-bin
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
-  BUNDLED_BIN="$INSTALL_DIR/resources/bin"
+  BUNDLED_ROOT="$INSTALL_DIR/resources/bin"
+  BUNDLED_BIN="$INSTALL_DIR/resources/bin/bin"
+  if [ -d "$BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_ROOT"
+  fi
   if [ -d "$BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
   fi

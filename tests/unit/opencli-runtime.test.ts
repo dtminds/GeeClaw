@@ -62,7 +62,8 @@ function setupPackagedOpenCliCatalogRuntime(options: { includeManifest?: boolean
     getPackagedOpenCliPath('opencli/extension'),
     getPackagedOpenCliPath('managed-bin'),
     getPackagedOpenCliPath('bin'),
-    getPackagedOpenCliPath('bin/node'),
+    getPackagedOpenCliPath('bin/bin'),
+    getPackagedOpenCliPath('bin/bin/node'),
   ]);
 
   if (options.includeManifest) {
@@ -224,17 +225,18 @@ Issues:
       || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
       || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
       || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin/node'
     ));
     mockSpawn.mockImplementation((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
-      expect(command).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/node');
+      expect(command).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/bin/node');
       expect(args).toEqual([
         '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js',
         'doctor',
         '--no-live',
       ]);
       expect(options.env.OPENCLI_EMBEDDED_IN).toBe('GeeClaw');
-      expect(options.env.PATH).toBe('/Applications/GeeClaw.app/Contents/Resources/managed-bin:/Applications/GeeClaw.app/Contents/Resources/bin:/usr/bin:/bin');
+      expect(options.env.PATH).toBe('/Applications/GeeClaw.app/Contents/Resources/managed-bin:/Applications/GeeClaw.app/Contents/Resources/bin/bin:/Applications/GeeClaw.app/Contents/Resources/bin:/usr/bin:/bin');
 
       return createMockChild([
           'opencli v1.3.3 doctor',
@@ -270,7 +272,8 @@ Issues:
       || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
       || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
       || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin/node'
     ));
     mockSpawn.mockImplementation(() => {
       return createMockChild([

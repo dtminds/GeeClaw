@@ -25,21 +25,33 @@ PATH_PREFIX="$SCRIPT_DIR"
 
 if [ -f "$PROJECT_ROOT/build/mcporter/dist/cli.js" ]; then
   CLI="$PROJECT_ROOT/build/mcporter/dist/cli.js"
-  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
+  DEV_BUNDLED_ROOT="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
+  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin"
+  if [ -d "$DEV_BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_ROOT"
+  fi
   if [ -d "$DEV_BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
   fi
 elif [ "$(uname)" = "Darwin" ]; then
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   CLI="$CONTENTS_DIR/Resources/mcporter/dist/cli.js"
-  BUNDLED_BIN="$CONTENTS_DIR/Resources/bin"
+  BUNDLED_ROOT="$CONTENTS_DIR/Resources/bin"
+  BUNDLED_BIN="$CONTENTS_DIR/Resources/bin/bin"
+  if [ -d "$BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_ROOT"
+  fi
   if [ -d "$BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
   fi
 else
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
   CLI="$INSTALL_DIR/resources/mcporter/dist/cli.js"
-  BUNDLED_BIN="$INSTALL_DIR/resources/bin"
+  BUNDLED_ROOT="$INSTALL_DIR/resources/bin"
+  BUNDLED_BIN="$INSTALL_DIR/resources/bin/bin"
+  if [ -d "$BUNDLED_ROOT" ]; then
+    PATH_PREFIX="$PATH_PREFIX:$BUNDLED_ROOT"
+  fi
   if [ -d "$BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$BUNDLED_BIN"
   fi
