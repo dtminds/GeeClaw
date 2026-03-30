@@ -18,7 +18,7 @@ const RECOGNIZED_META_KEYS = new Set([
   'presetId',
   'name',
   'description',
-  'iconKey',
+  'emoji',
   'category',
   'managed',
   'platforms',
@@ -27,7 +27,6 @@ const RECOGNIZED_META_KEYS = new Set([
 ]);
 const RECOGNIZED_AGENT_KEYS = new Set([
   'id',
-  'workspace',
   'model',
   'skillScope',
 ]);
@@ -41,13 +40,12 @@ export interface AgentPresetMeta {
   presetId: string;
   name: string;
   description: string;
-  iconKey: string;
+  emoji: string;
   category: string;
   managed: true;
   platforms?: AgentPresetPlatform[];
   agent: {
     id: string;
-    workspace: string;
     model?: string | { primary?: string; fallbacks?: string[] };
     skillScope: AgentSkillScope;
   };
@@ -216,7 +214,6 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
   const agentId = validatePresetAgentId(
     requireNonEmptyString(agentRecord.id, 'agent.id', presetId),
   );
-  const workspace = requireNonEmptyString(agentRecord.workspace, 'agent.workspace', presetId);
 
   if (metaRecord.managed !== true) {
     throw new Error(`Preset "${presetId}" managed must be true`);
@@ -226,13 +223,12 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
     presetId,
     name: requireNonEmptyString(metaRecord.name, 'name', presetId),
     description: requireNonEmptyString(metaRecord.description, 'description', presetId),
-    iconKey: requireNonEmptyString(metaRecord.iconKey, 'iconKey', presetId),
+    emoji: requireNonEmptyString(metaRecord.emoji, 'emoji', presetId),
     category: requireNonEmptyString(metaRecord.category, 'category', presetId),
     managed: true,
     platforms: normalizePresetPlatforms(presetId, metaRecord.platforms),
     agent: {
       id: agentId,
-      workspace,
       model: normalizeModelConfig(presetId, agentRecord.model),
       skillScope: normalizeSkillScope(presetId, agentRecord.skillScope),
     },

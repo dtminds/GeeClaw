@@ -93,11 +93,10 @@ vi.mock('@/stores/agents', () => ({
           presetId: 'stock-expert',
           name: '股票助手',
           description: '追踪个股、公告和财报',
-          iconKey: 'stock',
+          emoji: '📈',
           category: 'finance',
           managed: true,
           agentId: 'stockexpert',
-          workspace: '~/geeclaw/workspace-stockexpert',
           skillScope: { mode: 'specified' as const, skills: ['stock-analyzer', 'stock-announcements'] },
           presetSkills: ['stock-analyzer', 'stock-announcements'],
           managedFiles: ['AGENTS.md', 'SOUL.md'],
@@ -108,11 +107,10 @@ vi.mock('@/stores/agents', () => ({
           presetId: 'trend-finder',
           name: '趋势助手',
           description: '捕捉热点和市场趋势',
-          iconKey: 'trend',
+          emoji: '📊',
           category: 'research',
           managed: true,
           agentId: 'trendfinder',
-          workspace: '~/geeclaw/workspace-trendfinder',
           skillScope: { mode: 'specified' as const, skills: ['web-search'] },
           presetSkills: ['web-search'],
           managedFiles: ['AGENTS.md'],
@@ -122,11 +120,10 @@ vi.mock('@/stores/agents', () => ({
           presetId: 'alpha-researcher',
           name: 'Alpha Researcher',
           description: '套利信号与候选池',
-          iconKey: 'research',
+          emoji: '🧪',
           category: 'research',
           managed: true,
           agentId: 'alpha-researcher',
-          workspace: '~/geeclaw/workspace-alpha-researcher',
           skillScope: { mode: 'specified' as const, skills: ['web-search', 'stock-analyzer'] },
           presetSkills: ['web-search', 'stock-analyzer'],
           managedFiles: ['AGENTS.md', 'USER.md'],
@@ -187,14 +184,10 @@ describe('Agents marketplace view', () => {
 
     expect(screen.getByText('捕捉热点和市场趋势')).toBeInTheDocument();
     expect(screen.getByText('套利信号与候选池')).toBeInTheDocument();
+    expect(screen.getByText('📈')).toBeInTheDocument();
+    expect(screen.getByText('📊')).toBeInTheDocument();
+    expect(screen.getByText('🧪')).toBeInTheDocument();
     expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Unavailable' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Installed' })).toBeDisabled();
-    const installButton = screen.getByRole('button', { name: 'Install' });
-    expect(installButton).toBeDisabled();
-
-    fireEvent.pointerMove(installButton.closest('span') ?? installButton);
-    expect((await screen.findAllByText('Not open yet')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
 
@@ -204,6 +197,9 @@ describe('Agents marketplace view', () => {
     expect(within(dialog).getByText('stock-announcements')).toBeInTheDocument();
     expect(within(dialog).getByText('macOS')).toBeInTheDocument();
     expect(within(dialog).getByText('Available on macOS')).toBeInTheDocument();
+    expect(within(dialog).getByText('📈')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Workspace')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('~/geeclaw/workspace-stockexpert')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
 

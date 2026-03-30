@@ -2,12 +2,11 @@
   "presetId": "delivery-program-manager",
   "name": "交付项目总控PM",
   "description": "负责跨团队项目推进、版本状态同步、会议收敛和交付风险管理。",
-  "iconKey": "research",
+  "emoji": "📦",
   "category": "operations",
   "managed": true,
   "agent": {
     "id": "delivery-program-manager",
-    "workspace": "~/geeclaw/workspace-delivery-program-manager",
     "skillScope": {
       "mode": "specified",
       "skills": [

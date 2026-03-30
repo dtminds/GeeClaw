@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
 import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
@@ -162,17 +161,9 @@ export function Agents() {
           {activeTab === 'marketplace' ? (
             <div className="space-y-5">
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 {presets.map((preset) => {
-                  const installed = installedPresetIds.has(preset.presetId);
-                  const installOnHold = !installed && preset.supportedOnCurrentPlatform;
-                  const installDisabled = installed || !preset.supportedOnCurrentPlatform || installOnHold;
                   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
-                  const installLabel = installed
-                    ? t('marketplace.installed')
-                    : preset.supportedOnCurrentPlatform
-                      ? t('marketplace.install')
-                      : t('marketplace.unavailable');
                   return (
                     <div
                       key={preset.presetId}
@@ -180,6 +171,12 @@ export function Agents() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
+                          <span
+                            className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black/[0.04] text-xl dark:bg-white/[0.06]"
+                            aria-hidden="true"
+                          >
+                            {preset.emoji}
+                          </span>
                           <h3 className="text-[18px] font-semibold text-foreground">{preset.name}</h3>
                           {platformLabels.map((label) => (
                             <Badge
@@ -196,13 +193,13 @@ export function Agents() {
 
                       <div className="flex flex-wrap items-center gap-3">
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => setActivePresetId(preset.presetId)}
-                          className="h-9 rounded-full px-4 text-[13px] font-medium"
+                          className="h-9 rounded-full flex-1 px-4 text-[13px] font-medium"
                         >
                           {t('marketplace.viewDetails')}
                         </Button>
-                        {installOnHold ? (
+                        {/* {installOnHold ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-flex cursor-not-allowed">
@@ -226,7 +223,7 @@ export function Agents() {
                           >
                             {installLabel}
                           </Button>
-                        )}
+                        )} */}
                       </div>
                     </div>
                   );

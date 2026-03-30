@@ -2,13 +2,12 @@
   "presetId": "stock-expert",
   "name": "股票助手",
   "description": "追踪个股、财报和公告，并优先调用预置股票技能。",
-  "iconKey": "stock",
+  "emoji": "📈",
   "category": "finance",
   "managed": true,
   "platforms": ["darwin"],
   "agent": {
     "id": "stockexpert",
-    "workspace": "~/geeclaw/workspace-stockexpert",
     "skillScope": {
       "mode": "specified",
       "skills": [

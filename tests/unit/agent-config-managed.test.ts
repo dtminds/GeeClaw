@@ -119,12 +119,11 @@ async function setupManagedPresetFixture(options?: {
     presetId: 'stock-expert',
     name: '股票助手',
     description: 'desc',
-    iconKey: 'stock',
+    emoji: '📈',
     category: 'finance',
     managed: true,
     agent: {
       id: 'stockexpert',
-      workspace: '~/geeclaw/workspace-stockexpert',
       skillScope: {
         mode: 'specified' as const,
         skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
@@ -200,6 +199,7 @@ describe('managed agent config domain', () => {
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
         presetId: 'stock-expert',
+        emoji: '📈',
         platforms: ['darwin'],
         supportedOnCurrentPlatform: true,
       }),
@@ -209,6 +209,7 @@ describe('managed agent config domain', () => {
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
         presetId: 'stock-expert',
+        emoji: '📈',
         platforms: ['darwin'],
         supportedOnCurrentPlatform: false,
       }),

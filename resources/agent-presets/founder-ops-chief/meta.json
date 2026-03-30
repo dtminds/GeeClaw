@@ -2,12 +2,11 @@
   "presetId": "founder-ops-chief",
   "name": "创始人参谋长",
   "description": "围绕目标管理、节奏维护、想法验证和决策复盘，服务创始人日常经营。",
-  "iconKey": "research",
+  "emoji": "🎯",
   "category": "productivity",
   "managed": true,
   "agent": {
     "id": "founder-ops-chief",
-    "workspace": "~/geeclaw/workspace-founder-ops-chief",
     "skillScope": {
       "mode": "specified",
       "skills": [

@@ -49,6 +49,12 @@ export function MarketplacePresetDetailDialog({
         <div className="flex max-h-[min(86vh,760px)] flex-col overflow-hidden">
           <div className="border-b border-black/5 px-8 py-7 dark:border-white/10">
             <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] text-2xl dark:bg-white/[0.06]"
+                aria-hidden="true"
+              >
+                {preset.emoji}
+              </span>
               <h2 className="modal-title">{preset.name}</h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">{preset.description}</p>
@@ -90,12 +96,6 @@ export function MarketplacePresetDetailDialog({
                     {t('fields.agentId')}
                   </p>
                   <p className="font-mono text-[13px] text-foreground">{preset.agentId}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
-                    {t('fields.workspace')}
-                  </p>
-                  <p className="font-mono text-[13px] text-foreground">{preset.workspace}</p>
                 </div>
               </div>
             </section>

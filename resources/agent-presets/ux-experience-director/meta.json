@@ -2,12 +2,11 @@
   "presetId": "ux-experience-director",
   "name": "体验设计总监",
   "description": "面向关键产品界面与流程，产出高质量 UX 方向、界面方案和设计改进建议。",
-  "iconKey": "trend",
+  "emoji": "🎨",
   "category": "design",
   "managed": true,
   "agent": {
     "id": "ux-experience-director",
-    "workspace": "~/geeclaw/workspace-ux-experience-director",
     "skillScope": {
       "mode": "specified",
       "skills": [
