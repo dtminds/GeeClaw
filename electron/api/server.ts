@@ -8,6 +8,7 @@ import { handleGatewayRoutes } from './routes/gateway';
 import { handleSettingsRoutes } from './routes/settings';
 import { handleProviderRoutes } from './routes/providers';
 import { handleChannelRoutes } from './routes/channels';
+import { handleCliMarketplaceRoutes } from './routes/cli-marketplace';
 import { handleLogRoutes } from './routes/logs';
 import { handleOpenCliRoutes } from './routes/opencli';
 import { handleUsageRoutes } from './routes/usage';
@@ -34,6 +35,7 @@ const routeHandlers: RouteHandler[] = [
   handleSettingsRoutes,
   handleProviderRoutes,
   handleChannelRoutes,
+  handleCliMarketplaceRoutes,
   handleOpenCliRoutes,
   handleMcpRoutes,
   handleSkillRoutes,
