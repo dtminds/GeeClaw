@@ -1,19 +1,16 @@
-import { app } from 'electron';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger } from './logger';
-import { getManagedBinDir, getManagedCommandWrapperPath } from './managed-bin';
 import { prepareWinSpawn } from './paths';
+import { getGeeClawCommandSearchDirs } from './runtime-path';
 
 const execFileAsync = promisify(execFile);
 
 const MCPORTER_INSTALL_GUIDE_URL = 'https://github.com/steipete/mcporter#installation';
 const MCPORTER_REPOSITORY_URL = 'https://github.com/steipete/mcporter';
-const MCPORTER_QUICK_START_COMMAND = 'npx mcporter list';
-const MCPORTER_PROJECT_INSTALL_COMMAND = 'pnpm add mcporter';
 
 export interface McporterBinaryStatus {
   exists: boolean;
@@ -28,37 +25,7 @@ export interface McporterStatus {
   version: string | null;
   installGuideUrl: string;
   repositoryUrl: string;
-  quickStartCommand: string;
-  projectInstallCommand: string;
   system: McporterBinaryStatus;
-  bundled: McporterBinaryStatus & {
-    wrapperPath: string | null;
-    runtimeDir: string | null;
-  };
-}
-
-function getBundledMcporterRuntimeDir(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'mcporter');
-  }
-
-  return join(process.cwd(), 'build', 'mcporter');
-}
-
-function getBundledMcporterEntryPath(): string {
-  return join(getBundledMcporterRuntimeDir(), 'dist', 'cli.js');
-}
-
-function readPackageVersion(runtimeDir: string): string | null {
-  try {
-    const raw = readFileSync(join(runtimeDir, 'package.json'), 'utf8');
-    const parsed = JSON.parse(raw) as { version?: unknown };
-    return typeof parsed.version === 'string' && parsed.version.trim()
-      ? parsed.version.trim()
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function normalizeVersionOutput(output: string): string | null {
@@ -75,53 +42,8 @@ function normalizeExistingPath(pathValue: string): string {
   try {
     return realpathSync(pathValue);
   } catch {
-    return resolve(pathValue);
+    return pathValue;
   }
-}
-
-function getRejectedSystemRuntimeRoots(): string[] {
-  const roots = new Set<string>();
-
-  roots.add(normalizeExistingPath(process.cwd()));
-  roots.add(normalizeExistingPath(app.getAppPath()));
-
-  const bundledDir = getBundledMcporterRuntimeDir();
-  if (existsSync(bundledDir)) {
-    roots.add(normalizeExistingPath(bundledDir));
-  }
-
-  const managedBinDir = getManagedBinDir();
-  if (existsSync(managedBinDir)) {
-    roots.add(normalizeExistingPath(managedBinDir));
-  }
-
-  return [...roots];
-}
-
-function isRejectedSystemRuntimeCandidate(candidate: string): boolean {
-  const normalizedCandidate = normalizeExistingPath(candidate);
-  return getRejectedSystemRuntimeRoots().some((root) => (
-    normalizedCandidate === root
-    || normalizedCandidate.startsWith(`${root}/`)
-    || normalizedCandidate.startsWith(`${root}\\`)
-  ));
-}
-
-function getPosixSearchDirs(): string[] {
-  const envDirs = (process.env.PATH ?? '')
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const commonDirs = [
-    join(homedir(), '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/snap/bin',
-  ];
-
-  return [...new Set([...envDirs, ...commonDirs])];
 }
 
 async function listCommandCandidates(command: string): Promise<string[]> {
@@ -142,10 +64,11 @@ async function listCommandCandidates(command: string): Promise<string[]> {
     } catch {
       // Ignore missing where.exe results and fall through to manual candidates.
     }
-
-    const appData = process.env.APPDATA;
-    if (appData) {
-      candidates.push(join(appData, 'npm', `${command}.cmd`));
+    for (const dir of getGeeClawCommandSearchDirs()) {
+      candidates.push(join(dir, `${command}.cmd`));
+      candidates.push(join(dir, `${command}.exe`));
+      candidates.push(join(dir, `${command}.bat`));
+      candidates.push(join(dir, command));
     }
   } else {
     try {
@@ -163,7 +86,7 @@ async function listCommandCandidates(command: string): Promise<string[]> {
       // Ignore missing which results and fall through to manual candidates.
     }
 
-    for (const dir of getPosixSearchDirs()) {
+    for (const dir of getGeeClawCommandSearchDirs()) {
       candidates.push(join(dir, command));
     }
   }
@@ -186,7 +109,7 @@ async function listCommandCandidates(command: string): Promise<string[]> {
 
 async function resolveSystemMcporterCommandPath(): Promise<string | null> {
   const candidates = await listCommandCandidates('mcporter');
-  return candidates.find((candidate) => !isRejectedSystemRuntimeCandidate(candidate)) ?? null;
+  return candidates[0] ?? null;
 }
 
 async function runCapturedCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -262,33 +185,19 @@ export async function getMcporterStatus(): Promise<McporterStatus> {
   const systemPath = await resolveSystemMcporterCommandPath();
   const systemVersion = systemPath ? await getSystemMcporterVersion(systemPath) : null;
 
-  const bundledRuntimeDir = getBundledMcporterRuntimeDir();
-  const bundledEntryPath = getBundledMcporterEntryPath();
-  const bundledExists = existsSync(bundledEntryPath);
-  const bundledVersion = bundledExists ? readPackageVersion(bundledRuntimeDir) : null;
-
   return {
     installed: !!systemPath,
     binaryPath: systemPath,
     version: systemVersion,
     installGuideUrl: MCPORTER_INSTALL_GUIDE_URL,
     repositoryUrl: MCPORTER_REPOSITORY_URL,
-    quickStartCommand: MCPORTER_QUICK_START_COMMAND,
-    projectInstallCommand: MCPORTER_PROJECT_INSTALL_COMMAND,
     system: {
       exists: !!systemPath,
       path: systemPath,
       version: systemVersion,
       error: systemPath
         ? undefined
-        : 'System mcporter command not found on PATH (excluding GeeClaw bundled/project-local binaries)',
-    },
-    bundled: {
-      exists: bundledExists,
-      path: bundledExists ? bundledEntryPath : null,
-      version: bundledVersion,
-      wrapperPath: getManagedCommandWrapperPath('mcporter'),
-      runtimeDir: bundledExists ? bundledRuntimeDir : null,
+        : 'System mcporter command not found on PATH',
     },
   };
 }

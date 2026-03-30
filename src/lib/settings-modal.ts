@@ -1,6 +1,25 @@
 import type { Location } from 'react-router-dom';
 
-export type SettingsModalSection = 'appearance' | 'models' | 'safety' | 'gateway' | 'opencli' | 'mcp' | 'general';
+export type SettingsModalSection =
+  | 'appearance'
+  | 'models'
+  | 'safety'
+  | 'gateway'
+  | 'cliMarketplace'
+  | 'opencli'
+  | 'mcp'
+  | 'general';
+
+const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
+  appearance: 'appearance',
+  models: 'models',
+  safety: 'safety',
+  gateway: 'gateway',
+  cliMarketplace: 'cli-marketplace',
+  opencli: 'opencli',
+  mcp: 'mcp',
+  general: 'general',
+};
 
 type SettingsLocationState = {
   backgroundLocation?: Location;
@@ -18,13 +37,14 @@ export function getSettingsModalState(location: Location): SettingsLocationState
 }
 
 export function getSettingsModalPath(section: SettingsModalSection): string {
-  return `/settings/${section}`;
+  return `/settings/${SETTINGS_SECTION_SEGMENTS[section]}`;
 }
 
 export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/appearance')) return 'appearance';
   if (pathname.startsWith('/settings/safety')) return 'safety';
   if (pathname.startsWith('/settings/gateway')) return 'gateway';
+  if (pathname.startsWith('/settings/cli-marketplace')) return 'cliMarketplace';
   if (pathname.startsWith('/settings/opencli')) return 'opencli';
   if (pathname.startsWith('/settings/mcp')) return 'mcp';
   if (pathname.startsWith('/settings/general')) return 'general';

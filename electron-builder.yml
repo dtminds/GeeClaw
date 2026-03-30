@@ -30,10 +30,6 @@ extraResources:
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
     to: openclaw/
-  - from: build/opencli/
-    to: opencli/
-  - from: build/mcporter/
-    to: mcporter/
   - from: build/preinstalled-skills/
     to: skills/
   # NOTE: OpenClaw plugin mirrors are copied by the afterPack hook
@@ -71,10 +67,8 @@ releaseInfo:
 # macOS Configuration
 mac:
   binaries:
-    - Contents/Resources/bin/node
+    - Contents/Resources/bin/bin/node
   extraResources:
-    - from: resources/bin/darwin-${arch}
-      to: bin
     - from: resources/managed-bin/posix/
       to: managed-bin/
   category: public.app-category.productivity
@@ -124,8 +118,6 @@ win:
   verifyUpdateCodeSignature: false
   signAndEditExecutable: true
   extraResources:
-    - from: resources/bin/win32-${arch}
-      to: bin
     - from: resources/managed-bin/win32/
       to: managed-bin/
   icon: resources/icons/icon.ico
@@ -154,8 +146,6 @@ nsis:
 # Linux Configuration
 linux:
   extraResources:
-    - from: resources/bin/linux-${arch}
-      to: bin
     - from: resources/managed-bin/posix/
       to: managed-bin/
   icon: resources/icons

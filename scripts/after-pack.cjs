@@ -19,7 +19,7 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, readdirSync, rmSync, statSync, mkdirSync } = require('fs');
+const { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
 const { join, dirname, basename, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 
@@ -29,6 +29,49 @@ const ARCH_MAP = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' 
 
 function resolveArch(archEnum) {
   return ARCH_MAP[archEnum] || 'x64';
+}
+
+function copyBundledBinRuntimeResources(projectRoot, resourcesDir, platform, arch) {
+  const sourceDir = join(projectRoot, 'resources', 'bin', `${platform}-${arch}`);
+  const destDir = join(resourcesDir, 'bin');
+
+  if (!existsSync(sourceDir)) {
+    console.warn(`[after-pack] ⚠️  Bundled runtime source not found: ${sourceDir}`);
+    return false;
+  }
+
+  copyPathPreservingLinks(sourceDir, destDir);
+
+  console.log(`[after-pack] ✅ Synced bundled bin runtime from ${sourceDir} to ${destDir}`);
+  return true;
+}
+
+exports.copyBundledBinRuntimeResources = copyBundledBinRuntimeResources;
+
+function copyPathPreservingLinks(sourcePath, destPath) {
+  const stats = lstatSync(sourcePath);
+
+  if (stats.isSymbolicLink()) {
+    const linkTarget = readlinkSync(sourcePath);
+    rmSync(normWin(destPath), { recursive: true, force: true });
+    mkdirSync(normWin(dirname(destPath)), { recursive: true });
+    symlinkSync(linkTarget, normWin(destPath));
+    return;
+  }
+
+  if (stats.isDirectory()) {
+    mkdirSync(normWin(destPath), { recursive: true });
+    for (const entry of readdirSync(sourcePath)) {
+      copyPathPreservingLinks(join(sourcePath, entry), join(destPath, entry));
+    }
+    return;
+  }
+
+  mkdirSync(normWin(dirname(destPath)), { recursive: true });
+  cpSync(normWin(sourcePath), normWin(destPath), {
+    dereference: false,
+    force: true,
+  });
 }
 
 // ── General cleanup ──────────────────────────────────────────────────────────
@@ -516,6 +559,8 @@ exports.default = async function afterPack(context) {
     console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
     return;
   }
+
+  copyBundledBinRuntimeResources(join(__dirname, '..'), resourcesDir, platform, arch);
 
   // 1. Copy node_modules (electron-builder skips it due to .gitignore)
   const depCount = readdirSync(src, { withFileTypes: true })

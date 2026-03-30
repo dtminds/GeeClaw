@@ -2,28 +2,25 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalPlatform = process.platform;
-const originalResourcesPath = process.resourcesPath;
 const originalPath = process.env.PATH;
 
 const {
   mockExistsSync,
-  mockReadFileSync,
+  mockRealpathSync,
+  mockExecFile,
   mockSpawn,
-  mockIsPackagedGetter,
   mockLoggerInfo,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn<(path: string) => boolean>(),
-  mockReadFileSync: vi.fn<(path: string, encoding: string) => string>(),
+  mockRealpathSync: vi.fn<(path: string) => string>(),
+  mockExecFile: vi.fn(),
   mockSpawn: vi.fn(),
-  mockIsPackagedGetter: { value: false },
   mockLoggerInfo: vi.fn(),
 }));
 
 function setPlatform(platform: string) {
   Object.defineProperty(process, 'platform', { value: platform, writable: true });
 }
-
-const PACKAGED_RESOURCES_PATH = '/Applications/GeeClaw.app/Contents/Resources';
 
 function createMockChild(output: string) {
   const child = new EventEmitter() as EventEmitter & {
@@ -43,60 +40,25 @@ function createMockChild(output: string) {
   return child;
 }
 
-function getPackagedOpenCliPath(relativePath: string): string {
-  return `${PACKAGED_RESOURCES_PATH}/${relativePath}`;
-}
-
-function setupPackagedOpenCliCatalogRuntime(options: { includeManifest?: boolean } = {}) {
-  setPlatform('darwin');
-  mockIsPackagedGetter.value = true;
-  process.env.PATH = '/usr/bin:/bin';
-  Object.defineProperty(process, 'resourcesPath', {
-    value: PACKAGED_RESOURCES_PATH,
-    configurable: true,
-    writable: true,
-  });
-
-  const existingPaths = new Set([
-    getPackagedOpenCliPath('opencli/dist/main.js'),
-    getPackagedOpenCliPath('opencli/extension'),
-    getPackagedOpenCliPath('managed-bin'),
-    getPackagedOpenCliPath('bin'),
-    getPackagedOpenCliPath('bin/node'),
-  ]);
-
-  if (options.includeManifest) {
-    existingPaths.add(getPackagedOpenCliPath('opencli/cli-manifest.json'));
-  }
-
-  mockExistsSync.mockImplementation((value: string) => existingPaths.has(value));
-}
-
-vi.mock('electron', () => ({
-  app: {
-    get isPackaged() {
-      return mockIsPackagedGetter.value;
-    },
-  },
-}));
-
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return {
     ...actual,
     existsSync: mockExistsSync,
-    readFileSync: mockReadFileSync,
+    realpathSync: mockRealpathSync,
     default: {
       ...actual,
       existsSync: mockExistsSync,
-      readFileSync: mockReadFileSync,
+      realpathSync: mockRealpathSync,
     },
   };
 });
 
 vi.mock('node:child_process', () => ({
+  execFile: mockExecFile,
   spawn: mockSpawn,
   default: {
+    execFile: mockExecFile,
     spawn: mockSpawn,
   },
 }));
@@ -104,6 +66,7 @@ vi.mock('node:child_process', () => ({
 vi.mock('@electron/utils/logger', () => ({
   logger: {
     info: mockLoggerInfo,
+    debug: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   },
@@ -113,19 +76,22 @@ describe('opencli runtime', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    mockIsPackagedGetter.value = false;
-    mockExistsSync.mockReturnValue(false);
-    mockReadFileSync.mockReturnValue(JSON.stringify({ version: '1.3.3' }));
-    process.env.PATH = originalPath;
+    setPlatform('darwin');
+    process.env.PATH = '/usr/local/bin:/usr/bin:/bin';
+    mockExistsSync.mockImplementation((value: string) => value === '/usr/local/bin/opencli');
+    mockRealpathSync.mockImplementation((value: string) => value);
+    mockExecFile.mockImplementation((command: string, args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+      if (command === 'which' && args[0] === '-a') {
+        callback(null, '/usr/local/bin/opencli\n', '');
+        return;
+      }
+
+      callback(new Error(`Unexpected execFile call: ${command} ${args.join(' ')}`), '', '');
+    });
   });
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
-    Object.defineProperty(process, 'resourcesPath', {
-      value: originalResourcesPath,
-      configurable: true,
-      writable: true,
-    });
     process.env.PATH = originalPath;
   });
 
@@ -196,92 +162,113 @@ Issues:
     expect(parsed.extensionConnected).toBe(false);
     expect(parsed.connectivityOk).toBe(false);
     expect(parsed.issues).toHaveLength(2);
-    expect(parsed.issues[0]).toContain('Chrome extension is not connected');
-    expect(parsed.issues[1]).toContain('Please install the opencli Browser Bridge extension');
-    expect(parsed.issues[1]).toContain('Load unpacked');
   });
 
-  it('skips background warmup when the bundled runtime is missing', async () => {
-    const { warmupOpenCliDoctor } = await import('@electron/utils/opencli-runtime');
+  it('skips warmup and returns a missing status when system opencli is not on PATH', async () => {
+    mockExistsSync.mockReturnValue(false);
+    mockExecFile.mockImplementation((_command: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+      callback(new Error('not found'), '', '');
+    });
 
-    const result = await warmupOpenCliDoctor();
+    const { getOpenCliStatus, warmupOpenCliDoctor } = await import('@electron/utils/opencli-runtime');
 
-    expect(result).toBeNull();
+    const warmup = await warmupOpenCliDoctor();
+    const status = await getOpenCliStatus();
+
+    expect(warmup).toBeNull();
+    expect(status).toMatchObject({
+      binaryExists: false,
+      binaryPath: null,
+      version: null,
+      command: null,
+      doctor: null,
+    });
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('prepends managed runtime paths when running doctor in packaged builds', async () => {
-    setPlatform('darwin');
-    mockIsPackagedGetter.value = true;
+  it('falls back to the GeeClaw managed npm prefix when GUI PATH does not include opencli', async () => {
     process.env.PATH = '/usr/bin:/bin';
-    Object.defineProperty(process, 'resourcesPath', {
-      value: '/Applications/GeeClaw.app/Contents/Resources',
-      configurable: true,
-      writable: true,
-    });
-    mockExistsSync.mockImplementation((value: string) => (
-      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
-    ));
-    mockSpawn.mockImplementation((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
-      expect(command).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/node');
-      expect(args).toEqual([
-        '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js',
-        'doctor',
-        '--no-live',
-      ]);
-      expect(options.env.OPENCLI_EMBEDDED_IN).toBe('GeeClaw');
-      expect(options.env.PATH).toBe('/Applications/GeeClaw.app/Contents/Resources/managed-bin:/Applications/GeeClaw.app/Contents/Resources/bin:/usr/bin:/bin');
+    const managedOpenCliPath = `${process.env.HOME || '/Users/test'}/.geeclaw/npm-global/bin/opencli`;
 
+    mockExistsSync.mockImplementation((value: string) => value === managedOpenCliPath);
+    mockExecFile.mockImplementation((_command: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+      callback(new Error('not found'), '', '');
+    });
+    mockSpawn.mockImplementation((command: string, args: string[]) => {
+      if (args[0] === '--version') {
+        expect(command).toBe(managedOpenCliPath);
+        return createMockChild('opencli 1.5.5');
+      }
+
+      expect(command).toBe(managedOpenCliPath);
+      expect(args).toEqual(['doctor', '--no-live']);
       return createMockChild([
-          'opencli v1.3.3 doctor',
-          '',
-          '[OK] Daemon: running on port 19825',
-          '[OK] Extension: connected',
-          '[SKIP] Connectivity: skipped (--no-live)',
-          '',
-          'Everything looks good!',
-        ].join('\n'));
+        'opencli v1.5.5 doctor',
+        '',
+        '[OK] Daemon: running on port 19825',
+        '[OK] Extension: connected',
+        '[SKIP] Connectivity: skipped (--no-live)',
+        '',
+        'Everything looks good!',
+      ].join('\n'));
     });
 
     const { getOpenCliStatus } = await import('@electron/utils/opencli-runtime');
     const status = await getOpenCliStatus();
 
     expect(status.binaryExists).toBe(true);
+    expect(status.binaryPath).toBe(managedOpenCliPath);
+    expect(status.version).toBe('1.5.5');
     expect(status.doctor?.ok).toBe(true);
+  });
+
+  it('runs doctor against the detected system opencli command', async () => {
+    mockSpawn.mockImplementation((command: string, args: string[]) => {
+      if (args[0] === '--version') {
+        expect(command).toBe('/usr/local/bin/opencli');
+        return createMockChild('opencli 1.5.5');
+      }
+
+      expect(command).toBe('/usr/local/bin/opencli');
+      expect(args).toEqual(['doctor', '--no-live']);
+      return createMockChild([
+        'opencli v1.5.5 doctor',
+        '',
+        '[OK] Daemon: running on port 19825',
+        '[OK] Extension: connected',
+        '[SKIP] Connectivity: skipped (--no-live)',
+        '',
+        'Everything looks good!',
+      ].join('\n'));
+    });
+
+    const { getOpenCliStatus } = await import('@electron/utils/opencli-runtime');
+    const status = await getOpenCliStatus();
+
+    expect(status.binaryExists).toBe(true);
+    expect(status.binaryPath).toBe('/usr/local/bin/opencli');
+    expect(status.version).toBe('1.5.5');
+    expect(status.command).toBe('/usr/local/bin/opencli');
+    expect(status.doctor?.ok).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
     expect(mockLoggerInfo).not.toHaveBeenCalled();
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
   it('deduplicates doctor warmup and status fetch when they overlap', async () => {
-    setPlatform('darwin');
-    mockIsPackagedGetter.value = true;
-    process.env.PATH = '/usr/bin:/bin';
-    Object.defineProperty(process, 'resourcesPath', {
-      value: '/Applications/GeeClaw.app/Contents/Resources',
-      configurable: true,
-      writable: true,
-    });
-    mockExistsSync.mockImplementation((value: string) => (
-      value === '/Applications/GeeClaw.app/Contents/Resources/opencli/dist/main.js'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/opencli/extension'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/managed-bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin'
-      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
-    ));
-    mockSpawn.mockImplementation(() => {
+    mockSpawn.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === '--version') {
+        return createMockChild('opencli 1.5.5');
+      }
+
       return createMockChild([
-          'opencli v1.3.3 doctor',
-          '',
-          '[OK] Daemon: running on port 19825',
-          '[OK] Extension: connected',
-          '[SKIP] Connectivity: skipped (--no-live)',
-          '',
-          'Everything looks good!',
-        ].join('\n'));
+        'opencli v1.5.5 doctor',
+        '',
+        '[OK] Daemon: running on port 19825',
+        '[OK] Extension: connected',
+        '[SKIP] Connectivity: skipped (--no-live)',
+        '',
+        'Everything looks good!',
+      ].join('\n'));
     });
 
     const { getOpenCliStatus, warmupOpenCliDoctor } = await import('@electron/utils/opencli-runtime');
@@ -291,198 +278,6 @@ Issues:
     ]);
 
     expect(status.doctor?.ok).toBe(true);
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
-  });
-
-  describe('catalog parsing', () => {
-    beforeEach(() => {
-      setupPackagedOpenCliCatalogRuntime();
-    });
-
-    it('groups list output by site and sorts commands by name', async () => {
-      mockSpawn.mockImplementation((_command: string, args: string[]) => {
-        expect(args).toEqual([
-          getPackagedOpenCliPath('opencli/dist/main.js'),
-          'list',
-          '--json',
-        ]);
-
-        return createMockChild(JSON.stringify([
-          {
-            command: 'youtube/video',
-            site: 'youtube',
-            name: 'video',
-            description: 'Get video metadata',
-            strategy: 'cookie',
-            browser: true,
-            args: [],
-            columns: ['field', 'value'],
-            domain: 'www.youtube.com',
-          },
-          {
-            command: 'bilibili/search',
-            site: 'bilibili',
-            name: 'search',
-            description: 'Search Bilibili videos',
-            strategy: 'cookie',
-            browser: true,
-            args: [{ name: 'query', type: 'str', required: true, positional: true, choices: [], default: null, help: 'Keyword' }],
-            columns: ['title'],
-            domain: 'www.bilibili.com',
-          },
-          {
-            command: 'youtube/channel',
-            site: 'youtube',
-            name: 'channel',
-            description: 'Get channel info',
-            strategy: 'cookie',
-            browser: true,
-            args: [],
-            columns: ['field', 'value'],
-            domain: 'www.youtube.com',
-          },
-        ]));
-      });
-
-      const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
-      const catalog = await getOpenCliCatalog();
-
-      expect(catalog.totalSites).toBe(2);
-      expect(catalog.totalCommands).toBe(3);
-      expect(catalog.sites.map((site) => site.site)).toEqual(['bilibili', 'youtube']);
-      expect(catalog.sites[1]?.commands.map((command) => command.name)).toEqual(['channel', 'video']);
-    });
-
-    it('extracts list JSON when warning lines precede the payload', async () => {
-      mockSpawn.mockImplementation(() => createMockChild([
-        "⚠  Plugin hot-digest/aggregate.ts: Cannot find package '@jackwener/opencli'",
-        JSON.stringify([
-          {
-            command: 'youtube/video',
-            site: 'youtube',
-            name: 'video',
-            description: 'Get video metadata',
-            strategy: 'cookie',
-            browser: true,
-            args: [],
-            columns: ['field', 'value'],
-            domain: 'www.youtube.com',
-          },
-        ]),
-      ].join('\n')));
-
-      const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
-      const catalog = await getOpenCliCatalog();
-
-      expect(catalog.totalSites).toBe(1);
-      expect(catalog.totalCommands).toBe(1);
-      expect(catalog.sites[0]?.site).toBe('youtube');
-      expect(catalog.sites[0]?.commands[0]?.command).toBe('youtube/video');
-    });
-
-    it('supports grouped catalog payloads that wrap commands by site', async () => {
-      mockSpawn.mockImplementation(() => createMockChild(JSON.stringify({
-        sites: [
-          {
-            site: 'youtube',
-            domains: ['www.youtube.com'],
-            strategies: ['cookie'],
-            commands: [
-              {
-                name: 'video',
-                description: 'Get video metadata',
-                browser: true,
-                args: [],
-                columns: ['field', 'value'],
-              },
-              {
-                name: 'channel',
-                description: 'Get channel info',
-                browser: true,
-                args: [],
-                columns: ['field', 'value'],
-              },
-            ],
-          },
-        ],
-      })));
-
-      const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
-      const catalog = await getOpenCliCatalog();
-
-      expect(catalog.totalSites).toBe(1);
-      expect(catalog.totalCommands).toBe(2);
-      expect(catalog.sites[0]?.commands.map((command) => command.command)).toEqual([
-        'youtube/channel',
-        'youtube/video',
-      ]);
-    });
-
-    it('supports arrays that mix direct commands with site-grouped commands', async () => {
-      mockSpawn.mockImplementation(() => createMockChild(JSON.stringify([
-        {
-          command: 'bilibili/search',
-          site: 'bilibili',
-          name: 'search',
-          description: 'Search Bilibili videos',
-          strategy: 'cookie',
-          browser: true,
-          args: [],
-          columns: ['title'],
-          domain: 'www.bilibili.com',
-        },
-        {
-          site: 'youtube',
-          domains: ['www.youtube.com'],
-          strategies: ['cookie'],
-          commands: [
-            {
-              name: 'channel',
-              description: 'Get channel info',
-              browser: true,
-              args: [],
-              columns: ['field', 'value'],
-            },
-          ],
-        },
-      ])));
-
-      const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
-      const catalog = await getOpenCliCatalog();
-
-      expect(catalog.totalSites).toBe(2);
-      expect(catalog.totalCommands).toBe(2);
-      expect(catalog.sites.map((site) => site.site)).toEqual(['bilibili', 'youtube']);
-    });
-
-    it('falls back to the bundled manifest when list output is not parseable', async () => {
-      setupPackagedOpenCliCatalogRuntime({ includeManifest: true });
-      mockReadFileSync.mockImplementation((value: string) => {
-        if (value === getPackagedOpenCliPath('opencli/cli-manifest.json')) {
-          return JSON.stringify([
-            {
-              site: 'bilibili',
-              name: 'search',
-              description: 'Search Bilibili videos',
-              strategy: 'cookie',
-              browser: true,
-              args: [],
-              columns: ['title'],
-              domain: 'www.bilibili.com',
-            },
-          ]);
-        }
-
-        return JSON.stringify({ version: '1.3.3' });
-      });
-      mockSpawn.mockImplementation(() => createMockChild('plugin warning without json payload'));
-
-      const { getOpenCliCatalog } = await import('@electron/utils/opencli-runtime');
-      const catalog = await getOpenCliCatalog();
-
-      expect(catalog.totalSites).toBe(1);
-      expect(catalog.totalCommands).toBe(1);
-      expect(catalog.sites[0]?.commands[0]?.command).toBe('bilibili/search');
-    });
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 });

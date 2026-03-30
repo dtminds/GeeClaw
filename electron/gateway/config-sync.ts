@@ -38,8 +38,8 @@ import {
   resolveManagedAgentWorkspacePath,
 } from '../utils/managed-agent-workspace';
 import { logger } from '../utils/logger';
-import { prependPathEntries, setPathEnvValue } from '../utils/env-path';
-import { getBundledPathEntries } from '../utils/managed-bin';
+import { setPathEnvValue } from '../utils/env-path';
+import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
@@ -87,7 +87,10 @@ export function buildGatewayForkEnv(options: {
 }): Record<string, string | undefined> {
   const { NODE_OPTIONS: _nodeOptions, ...forwardedEnv } = options.baseEnv;
   const forwardedEnvRecord = forwardedEnv as Record<string, string | undefined>;
-  const forwardedEnvWithPath = setPathEnvValue(forwardedEnvRecord, options.finalPath);
+  const forwardedEnvWithPath = setPathEnvValue(
+    forwardedEnvRecord,
+    getGeeClawRuntimePath({ ...forwardedEnvRecord, PATH: options.finalPath }, { includeBundled: false }),
+  );
 
   return {
     ...forwardedEnvWithPath,
@@ -464,9 +467,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const mode = app.isPackaged ? 'packaged' : 'dev';
 
   const baseProcessEnv = process.env as Record<string, string | undefined>;
-  const pathEntries = getBundledPathEntries();
+  const pathEntries = getGeeClawRuntimePathEntries(baseProcessEnv);
   const binPathExists = pathEntries.length > 0;
-  const finalPath = prependPathEntries(baseProcessEnv, pathEntries).path;
+  const finalPath = getGeeClawRuntimePath(baseProcessEnv);
 
   const appSettings = await getAllSettings();
   const uvEnv = await getUvMirrorEnv();

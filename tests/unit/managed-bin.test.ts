@@ -68,12 +68,14 @@ describe('managed-bin paths', () => {
     });
     mockExistsSync.mockImplementation((value: string) => (
       value === '/opt/geeclaw/resources/managed-bin'
+      || value === '/opt/geeclaw/resources/bin/bin'
       || value === '/opt/geeclaw/resources/bin'
     ));
 
     const { getBundledPathEntries } = await import('@electron/utils/managed-bin');
     expect(getBundledPathEntries()).toEqual([
       '/opt/geeclaw/resources/managed-bin',
+      '/opt/geeclaw/resources/bin/bin',
       '/opt/geeclaw/resources/bin',
     ]);
   });
@@ -92,7 +94,7 @@ describe('managed-bin paths', () => {
     expect(getBundledBinDir()).toBe(join(process.cwd(), 'resources', 'bin', 'win32-x64'));
   });
 
-  it('resolves the bundled node path for packaged macOS builds', async () => {
+  it('resolves the bundled node, npm, and npx paths for packaged macOS builds', async () => {
     setPlatform('darwin');
     setArch('arm64');
     mockIsPackagedGetter.value = true;
@@ -102,10 +104,36 @@ describe('managed-bin paths', () => {
       writable: true,
     });
     mockExistsSync.mockImplementation((value: string) => (
-      value === '/Applications/GeeClaw.app/Contents/Resources/bin/node'
+      value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin/node'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin/npm'
+      || value === '/Applications/GeeClaw.app/Contents/Resources/bin/bin/npx'
     ));
 
-    const { getBundledNodePath } = await import('@electron/utils/managed-bin');
-    expect(getBundledNodePath()).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/node');
+    const { getBundledNodePath, getBundledNpmPath, getBundledNpxPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNodePath()).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/bin/node');
+    expect(getBundledNpmPath()).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/bin/npm');
+    expect(getBundledNpxPath()).toBe('/Applications/GeeClaw.app/Contents/Resources/bin/bin/npx');
+  });
+
+  it('resolves bundled npm.cmd and npx.cmd for packaged Windows builds', async () => {
+    setPlatform('win32');
+    setArch('x64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: 'C:/Program Files/GeeClaw/resources',
+      configurable: true,
+      writable: true,
+    });
+
+    const npmCmdPath = join('C:/Program Files/GeeClaw/resources', 'bin', 'npm.cmd');
+    const npxCmdPath = join('C:/Program Files/GeeClaw/resources', 'bin', 'npx.cmd');
+    mockExistsSync.mockImplementation((value: string) => (
+      value === npmCmdPath
+      || value === npxCmdPath
+    ));
+
+    const { getBundledNpmPath, getBundledNpxPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNpmPath()).toBe(npmCmdPath);
+    expect(getBundledNpxPath()).toBe(npxCmdPath);
   });
 });

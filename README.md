@@ -85,8 +85,6 @@ Environment variables for bundled search skills:
 - `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
 - `BOCHA_API_KEY` for `bocha-skill`
 
-Packaged builds also ship managed `opencli` and `mcporter` CLIs on the internal PATH so bundled skill / exec flows do not depend on separate system installs.
-
 ### 🔐 Secure Provider Integration
 Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 
@@ -171,17 +169,34 @@ Notes:
 
 ### OpenCLI Browser Bridge Check
 
-GeeClaw also ships a bundled `opencli` runtime for skill/exec environments that rely on OpenCLI. Open **Settings → OpenCLI** to:
+Open **Settings → OpenCLI** to:
 
-- verify that the bundled OpenCLI runtime is present
-- inspect the bundled runtime version, daemon status, and Chrome Browser Bridge connectivity
+- verify whether `opencli` is installed on your system PATH
+- inspect the detected OpenCLI version, daemon status, and Chrome Browser Bridge connectivity
 - let GeeClaw warm up `opencli doctor --no-live` in the background after Gateway startup so the daemon is ready before you open the page
-- browse supported OpenCLI sites and commands grouped by site from the Settings page
+- jump to **Settings → CLI Market** when `opencli` is missing
 - download the Chrome extension package or jump to the upstream install guide when Chrome is not connected
 
 ### MCP Runtime Check
 
-Open **Settings → MCP** to review whether `mcporter` is installed in the standard way on your system PATH. If GeeClaw cannot find a standard installation, the page links to the official installation guide and still shows whether the bundled fallback runtime is available.
+Open **Settings → MCP** to review whether `mcporter` is installed on your system PATH. If GeeClaw cannot find it, the page sends you to **Settings → CLI Market** for one-click installation and still offers the upstream project links as secondary references.
+
+### CLI Market
+
+Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect, install, reinstall, and uninstall.
+
+- GeeClaw first checks whether the command already exists on your system and marks it as installed if found.
+- If the command is missing, GeeClaw installs it with the bundled Node/npm runtime into a GeeClaw-managed user-level prefix instead of requiring a system-wide `npm install -g`.
+- On the first managed install, GeeClaw also adds that managed directory to your user PATH so newly opened terminals can use the command directly.
+- The current UI intentionally keeps the status simple: it shows only `Installed` / `Not installed`. Missing CLIs show an `Install` button; installed CLIs move `Reinstall` and `Uninstall` into a compact actions menu.
+- GeeClaw does not compare versions in this view yet. Reinstall always uses the latest package version available from npm at the time you click it.
+- Some catalog entries can also declare follow-up Skills. GeeClaw automatically runs `npx skills add ... -y -g` after install and `npx skills remove ... -y -g` during uninstall.
+- Install and uninstall open a live log dialog so you can watch the full bundled `npm` and `npx skills` output in one place.
+
+Managed install locations:
+
+- macOS / Linux: `~/.geeclaw/npm-global`
+- Windows: `%APPDATA%\\GeeClaw\\npm-global`
 
 ---
 
@@ -265,7 +280,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 
 ```bash
 # Development
-pnpm run init             # Install dependencies + download uv
+pnpm run init             # Install dependencies + download uv and bundled Node/npm
 pnpm dev                  # Start with hot reload
 
 # Quality
@@ -279,8 +294,6 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
-pnpm run bundle:opencli   # Refresh the bundled opencli runtime
-pnpm run bundle:mcporter  # Refresh the bundled mcporter runtime
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform

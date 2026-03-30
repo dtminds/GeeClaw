@@ -407,7 +407,7 @@ export function Sidebar() {
                     )}
                     title={t('sidebar.settings')}
                   >
-                    <div className={cn('flex shrink-0 items-center justify-center', isSettingsModalPath(location.pathname) ? 'text-primary' : 'text-muted-foreground')}>
+                    <div className={cn('flex shrink-0 items-center justify-center cursor-pointer', isSettingsModalPath(location.pathname) ? 'text-primary' : 'text-muted-foreground')}>
                       <SidebarGlyph icon={Settings03Icon} />
                     </div>
                   </button>

@@ -22,14 +22,34 @@ export function getBundledBinDir(): string {
   return join(process.cwd(), 'resources', 'bin', `${process.platform}-${process.arch}`);
 }
 
+function getBundledExecutableDir(): string {
+  return process.platform === 'win32' ? getBundledBinDir() : join(getBundledBinDir(), 'bin');
+}
+
 export function getBundledNodePath(): string | null {
   const fileName = process.platform === 'win32' ? 'node.exe' : 'node';
-  const nodePath = join(getBundledBinDir(), fileName);
+  const nodePath = join(getBundledExecutableDir(), fileName);
   return existsSync(nodePath) ? nodePath : null;
 }
 
+function getBundledScriptPath(command: string): string | null {
+  const fileName = process.platform === 'win32' ? `${command}.cmd` : command;
+  const scriptPath = join(getBundledExecutableDir(), fileName);
+  return existsSync(scriptPath) ? scriptPath : null;
+}
+
+export function getBundledNpmPath(): string | null {
+  return getBundledScriptPath('npm');
+}
+
+export function getBundledNpxPath(): string | null {
+  return getBundledScriptPath('npx');
+}
+
 export function getBundledPathEntries(): string[] {
-  const entries = [getManagedBinDir(), getBundledBinDir()];
+  const entries = process.platform === 'win32'
+    ? [getManagedBinDir(), getBundledExecutableDir()]
+    : [getManagedBinDir(), getBundledExecutableDir(), getBundledBinDir()];
   return entries.filter((entry, index) => existsSync(entry) && entries.indexOf(entry) === index);
 }
 

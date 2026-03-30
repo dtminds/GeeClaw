@@ -4,8 +4,33 @@
   "nav": {
     "general": "关于",
     "gateway": "OpenClaw",
+    "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
     "mcp": "MCP"
+  },
+  "cliMarketplace": {
+    "title": "CLI 市场",
+    "description": "精选的命令行工具，可扩展 GeeClaw 的能力",
+    "refresh": "刷新状态",
+    "loadFailed": "加载 CLI 市场失败",
+    "installFailed": "安装 CLI 失败",
+    "empty": "当前还没有可安装的 CLI",
+    "installed": "已安装",
+    "missing": "未安装",
+    "install": "安装",
+    "reinstall": "重新安装",
+    "uninstall": "卸载",
+    "moreActions": "更多操作",
+    "job": {
+      "title": {
+        "install": "安装 CLI",
+        "uninstall": "卸载 CLI"
+      },
+      "running": "执行中",
+      "succeeded": "已完成",
+      "failed": "失败",
+      "close": "关闭"
+    }
   },
   "safety": {
     "navTitle": "安全",
@@ -294,17 +319,19 @@
     "refresh": "刷新状态",
     "loadFailed": "加载 OpenCLI 状态失败",
     "runtime": {
-      "title": "内置运行时",
-      "description": "GeeClaw 已经帮你准备好 OpenCLI，只需要确认当前环境是否可用。",
-      "present": "运行时就绪",
-      "missing": "运行时缺失",
+      "title": "系统运行时",
+      "description": "GeeClaw 会自动检测系统中是否已有可用的 opencli",
+      "present": "已安装",
+      "missing": "未安装",
       "version": "版本",
-      "doctor": "状态",
-      "binaryPath": "运行时路径",
-      "emptyPath": "未找到内置 OpenCLI 运行时",
-      "command": "启动命令",
-      "emptyCommand": "命令不可用",
+      "binaryPath": "路径",
+      "emptyPath": "未检测到系统 PATH 中的 opencli",
       "unknown": "未知"
+    },
+    "install": {
+      "title": "安装引导",
+      "description": "未检测到 opencli，请先前往 CLI 市场安装",
+      "marketplace": "前往 CLI 市场安装"
     },
     "doctor": {
       "title": "环境检查",
@@ -319,38 +346,13 @@
     },
     "extension": {
       "title": "Chrome浏览器插件",
-      "description": "如果插件还没有连通，请先下载最新扩展包，再按下面步骤安装到 Chrome",
-      "folder": "内置扩展目录",
-      "empty": "扩展目录不可用",
-      "opening": "打开中...",
-      "openFolder": "打开目录",
-      "openFailed": "打开扩展目录失败",
-      "bundleMissing": "当前构建未包含内置 Browser Bridge 扩展。请重新打包 GeeClaw，或从 OpenCLI Releases 下载扩展",
+      "description": "OpenCLI 运行依赖 Chrome 浏览器插件，如果你尚未安装插件，请按下面步骤安装，如已安装请忽略",
       "step1": "1. 点击上方按钮，下载最新的扩展安装包 `opencli-extension.zip`。",
       "step2": "2. 解压后打开 Chrome，访问 chrome://extensions，并打开右上角的“开发者模式”。",
       "step3": "3. 点击“加载已解压的扩展程序”，选择刚刚解压出来的扩展文件夹。",
       "step4": "4. 等 Chrome 显示 OpenCLI 扩展已启用后，回到这里刷新状态。"
     },
-    "catalog": {
-      "title": "支持的站点与命令",
-      "description": "按站点查看 OpenCLI 已支持的命令，先了解它能做什么，再决定要不要进一步配置浏览器环境",
-      "site": "站点",
-      "commands": "命令",
-      "searchPlaceholder": "搜索站点名，比如 bilibili、zhihu、weibo",
-      "searchAriaLabel": "搜索 OpenCLI 站点",
-      "searchResults": "当前筛选：{{query}}",
-      "summarySites": "{{count}} 个站点",
-      "summaryCommands": "{{count}} 个命令",
-      "commandCount": "{{count}} 个命令",
-      "loading": "正在读取 OpenCLI 站点目录...",
-      "empty": "当前没有可展示的 OpenCLI 站点目录。",
-      "emptySearch": "没有匹配的站点，试试别的站点名。",
-      "loadFailed": "加载 OpenCLI 站点目录失败",
-      "noDescription": "暂无说明"
-    },
     "actions": {
-      "copyPath": "复制路径",
-      "copyCommand": "复制命令",
       "downloadExtension": "下载插件安装包",
       "openGuide": "打开安装说明"
     },
@@ -375,7 +377,7 @@
     "loadFailed": "加载 MCP 状态失败",
     "health": {
       "title": "mcporter健康检测",
-      "description": "GeeClaw 会优先识别系统 PATH 里的 mcporter，如未安装将使用内置的环境"
+      "description": "GeeClaw 会自动检测系统中是否安装了 mcporter"
     },
     "system": {
       "title": "系统",
@@ -386,18 +388,10 @@
       "emptyPath": "未检测到系统 PATH 中的 mcporter",
       "unknown": "未知"
     },
-    "bundled": {
-      "title": "GeeClaw预置",
-      "present": "可用",
-      "missing": "缺失",
-      "version": "版本"
-    },
     "install": {
       "title": "安装引导",
-      "description": "当前系统 PATH 里还没有 mcporter。按下面方式安装后，GeeClaw 和终端都可以直接使用它。",
-      "step1": "1. 想先试用时，可以在终端运行：",
-      "step2": "2. 想把它作为当前项目依赖，可以运行：",
-      "step3": "3. 想让系统命令行里直接可用，请打开官方安装说明，按你的平台选择合适方式。",
+      "description": "未检测到 mcporter，建议先去 CLI 市场安装",
+      "marketplace": "前往 CLI 市场安装",
       "guide": "打开官方安装说明",
       "repo": "打开项目主页"
     }

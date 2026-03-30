@@ -40,6 +40,7 @@ import { weixinLoginManager } from '../utils/weixin-login';
 import { PORTS } from '../utils/config';
 import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
+import { CliMarketplaceService } from '../utils/cli-marketplace';
 
 // Disable GPU hardware acceleration globally for maximum stability across
 // all GPU configurations (no GPU, integrated, discrete).
@@ -106,6 +107,7 @@ const gotTheLock = gotElectronLock && gotFileLock;
 let mainWindow: BrowserWindow | null = null;
 const gatewayManager = new GatewayManager();
 const clawHubService = new ClawHubService();
+const cliMarketplaceService = new CliMarketplaceService();
 const hostEventBus = new HostEventBus();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
@@ -274,6 +276,7 @@ async function initialize(): Promise<void> {
   hostApiServer = startHostApiServer({
     gatewayManager,
     clawHubService,
+    cliMarketplaceService,
     eventBus: hostEventBus,
     mainWindow,
   });

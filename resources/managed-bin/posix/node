@@ -20,7 +20,7 @@ bin_arch() {
 }
 
 find_bundled_node() {
-  DEV_BUNDLED_NODE="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/node"
+  DEV_BUNDLED_NODE="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin/node"
   if [ -x "$DEV_BUNDLED_NODE" ]; then
     echo "$DEV_BUNDLED_NODE"
     return 0
@@ -28,10 +28,10 @@ find_bundled_node() {
 
   if [ "$(uname)" = "Darwin" ]; then
     CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-    PACKAGED_BUNDLED_NODE="$CONTENTS_DIR/Resources/bin/node"
+    PACKAGED_BUNDLED_NODE="$CONTENTS_DIR/Resources/bin/bin/node"
   else
     INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-    PACKAGED_BUNDLED_NODE="$INSTALL_DIR/resources/bin/node"
+    PACKAGED_BUNDLED_NODE="$INSTALL_DIR/resources/bin/bin/node"
   fi
 
   if [ -x "$PACKAGED_BUNDLED_NODE" ]; then

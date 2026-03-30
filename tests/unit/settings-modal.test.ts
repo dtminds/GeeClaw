@@ -10,6 +10,10 @@ describe('settings modal paths', () => {
     expect(getSettingsModalPath('mcp')).toBe('/settings/mcp');
   });
 
+  it('builds the cli marketplace settings path', () => {
+    expect(getSettingsModalPath('cliMarketplace')).toBe('/settings/cli-marketplace');
+  });
+
   it('resolves the opencli settings section from the route', () => {
     expect(resolveSettingsSection('/settings/opencli')).toBe('opencli');
     expect(resolveSettingsSection('/settings/opencli/status')).toBe('opencli');
@@ -18,5 +22,10 @@ describe('settings modal paths', () => {
   it('resolves the mcp settings section from the route', () => {
     expect(resolveSettingsSection('/settings/mcp')).toBe('mcp');
     expect(resolveSettingsSection('/settings/mcp/status')).toBe('mcp');
+  });
+
+  it('resolves the cli marketplace settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/cli-marketplace')).toBe('cliMarketplace');
+    expect(resolveSettingsSection('/settings/cli-marketplace/feishu')).toBe('cliMarketplace');
   });
 });
