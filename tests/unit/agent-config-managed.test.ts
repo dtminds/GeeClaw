@@ -47,6 +47,7 @@ async function setupManagedPresetFixture(options?: {
       skillScope?: { mode: 'default' } | { mode: 'specified'; skills: string[] };
     };
   };
+  failAccessPaths?: string[] | ((homeDir: string) => string[]);
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
   tempDirs.push(homeDir);
@@ -64,6 +65,25 @@ async function setupManagedPresetFixture(options?: {
     homedir: () => homeDir,
     default: { homedir: () => homeDir },
   }));
+  vi.doMock('fs/promises', async () => {
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const blockedList = typeof options?.failAccessPaths === 'function'
+      ? options.failAccessPaths(homeDir)
+      : (options?.failAccessPaths ?? []);
+    const blockedPaths = new Set(blockedList.map((entry) => entry.replace(/\\/g, '/')));
+
+    return {
+      ...actual,
+      default: actual,
+      access: vi.fn(async (path: Parameters<typeof actual.access>[0], mode?: Parameters<typeof actual.access>[1]) => {
+        const normalized = String(path).replace(/\\/g, '/');
+        if (blockedPaths.has(normalized)) {
+          throw new Error(`blocked access for ${normalized}`);
+        }
+        return actual.access(path, mode);
+      }),
+    };
+  });
   vi.doMock('@electron/utils/paths', async () => {
     const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
     return {
@@ -76,7 +96,6 @@ async function setupManagedPresetFixture(options?: {
         : value,
     };
   });
-
   const configDir = join(homeDir, '.openclaw-geeclaw');
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
@@ -160,6 +179,7 @@ afterEach(() => {
   vi.unmock('electron');
   vi.unmock('os');
   vi.unmock('@electron/utils/paths');
+  vi.unmock('fs/promises');
   vi.unmock('@electron/services/agents/store-instance');
   vi.unmock('@electron/utils/agent-presets');
   while (tempDirs.length > 0) {
@@ -224,6 +244,18 @@ describe('managed agent config domain', () => {
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       workspace: '~/geeclaw/workspace-stockexpert',
       agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
+    });
+  });
+
+  it('installs preset agents even when direct access probes on the workspace root fail', async () => {
+    const { agentConfig } = await setupManagedPresetFixture({
+      failAccessPaths: (homeDir) => [join(homeDir, 'geeclaw', 'workspace-stockexpert')],
+    });
+
+    await expect(agentConfig.installPresetAgent('stock-expert')).resolves.toMatchObject({
+      agents: expect.arrayContaining([
+        expect.objectContaining({ id: 'stockexpert', managed: true }),
+      ]),
     });
   });
 

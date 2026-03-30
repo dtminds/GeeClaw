@@ -3,6 +3,9 @@ import { join, relative } from 'node:path';
 import { getAgentPresetsDir } from './paths';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { normalizePresetPlatforms, type AgentPresetPlatform } from './agent-preset-platforms';
+import { mapWithConcurrency } from './promise-pool';
+
+const PRESET_SKILL_IO_CONCURRENCY = 16;
 
 const RECOGNIZED_MANAGED_FILES = new Set([
   'AGENTS.md',
@@ -292,22 +295,24 @@ async function readPresetSkills(
 
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true });
-    const skills: Record<string, Record<string, string>> = {};
+    const skills = await mapWithConcurrency(
+      entries.sort((left, right) => left.name.localeCompare(right.name)),
+      PRESET_SKILL_IO_CONCURRENCY,
+      async (entry) => {
+        if (!entry.isDirectory()) {
+          throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
+        }
 
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.isDirectory()) {
-        throw new Error(`Preset "${presetId}" skill entry "${entry.name}" must be a directory`);
-      }
+        const skillDir = join(skillsDir, entry.name);
+        const files = await readDirectoryFiles(skillDir);
+        if (!files['SKILL.md']) {
+          throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
+        }
+        return [entry.name, files] as const;
+      },
+    );
 
-      const skillDir = join(skillsDir, entry.name);
-      const files = await readDirectoryFiles(skillDir);
-      if (!files['SKILL.md']) {
-        throw new Error(`Preset "${presetId}" skill "${entry.name}" must contain SKILL.md`);
-      }
-      skills[entry.name] = files;
-    }
-
-    return skills;
+    return Object.fromEntries(skills);
   } catch (error) {
     const fsError = error as NodeJS.ErrnoException;
     if (fsError.code === 'ENOENT') {
