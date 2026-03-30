@@ -71,11 +71,10 @@
         "marketplace": "智能体广场"
     },
     "marketplace": {
-        "title": "内置智能体广场",
-        "description": "安装带预设工作区、指令文件和托管规则的内置 Agent。",
         "install": "添加",
         "installed": "已添加",
         "unavailable": "当前不可用",
+        "comingSoon": "暂未开放",
         "viewDetails": "查看详情",
         "managedHint": "添加后会作为受管控 Agent 安装",
         "skillCount": "{{count}} 个预置技能",

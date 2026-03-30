@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const fetchAgentsMock = vi.fn(async () => undefined);
 const fetchPresetsMock = vi.fn(async () => undefined);
@@ -26,6 +27,7 @@ const translations: Record<string, string> = {
   'marketplace.install': 'Install',
   'marketplace.installed': 'Installed',
   'marketplace.unavailable': 'Unavailable',
+  'marketplace.comingSoon': 'Not open yet',
   'marketplace.viewDetails': 'View Details',
   'marketplace.availableOn': 'Available on {{platforms}}',
   'marketplace.managedHint': 'Installs as a managed preset agent',
@@ -166,9 +168,13 @@ vi.mock('@/stores/gateway', () => ({
 }));
 
 describe('Agents marketplace view', () => {
-  it('opens preset details, disables unsupported installs, and still installs supported presets', async () => {
+  it('shows the temporary install hold in marketplace cards and preset details', async () => {
     const { Agents } = await import('@/pages/Agents');
-    render(<Agents />);
+    render(
+      <TooltipProvider delayDuration={0}>
+        <Agents />
+      </TooltipProvider>,
+    );
 
     expect(fetchAgentsMock).toHaveBeenCalledTimes(1);
     expect(fetchPresetsMock).toHaveBeenCalledTimes(1);
@@ -179,15 +185,16 @@ describe('Agents marketplace view', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
 
-    expect(screen.getByText('Built-in Agent Marketplace')).toBeInTheDocument();
     expect(screen.getByText('捕捉热点和市场趋势')).toBeInTheDocument();
     expect(screen.getByText('套利信号与候选池')).toBeInTheDocument();
     expect(screen.getAllByText('macOS').length).toBeGreaterThan(0);
-    expect(screen.getByText('Available on macOS')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unavailable' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Installed' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
-    expect(installPresetMock).toHaveBeenCalledWith('alpha-researcher');
+    const installButton = screen.getByRole('button', { name: 'Install' });
+    expect(installButton).toBeDisabled();
+
+    fireEvent.pointerMove(installButton.closest('span') ?? installButton);
+    expect((await screen.findAllByText('Not open yet')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
 
@@ -195,10 +202,19 @@ describe('Agents marketplace view', () => {
     expect(within(dialog).getByText('Preset summary')).toBeInTheDocument();
     expect(within(dialog).getByText('Preset skills')).toBeInTheDocument();
     expect(within(dialog).getByText('stock-announcements')).toBeInTheDocument();
-    expect(within(dialog).getByText('Managed files')).toBeInTheDocument();
-    expect(within(dialog).getByText('AGENTS.md')).toBeInTheDocument();
     expect(within(dialog).getByText('macOS')).toBeInTheDocument();
     expect(within(dialog).getByText('Available on macOS')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[2]);
+
+    const supportedDialog = await screen.findByRole('dialog');
+    const supportedInstallButton = within(supportedDialog).getByRole('button', { name: 'Install' });
+    expect(supportedInstallButton).toBeDisabled();
+
+    fireEvent.pointerMove(supportedInstallButton.closest('span') ?? supportedInstallButton);
+    expect((await screen.findAllByText('Not open yet')).length).toBeGreaterThan(0);
+    expect(installPresetMock).not.toHaveBeenCalled();
   });
 });

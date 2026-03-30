@@ -71,11 +71,10 @@
         "marketplace": "Marketplace"
     },
     "marketplace": {
-        "title": "Built-in Agent Marketplace",
-        "description": "Install curated agents with preset workspaces, instructions, and managed rules.",
         "install": "Install",
         "installed": "Installed",
         "unavailable": "Unavailable",
+        "comingSoon": "Not open yet",
         "viewDetails": "View Details",
         "managedHint": "Installs as a managed preset agent",
         "skillCount": "{{count}} preset skills",
