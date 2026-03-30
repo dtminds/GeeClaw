@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
 import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
@@ -21,7 +22,7 @@ import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
 import { cn } from '@/lib/utils';
 import { MarketplacePresetDetailDialog } from './MarketplacePresetDetailDialog';
-import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
+import { getPresetPlatformLabels } from './preset-platforms';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
 import whatsappIcon from '@/assets/channels/whatsapp.svg';
@@ -32,7 +33,7 @@ import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
 export function Agents() {
-  const { t, i18n } = useTranslation('agents');
+  const { t } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
   const {
     agents,
@@ -135,7 +136,7 @@ export function Agents() {
           )}
 
           <div
-            className="mb-6 flex items-center gap-2 rounded-full border border-black/8 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/8 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
             role="tablist"
           >
             {(['agents', 'marketplace'] as const).map((tab) => {
@@ -160,19 +161,18 @@ export function Agents() {
 
           {activeTab === 'marketplace' ? (
             <div className="space-y-5">
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-foreground">{t('marketplace.title')}</h2>
-                <p className="text-sm text-muted-foreground">{t('marketplace.description')}</p>
-              </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 {presets.map((preset) => {
                   const installed = installedPresetIds.has(preset.presetId);
-                  const installDisabled = installed || !preset.supportedOnCurrentPlatform;
+                  const installOnHold = !installed && preset.supportedOnCurrentPlatform;
+                  const installDisabled = installed || !preset.supportedOnCurrentPlatform || installOnHold;
                   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
-                  const availabilityCopy = !preset.supportedOnCurrentPlatform
-                    ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
-                    : null;
+                  const installLabel = installed
+                    ? t('marketplace.installed')
+                    : preset.supportedOnCurrentPlatform
+                      ? t('marketplace.install')
+                      : t('marketplace.unavailable');
                   return (
                     <div
                       key={preset.presetId}
@@ -181,29 +181,17 @@ export function Agents() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <h3 className="text-[18px] font-semibold text-foreground">{preset.name}</h3>
-                          <Badge className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shadow-none">
-                            {t('managedBadge')}
-                          </Badge>
+                          {platformLabels.map((label) => (
+                            <Badge
+                              key={label}
+                              variant="secondary"
+                              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                            >
+                              {label}
+                            </Badge>
+                          ))}
                         </div>
                         <p className="text-sm text-muted-foreground">{preset.description}</p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {platformLabels.map((label) => (
-                          <Badge
-                            key={label}
-                            variant="secondary"
-                            className="rounded-full border-0 bg-black/[0.05] px-2 py-0.5 text-[11px] font-medium text-foreground/70 shadow-none dark:bg-white/[0.08]"
-                          >
-                            {label}
-                          </Badge>
-                        ))}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
-                        <span>{t('marketplace.managedHint')}</span>
-                        <span>{t('marketplace.skillCount', { count: preset.presetSkills.length })}</span>
-                        {availabilityCopy && <span>{availabilityCopy}</span>}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3">
@@ -214,17 +202,31 @@ export function Agents() {
                         >
                           {t('marketplace.viewDetails')}
                         </Button>
-                        <Button
-                          onClick={() => void installPreset(preset.presetId)}
-                          disabled={installDisabled}
-                          className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
-                        >
-                          {installed
-                            ? t('marketplace.installed')
-                            : preset.supportedOnCurrentPlatform
-                              ? t('marketplace.install')
-                              : t('marketplace.unavailable')}
-                        </Button>
+                        {installOnHold ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex cursor-not-allowed">
+                                <Button
+                                  disabled={installDisabled}
+                                  className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                                >
+                                  {installLabel}
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              {t('marketplace.comingSoon')}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Button
+                            onClick={() => void installPreset(preset.presetId)}
+                            disabled={installDisabled}
+                            className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
+                          >
+                            {installLabel}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
