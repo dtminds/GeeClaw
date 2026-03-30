@@ -1,0 +1,31 @@
+{
+  "presetId": "customer-insights-lab",
+  "name": "客户洞察实验室",
+  "description": "从访谈、工单、评论和反馈中提炼用户痛点、机会与优先级，服务产品和服务改进。",
+  "iconKey": "research",
+  "category": "support",
+  "managed": true,
+  "agent": {
+    "id": "customer-insights-lab",
+    "workspace": "~/geeclaw/workspace-customer-insights-lab",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "market-researcher",
+        "file-skill",
+        "xlsx",
+        "docx",
+        "summarize",
+        "self-improving-agent"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

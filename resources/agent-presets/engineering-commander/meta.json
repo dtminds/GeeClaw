@@ -1,0 +1,31 @@
+{
+  "presetId": "engineering-commander",
+  "name": "工程交付指挥官",
+  "description": "围绕计划、实现、验证和评审组织复杂研发任务，适合高强度工程交付。",
+  "iconKey": "research",
+  "category": "engineering",
+  "managed": true,
+  "agent": {
+    "id": "engineering-commander",
+    "workspace": "~/geeclaw/workspace-engineering-commander",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "autoplan",
+        "codex",
+        "review",
+        "qa",
+        "ship",
+        "investigate"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

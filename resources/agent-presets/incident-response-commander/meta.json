@@ -1,0 +1,31 @@
+{
+  "presetId": "incident-response-commander",
+  "name": "故障应急指挥官",
+  "description": "围绕告警、排查、验证、沟通和复盘组织故障应对，适合线上问题处置。",
+  "iconKey": "research",
+  "category": "operations",
+  "managed": true,
+  "agent": {
+    "id": "incident-response-commander",
+    "workspace": "~/geeclaw/workspace-incident-response-commander",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "investigate",
+        "qa-only",
+        "review",
+        "guard",
+        "freeze",
+        "canary"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}
