@@ -32,8 +32,6 @@ extraResources:
     to: openclaw/
   - from: build/opencli/
     to: opencli/
-  - from: build/mcporter/
-    to: mcporter/
   - from: build/preinstalled-skills/
     to: skills/
   # NOTE: OpenClaw plugin mirrors are copied by the afterPack hook

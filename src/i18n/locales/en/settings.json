@@ -388,7 +388,7 @@
     "loadFailed": "Failed to load MCP status",
     "health": {
       "title": "mcporter Health Check",
-      "description": "GeeClaw first looks for mcporter on your system PATH, and uses the bundled environment when it is not installed."
+      "description": "GeeClaw only checks for mcporter on your system PATH, including installs completed through CLI Market."
     },
     "system": {
       "title": "System",
@@ -399,18 +399,10 @@
       "emptyPath": "No mcporter command was found on your system PATH",
       "unknown": "Unknown"
     },
-    "bundled": {
-      "title": "GeeClaw Bundled",
-      "present": "Ready",
-      "missing": "Missing",
-      "version": "Version"
-    },
     "install": {
       "title": "Install Guide",
-      "description": "mcporter is not available on your system PATH yet. Install it with one of the standard methods below so GeeClaw and your terminal can use the same command.",
-      "step1": "1. To try it first without installing, run:",
-      "step2": "2. To add it as a dependency in the current project, run:",
-      "step3": "3. To make the command directly available in your shell, open the official installation guide and choose the method that matches your platform.",
+      "description": "mcporter is not available on your system PATH yet. Install it from CLI Market first so GeeClaw and your terminal can use the same system command.",
+      "marketplace": "Open CLI Market",
       "guide": "Open Official Install Guide",
       "repo": "Open Project Page"
     }

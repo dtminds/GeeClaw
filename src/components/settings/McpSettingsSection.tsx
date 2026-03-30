@@ -8,11 +8,13 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc, toUserMessage } from '@/lib/api-client';
+import { getSettingsModalPath } from '@/lib/settings-modal';
 
 interface McporterBinaryStatus {
   exists: boolean;
@@ -27,13 +29,7 @@ interface McporterStatus {
   version: string | null;
   installGuideUrl: string;
   repositoryUrl: string;
-  quickStartCommand: string;
-  projectInstallCommand: string;
   system: McporterBinaryStatus;
-  bundled: McporterBinaryStatus & {
-    wrapperPath: string | null;
-    runtimeDir: string | null;
-  };
 }
 
 interface McpStatusResponse {
@@ -98,6 +94,7 @@ function ValueCard({
 
 export function McpSettingsSection() {
   const { t } = useTranslation('settings');
+  const navigate = useNavigate();
   const [status, setStatus] = useState<McporterStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,8 +124,7 @@ export function McpSettingsSection() {
     void loadStatus();
   }, [loadStatus]);
 
-  const systemInstalled = loading ? null : (status?.system.exists ?? false);
-  const bundledInstalled = loading ? null : (status?.bundled.exists ?? false);
+  const systemInstalled = loading ? null : (status?.system?.exists ?? false);
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,7 +157,7 @@ export function McpSettingsSection() {
             <p className="mt-1 text-sm text-muted-foreground">{t('mcp.health.description')}</p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4">
             <div className="modal-field-surface rounded-2xl border p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h4 className="text-base font-semibold text-foreground">{t('mcp.system.title')}</h4>
@@ -185,30 +181,11 @@ export function McpSettingsSection() {
                 />
               </div>
             </div>
-
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h4 className="text-base font-semibold text-foreground">{t('mcp.bundled.title')}</h4>
-                <StatusBadge
-                  status={bundledInstalled}
-                  trueLabel={t('mcp.bundled.present')}
-                  falseLabel={t('mcp.bundled.missing')}
-                  unknownLabel={t('opencli.status.checking')}
-                />
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <ValueCard
-                  label={t('mcp.bundled.version')}
-                  value={loading ? t('common:status.loading') : (status?.bundled.version || t('mcp.system.unknown'))}
-                />
-              </div>
-            </div>
           </div>
         </div>
       </section>
 
-      {!status?.system.exists && (
+      {true && (
         <section className="modal-section-surface rounded-3xl border p-5">
           <div className="flex flex-col gap-4">
             <div>
@@ -216,15 +193,15 @@ export function McpSettingsSection() {
               <p className="mt-1 text-sm text-muted-foreground">{t('mcp.install.description')}</p>
             </div>
 
-            <div className="rounded-2xl border border-black/8 bg-background/55 px-4 py-4 text-sm leading-7 text-muted-foreground dark:border-white/10 dark:bg-black/10">
-              <p>{t('mcp.install.step1')}</p>
-              <p className="mt-2 font-mono text-foreground">{status?.quickStartCommand || 'npx mcporter list'}</p>
-              <p className="mt-4">{t('mcp.install.step2')}</p>
-              <p className="mt-2 font-mono text-foreground">{status?.projectInstallCommand || 'pnpm add mcporter'}</p>
-              <p className="mt-4">{t('mcp.install.step3')}</p>
-            </div>
-
             <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                className="rounded-full"
+                onClick={() => navigate(getSettingsModalPath('cliMarketplace'))}
+              >
+                {t('mcp.install.marketplace')}
+              </Button>
+
               <Button
                 type="button"
                 variant="outline"

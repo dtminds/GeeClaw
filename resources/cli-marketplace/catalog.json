@@ -1,5 +1,35 @@
 [
     {
+        "id": "mcporter",
+        "title": "MCPorter",
+        "packageName": "mcporter",
+        "binNames": [
+            "mcporter"
+        ],
+        "description": "通过命令行调用 MCP 服务",
+        "homepage": "mcporter.dev",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
+    },
+    {
+        "id": "opencli",
+        "title": "OpenCLI",
+        "packageName": "@jackwener/opencli",
+        "binNames": [
+            "opencli"
+        ],
+        "description": "让任何网站或 Electron 应用成为你的 CLI",
+        "homepage": "https://opencli.info/",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
+    },
+    {
         "id": "feishu",
         "title": "飞书 CLI",
         "packageName": "@larksuite/cli",
@@ -30,14 +60,14 @@
         "installArgs": []
     },
     {
-        "id": "opencli",
-        "title": "OpenCLI",
-        "packageName": "@jackwener/opencli",
+        "id": "ncm-cli",
+        "title": "网易云音乐 CLI",
+        "packageName": "@music163/ncm-cli",
         "binNames": [
-            "opencli"
+            "ncm-cli"
         ],
-        "description": "让任何网站或 Electron 应用成为你的 CLI",
-        "homepage": "https://opencli.info/",
+        "description": "网易云音乐命令行播放器，支持搜索、播放、歌单管理，专为 AI Agent 设计",
+        "homepage": "https://github.com/nicepkg/ncm-cli",
         "platforms": [
             "darwin",
             "win32"

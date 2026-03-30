@@ -85,7 +85,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 - `TAVILY_API_KEY`：用于 `tavily-search`（上游运行时也可能支持 OAuth）
 - `BOCHA_API_KEY`：用于 `bocha-skill`
 
-打包版本也会把托管的 `opencli` 与 `mcporter` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
+打包版本仍会把托管的 `opencli` CLI 放进应用内部 PATH，方便内置 skill / exec 流程直接复用，而不依赖用户额外在系统里安装。
 
 ### 🔐 安全的供应商集成
 连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。OpenAI 同时支持 API Key 与浏览器 OAuth（Codex 订阅）登录。
@@ -182,7 +182,7 @@ GeeClaw 也会随应用打包 `opencli` 运行时，供依赖 OpenCLI 的 skill 
 
 ### MCP Runtime 检查
 
-打开 **设置 → MCP** 可以查看系统 PATH 中是否已经按标准方式安装 `mcporter`。如果 GeeClaw 还没有检测到标准安装，页面会引导你打开官方安装说明，同时也会显示内置兜底运行时是否可用。
+打开 **设置 → MCP** 可以查看系统 PATH 中是否已经有 `mcporter`。如果 GeeClaw 还没有检测到它，页面会优先引导你前往 **设置 → CLI 市场** 一键安装，同时保留上游项目链接作为辅助信息。
 
 ### CLI 市场
 
@@ -296,7 +296,6 @@ pnpm run verify           # 运行 lint + typecheck + 单元测试
 # 构建与打包
 pnpm run build:vite       # 仅构建前端
 pnpm run bundle:opencli   # 重新生成内置 opencli 运行时
-pnpm run bundle:mcporter  # 重新生成内置 mcporter 运行时
 pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包

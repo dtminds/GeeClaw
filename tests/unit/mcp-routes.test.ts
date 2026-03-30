@@ -23,7 +23,6 @@ describe('handleMcpRoutes', () => {
       binaryPath: '/usr/local/bin/mcporter',
       version: '0.7.3',
       system: { exists: true, path: '/usr/local/bin/mcporter', version: '0.7.3' },
-      bundled: { exists: true, path: '/tmp/mcporter/dist/cli.js', version: '0.7.3' },
     });
 
     const { handleMcpRoutes } = await import('@electron/api/routes/mcp');
@@ -44,6 +43,10 @@ describe('handleMcpRoutes', () => {
         mcporter: expect.objectContaining({
           installed: true,
           version: '0.7.3',
+          system: expect.objectContaining({
+            exists: true,
+            path: '/usr/local/bin/mcporter',
+          }),
         }),
       }),
     );

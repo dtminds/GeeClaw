@@ -85,7 +85,7 @@ Environment variables for bundled search skills:
 - `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
 - `BOCHA_API_KEY` for `bocha-skill`
 
-Packaged builds also ship managed `opencli` and `mcporter` CLIs on the internal PATH so bundled skill / exec flows do not depend on separate system installs.
+Packaged builds still ship a managed `opencli` CLI on the internal PATH so bundled skill / exec flows do not depend on a separate system install.
 
 ### 🔐 Secure Provider Integration
 Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
@@ -181,7 +181,7 @@ GeeClaw also ships a bundled `opencli` runtime for skill/exec environments that 
 
 ### MCP Runtime Check
 
-Open **Settings → MCP** to review whether `mcporter` is installed in the standard way on your system PATH. If GeeClaw cannot find a standard installation, the page links to the official installation guide and still shows whether the bundled fallback runtime is available.
+Open **Settings → MCP** to review whether `mcporter` is installed on your system PATH. If GeeClaw cannot find it, the page sends you to **Settings → CLI Market** for one-click installation and still offers the upstream project links as secondary references.
 
 ### CLI Market
 
@@ -295,7 +295,6 @@ pnpm run verify           # Lint + typecheck + unit tests
 # Build & Package
 pnpm run build:vite       # Build frontend only
 pnpm run bundle:opencli   # Refresh the bundled opencli runtime
-pnpm run bundle:mcporter  # Refresh the bundled mcporter runtime
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
