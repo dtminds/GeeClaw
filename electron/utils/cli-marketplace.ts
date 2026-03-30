@@ -557,7 +557,7 @@ async function defaultRunSkillCommandWithBundledNpx(
   await runBundledCommand({
     executablePath: npxPath,
     displayCommand: 'npx',
-    args: ['skills', command, source, '-y', '-g'],
+    args: ['-y', 'skills', command, source, '-y', '-g'],
     prefixDir: options.prefixDir,
     appendLog: options.appendLog,
     failureMessage: `npx skills ${command} exited`,
