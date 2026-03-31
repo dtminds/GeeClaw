@@ -243,7 +243,7 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
   const normalized = normalizeSpecifiedSkillList(rawSkills, {
     duplicateError: 'Specified skill scope must not contain duplicate skills',
     emptyError: 'Specified skill scope must contain at least 1 skill',
-    tooManyError: 'Specified skill scope must not contain more than 6 skills',
+    tooManyError: 'Specified skill scope must not contain more than 20 skills',
   });
 
   return { mode: 'specified', skills: normalized };
@@ -346,7 +346,7 @@ async function seedPresetSkillsIntoWorkspace(
     return;
   }
 
-  const skillsRoot = join(workspace, 'SKILLS');
+  const skillsRoot = join(workspace, 'skills');
   await ensureDir(skillsRoot);
 
   for (const [skillSlug, files] of Object.entries(skills)) {

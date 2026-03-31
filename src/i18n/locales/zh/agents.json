@@ -73,6 +73,16 @@
         "install": "添加",
         "installed": "已添加",
         "unavailable": "当前不可用",
+        "installProgress": "{{progress}}%",
+        "installState": {
+            "idle": "添加",
+            "preparing": "准备预设",
+            "installing_files": "安装文件",
+            "installing_skills": "安装技能",
+            "finalizing": "完成配置",
+            "completed": "已添加",
+            "failed": "安装失败"
+        },
         "comingSoon": "暂未开放",
         "viewDetails": "查看详情",
         "managedHint": "添加后会作为受管控 Agent 安装",

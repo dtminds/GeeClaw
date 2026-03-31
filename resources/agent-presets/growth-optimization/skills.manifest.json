@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "slug": "ab-test-analysis",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-data-analytics/skills/ab-test-analysis",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "beachhead-segment",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/beachhead-segment",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "cohort-analysis",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-data-analytics/skills/cohort-analysis",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "competitive-battlecard",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/competitive-battlecard",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "growth-loops",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/growth-loops",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "gtm-motions",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/gtm-motions",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "gtm-strategy",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/gtm-strategy",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "ideal-customer-profile",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-go-to-market/skills/ideal-customer-profile",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "marketing-ideas",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-marketing-growth/skills/marketing-ideas",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "metrics-dashboard",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-discovery/skills/metrics-dashboard",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "north-star-metric",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-marketing-growth/skills/north-star-metric",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "positioning-ideas",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-marketing-growth/skills/positioning-ideas",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "product-name",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-marketing-growth/skills/product-name",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "sql-queries",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-data-analytics/skills/sql-queries",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "value-prop-statements",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-marketing-growth/skills/value-prop-statements",
+        "ref": "main"
+      }
+    }
+  ]
+}

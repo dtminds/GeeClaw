@@ -13,9 +13,9 @@
         "all": "全部",
         "enabled": "已启用",
         "builtIn": "内置",
-        "openclawExtra": "OpenClaw Extra",
-        "openclawManaged": "OpenClaw Managed",
-        "personal": "个人"
+        "openclawExtra": "Extra",
+        "openclawManaged": "Managed",
+        "personal": "全局"
     },
     "search": "搜索技能...",
     "searchMarketplace": "搜索市场...",

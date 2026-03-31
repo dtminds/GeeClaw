@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "slug": "ansoff-matrix",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/ansoff-matrix",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "business-model",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/business-model",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "brainstorm-okrs",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/brainstorm-okrs",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "create-prd",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/create-prd",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "lean-canvas",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/lean-canvas",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "monetization-strategy",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/monetization-strategy",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "outcome-roadmap",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/outcome-roadmap",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "pestle-analysis",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/pestle-analysis",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "porters-five-forces",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/porters-five-forces",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "pre-mortem",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/pre-mortem",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "pricing-strategy",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/pricing-strategy",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "prioritization-frameworks",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/prioritization-frameworks",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "product-strategy",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/product-strategy",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "product-vision",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/product-vision",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "stakeholder-map",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-execution/skills/stakeholder-map",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "startup-canvas",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/startup-canvas",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "swot-analysis",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/swot-analysis",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "value-proposition",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "phuryn/pm-skills",
+        "repoPath": "pm-product-strategy/skills/value-proposition",
+        "ref": "main"
+      }
+    }
+  ]
+}

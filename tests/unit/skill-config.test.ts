@@ -158,6 +158,88 @@ describe('skill config sync', () => {
     expect(config.commands?.restart).toBe(true);
   });
 
+  it('does not default-disable skills already referenced by agents.list entries', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+
+    vi.doMock('@electron/utils/paths', async () => {
+      const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
+      return {
+        ...actual,
+        getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+      };
+    });
+
+    vi.doMock('@electron/utils/skills-policy', () => ({
+      getAlwaysEnabledSkillKeys: () => [],
+      isAlwaysEnabledSkillKey: () => false,
+    }));
+
+    vi.doMock('@electron/utils/store', () => ({
+      getExplicitSkillToggles: async () => ({
+        enabledSkills: [],
+        disabledSkills: [],
+      }),
+      setExplicitSkillToggle: vi.fn(),
+    }));
+
+    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configPath = join(configDir, 'openclaw.json');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        list: [
+          { id: 'main', default: true },
+          { id: 'stockexpert', skills: ['stock-analyzer', 'web-search'] },
+        ],
+      },
+      skills: {
+        entries: {
+          existing: { enabled: true },
+          'stock-analyzer': { enabled: false },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { ensureSkillEntriesDefaultDisabled } = await import('@electron/utils/skill-config');
+    const result = await ensureSkillEntriesDefaultDisabled([
+      'stock-analyzer',
+      'other-new-skill',
+    ]);
+
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      skills?: {
+        entries?: Record<string, { enabled?: boolean }>;
+      };
+    };
+
+    expect(result).toEqual({
+      success: true,
+      added: ['other-new-skill'],
+      normalizedAlwaysEnabled: [],
+    });
+    expect(config.skills?.entries?.['stock-analyzer']).toBeUndefined();
+    expect(config.skills?.entries?.['other-new-skill']).toEqual({ enabled: false });
+  });
+
   it('stores only disabled state for individual skill toggles', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
     tempDirs.push(homeDir);

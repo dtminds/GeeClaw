@@ -1,0 +1,38 @@
+{
+  "presetId": "strategy-planning",
+  "name": "战略规划官",
+  "description": "覆盖产品战略、商业模式、PRD、OKR 与路线规划，适合把研究结论收敛成可执行方向。",
+  "emoji": "🧭",
+  "category": "strategy",
+  "managed": true,
+  "agent": {
+    "id": "strategy-planning",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "ansoff-matrix",
+        "business-model",
+        "brainstorm-okrs",
+        "create-prd",
+        "lean-canvas",
+        "monetization-strategy",
+        "outcome-roadmap",
+        "pestle-analysis",
+        "porters-five-forces",
+        "pre-mortem",
+        "pricing-strategy",
+        "prioritization-frameworks",
+        "product-strategy",
+        "product-vision",
+        "stakeholder-map",
+        "startup-canvas",
+        "swot-analysis",
+        "value-proposition"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": ["id", "workspace", "persona"],
+    "canUnmanage": true
+  }
+}

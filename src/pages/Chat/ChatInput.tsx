@@ -20,6 +20,7 @@ import { buildProviderListItems, hasConfiguredCredentials } from '@/lib/provider
 import { getConfiguredProviderModels, getProviderIconUrl, shouldInvertInDark } from '@/lib/providers';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
+import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/providers';
 import { useSkillsStore } from '@/stores/skills';
 import {
@@ -31,10 +32,20 @@ import {
 import type { SecurityPolicy } from '@/stores/settings';
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
-import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { findRecentAssistantMessageWithReliableUsage, formatTokenCount, getContextOccupancyInfo } from './message-usage';
 import { findSkillKeywordRecommendation } from './skill-recommendations';
+import {
+  buildSlashPickerItems,
+  fetchPresetAgentSkills,
+  getSlashCommandDescription,
+  getSlashCommandName,
+  getVisibleSlashItems,
+  isSlashCommandItem,
+  type SlashCommandOption,
+  type SlashPickerItem,
+  type SlashSkillQuery,
+} from './slash-picker';
 import { toast } from 'sonner';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -57,13 +68,6 @@ interface ChatInputProps {
   disabledPlaceholder?: string;
   sending?: boolean;
   isEmpty?: boolean;
-}
-
-interface SlashSkillQuery {
-  query: string;
-  from: number;
-  to: number;
-  allowCommands: boolean;
 }
 
 interface SerializedNode {
@@ -111,16 +115,6 @@ interface SafetyComposerSettings {
   workspaceOnly: boolean;
   securityPolicy: SecurityPolicy;
 }
-
-interface SlashCommandOption {
-  id: string;
-  value: string;
-  nameKey: string;
-  descriptionKey: string;
-  type: 'command';
-}
-
-type SlashPickerItem = Skill | SlashCommandOption;
 
 const SLASH_COMMANDS: SlashCommandOption[] = [
   {
@@ -207,6 +201,35 @@ function normalizeSkillSearch(value: string): string {
     .normalize('NFKD')
     .trim()
     .toLowerCase();
+}
+
+function buildPresetAgentFallbackSkills(agent: Pick<AgentSummary, 'presetSkills'> | null | undefined): Skill[] {
+  if (!agent || agent.presetSkills.length === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+
+  return agent.presetSkills.flatMap((skillSlug) => {
+    const normalizedSlug = skillSlug.trim();
+    if (!normalizedSlug || seen.has(normalizedSlug)) {
+      return [];
+    }
+
+    seen.add(normalizedSlug);
+    return [{
+      id: normalizedSlug,
+      slug: normalizedSlug,
+      name: normalizedSlug,
+      description: '',
+      enabled: true,
+      configuredEnabled: true,
+      eligible: true,
+      icon: '📦',
+      hidden: false,
+      source: 'preset-agent-workspace',
+    }];
+  });
 }
 
 function resolveLeadingAgentMention(
@@ -483,81 +506,6 @@ function extractSlashSkillQueryFromEditor(editor: NonNullable<ReturnType<typeof 
   return extractSlashSkillQueryFromState(editor.state as SlashQueryState);
 }
 
-function isSlashCommandItem(item: SlashPickerItem): item is SlashCommandOption {
-  return 'type' in item && item.type === 'command';
-}
-
-function getSlashCommandName(item: SlashCommandOption, tChat: TFunction<'chat'>): string {
-  return tChat(item.nameKey);
-}
-
-function getSlashCommandDescription(item: SlashCommandOption, tChat: TFunction<'chat'>): string {
-  return tChat(item.descriptionKey);
-}
-
-function getSlashPickerItemName(item: SlashPickerItem, tChat: TFunction<'chat'>): string {
-  return isSlashCommandItem(item) ? getSlashCommandName(item, tChat) : item.name;
-}
-
-function getSlashPickerItemSearchValues(item: SlashPickerItem, tChat: TFunction<'chat'>): string[] {
-  if (isSlashCommandItem(item)) {
-    const commandValue = item.value.replace(/^\//, '');
-    return [getSlashCommandName(item, tChat), item.value, commandValue, getSlashCommandDescription(item, tChat)];
-  }
-
-  return [item.name, item.slug || item.id, item.description || ''];
-}
-
-function rankSlashPickerItemsForQuery(items: SlashPickerItem[], query: string, tChat: TFunction<'chat'>): SlashPickerItem[] {
-  const normalizedQuery = normalizeSkillSearch(query);
-
-  if (!normalizedQuery) {
-    return items;
-  }
-
-  return items
-    .map((item) => {
-      const [primary, secondary, tertiary, quaternary] = getSlashPickerItemSearchValues(item, tChat)
-        .map((value) => normalizeSkillSearch(value));
-      const normalizedName = primary || '';
-      const normalizedSlug = secondary || '';
-      const normalizedAlias = tertiary || '';
-      const normalizedDescription = quaternary || '';
-      const exact = normalizedName === normalizedQuery || normalizedSlug === normalizedQuery;
-      const startsWith = normalizedName.startsWith(normalizedQuery) || normalizedSlug.startsWith(normalizedQuery) || normalizedAlias.startsWith(normalizedQuery);
-      const includes = normalizedName.includes(normalizedQuery) || normalizedSlug.includes(normalizedQuery) || normalizedAlias.includes(normalizedQuery) || normalizedDescription.includes(normalizedQuery);
-
-      if (!exact && !startsWith && !includes) {
-        return null;
-      }
-
-      return {
-        item,
-        rank: exact ? 0 : startsWith ? 1 : 2,
-      };
-    })
-    .filter((entry): entry is { item: SlashPickerItem; rank: number } => Boolean(entry))
-    .sort((a, b) => {
-      if (a.rank !== b.rank) {
-        return a.rank - b.rank;
-      }
-      return getSlashPickerItemName(a.item, tChat).localeCompare(getSlashPickerItemName(b.item, tChat));
-    })
-    .map((entry) => entry.item);
-}
-
-function getVisibleSlashItems(
-  items: SlashPickerItem[],
-  slashQuery: SlashSkillQuery | null,
-  tChat: TFunction<'chat'>,
-): SlashPickerItem[] {
-  const scopedItems = slashQuery?.allowCommands
-    ? items
-    : items.filter((item) => !isSlashCommandItem(item));
-
-  return rankSlashPickerItemsForQuery(scopedItems, slashQuery?.query ?? '', tChat);
-}
-
 function scrollElementIntoScrollableView(container: HTMLElement, element: HTMLElement) {
   const containerRect = container.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
@@ -661,6 +609,7 @@ export const ChatInput = memo(function ChatInput({
   const [editorFocused, setEditorFocused] = useState(false);
   const [editorText, setEditorText] = useState('');
   const [slashQuery, setSlashQuery] = useState<SlashSkillQuery | null>(null);
+  const [presetAgentSkills, setPresetAgentSkills] = useState<Skill[]>([]);
   const [skillPickerDismissed, setSkillPickerDismissed] = useState(false);
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
   const [dismissedSkillRecommendationKey, setDismissedSkillRecommendationKey] = useState<string | null>(null);
@@ -690,6 +639,8 @@ export const ChatInput = memo(function ChatInput({
   const defaultProviderAccountId = useProviderStore((s) => s.defaultAccountId);
   const providerSnapshotLoading = useProviderStore((s) => s.loading);
   const refreshProviderSnapshot = useProviderStore((s) => s.refreshProviderSnapshot);
+  const gatewayRpc = useGatewayStore.getState().rpc;
+  const gatewayStatusState = useGatewayStore((s) => s.status.state);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const pendingComposerSeed = useChatStore((s) => s.pendingComposerSeed);
@@ -850,6 +801,15 @@ export const ChatInput = memo(function ChatInput({
     [agents, currentAgentId],
   );
 
+  const currentAgent = useMemo(
+    () => agents.find((agent) => agent.id === currentAgentId) ?? null,
+    [agents, currentAgentId],
+  );
+  const presetAgentFallbackSkills = useMemo(
+    () => buildPresetAgentFallbackSkills(currentAgent),
+    [currentAgent],
+  );
+
   const resolvableSkills = useMemo(
     () => [...skills]
       .filter((skill) => skill.eligible !== false)
@@ -863,8 +823,12 @@ export const ChatInput = memo(function ChatInput({
   );
 
   const availableSlashItems = useMemo<SlashPickerItem[]>(
-    () => [...SLASH_COMMANDS, ...availableSkills],
-    [availableSkills],
+    () => buildSlashPickerItems({
+      presetAgentSkills,
+      commands: SLASH_COMMANDS,
+      globalSkills: availableSkills,
+    }),
+    [availableSkills, presetAgentSkills],
   );
 
   useEffect(() => {
@@ -994,6 +958,41 @@ export const ChatInput = memo(function ChatInput({
       void fetchSkills();
     }
   }, [fetchSkills, skills.length, skillsLoading]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!currentAgent || currentAgent.source !== 'preset') {
+      setPresetAgentSkills([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (gatewayStatusState !== 'running') {
+      setPresetAgentSkills(presetAgentFallbackSkills);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchPresetAgentSkills(currentAgent.id, gatewayRpc)
+      .then((nextSkills) => {
+        if (cancelled) {
+          return;
+        }
+        setPresetAgentSkills(nextSkills.filter((skill) => skill.hidden !== true));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPresetAgentSkills(presetAgentFallbackSkills);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAgent, gatewayRpc, gatewayStatusState, presetAgentFallbackSkills]);
 
   useEffect(() => {
     if (
@@ -1879,7 +1878,9 @@ function SkillPickerItem({
   const itemDescription = isCommand ? getSlashCommandDescription(item, tChat) : item.description || `/${item.slug || item.id}`;
 
   if (!isCommand) {
-    sourceLabel = item.isCore
+    sourceLabel = source === 'preset-agent-workspace'
+      ? tChat('composer.presetAgentSkillBadge')
+      : item.isCore
       ? t('detail.coreSystem', { defaultValue: 'Core System' })
       : item.isBundled
         ? t('source.badge.bundled', { defaultValue: 'Bundled' })

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -216,7 +216,7 @@ describe('managed agent config domain', () => {
     ]);
   });
 
-  it('installs a preset agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/SKILLS', async () => {
+  it('installs a preset agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/skills', async () => {
     const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
     const snapshot = await agentConfig.installPresetAgent('stock-expert');
 
@@ -240,8 +240,10 @@ describe('managed agent config domain', () => {
     ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('agentDir');
     expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8')).toContain('stock expert');
-    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
-    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'web-search', 'README.md'), 'utf8')).toContain('Web Search docs');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'skills', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'skills', 'web-search', 'README.md'), 'utf8')).toContain('Web Search docs');
+    expect(readdirSync(join(homeDir, 'geeclaw', 'workspace-stockexpert'))).toContain('skills');
+    expect(readdirSync(join(homeDir, 'geeclaw', 'workspace-stockexpert'))).not.toContain('SKILLS');
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       workspace: '~/geeclaw/workspace-stockexpert',
       agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
@@ -306,7 +308,7 @@ describe('managed agent config domain', () => {
       managedFiles: [],
       canUseDefaultSkillScope: true,
     });
-    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'SKILLS', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
+    expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'skills', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
   });
 
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {

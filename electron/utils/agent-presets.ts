@@ -34,6 +34,9 @@ const RECOGNIZED_MODEL_KEYS = new Set(['primary', 'fallbacks']);
 const RECOGNIZED_SKILL_SCOPE_KEYS = new Set(['mode', 'skills']);
 const RECOGNIZED_LOCKED_FIELDS = new Set(['id', 'workspace', 'persona']);
 const RECOGNIZED_MANAGED_POLICY_KEYS = new Set(['lockedFields', 'canUnmanage']);
+const RECOGNIZED_SKILL_MANIFEST_KEYS = new Set(['version', 'skills']);
+const RECOGNIZED_SKILL_MANIFEST_SKILL_KEYS = new Set(['slug', 'delivery', 'source']);
+const RECOGNIZED_SKILL_MANIFEST_SOURCE_KEYS = new Set(['type', 'repo', 'repoPath', 'ref', 'version']);
 const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface AgentPresetMeta {
@@ -59,6 +62,24 @@ export interface AgentPresetPackage {
   meta: AgentPresetMeta;
   files: Record<string, string>;
   skills: Record<string, Record<string, string>>;
+  skillManifest?: PresetBundledSkillManifest;
+}
+
+export interface PresetBundledSkillManifest {
+  version: 1;
+  skills: PresetBundledSkillManifestSkill[];
+}
+
+export interface PresetBundledSkillManifestSkill {
+  slug: string;
+  delivery: 'bundled';
+  source: {
+    type: 'github';
+    repo: string;
+    repoPath: string;
+    ref: string;
+    version?: string;
+  };
 }
 
 function requirePlainObject(
@@ -84,6 +105,22 @@ function requireNonEmptyString(value: unknown, field: string, presetId?: string)
     throw new Error(`Preset ${field} is required`);
   }
   return value.trim();
+}
+
+function sanitizeManifestSkillSlug(presetId: string, slug: string): string {
+  if (slug === '.' || slug.includes('..') || slug.includes('/') || slug.includes('\\')) {
+    throw new Error(`Preset "${presetId}" bundled skill slug "${slug}" is invalid`);
+  }
+  return slug;
+}
+
+function sanitizeManifestRepoPath(presetId: string, repoPath: string): string {
+  const normalized = repoPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  const segments = normalized.split('/');
+  if (!normalized || segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error(`Preset "${presetId}" bundled skill repoPath "${repoPath}" is invalid`);
+  }
+  return normalized;
 }
 
 function validatePresetAgentId(agentId: string): string {
@@ -161,7 +198,7 @@ function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillS
       invalidEntryError: 'Preset specified skill scope must contain only non-empty string skills',
       duplicateError: 'Preset specified skill scope must not contain duplicate skills',
       emptyError: `Preset "${presetId}" specified skill scope must contain at least 1 skill`,
-      tooManyError: 'Preset specified skill scope must not contain more than 6 skills',
+      tooManyError: 'Preset specified skill scope must not contain more than 20 skills',
     });
     return { mode: 'specified', skills };
   }
@@ -323,6 +360,113 @@ async function readPresetSkills(
   }
 }
 
+function validatePresetSkillManifest(
+  presetId: string,
+  meta: AgentPresetMeta,
+  manifest: unknown,
+): PresetBundledSkillManifest {
+  const manifestRecord = requirePlainObject(manifest, 'skills.manifest.json', presetId);
+  assertSupportedKeys(manifestRecord, RECOGNIZED_SKILL_MANIFEST_KEYS, 'skills.manifest.json', presetId);
+
+  if (manifestRecord.version !== 1) {
+    throw new Error(`Preset "${presetId}" skills.manifest.json version must be 1`);
+  }
+  if (!Array.isArray(manifestRecord.skills)) {
+    throw new Error(`Preset "${presetId}" skills.manifest.json skills is invalid`);
+  }
+
+  const scopedSkillSet = new Set(
+    meta.agent.skillScope.mode === 'specified' ? meta.agent.skillScope.skills : [],
+  );
+  const seenSlugs = new Set<string>();
+  const skills: PresetBundledSkillManifestSkill[] = manifestRecord.skills.map((entry, index) => {
+    const fieldPath = `skills.manifest.json skills[${index}]`;
+    const entryRecord = requirePlainObject(entry, fieldPath, presetId);
+    assertSupportedKeys(entryRecord, RECOGNIZED_SKILL_MANIFEST_SKILL_KEYS, fieldPath, presetId);
+
+    const slug = sanitizeManifestSkillSlug(
+      presetId,
+      requireNonEmptyString(entryRecord.slug, `${fieldPath}.slug`, presetId),
+    );
+    if (seenSlugs.has(slug)) {
+      throw new Error(`Preset "${presetId}" skills.manifest.json has duplicate skill slug "${slug}"`);
+    }
+    seenSlugs.add(slug);
+
+    if (entryRecord.delivery !== 'bundled') {
+      throw new Error(`Preset "${presetId}" ${fieldPath}.delivery must be "bundled"`);
+    }
+
+    const sourceFieldPath = `${fieldPath}.source`;
+    const sourceRecord = requirePlainObject(entryRecord.source, sourceFieldPath, presetId);
+    assertSupportedKeys(sourceRecord, RECOGNIZED_SKILL_MANIFEST_SOURCE_KEYS, sourceFieldPath, presetId);
+    if (sourceRecord.type !== 'github') {
+      throw new Error(`Preset "${presetId}" ${sourceFieldPath}.type must be "github"`);
+    }
+
+    if (!scopedSkillSet.has(slug)) {
+      throw new Error(
+        `Preset "${presetId}" bundled skill "${slug}" must appear in agent.skillScope.skills`,
+      );
+    }
+
+    const source: PresetBundledSkillManifestSkill['source'] = {
+      type: 'github',
+      repo: requireNonEmptyString(sourceRecord.repo, `${sourceFieldPath}.repo`, presetId),
+      repoPath: sanitizeManifestRepoPath(
+        presetId,
+        requireNonEmptyString(sourceRecord.repoPath, `${sourceFieldPath}.repoPath`, presetId),
+      ),
+      ref: requireNonEmptyString(sourceRecord.ref, `${sourceFieldPath}.ref`, presetId),
+    };
+    if (sourceRecord.version !== undefined) {
+      source.version = requireNonEmptyString(sourceRecord.version, `${sourceFieldPath}.version`, presetId);
+    }
+
+    return {
+      slug,
+      delivery: 'bundled',
+      source,
+    };
+  });
+
+  return {
+    version: 1,
+    skills,
+  };
+}
+
+async function readPresetSkillManifest(
+  presetId: string,
+  presetDir: string,
+  meta: AgentPresetMeta,
+): Promise<PresetBundledSkillManifest | undefined> {
+  const manifestPath = join(presetDir, 'skills.manifest.json');
+  let rawManifest: string;
+  try {
+    rawManifest = await readFile(manifestPath, 'utf8');
+  } catch (error) {
+    const fsError = error as NodeJS.ErrnoException;
+    if (fsError.code === 'ENOENT') {
+      return undefined;
+    }
+    throw new Error(`Preset "${presetId}" skills.manifest.json is invalid`, {
+      cause: error,
+    });
+  }
+
+  let parsedManifest: unknown;
+  try {
+    parsedManifest = JSON.parse(rawManifest) as unknown;
+  } catch (error) {
+    throw new Error(`Preset "${presetId}" skills.manifest.json is invalid`, {
+      cause: error,
+    });
+  }
+
+  return validatePresetSkillManifest(presetId, meta, parsedManifest);
+}
+
 export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
   const root = getAgentPresetsDir();
   const entries = await readdir(root, { withFileTypes: true });
@@ -347,6 +491,7 @@ export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
       meta,
       files: await readPresetFiles(meta.presetId, presetDir),
       skills: await readPresetSkills(meta.presetId, presetDir),
+      skillManifest: await readPresetSkillManifest(meta.presetId, presetDir, meta),
     });
   }
 

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { PresetInstallStage } from '@/stores/agents';
 import type { AgentPresetSummary } from '@/types/agent';
 import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
 
@@ -9,6 +10,10 @@ type MarketplacePresetDetailDialogProps = {
   preset: AgentPresetSummary | null;
   open: boolean;
   installed: boolean;
+  isInstalling: boolean;
+  installStage: PresetInstallStage;
+  installProgress: number;
+  disableInstall: boolean;
   onClose: () => void;
   onInstall: (presetId: string) => void;
 };
@@ -17,6 +22,10 @@ export function MarketplacePresetDetailDialog({
   preset,
   open,
   installed,
+  isInstalling,
+  installStage,
+  installProgress,
+  disableInstall,
   onClose,
   onInstall,
 }: MarketplacePresetDetailDialogProps) {
@@ -30,8 +39,11 @@ export function MarketplacePresetDetailDialog({
   const availabilityCopy = !preset.supportedOnCurrentPlatform
     ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
     : null;
+  const installStageLabel = t(`marketplace.installState.${installStage}`);
   const installLabel = installed
     ? t('marketplace.installed')
+    : isInstalling
+      ? installStageLabel
     : preset.supportedOnCurrentPlatform
       ? t('marketplace.install')
       : t('marketplace.unavailable');
@@ -103,10 +115,25 @@ export function MarketplacePresetDetailDialog({
             )}
           </div>
 
-          <div className="modal-footer justify-end px-8 py-5">
+          <div className="modal-footer flex-wrap justify-between gap-4 px-8 py-5">
+            {isInstalling ? (
+              <div className="min-w-[220px] flex-1 space-y-1.5">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-foreground/75 transition-[width] duration-300"
+                    style={{ width: `${installProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {installStageLabel} · {t('marketplace.installProgress', { progress: installProgress })}
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
             <Button
               className="modal-primary-button"
-              disabled={installed || !preset.supportedOnCurrentPlatform}
+              disabled={installed || !preset.supportedOnCurrentPlatform || disableInstall}
               onClick={() => onInstall(preset.presetId)}
             >
               {installLabel}

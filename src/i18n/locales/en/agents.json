@@ -73,6 +73,16 @@
         "install": "Install",
         "installed": "Installed",
         "unavailable": "Unavailable",
+        "installProgress": "{{progress}}%",
+        "installState": {
+            "idle": "Install",
+            "preparing": "Preparing preset",
+            "installing_files": "Installing files",
+            "installing_skills": "Installing skills",
+            "finalizing": "Finalizing setup",
+            "completed": "Installed",
+            "failed": "Install failed"
+        },
         "comingSoon": "Not open yet",
         "viewDetails": "View Details",
         "managedHint": "Installs as a managed preset agent",

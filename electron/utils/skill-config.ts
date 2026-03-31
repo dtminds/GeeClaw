@@ -26,6 +26,13 @@ export interface DiscoveredSkillDescriptor {
 }
 
 interface OpenClawConfig {
+    agents?: {
+        list?: Array<{
+            skills?: unknown;
+            [key: string]: unknown;
+        }>;
+        [key: string]: unknown;
+    };
     skills?: {
         entries?: Record<string, SkillEntry>;
         [key: string]: unknown;
@@ -75,6 +82,29 @@ function getCurrentSkillExtraDirs(skills: Record<string, unknown>): string[] {
     }
 
     return [];
+}
+
+function getAgentReferencedSkillKeys(config: OpenClawConfig): Set<string> {
+    const agentEntries = Array.isArray(config.agents?.list) ? config.agents.list : [];
+    const referenced = new Set<string>();
+
+    for (const entry of agentEntries) {
+        if (!Array.isArray(entry?.skills)) {
+            continue;
+        }
+
+        for (const skill of entry.skills) {
+            if (typeof skill !== 'string') {
+                continue;
+            }
+            const normalized = skill.trim();
+            if (normalized) {
+                referenced.add(normalized);
+            }
+        }
+    }
+
+    return referenced;
 }
 
 function isManagedPreinstalledSkillExtraDir(pathEntry: string): boolean {
@@ -268,6 +298,7 @@ export async function ensureSkillEntriesDefaultDisabled(
 
         const result = await mutateOpenClawConfigDocument<{ added: string[]; normalizedAlwaysEnabled: string[] }>((config) => {
             const skillConfig = config as OpenClawConfig;
+            const agentReferencedSkillKeys = getAgentReferencedSkillKeys(skillConfig);
             if (!skillConfig.skills) {
                 skillConfig.skills = {};
             }
@@ -297,6 +328,20 @@ export async function ensureSkillEntriesDefaultDisabled(
                 }
 
                 if (explicitEnabledSkillKeys.has(skillKey)) {
+                    continue;
+                }
+
+                if (agentReferencedSkillKeys.has(skillKey)) {
+                    const currentEntry = skillConfig.skills.entries[skillKey];
+                    if (currentEntry && currentEntry.enabled === false) {
+                        if (Object.keys(currentEntry).length === 1) {
+                            delete skillConfig.skills.entries[skillKey];
+                        } else {
+                            const nextEntry = { ...currentEntry };
+                            delete nextEntry.enabled;
+                            skillConfig.skills.entries[skillKey] = nextEntry;
+                        }
+                    }
                     continue;
                 }
 

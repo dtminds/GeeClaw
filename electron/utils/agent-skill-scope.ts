@@ -2,6 +2,8 @@ export type AgentSkillScope =
   | { mode: 'default'; skills?: never }
   | { mode: 'specified'; skills: string[] };
 
+export const MAX_SPECIFIED_AGENT_SKILLS = 20;
+
 type NormalizeSpecifiedSkillListOptions = {
   invalidEntryError?: string;
   duplicateError: string;
@@ -32,7 +34,7 @@ export function normalizeSpecifiedSkillList(
   if (normalized.length === 0) {
     throw new Error(options.emptyError);
   }
-  if (normalized.length > 6) {
+  if (normalized.length > MAX_SPECIFIED_AGENT_SKILLS) {
     throw new Error(options.tooManyError);
   }
 
