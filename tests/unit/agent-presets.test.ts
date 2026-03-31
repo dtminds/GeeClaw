@@ -162,9 +162,7 @@ describe('agent preset loader', () => {
     const requiredFiles = [
       'AGENTS.md',
       'IDENTITY.md',
-      'MEMORY.md',
       'SOUL.md',
-      'USER.md',
     ];
     const categories = new Set(presets.map((preset) => preset.meta.category));
 
@@ -284,7 +282,7 @@ describe('agent preset loader', () => {
     const preset = presets.find((entry) => entry.meta.presetId === 'discovery-research');
 
     expect(preset).toBeDefined();
-    expect(preset?.meta.name).toBe('发现研究官');
+    expect(preset?.meta.name).toBe('用户研究官');
     expect(preset?.meta.emoji).toBe('🔍');
     expect(preset?.meta.agent.id).toBe('discovery-research');
     expect(preset?.meta.agent).not.toHaveProperty('workspace');
@@ -316,11 +314,9 @@ describe('agent preset loader', () => {
     expect(Object.keys(preset?.files ?? {}).sort()).toEqual([
       'AGENTS.md',
       'IDENTITY.md',
-      'MEMORY.md',
       'SOUL.md',
-      'USER.md',
     ]);
-    expect(preset?.files['AGENTS.md']).toContain('发现研究官');
+    expect(preset?.files['AGENTS.md']).toContain('用户研究官');
     expect(preset?.skills).toEqual({});
     expect(preset?.skillManifest?.version).toBe(1);
     expect(preset?.skillManifest?.skills).toHaveLength(19);
