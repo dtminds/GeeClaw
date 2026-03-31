@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   FileText,
@@ -11,33 +11,13 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
-import { hostApiFetch } from '@/lib/host-api';
 import { cn } from '@/lib/utils';
-import { toUserMessage } from '@/lib/api-client';
-
-type PersonaFileKey = 'identity' | 'master' | 'soul' | 'memory';
-type SoulTemplateId = 'assistant' | 'companion' | 'mentor' | 'custom';
-
-type SoulTemplate = {
-  id: SoulTemplateId;
-  emoji: string;
-  name: string;
-  description: string;
-  content: string;
-};
-
-type PersonaResponse = {
-  agentId: string;
-  workspace: string;
-  editable: boolean;
-  lockedFiles: PersonaFileKey[];
-  message?: string;
-  files: Record<PersonaFileKey, {
-    exists: boolean;
-    content: string;
-  }>;
-  success?: boolean;
-};
+import {
+  PERSONA_FILE_ORDER,
+  SOUL_TEMPLATES,
+  useAgentPersona,
+} from '@/pages/Chat/agent-settings/useAgentPersona';
+import type { PersonaFileKey } from '@/pages/Chat/agent-settings/useAgentPersona';
 
 type SectionTone = {
   shellClassName: string;
@@ -54,78 +34,6 @@ interface PersonaDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const FILE_ORDER: PersonaFileKey[] = ['identity', 'master', 'soul', 'memory'];
-const SOUL_TEMPLATES: SoulTemplate[] = [
-  {
-    id: 'assistant',
-    emoji: '💡',
-    name: '全能助手',
-    description: '理性、客观、高效的得力干将',
-    content: `[核心驱动]
-你是一个理性、可靠、高执行力的全能助手。
-
-[行为原则]
-- 先给结论，再补充必要背景
-- 优先提供可执行方案，不说空话
-- 主动拆解复杂问题，帮助用户推进下一步
-- 保持客观、专业、稳定，不情绪化表演
-
-[表达风格]
-- 简洁清楚
-- 重点明确
-- 遇到不确定信息时直说不确定`,
-  },
-  {
-    id: 'companion',
-    emoji: '🌸',
-    name: '贴心伴侣',
-    description: '温柔倾听，提供满满的情绪价值',
-    content: `[核心驱动]
-你是一个温柔、细腻、善于共情的贴心陪伴型助手。
-
-[行为原则]
-- 先理解用户感受，再给建议
-- 关注情绪、氛围和陪伴感
-- 用轻柔但不敷衍的方式表达支持
-- 在给方案时保持温暖、耐心和鼓励
-
-[表达风格]
-- 自然亲近
-- 柔和真诚
-- 让用户感到被理解和被接住`,
-  },
-  {
-    id: 'mentor',
-    emoji: '🎓',
-    name: '严厉导师',
-    description: '直击痛点，鞭策你不断突破自我',
-    content: `[核心驱动]
-你是一个标准极高、判断直接、以成长为导向的导师型助手。
-
-[行为原则]
-- 不回避问题，敢于指出真正的卡点
-- 少安慰，多推动用户行动和复盘
-- 强调目标、节奏、纪律和结果
-- 对模糊、拖延、借口保持敏锐
-
-[表达风格]
-- 直接有力
-- 逻辑清晰
-- 尖锐但不羞辱，严格但以成长为目的`,
-  },
-  {
-    id: 'custom',
-    emoji: '⚙️',
-    name: '自定义',
-    description: '亲手编写 Prompt，为 TA 注入独一无二的灵魂',
-    content: '',
-  },
-];
-
-function normalizeTemplateSource(content: string): string {
-  return content.replace(/\r\n/g, '\n').trim();
-}
-
 export function PersonaDrawer({
   open,
   agentId,
@@ -133,18 +41,20 @@ export function PersonaDrawer({
 }: PersonaDrawerProps) {
   const { t } = useTranslation('chat');
   const [activeTab, setActiveTab] = useState<PersonaFileKey>('identity');
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<PersonaResponse | null>(null);
-  const [drafts, setDrafts] = useState<Record<PersonaFileKey, string>>({
-    identity: '',
-    master: '',
-    soul: '',
-    memory: '',
-  });
-  const [customSoulDraft, setCustomSoulDraft] = useState('');
-  const [soulTemplateId, setSoulTemplateId] = useState<SoulTemplateId>('assistant');
+  const {
+    snapshot,
+    loading,
+    saving,
+    error,
+    drafts,
+    soulTemplateId,
+    lockedFileSet,
+    hasChanges,
+    selectSoulTemplate,
+    updateDraft,
+    load,
+    savePersona,
+  } = useAgentPersona(agentId, open);
 
   const sectionTones = useMemo<Record<PersonaFileKey, SectionTone>>(() => ({
     identity: {
@@ -195,10 +105,6 @@ export function PersonaDrawer({
       label: t('toolbar.persona.tabs.memory'),
     },
   }), [t]);
-  const lockedFileSet = useMemo(
-    () => new Set(snapshot?.lockedFiles ?? []),
-    [snapshot?.lockedFiles],
-  );
   const soulLocked = lockedFileSet.has('soul');
   const activeTabLockedMessage = useMemo(() => {
     if (!lockedFileSet.has(activeTab)) {
@@ -212,146 +118,27 @@ export function PersonaDrawer({
     return t('toolbar.persona.lockedManaged.default');
   }, [activeTab, lockedFileSet, t]);
 
-  const applyPersonaResponse = useCallback((response: PersonaResponse) => {
-    const normalizedSoul = normalizeTemplateSource(response.files.soul.content);
-    const matchedTemplate = SOUL_TEMPLATES.find((template) => (
-      template.id !== 'custom' && normalizeTemplateSource(template.content) === normalizedSoul
-    ));
-
-    setSnapshot(response);
-    setDrafts({
-      identity: response.files.identity.content,
-      master: response.files.master.content,
-      soul: response.files.soul.content,
-      memory: response.files.memory.content,
-    });
-    setSoulTemplateId(matchedTemplate?.id ?? 'custom');
-    setCustomSoulDraft(matchedTemplate ? '' : response.files.soul.content);
-  }, []);
-
-  const loadPersona = useCallback(async (targetAgentId: string) => {
-    return await hostApiFetch<PersonaResponse>(
-      `/api/agents/${encodeURIComponent(targetAgentId)}/persona`,
-    );
-  }, []);
-
   useEffect(() => {
-    if (!open || !agentId) return;
-
-    let cancelled = false;
-    setError(null);
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting the tab when the drawer opens is intentional.
     setActiveTab('identity');
-
-    if (snapshot?.agentId === agentId) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setLoading(true);
-
-    const frameId = window.requestAnimationFrame(() => {
-      void (async () => {
-        try {
-          const response = await loadPersona(agentId);
-          if (cancelled) return;
-          applyPersonaResponse(response);
-        } catch (err) {
-          if (cancelled) return;
-          setError(toUserMessage(err));
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
-        }
-      })();
-    });
-
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [agentId, applyPersonaResponse, loadPersona, open, snapshot?.agentId]);
-
-  const hasChanges = useMemo(() => {
-    if (!snapshot) return false;
-    return FILE_ORDER.some((key) => !lockedFileSet.has(key) && drafts[key] !== snapshot.files[key].content);
-  }, [drafts, lockedFileSet, snapshot]);
+  }, [open, agentId]);
 
   const handleReload = async () => {
     if (!agentId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await loadPersona(agentId);
-      applyPersonaResponse(response);
-    } catch (err) {
-      setError(toUserMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectSoulTemplate = (nextTemplateId: SoulTemplateId) => {
-    if (soulLocked) {
-      return;
-    }
-    if (nextTemplateId === 'custom') {
-      if (soulTemplateId !== 'custom') {
-        setCustomSoulDraft((current) => current || '');
-      }
-      setSoulTemplateId('custom');
-      setDrafts((current) => ({
-        ...current,
-        soul: customSoulDraft,
-      }));
-      return;
-    }
-
-    if (soulTemplateId === 'custom') {
-      setCustomSoulDraft(drafts.soul);
-    }
-
-    const template = SOUL_TEMPLATES.find((item) => item.id === nextTemplateId);
-    if (!template) return;
-
-    setSoulTemplateId(nextTemplateId);
-    setDrafts((current) => ({
-      ...current,
-      soul: template.content,
-    }));
+    await load();
   };
 
   const handleSave = async () => {
     if (!snapshot || !snapshot.editable) return;
 
-    const payload: Partial<Record<PersonaFileKey, string>> = {};
-    for (const key of FILE_ORDER) {
-      if (!lockedFileSet.has(key) && drafts[key] !== snapshot.files[key].content) {
-        payload[key] = drafts[key];
-      }
-    }
+    const result = await savePersona();
+    if (!result) return;
 
-    if (Object.keys(payload).length === 0) return;
-
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await hostApiFetch<PersonaResponse>(
-        `/api/agents/${encodeURIComponent(agentId)}/persona`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        },
-      );
-      setSnapshot(response);
+    if ('response' in result) {
       toast.success(t('toolbar.persona.toast.saved'));
-    } catch (err) {
-      const message = toUserMessage(err);
-      setError(message);
-      toast.error(`${t('toolbar.persona.toast.failed')}: ${message}`);
-    } finally {
-      setSaving(false);
+    } else {
+      toast.error(`${t('toolbar.persona.toast.failed')}: ${result.error}`);
     }
   };
 
@@ -481,7 +268,7 @@ export function PersonaDrawer({
           </div>
 
           <div className="mt-2 flex items-end gap-6 border-b border-black/8 dark:border-white/10">
-            {FILE_ORDER.map((tabKey) => {
+            {PERSONA_FILE_ORDER.map((tabKey) => {
               const selected = activeTab === tabKey;
               return (
                 <button
@@ -534,7 +321,7 @@ export function PersonaDrawer({
                   fileLabel: 'IDENTITY.md',
                   helperText: t('toolbar.persona.notes.identity'),
                   value: drafts.identity,
-                  onChange: (value) => setDrafts((current) => ({ ...current, identity: value })),
+                  onChange: (value) => updateDraft('identity', value),
                   fillHeight: true,
                   readOnly: lockedFileSet.has('identity'),
                 })}
@@ -544,7 +331,7 @@ export function PersonaDrawer({
                   fileLabel: 'USER.md',
                   helperText: t('toolbar.persona.notes.master'),
                   value: drafts.master,
-                  onChange: (value) => setDrafts((current) => ({ ...current, master: value })),
+                  onChange: (value) => updateDraft('master', value),
                   fillHeight: true,
                   readOnly: lockedFileSet.has('master'),
                 })}
@@ -554,7 +341,7 @@ export function PersonaDrawer({
                   fileLabel: 'MEMORY.md',
                   helperText: t('toolbar.persona.notes.memory'),
                   value: drafts.memory,
-                  onChange: (value) => setDrafts((current) => ({ ...current, memory: value })),
+                  onChange: (value) => updateDraft('memory', value),
                   fillHeight: true,
                   readOnly: lockedFileSet.has('memory'),
                 })}
@@ -568,7 +355,7 @@ export function PersonaDrawer({
                           <button
                             key={template.id}
                             type="button"
-                            onClick={() => handleSelectSoulTemplate(template.id)}
+                            onClick={() => selectSoulTemplate(template.id)}
                             disabled={soulLocked}
                             className={cn(
                               'relative min-h-[86px] rounded-[16px] border bg-white px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-[1px] dark:bg-[#18141f]',
@@ -609,10 +396,7 @@ export function PersonaDrawer({
                           fileLabel: 'SOUL.md',
                           helperText: t('toolbar.persona.notes.soul'),
                           value: drafts.soul,
-                          onChange: (value) => {
-                            setCustomSoulDraft(value);
-                            setDrafts((current) => ({ ...current, soul: value }));
-                          },
+                          onChange: (value) => updateDraft('soul', value),
                           fillHeight: true,
                           readOnly: soulLocked,
                         })
