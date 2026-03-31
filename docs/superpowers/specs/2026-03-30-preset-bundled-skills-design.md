@@ -29,7 +29,7 @@ This design keeps the current runtime contract:
 ### Preset-bundled skills
 
 - Preset loader already reads `resources/agent-presets/<presetId>/skills/*`.
-- Preset install already copies these skills into `workspace/SKILLS/<slug>/...`.
+- Preset install already copies these skills into `workspace/skills/<slug>/...`.
 - Preset metadata currently only declares runtime `agent.skillScope.skills`, not build-time skill sources.
 
 ## Problem
@@ -194,7 +194,7 @@ The current install flow remains:
 1. Validate preset availability/platform support.
 2. Create the Agent config entry.
 3. Seed preset-managed files into workspace.
-4. Copy preset-bundled skills into `workspace/SKILLS`.
+4. Copy preset-bundled skills into `workspace/skills`.
 5. Persist config and management metadata.
 
 This preserves:
