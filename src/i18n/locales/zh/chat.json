@@ -73,6 +73,53 @@
             }
         }
     },
+    "agentSettingsDialog": {
+        "title": "智能体设置",
+        "description": "管理该智能体的资料、技能和记忆。",
+        "navigation": "智能体设置分区",
+        "panels": {
+            "loading": "正在加载智能体人格...",
+            "error": "加载人格失败"
+        },
+        "sections": {
+            "general": {
+                "label": "通用",
+                "title": "通用",
+                "description": "基础信息与运行偏好。",
+                "placeholder": "通用设置即将上线。"
+            },
+            "skills": {
+                "label": "技能",
+                "title": "技能",
+                "description": "技能范围与能力配置。",
+                "placeholder": "技能设置即将上线。"
+            },
+            "identity": {
+                "label": "身份",
+                "title": "身份",
+                "description": "定义智能体如何理解自己。",
+                "placeholder": "身份内容将在此显示。"
+            },
+            "soul": {
+                "label": "灵魂",
+                "title": "灵魂",
+                "description": "影响语气、个性与回复风格。",
+                "placeholder": "灵魂内容将在此显示。"
+            },
+            "memory": {
+                "label": "长期记忆",
+                "title": "长期记忆",
+                "description": "需要长期保留的关键信息。",
+                "placeholder": "长期记忆将在此显示。"
+            },
+            "ownerProfile": {
+                "label": "主人档案",
+                "title": "主人档案",
+                "description": "关于智能体主人的信息。",
+                "placeholder": "主人档案将在此显示。"
+            }
+        }
+    },
     "sessionPanel": {
         "title": "会话",
         "collapse": "收起会话栏",

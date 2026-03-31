@@ -73,6 +73,53 @@
             }
         }
     },
+    "agentSettingsDialog": {
+        "title": "Agent Settings",
+        "description": "Manage this agent's profile, skills, and memory.",
+        "navigation": "Agent settings sections",
+        "panels": {
+            "loading": "Loading agent persona...",
+            "error": "Failed to load persona"
+        },
+        "sections": {
+            "general": {
+                "label": "General",
+                "title": "General",
+                "description": "Core identity and runtime defaults.",
+                "placeholder": "General settings are coming soon."
+            },
+            "skills": {
+                "label": "Skills",
+                "title": "Skills",
+                "description": "Skill scope and capabilities.",
+                "placeholder": "Skills settings are coming soon."
+            },
+            "identity": {
+                "label": "Identity",
+                "title": "Identity",
+                "description": "Defines how this agent sees itself.",
+                "placeholder": "Identity details will appear here."
+            },
+            "soul": {
+                "label": "Soul",
+                "title": "Soul",
+                "description": "Guides tone, personality, and response style.",
+                "placeholder": "Soul details will appear here."
+            },
+            "memory": {
+                "label": "Long-term Memory",
+                "title": "Long-term Memory",
+                "description": "Persistent facts the agent should retain.",
+                "placeholder": "Long-term memory will appear here."
+            },
+            "ownerProfile": {
+                "label": "Owner Profile",
+                "title": "Owner Profile",
+                "description": "Details about the agent owner.",
+                "placeholder": "Owner profile details will appear here."
+            }
+        }
+    },
     "sessionPanel": {
         "title": "Sessions",
         "collapse": "Collapse session panel",
