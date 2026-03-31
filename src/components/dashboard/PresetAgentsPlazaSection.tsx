@@ -131,7 +131,7 @@ export function PresetAgentsPlazaSection() {
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <h3 className="min-h-[1.4em]line-clamp-1 text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
+                    <h3 className="min-h-[1.4em] line-clamp-1 text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
                       {preset.name}
                     </h3>
                     <p className="min-h-8 line-clamp-2 text-[12px] leading-4 text-foreground/45 dark:text-foreground/56">
