@@ -157,12 +157,6 @@ export function useAgentPersona(agentId: string, open: boolean) {
     let cancelled = false;
     setError(null);
 
-    if (snapshot?.agentId === agentId) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
     setLoading(true);
 
     const frameId = window.requestAnimationFrame(() => {
@@ -186,7 +180,18 @@ export function useAgentPersona(agentId: string, open: boolean) {
       cancelled = true;
       window.cancelAnimationFrame(frameId);
     };
-  }, [agentId, applyPersonaResponse, fetchPersonaSnapshot, open, snapshot?.agentId]);
+  }, [agentId, applyPersonaResponse, fetchPersonaSnapshot, open]);
+
+  useEffect(() => {
+    if (open) return;
+    setSnapshot(null);
+    setLoading(false);
+    setSaving(false);
+    setError(null);
+    setDrafts({ ...EMPTY_DRAFTS });
+    setSoulTemplateId('assistant');
+    setCustomSoulDraft('');
+  }, [agentId, open]);
 
   const hasChanges = useMemo(() => {
     if (!snapshot) return false;

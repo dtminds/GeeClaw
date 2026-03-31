@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,7 +14,12 @@ import { cn } from '@/lib/utils';
 import { AgentGeneralPanel } from '@/pages/Chat/agent-settings/AgentGeneralPanel';
 import { AgentSkillsPanel } from '@/pages/Chat/agent-settings/AgentSkillsPanel';
 import { AgentMarkdownPanel } from '@/pages/Chat/agent-settings/AgentMarkdownPanel';
-import { useAgentPersona, type PersonaFileKey } from '@/pages/Chat/agent-settings/useAgentPersona';
+import { AgentSoulPanel } from '@/pages/Chat/agent-settings/AgentSoulPanel';
+import {
+  SOUL_TEMPLATES,
+  useAgentPersona,
+  type PersonaFileKey,
+} from '@/pages/Chat/agent-settings/useAgentPersona';
 
 const SECTION_DEFINITIONS = [
   { id: 'general' },
@@ -38,7 +44,19 @@ interface AgentSettingsDialogProps {
 export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettingsDialogProps) {
   const { t } = useTranslation('chat');
   const [activeSection, setActiveSection] = useState<AgentSettingsSection>(SECTION_DEFINITIONS[0].id);
-  const { drafts, loading, error } = useAgentPersona(agentId, open);
+  const {
+    snapshot,
+    drafts,
+    loading,
+    saving,
+    error,
+    updateDraft,
+    soulTemplateId,
+    lockedFileSet,
+    hasSectionChanges,
+    selectSoulTemplate,
+    saveSection,
+  } = useAgentPersona(agentId, open);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +74,38 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
   const activeMeta = sections.find((section) => section.id === activeSection) ?? sections[0];
   const getTabId = (sectionId: AgentSettingsSection) => `agent-settings-tab-${sectionId}`;
   const getPanelId = (sectionId: AgentSettingsSection) => `agent-settings-panel-${sectionId}`;
+  const fileLabels: Record<PersonaFileKey, string> = {
+    identity: 'IDENTITY.md',
+    master: 'USER.md',
+    soul: 'SOUL.md',
+    memory: 'MEMORY.md',
+  };
+  const personaError = snapshot ? null : error;
+  const personaLoading = loading && !snapshot;
+  const isPersonaEditable = snapshot?.editable ?? false;
+
+  const getLockedMessage = useCallback((fileKey: PersonaFileKey) => {
+    if (!lockedFileSet.has(fileKey)) {
+      return null;
+    }
+
+    if (fileKey === 'identity') {
+      return t('toolbar.persona.lockedManaged.identity');
+    }
+
+    return t('toolbar.persona.lockedManaged.default');
+  }, [lockedFileSet, t]);
+
+  const handleSaveSection = useCallback(async (fileKey: PersonaFileKey) => {
+    if (!snapshot || !snapshot.editable) return;
+    const result = await saveSection(fileKey);
+    if (!result) return;
+    if ('response' in result) {
+      toast.success(t('toolbar.persona.toast.saved'));
+    } else {
+      toast.error(`${t('toolbar.persona.toast.failed')}: ${result.error}`);
+    }
+  }, [saveSection, snapshot, t]);
 
   const renderPanel = () => {
     if (activeMeta.id === 'general') {
@@ -80,27 +130,65 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
     }
 
     if (!activeMeta.personaKey) {
+      return null;
+    }
+
+    const personaKey = activeMeta.personaKey;
+    const personaValue = drafts[personaKey];
+    const fileLabel = fileLabels[personaKey];
+    const fileExists = snapshot?.files[personaKey].exists ?? false;
+    const lockedMessage = getLockedMessage(personaKey);
+    const canSave = Boolean(isPersonaEditable && hasSectionChanges(personaKey));
+    const readOnly = !isPersonaEditable || lockedFileSet.has(personaKey);
+
+    if (personaKey === 'soul') {
       return (
-        <AgentMarkdownPanel
+        <AgentSoulPanel
           title={activeMeta.title}
           description={activeMeta.description}
-          placeholder={activeMeta.placeholder}
+          templates={SOUL_TEMPLATES}
+          templateId={soulTemplateId}
+          value={personaValue}
+          placeholder={t('toolbar.persona.placeholders.soul')}
+          helperText={t('toolbar.persona.notes.soul')}
+          exists={fileExists}
+          lockedMessage={lockedMessage}
+          loading={personaLoading}
+          loadingLabel={t('agentSettingsDialog.panels.loading')}
+          error={personaError}
+          errorLabel={t('agentSettingsDialog.panels.error')}
+          saving={saving}
+          canSave={canSave}
+          isEditable={isPersonaEditable}
+          isLocked={lockedFileSet.has('soul')}
+          onTemplateChange={selectSoulTemplate}
+          onChange={(value) => updateDraft('soul', value)}
+          onSave={() => void handleSaveSection('soul')}
+          fieldId="agent-settings-soul"
         />
       );
     }
-
-    const personaValue = drafts[activeMeta.personaKey];
 
     return (
       <AgentMarkdownPanel
         title={activeMeta.title}
         description={activeMeta.description}
-        placeholder={activeMeta.placeholder}
-        loading={loading}
-        loadingLabel={t('agentSettingsDialog.panels.loading')}
-        error={error}
-        errorLabel={t('agentSettingsDialog.panels.error')}
+        fileLabel={fileLabel}
+        helperText={t(`toolbar.persona.notes.${personaKey}`)}
         value={personaValue}
+        placeholder={t(`toolbar.persona.placeholders.${personaKey}`)}
+        loading={personaLoading}
+        loadingLabel={t('agentSettingsDialog.panels.loading')}
+        error={personaError}
+        errorLabel={t('agentSettingsDialog.panels.error')}
+        exists={fileExists}
+        lockedMessage={lockedMessage}
+        readOnly={readOnly}
+        saving={saving}
+        canSave={canSave}
+        onChange={(value) => updateDraft(personaKey, value)}
+        onSave={() => void handleSaveSection(personaKey)}
+        fieldId={`agent-settings-${personaKey}`}
       />
     );
   };

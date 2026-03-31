@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useAgentsStore } from '@/stores/agents';
 import { useSkillsStore } from '@/stores/skills';
+import { SOUL_TEMPLATES } from '@/pages/Chat/agent-settings/useAgentPersona';
 
 const mockHostApiFetch = vi.fn();
 
@@ -57,6 +58,16 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.sections.ownerProfile.placeholder': 'Owner profile placeholder',
   'agentSettingsDialog.panels.loading': 'Loading agent persona...',
   'agentSettingsDialog.panels.error': 'Failed to load persona',
+  'toolbar.persona.createOnSave': 'Create on save',
+  'toolbar.persona.notes.identity': 'The agent reads this file to understand itself',
+  'toolbar.persona.notes.master': 'The agent reads this file to understand you',
+  'toolbar.persona.notes.soul': 'The agent reads this file to shape its persona and response style',
+  'toolbar.persona.notes.memory': 'The agent reads and writes memory here',
+  'toolbar.persona.lockedManaged.identity': 'Managed agents do not support editing this file.',
+  'toolbar.persona.lockedManaged.default': 'This file is locked for managed agents.',
+  'toolbar.persona.toast.saved': 'Persona saved',
+  'toolbar.persona.toast.failed': 'Failed to save persona',
+  'toolbar.persona.saving': 'Saving...',
   'common:actions.close': 'Close',
   'common:actions.save': 'Save',
   'common:actions.cancel': 'Cancel',
@@ -155,11 +166,11 @@ describe('AgentSettingsDialog shell', () => {
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
     expect(await screen.findByRole('tabpanel', { name: 'Identity' })).toBeInTheDocument();
-    expect(await screen.findByText('identity text')).toBeInTheDocument();
+    expect(await screen.findByLabelText('IDENTITY.md')).toHaveValue('identity text');
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Owner Profile' }));
     expect(await screen.findByRole('tabpanel', { name: 'Owner Profile' })).toBeInTheDocument();
-    expect(await screen.findByText('owner text')).toBeInTheDocument();
+    expect(await screen.findByLabelText('USER.md')).toHaveValue('owner text');
   });
 
   it('disables delete for the default agent', async () => {
@@ -190,6 +201,171 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     await waitFor(() => expect(mockHostApiFetch).toHaveBeenCalledWith('/api/agents/writer/persona'));
+  });
+
+  it('refetches persona on reopen and resets drafts', async () => {
+    const refreshedSnapshot = {
+      ...personaSnapshot,
+      files: {
+        ...personaSnapshot.files,
+        identity: { exists: true, content: 'identity refreshed' },
+      },
+    };
+
+    mockHostApiFetch
+      .mockResolvedValueOnce(personaSnapshot)
+      .mockResolvedValueOnce(refreshedSnapshot);
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    const { rerender } = render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Identity' }));
+    const identityInput = await screen.findByLabelText('IDENTITY.md');
+    fireEvent.change(identityInput, { target: { value: 'draft identity' } });
+    expect(identityInput).toHaveValue('draft identity');
+
+    rerender(<AgentSettingsDialog open={false} agentId="writer" onOpenChange={() => {}} />);
+    rerender(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Identity' }));
+    const refreshedInput = await screen.findByLabelText('IDENTITY.md');
+
+    await waitFor(() => {
+      expect(mockHostApiFetch).toHaveBeenCalledTimes(2);
+      expect(refreshedInput).toHaveValue('identity refreshed');
+    });
+  });
+
+  it('disables soul controls while saving', async () => {
+    let resolveSave: ((value: typeof personaSnapshot) => void) | undefined;
+    const savePromise = new Promise<typeof personaSnapshot>((resolve) => {
+      resolveSave = resolve;
+    });
+    const soulSnapshot = {
+      ...personaSnapshot,
+      files: {
+        ...personaSnapshot.files,
+        soul: { exists: true, content: 'custom soul' },
+      },
+    };
+
+    mockHostApiFetch
+      .mockResolvedValueOnce(soulSnapshot)
+      .mockReturnValueOnce(savePromise);
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Soul' }));
+    const soulInput = await screen.findByLabelText('SOUL.md');
+    fireEvent.change(soulInput, { target: { value: 'custom soul updated' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const templateButton = screen.getByRole('button', { name: SOUL_TEMPLATES[0].name });
+    await waitFor(() => {
+      expect(templateButton).toBeDisabled();
+      expect(soulInput).toBeDisabled();
+    });
+
+    await act(async () => {
+      resolveSave?.({
+        ...soulSnapshot,
+        files: {
+          ...soulSnapshot.files,
+          soul: { exists: true, content: 'custom soul updated' },
+        },
+      });
+    });
+  });
+
+  it('saves persona section changes through the persona api', async () => {
+    mockHostApiFetch
+      .mockResolvedValueOnce(personaSnapshot)
+      .mockResolvedValueOnce({
+        ...personaSnapshot,
+        files: {
+          ...personaSnapshot.files,
+          identity: { exists: true, content: 'updated identity' },
+        },
+      });
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Identity' }));
+    const identityInput = await screen.findByLabelText('IDENTITY.md');
+    fireEvent.change(identityInput, { target: { value: 'updated identity' } });
+
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockHostApiFetch).toHaveBeenLastCalledWith('/api/agents/writer/persona', {
+        method: 'PUT',
+        body: JSON.stringify({ identity: 'updated identity' }),
+      });
+    });
+  });
+
+  it('disables edits for locked persona files', async () => {
+    mockHostApiFetch.mockResolvedValueOnce({
+      ...personaSnapshot,
+      lockedFiles: ['identity'],
+    });
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Identity' }));
+    const identityInput = await screen.findByLabelText('IDENTITY.md');
+    expect(identityInput).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('switches soul templates while keeping custom editing', async () => {
+    mockHostApiFetch.mockResolvedValueOnce({
+      ...personaSnapshot,
+      files: {
+        ...personaSnapshot.files,
+        soul: { exists: true, content: 'my custom soul' },
+      },
+    });
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Soul' }));
+    const soulInput = await screen.findByLabelText('SOUL.md');
+    expect(soulInput).not.toHaveAttribute('readonly');
+
+    fireEvent.click(screen.getByRole('button', { name: SOUL_TEMPLATES[0].name }));
+    expect(soulInput).toHaveAttribute('readonly');
   });
 
   it('saves specified skills after searching and selecting', async () => {
