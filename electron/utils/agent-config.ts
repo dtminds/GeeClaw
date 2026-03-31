@@ -326,12 +326,15 @@ function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): Ag
 async function seedPresetFilesIntoWorkspace(
   workspace: string,
   files: Record<string, string>,
+  options?: {
+    overwriteExisting?: boolean;
+  },
 ): Promise<void> {
   await ensureDir(workspace);
 
   for (const [fileName, content] of Object.entries(files)) {
     const destination = join(workspace, fileName);
-    if (await fileExists(destination)) {
+    if (!options?.overwriteExisting && await fileExists(destination)) {
       throw new Error(`Preset-managed file "${fileName}" already exists in the target workspace`);
     }
     await writeFile(destination, content, 'utf-8');
@@ -1110,15 +1113,16 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
     list: nextEntries,
   };
 
+  await provisionAgentFilesystem(config, newEntry);
   await seedPresetFilesIntoWorkspace(
     expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
     preset.files,
+    { overwriteExisting: true },
   );
   await seedPresetSkillsIntoWorkspace(
     expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
     preset.skills,
   );
-  await provisionAgentFilesystem(config, newEntry);
   await persistAgentConfigAndPatchRuntime(config);
 
   management[nextId] = {
