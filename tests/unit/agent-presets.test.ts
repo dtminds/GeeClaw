@@ -110,9 +110,29 @@ afterEach(() => {
 });
 
 describe('agent preset paths', () => {
-  it('resolves the preset directory in development mode', async () => {
-    const { getAgentPresetsDir } = await importPathsWithElectronMock(false);
-    expect(getAgentPresetsDir()).toMatch(/resources[\\/]agent-presets$/);
+  it('falls back to resources/agent-presets in development mode when built preset output is absent', async () => {
+    const root = createTempRoot('agent-presets-dev-fallback-');
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(root);
+
+    try {
+      const { getAgentPresetsDir } = await importPathsWithElectronMock(false);
+      expect(getAgentPresetsDir()).toMatch(/resources[\\/]agent-presets$/);
+    } finally {
+      cwdSpy.mockRestore();
+    }
+  });
+
+  it('prefers build/agent-presets in development mode when bundled preset output exists', async () => {
+    const root = createTempRoot('agent-presets-dev-root-');
+    mkdirSync(join(root, 'build', 'agent-presets'), { recursive: true });
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(root);
+
+    try {
+      const { getAgentPresetsDir } = await importPathsWithElectronMock(false);
+      expect(getAgentPresetsDir()).toBe(join(root, 'build', 'agent-presets'));
+    } finally {
+      cwdSpy.mockRestore();
+    }
   });
 
   it('resolves the preset directory in packaged mode', async () => {
@@ -136,7 +156,7 @@ describe('agent preset platform helpers', () => {
 });
 
 describe('agent preset loader', () => {
-  it('ships a curated premium preset catalog with full persona files', async () => {
+  it('ships a consolidated PM preset catalog with full persona files', async () => {
     const presets = await listPresetsFrom(bundledPresetsDir);
     const presetIds = presets.map((preset) => preset.meta.presetId).sort();
     const requiredFiles = [
@@ -148,21 +168,12 @@ describe('agent preset loader', () => {
     ];
     const categories = new Set(presets.map((preset) => preset.meta.category));
 
-    expect(presets).toHaveLength(13);
+    expect(presets).toHaveLength(4);
     expect(presetIds).toEqual([
-      'automation-systems-architect',
-      'campaign-growth-studio',
-      'customer-insights-lab',
-      'decision-analytics-lab',
-      'delivery-program-manager',
-      'engineering-commander',
-      'founder-ops-chief',
-      'incident-response-commander',
-      'knowledge-synthesis-lab',
-      'market-intelligence-chief',
-      'product-strategy-architect',
-      'stock-expert',
-      'ux-experience-director',
+      'delivery-execution',
+      'discovery-research',
+      'growth-optimization',
+      'strategy-planning',
     ]);
 
     for (const preset of presets) {
@@ -170,99 +181,138 @@ describe('agent preset loader', () => {
     }
 
     for (const category of [
-      'engineering',
-      'design',
       'research',
-      'analytics',
-      'product',
-      'marketing',
+      'strategy',
       'operations',
-      'finance',
-      'support',
-      'productivity',
+      'growth',
     ]) {
       expect(categories.has(category)).toBe(true);
     }
 
-    const engineeringCommander = presets.find((preset) => preset.meta.presetId === 'engineering-commander');
-    expect(engineeringCommander?.meta.agent.skillScope).toEqual({
+    const discoveryResearch = presets.find((preset) => preset.meta.presetId === 'discovery-research');
+    expect(discoveryResearch?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: [
-        'autoplan',
-        'codex',
-        'review',
-        'qa',
-        'ship',
-        'investigate',
+        'analyze-feature-requests',
+        'brainstorm-experiments-existing',
+        'brainstorm-experiments-new',
+        'brainstorm-ideas-existing',
+        'brainstorm-ideas-new',
+        'competitor-analysis',
+        'customer-journey-map',
+        'identify-assumptions-existing',
+        'identify-assumptions-new',
+        'interview-script',
+        'market-segments',
+        'market-sizing',
+        'opportunity-solution-tree',
+        'prioritize-assumptions',
+        'prioritize-features',
+        'sentiment-analysis',
+        'summarize-interview',
+        'user-personas',
+        'user-segmentation',
       ],
     });
 
-    const automationArchitect = presets.find((preset) => preset.meta.presetId === 'automation-systems-architect');
-    expect(automationArchitect?.meta.agent.skillScope).toEqual({
+    const strategyPlanning = presets.find((preset) => preset.meta.presetId === 'strategy-planning');
+    expect(strategyPlanning?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: [
-        'automation-workflows',
-        'api-gateway',
-        'opencli',
-        'schedule-skill',
-        'proactive-agent',
-        'self-improving-agent',
+        'ansoff-matrix',
+        'business-model',
+        'brainstorm-okrs',
+        'create-prd',
+        'lean-canvas',
+        'monetization-strategy',
+        'outcome-roadmap',
+        'pestle-analysis',
+        'porters-five-forces',
+        'pre-mortem',
+        'pricing-strategy',
+        'prioritization-frameworks',
+        'product-strategy',
+        'product-vision',
+        'stakeholder-map',
+        'startup-canvas',
+        'swot-analysis',
+        'value-proposition',
       ],
     });
 
-    const productArchitect = presets.find((preset) => preset.meta.presetId === 'product-strategy-architect');
-    expect(productArchitect?.meta.agent.skillScope).toEqual({
+    const deliveryExecution = presets.find((preset) => preset.meta.presetId === 'delivery-execution');
+    expect(deliveryExecution?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: [
-        'office-hours',
-        'plan-ceo-review',
-        'plan-eng-review',
-        'plan-design-review',
-        'autoplan',
-        'design-consultation',
-      ],
-    });
-
-    const deliveryManager = presets.find((preset) => preset.meta.presetId === 'delivery-program-manager');
-    expect(deliveryManager?.meta.agent.skillScope).toEqual({
-      mode: 'specified',
-      skills: [
-        'ship',
-        'land-and-deploy',
-        'canary',
-        'document-release',
+        'dummy-dataset',
+        'job-stories',
+        'release-notes',
         'retro',
-        'guard',
+        'sprint-plan',
+        'summarize-meeting',
+        'test-scenarios',
+        'user-stories',
+        'wwas',
       ],
     });
 
-    const uxDirector = presets.find((preset) => preset.meta.presetId === 'ux-experience-director');
-    expect(uxDirector?.meta.agent.skillScope).toEqual({
+    const growthOptimization = presets.find((preset) => preset.meta.presetId === 'growth-optimization');
+    expect(growthOptimization?.meta.agent.skillScope).toEqual({
       mode: 'specified',
       skills: [
-        'design-consultation',
-        'ui-ux-pro-max',
-        'plan-design-review',
-        'design-review',
-        'browse',
-        'benchmark',
+        'ab-test-analysis',
+        'beachhead-segment',
+        'cohort-analysis',
+        'competitive-battlecard',
+        'growth-loops',
+        'gtm-motions',
+        'gtm-strategy',
+        'ideal-customer-profile',
+        'marketing-ideas',
+        'metrics-dashboard',
+        'north-star-metric',
+        'positioning-ideas',
+        'product-name',
+        'sql-queries',
+        'value-prop-statements',
       ],
     });
   });
 
-  it('loads the bundled stock-expert preset package from resources/agent-presets', async () => {
+  it('loads the bundled discovery-research preset package from resources/agent-presets', async () => {
     const presets = await listPresetsFrom(bundledPresetsDir);
-    const preset = presets.find((entry) => entry.meta.presetId === 'stock-expert');
+    const preset = presets.find((entry) => entry.meta.presetId === 'discovery-research');
 
     expect(preset).toBeDefined();
-    expect(preset?.meta.emoji).toBe('📈');
-    expect(preset?.meta.agent.id).toBe('stockexpert');
+    expect(preset?.meta.name).toBe('发现研究官');
+    expect(preset?.meta.emoji).toBe('🔍');
+    expect(preset?.meta.agent.id).toBe('discovery-research');
     expect(preset?.meta.agent).not.toHaveProperty('workspace');
     expect(preset?.meta.agent.skillScope).toEqual({
       mode: 'specified',
-      skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+      skills: [
+        'analyze-feature-requests',
+        'brainstorm-experiments-existing',
+        'brainstorm-experiments-new',
+        'brainstorm-ideas-existing',
+        'brainstorm-ideas-new',
+        'competitor-analysis',
+        'customer-journey-map',
+        'identify-assumptions-existing',
+        'identify-assumptions-new',
+        'interview-script',
+        'market-segments',
+        'market-sizing',
+        'opportunity-solution-tree',
+        'prioritize-assumptions',
+        'prioritize-features',
+        'sentiment-analysis',
+        'summarize-interview',
+        'user-personas',
+        'user-segmentation',
+      ],
     });
-    expect(preset?.meta.platforms).toEqual(['darwin']);
+    expect(preset?.meta.platforms).toBeUndefined();
     expect(Object.keys(preset?.files ?? {}).sort()).toEqual([
       'AGENTS.md',
       'IDENTITY.md',
@@ -270,28 +320,24 @@ describe('agent preset loader', () => {
       'SOUL.md',
       'USER.md',
     ]);
-    expect(preset?.files['AGENTS.md']).toContain('股票助手');
-    expect(preset?.skills).toEqual({
-      'stock-analyzer': {
-        'SKILL.md': expect.stringContaining('# Stock Analyzer'),
+    expect(preset?.files['AGENTS.md']).toContain('发现研究官');
+    expect(preset?.skills).toEqual({});
+    expect(preset?.skillManifest?.version).toBe(1);
+    expect(preset?.skillManifest?.skills).toHaveLength(19);
+    expect(preset?.skillManifest?.skills[0]).toEqual({
+      slug: 'analyze-feature-requests',
+      delivery: 'bundled',
+      source: {
+        type: 'github',
+        repo: 'phuryn/pm-skills',
+        repoPath: 'pm-product-discovery/skills/analyze-feature-requests',
+        ref: 'main',
       },
     });
-    expect(preset?.skillManifest).toEqual({
-      version: 1,
-      skills: [
-        {
-          slug: 'stock-analyzer',
-          delivery: 'bundled',
-          source: {
-            type: 'github',
-            repo: 'dtminds/GeeClaw',
-            repoPath: 'resources/agent-presets/stock-expert/skills/stock-analyzer',
-            ref: 'main',
-            version: 'a8be3fd6f1b3e94de3cbca9ef2ffeda09232ff80',
-          },
-        },
-      ],
-    });
+    expect(preset?.skillManifest?.skills).toContainEqual(expect.objectContaining({
+      slug: 'user-segmentation',
+      delivery: 'bundled',
+    }));
   });
 
   it('loads preset packages and managed files from a mocked resources directory', async () => {
@@ -549,14 +595,20 @@ describe('agent preset loader', () => {
     );
   });
 
-  it('rejects presets whose specified skill scope exceeds 6 entries', async () => {
+  it('rejects presets whose specified skill scope exceeds 20 entries', async () => {
     const root = createTempRoot('agent-presets-invalid-');
     const meta = createPresetMeta('too-many-skills');
-    meta.agent.skillScope.skills = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    meta.agent.skillScope.skills = [
+      'a', 'b', 'c', 'd', 'e',
+      'f', 'g', 'h', 'i', 'j',
+      'k', 'l', 'm', 'n', 'o',
+      'p', 'q', 'r', 's', 't',
+      'u',
+    ];
     writePresetPackage(root, 'too-many-skills', meta, {});
 
     await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
-      'must not contain more than 6 skills',
+      'must not contain more than 20 skills',
     );
   });
 

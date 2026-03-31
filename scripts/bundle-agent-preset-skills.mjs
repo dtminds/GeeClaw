@@ -22,6 +22,7 @@ const RECOGNIZED_SKILL_SCOPE_KEYS = new Set(['mode', 'skills']);
 const RECOGNIZED_SKILL_MANIFEST_KEYS = new Set(['version', 'skills']);
 const RECOGNIZED_SKILL_MANIFEST_SKILL_KEYS = new Set(['slug', 'delivery', 'source']);
 const RECOGNIZED_SKILL_MANIFEST_SOURCE_KEYS = new Set(['type', 'repo', 'repoPath', 'ref', 'version']);
+const MAX_SPECIFIED_AGENT_SKILLS = 20;
 
 function requireNonEmptyString(value, field) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -82,8 +83,8 @@ function normalizeSpecifiedSkillScopeSkills(presetId, skills) {
   if (normalized.length === 0) {
     throw new Error(`Preset "${presetId}" specified skill scope must contain at least 1 skill`);
   }
-  if (normalized.length > 6) {
-    throw new Error('Preset specified skill scope must not contain more than 6 skills');
+  if (normalized.length > MAX_SPECIFIED_AGENT_SKILLS) {
+    throw new Error('Preset specified skill scope must not contain more than 20 skills');
   }
   return normalized;
 }

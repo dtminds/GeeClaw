@@ -198,7 +198,7 @@ function normalizeSkillScope(presetId: string, skillScope: unknown): AgentSkillS
       invalidEntryError: 'Preset specified skill scope must contain only non-empty string skills',
       duplicateError: 'Preset specified skill scope must not contain duplicate skills',
       emptyError: `Preset "${presetId}" specified skill scope must contain at least 1 skill`,
-      tooManyError: 'Preset specified skill scope must not contain more than 6 skills',
+      tooManyError: 'Preset specified skill scope must not contain more than 20 skills',
     });
     return { mode: 'specified', skills };
   }
