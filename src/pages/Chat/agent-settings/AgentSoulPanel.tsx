@@ -55,7 +55,8 @@ export function AgentSoulPanel({
   fieldId,
 }: AgentSoulPanelProps) {
   const { t } = useTranslation(['chat', 'common']);
-  const textareaId = fieldId ?? useId();
+  const generatedTextareaId = useId();
+  const textareaId = fieldId ?? generatedTextareaId;
   const showLoading = Boolean(loading);
   const showError = Boolean(error);
   const showCreateBadge = !exists;

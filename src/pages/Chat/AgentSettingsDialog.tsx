@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -42,6 +42,14 @@ interface AgentSettingsDialogProps {
 }
 
 export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettingsDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? <AgentSettingsDialogBody agentId={agentId} onOpenChange={onOpenChange} /> : null}
+    </Dialog>
+  );
+}
+
+function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDialogProps, 'open'>) {
   const { t } = useTranslation('chat');
   const [activeSection, setActiveSection] = useState<AgentSettingsSection>(SECTION_DEFINITIONS[0].id);
   const {
@@ -56,12 +64,7 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
     hasSectionChanges,
     selectSoulTemplate,
     saveSection,
-  } = useAgentPersona(agentId, open);
-
-  useEffect(() => {
-    if (!open) return;
-    setActiveSection(SECTION_DEFINITIONS[0].id);
-  }, [agentId, open]);
+  } = useAgentPersona(agentId, true);
 
   const sections = useMemo(() => SECTION_DEFINITIONS.map((section) => ({
     ...section,
@@ -194,32 +197,31 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        hideCloseButton
-        className="modal-card-surface w-[min(980px,calc(100vw-2rem))] max-w-[980px] max-h-[min(88vh,860px)] overflow-hidden rounded-[28px] border p-0"
-      >
-        <div className="flex h-full flex-col">
-          <div className="flex items-start justify-between gap-6 border-b border-black/6 px-6 py-5 dark:border-white/10 sm:px-7">
-            <DialogHeader className="pr-8">
-              <DialogTitle className="modal-title">
-                {t('agentSettingsDialog.title')}
-              </DialogTitle>
-              <DialogDescription className="modal-description mt-2">
-                {t('agentSettingsDialog.description')}
-              </DialogDescription>
-            </DialogHeader>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="modal-close-button -mr-2 -mt-2"
-              aria-label={t('common:actions.close')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+    <DialogContent
+      hideCloseButton
+      className="modal-card-surface w-[min(980px,calc(100vw-2rem))] max-w-[980px] max-h-[min(88vh,860px)] overflow-hidden rounded-[28px] border p-0"
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex items-start justify-between gap-6 border-b border-black/6 px-6 py-5 dark:border-white/10 sm:px-7">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="modal-title">
+              {t('agentSettingsDialog.title')}
+            </DialogTitle>
+            <DialogDescription className="modal-description mt-2">
+              {t('agentSettingsDialog.description')}
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            className="modal-close-button -mr-2 -mt-2"
+            aria-label={t('common:actions.close')}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
 
           <div className="flex min-h-0 flex-1 flex-col sm:grid sm:grid-cols-[220px_minmax(0,1fr)]">
             <aside className="border-b border-black/6 px-4 py-3 dark:border-white/10 sm:border-b-0 sm:border-r sm:px-5 sm:py-5">
@@ -271,8 +273,7 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
               </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </DialogContent>
   );
 }

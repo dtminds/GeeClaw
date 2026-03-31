@@ -115,7 +115,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
         ? Math.max(6, agent.skillScope.skills.length)
         : 6,
     );
-  }, [agent?.skillScope, agentId]);
+  }, [agent]);
 
   useEffect(() => {
     if (!skillPickerOpen) {

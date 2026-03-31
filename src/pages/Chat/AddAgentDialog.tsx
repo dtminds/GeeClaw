@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -25,21 +25,20 @@ interface AddAgentDialogProps {
 }
 
 export function AddAgentDialog({ open, onOpenChange }: AddAgentDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? <AddAgentDialogBody onOpenChange={onOpenChange} /> : null}
+    </Dialog>
+  );
+}
+
+function AddAgentDialogBody({ onOpenChange }: Pick<AddAgentDialogProps, 'onOpenChange'>) {
   const { t } = useTranslation('agents');
   const agents = useAgentsStore((state) => state.agents);
   const createAgent = useAgentsStore((state) => state.createAgent);
   const [name, setName] = useState('');
   const [agentId, setAgentId] = useState('');
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setName('');
-    setAgentId('');
-    setSaving(false);
-  }, [open]);
 
   const normalizedAgentId = agentId.trim().toLowerCase();
   const isIdFormatValid = agentIdPattern.test(normalizedAgentId);
@@ -63,71 +62,68 @@ export function AddAgentDialog({ open, onOpenChange }: AddAgentDialogProps) {
       setSaving(false);
     }
   };
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        hideCloseButton
-        className="modal-card-surface w-full max-w-md overflow-hidden rounded-3xl border p-0"
-      >
-        <DialogHeader className="px-6 pb-2 pt-6">
-          <DialogTitle className="modal-title">
-            {t('createDialog.title')}
-          </DialogTitle>
-          <DialogDescription className="modal-description">
-            {t('createDialog.description')}
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent
+      hideCloseButton
+      className="modal-card-surface w-full max-w-md overflow-hidden rounded-3xl border p-0"
+    >
+      <DialogHeader className="px-6 pb-2 pt-6">
+        <DialogTitle className="modal-title">
+          {t('createDialog.title')}
+        </DialogTitle>
+        <DialogDescription className="modal-description">
+          {t('createDialog.description')}
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="space-y-6 p-6 pt-4">
-          <div className="space-y-2.5">
-            <Label htmlFor="agent-name" className={labelClasses}>{t('createDialog.nameLabel')}</Label>
-            <Input
-              id="agent-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t('createDialog.namePlaceholder')}
-              className={inputClasses}
-            />
-          </div>
-          <div className="space-y-2.5">
-            <Label htmlFor="agent-id" className={labelClasses}>{t('createDialog.idLabel')}</Label>
-            <Input
-              id="agent-id"
-              value={agentId}
-              onChange={(event) => setAgentId(event.target.value)}
-              placeholder={t('createDialog.idPlaceholder')}
-              className={cn(inputClasses, idError && 'border-destructive focus-visible:ring-destructive/30 focus-visible:border-destructive')}
-            />
-            <p className={cn('text-[12px]', idError ? 'text-destructive' : 'text-muted-foreground')}>
-              {idError || t('createDialog.idHint')}
-            </p>
-          </div>
-          <div className="modal-footer">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="modal-secondary-button"
-            >
-              {t('common:actions.cancel')}
-            </Button>
-            <Button
-              onClick={() => void handleSubmit()}
-              disabled={!canSubmit}
-              className="modal-primary-button"
-            >
-              {saving ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  {t('creating')}
-                </>
-              ) : (
-                t('common:actions.save')
-              )}
-            </Button>
-          </div>
+      <div className="space-y-6 p-6 pt-4">
+        <div className="space-y-2.5">
+          <Label htmlFor="agent-name" className={labelClasses}>{t('createDialog.nameLabel')}</Label>
+          <Input
+            id="agent-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t('createDialog.namePlaceholder')}
+            className={inputClasses}
+          />
         </div>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-2.5">
+          <Label htmlFor="agent-id" className={labelClasses}>{t('createDialog.idLabel')}</Label>
+          <Input
+            id="agent-id"
+            value={agentId}
+            onChange={(event) => setAgentId(event.target.value)}
+            placeholder={t('createDialog.idPlaceholder')}
+            className={cn(inputClasses, idError && 'border-destructive focus-visible:ring-destructive/30 focus-visible:border-destructive')}
+          />
+          <p className={cn('text-[12px]', idError ? 'text-destructive' : 'text-muted-foreground')}>
+            {idError || t('createDialog.idHint')}
+          </p>
+        </div>
+        <div className="modal-footer">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="modal-secondary-button"
+          >
+            {t('common:actions.cancel')}
+          </Button>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            className="modal-primary-button"
+          >
+            {saving ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                {t('creating')}
+              </>
+            ) : (
+              t('common:actions.save')
+            )}
+          </Button>
+        </div>
+      </div>
+    </DialogContent>
   );
 }
