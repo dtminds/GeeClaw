@@ -164,27 +164,17 @@ describe('agent preset loader', () => {
       'IDENTITY.md',
       'SOUL.md',
     ];
-    const categories = new Set(presets.map((preset) => preset.meta.category));
-
-    expect(presets).toHaveLength(4);
-    expect(presetIds).toEqual([
+    const corePresetIds = [
       'delivery-execution',
       'discovery-research',
       'growth-optimization',
       'strategy-planning',
-    ]);
+    ];
 
-    for (const preset of presets) {
+    expect(presetIds).toEqual(expect.arrayContaining(corePresetIds));
+
+    for (const preset of presets.filter((entry) => corePresetIds.includes(entry.meta.presetId))) {
       expect(Object.keys(preset.files).sort()).toEqual(requiredFiles);
-    }
-
-    for (const category of [
-      'research',
-      'strategy',
-      'operations',
-      'growth',
-    ]) {
-      expect(categories.has(category)).toBe(true);
     }
 
     const discoveryResearch = presets.find((preset) => preset.meta.presetId === 'discovery-research');

@@ -1,7 +1,7 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { PRESET_INSTALL_STAGE_VISIBLE_MS, useAgentsStore } from '@/stores/agents';
+import { useAgentsStore } from '@/stores/agents';
 import type { AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
@@ -166,26 +166,9 @@ function buildInstalledSnapshot(presetId: 'alpha-researcher' | 'beta-scout'): Ag
   };
 }
 
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
-}
-
-async function clickAndFlush(element: HTMLElement) {
-  await act(async () => {
-    fireEvent.click(element);
-    await flushPromises();
-  });
 }
 
 async function flushUiTimers() {
