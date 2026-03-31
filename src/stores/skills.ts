@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { AppError, normalizeAppError } from '@/lib/error-model';
+import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { useGatewayStore } from './gateway';
 import type { CategoryInfo, MarketplaceCatalog, MarketplaceSkill, Skill, SkillMissingRequirements } from '../types/skill';
 
@@ -345,6 +346,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       }
       // Refresh skills after install
       await get().fetchSkills();
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Install error:', error);
       throw error;
@@ -374,6 +376,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       }
       // Refresh skills after uninstall
       await get().fetchSkills();
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Uninstall error:', error);
       throw error;
@@ -401,6 +404,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         body: JSON.stringify({ skillKey: skillId, enabled: true }),
       });
       updateSkill(skillId, { enabled: true, configuredEnabled: true });
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Failed to enable skill:', error);
       throw error;
@@ -422,6 +426,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         body: JSON.stringify({ skillKey: skillId, enabled: false }),
       });
       updateSkill(skillId, { enabled: false, configuredEnabled: false });
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Failed to disable skill:', error);
       throw error;

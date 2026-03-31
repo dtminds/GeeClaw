@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
+import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import type { ChannelType } from '@/types/channel';
 import type { AgentPresetSummary, AgentSkillScope, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
@@ -124,6 +125,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         }
       );
       set(applySnapshot(snapshot));
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       set({ error: String(error) });
       throw error;
@@ -170,6 +172,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       } else {
         set(applySnapshot(snapshot));
       }
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       if (get().installingPresetId === presetId) {
         set({ installStage: 'failed', error: String(error) });
@@ -212,6 +215,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         { method: 'POST' }
       );
       set(applySnapshot(snapshot));
+      invalidatePresetAgentSkillsCache();
     } catch (error) {
       set({ error: String(error) });
       throw error;

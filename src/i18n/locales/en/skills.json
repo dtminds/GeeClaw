@@ -12,9 +12,9 @@
         "allSkills": "Installed",
         "all": "All",
         "enabled": "Enabled",
-        "builtIn": "OpenClaw Bundled",
-        "openclawExtra": "OpenClaw Extra",
-        "openclawManaged": "OpenClaw Managed",
+        "builtIn": "Bundled",
+        "openclawExtra": "Extra",
+        "openclawManaged": "Managed",
         "personal": "Personal"
     },
     "search": "Search skills...",

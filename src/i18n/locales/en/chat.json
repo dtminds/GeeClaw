@@ -109,6 +109,7 @@
         "skillSearchPlaceholder": "Search skills",
         "skillPickerLoading": "Loading skills...",
         "skillPickerEmpty": "No matching skills found",
+        "presetAgentSkillBadge": "Current Agent",
         "skillRecommendation": {
             "title": "Use the {{skill}} skill in this prompt",
             "action": "Use",

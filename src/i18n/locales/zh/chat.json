@@ -109,6 +109,7 @@
         "skillSearchPlaceholder": "搜索技能",
         "skillPickerLoading": "正在加载技能...",
         "skillPickerEmpty": "没有匹配的技能",
+        "presetAgentSkillBadge": "当前 Agent",
         "skillRecommendation": {
             "title": "在当前提示词中使用 {{skill}} 技能",
             "action": "使用",

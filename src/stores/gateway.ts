@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
+import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { subscribeHostEvent } from '@/lib/host-events';
 import type { GatewayStatus } from '../types/gateway';
 
@@ -202,6 +203,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
           const unsubscribers: Array<() => void> = [];
           unsubscribers.push(subscribeHostEvent<GatewayStatus>('gateway:status', (payload) => {
             set({ status: payload });
+            invalidatePresetAgentSkillsCache();
             if (payload.state === 'running') {
               refreshChannelsSnapshot();
               scheduleChannelWarmupRefreshes();
@@ -257,6 +259,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   start: async () => {
     try {
       set({ status: { ...get().status, state: 'starting' }, lastError: null });
+      invalidatePresetAgentSkillsCache();
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/gateway/start', {
         method: 'POST',
       });
@@ -277,6 +280,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   stop: async () => {
     try {
       await hostApiFetch('/api/gateway/stop', { method: 'POST' });
+      invalidatePresetAgentSkillsCache();
       set({ status: { ...get().status, state: 'stopped' }, lastError: null });
     } catch (error) {
       console.error('Failed to stop Gateway:', error);
@@ -287,6 +291,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   restart: async () => {
     try {
       set({ status: { ...get().status, state: 'starting' }, lastError: null });
+      invalidatePresetAgentSkillsCache();
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/gateway/restart', {
         method: 'POST',
       });
