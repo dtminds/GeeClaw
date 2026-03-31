@@ -131,10 +131,10 @@ export function PresetAgentsPlazaSection() {
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <h3 className="max-w-[22ch] text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
+                    <h3 className="min-h-[1.4em]line-clamp-1 text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
                       {preset.name}
                     </h3>
-                    <p className="max-w-[38ch] text-[12px] leading-4 text-foreground/45 line-clamp-3 dark:text-foreground/56">
+                    <p className="min-h-8 line-clamp-2 text-[12px] leading-4 text-foreground/45 dark:text-foreground/56">
                       {preset.description}
                     </p>
                   </div>
@@ -156,7 +156,6 @@ export function PresetAgentsPlazaSection() {
         onClose={() => setActivePresetId(null)}
         onInstall={(presetId) => void installPreset(presetId)}
         availabilityTitle={t('presetPlaza.platformsTitle')}
-        summaryTitle={t('presetPlaza.summaryTitle')}
         skillsTitle={t('presetPlaza.skillsTitle')}
         closeLabel={t('presetPlaza.close')}
         locale={i18n.resolvedLanguage || i18n.language}

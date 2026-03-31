@@ -45,6 +45,7 @@ export function Agents() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<AgentSummary | null>(null);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchChannels()]);
@@ -161,8 +162,10 @@ export function Agents() {
         confirmLabel={t('common:actions.delete')}
         cancelLabel={t('common:actions.cancel')}
         variant="destructive"
+        loading={!!agentToDelete && deletingAgentId === agentToDelete.id}
         onConfirm={async () => {
           if (!agentToDelete) return;
+          setDeletingAgentId(agentToDelete.id);
           try {
             await deleteAgent(agentToDelete.id);
             if (activeAgentId === agentToDelete.id) {
@@ -172,10 +175,16 @@ export function Agents() {
           } catch (deleteError) {
             toast.error(t('toast.agentDeleteFailed', { error: String(deleteError) }));
           } finally {
+            setDeletingAgentId(null);
             setAgentToDelete(null);
           }
         }}
-        onCancel={() => setAgentToDelete(null)}
+        onCancel={() => {
+          if (deletingAgentId) {
+            return;
+          }
+          setAgentToDelete(null);
+        }}
       />
     </div>
   );

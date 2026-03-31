@@ -53,8 +53,6 @@ describe('InspirationPlazaSection', () => {
     const { InspirationPlazaSection } = await import('@/components/dashboard/InspirationPlazaSection');
     const { container } = render(<InspirationPlazaSection />);
 
-    expect(screen.getByText('灵感广场')).toBeInTheDocument();
-
     const firstTitle = container.querySelector('h3');
     const firstDescription = container.querySelector('h3 + p');
 

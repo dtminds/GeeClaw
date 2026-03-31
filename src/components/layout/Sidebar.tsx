@@ -36,7 +36,6 @@ import { getSettingsModalPath, getSettingsModalState, isSettingsModalPath } from
 import { renderSkillMarkersAsPlainText } from '@/lib/chat-message-text';
 
 const isMac = window.electron?.platform === 'darwin';
-const SIDEBAR_TRANSITION_MS = 220;
 const sidebarItemBaseClass = 'text-foreground/72 hover:bg-white/72 hover:text-foreground dark:text-foreground/70 dark:hover:bg-white/6 dark:hover:text-foreground';
 const sidebarItemActiveClass = 'sidebar-item-active font-medium';
 const sidebarSessionActiveClass = 'sidebar-item-active font-medium';
@@ -72,7 +71,7 @@ function NavItem({ to, icon, label, badge, trailing, collapsed, onClick }: NavIt
       onClick={onClick}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-normal transition-all duration-200',
+          'flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-normal transition-colors duration-200',
           sidebarItemBaseClass,
           isActive && !collapsed ? sidebarItemActiveClass : '',
           collapsed && 'justify-center px-0'
@@ -114,7 +113,6 @@ function isMainSessionKey(sessionKey: string): boolean {
 export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
-  const [sidebarExpandedContentReady, setSidebarExpandedContentReady] = useState(!sidebarCollapsed);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const desktopSessions = useChatStore((s) => s.desktopSessions);
@@ -141,18 +139,6 @@ export function Sidebar() {
   useEffect(() => {
     if (!isMac) return;
     void invokeIpc('window:setButtonsVisible', !sidebarCollapsed);
-  }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    if (sidebarCollapsed) return;
-
-    const timer = window.setTimeout(() => {
-      setSidebarExpandedContentReady(true);
-    }, SIDEBAR_TRANSITION_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
   }, [sidebarCollapsed]);
 
   useEffect(() => {
@@ -204,12 +190,10 @@ export function Sidebar() {
     { to: '/skills', icon: <SidebarGlyph icon={ThreeDViewIcon} />, label: t('sidebar.skills') },
     { to: '/channels', icon: <SidebarGlyph icon={SmartPhone03Icon} />, label: t('sidebar.channels'), trailing: channelsTrailing },
   ];
-  const agentSectionHidden = !sidebarCollapsed && !sidebarExpandedContentReady;
-
   return (
     <aside
       className={cn(
-        'app-sidebar flex shrink-0 flex-col transition-all duration-300',
+        'app-sidebar flex shrink-0 flex-col',
         sidebarCollapsed ? 'w-12' : 'w-56'
       )}
     >
@@ -226,9 +210,6 @@ export function Sidebar() {
           size="icon"
           className="no-drag h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-white/72 hover:text-foreground dark:hover:bg-white/6 dark:hover:text-foreground"
           onClick={() => {
-            if (!sidebarCollapsed) {
-              setSidebarExpandedContentReady(false);
-            }
             setSidebarCollapsed(!sidebarCollapsed);
           }}
           title={sidebarCollapsed ? t('sidebar.expand', 'Expand sidebar') : t('sidebar.collapse', 'Collapse sidebar')}
@@ -253,59 +234,37 @@ export function Sidebar() {
       </nav>
 
       {/* Agent list */}
-      {!agentSectionHidden && (
-        <div className={cn('mt-4 flex min-h-0 flex-1 flex-col pb-3', sidebarCollapsed ? 'px-1' : 'px-3')}>
-          {!sidebarCollapsed && (
-            <div className="mb-1 flex items-center justify-between px-3 py-1">
-              <h2 className="text-[13px] font-semibold text-foreground/88">
-                {t('sidebar.agents', '智能体')}
-              </h2>
-              <button
-                type="button"
-                onClick={() => navigate('/agents')}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-white/72 hover:text-foreground dark:hover:bg-white/6 dark:hover:text-foreground"
-                title={t('sidebar.agents', '智能体')}
-                aria-label={t('sidebar.agents', '智能体')}
-              >
-                <SidebarGlyph icon={AppleIntelligenceIcon} size={16} />
-              </button>
-            </div>
-          )}
+      <div className={cn('mt-4 flex min-h-0 flex-1 flex-col pb-3', sidebarCollapsed ? 'px-1' : 'px-3')}>
+        {!sidebarCollapsed && (
+          <div className="mb-1 flex items-center justify-between px-3 py-1">
+            <h2 className="text-[13px] font-semibold text-foreground/88">
+              {t('sidebar.agents', '智能体')}
+            </h2>
+            <button
+              type="button"
+              onClick={() => navigate('/agents')}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/72 hover:text-foreground dark:hover:bg-white/6 dark:hover:text-foreground"
+              title={t('sidebar.agents', '智能体')}
+              aria-label={t('sidebar.agents', '智能体')}
+            >
+              <SidebarGlyph icon={AppleIntelligenceIcon} size={16} />
+            </button>
+          </div>
+        )}
 
-          <div className={cn(
-            'scroll-fade-y scrollbar-hidden min-h-0 flex-1 overflow-y-auto overflow-x-hidden',
-            sidebarCollapsed ? 'py-1' : 'py-2',
-          )}>
-            <div className={cn(sidebarCollapsed ? 'flex flex-col items-center gap-2' : 'space-y-1')}>
-              {sortedAgents.map((agent) => {
-                const mainSession = agentMainSessions.get(agent.id);
-                const preview = renderSkillMarkersAsPlainText(mainSession?.lastMessagePreview || '').trim();
-                const subtitle = preview || t('sidebar.agentMainSessionHint', '点击进入会话');
-                const updatedAt = mainSession?.updatedAt ? formatShortDateTime(mainSession.updatedAt) : '';
-                const isActiveAgent = isOnChat && currentAgentId === agent.id;
+        <div className={cn(
+          'scroll-fade-y scrollbar-hidden min-h-0 flex-1 overflow-y-auto overflow-x-hidden',
+          sidebarCollapsed ? 'py-1' : 'py-2',
+        )}>
+          <div className={cn(sidebarCollapsed ? 'flex flex-col items-center gap-2' : 'space-y-1')}>
+            {sortedAgents.map((agent) => {
+              const mainSession = agentMainSessions.get(agent.id);
+              const preview = renderSkillMarkersAsPlainText(mainSession?.lastMessagePreview || '').trim();
+              const subtitle = preview || t('sidebar.agentMainSessionHint', '点击进入会话');
+              const updatedAt = mainSession?.updatedAt ? formatShortDateTime(mainSession.updatedAt) : '';
+              const isActiveAgent = isOnChat && currentAgentId === agent.id;
 
-                if (sidebarCollapsed) {
-                  return (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => {
-                        void openAgentMainSession(agent.id);
-                        navigate('/chat');
-                      }}
-                      className={cn(
-                        'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
-                        isActiveAgent
-                          ? 'bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65'
-                          : 'bg-black/[0.08] text-foreground/56 dark:bg-white/[0.11] dark:text-foreground/58',
-                      )}
-                      aria-label={t('sidebar.switchToAgent', { defaultValue: '切换到 {{name}}', name: agent.name })}
-                    >
-                      {agent.name.slice(0, 1).toUpperCase()}
-                    </button>
-                  );
-                }
-
+              if (sidebarCollapsed) {
                 return (
                   <button
                     key={agent.id}
@@ -315,32 +274,52 @@ export function Sidebar() {
                       navigate('/chat');
                     }}
                     className={cn(
-                      'w-full rounded-xl px-3 py-2 text-left transition-all duration-200',
-                      sidebarItemBaseClass,
-                      isActiveAgent ? sidebarSessionActiveClass : '',
+                      'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
+                      isActiveAgent
+                        ? 'bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65'
+                        : 'bg-black/[0.08] text-foreground/56 dark:bg-white/[0.11] dark:text-foreground/58',
                     )}
+                    aria-label={t('sidebar.switchToAgent', { defaultValue: '切换到 {{name}}', name: agent.name })}
                   >
-                    <div className="flex items-start gap-2.5">
-                      <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65 text-[12px] font-semibold text-white">
-                        {agent.name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[13px] font-medium text-foreground">{agent.name}</span>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">{updatedAt}</span>
-                        </div>
-                        <div className="mt-0.5">
-                          <span className="block truncate text-[12px] text-muted-foreground">{subtitle}</span>
-                        </div>
-                      </div>
-                    </div>
+                    {agent.name.slice(0, 1).toUpperCase()}
                   </button>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => {
+                    void openAgentMainSession(agent.id);
+                    navigate('/chat');
+                  }}
+                  className={cn(
+                    'w-full rounded-xl px-3 py-2 text-left transition-colors duration-200',
+                    sidebarItemBaseClass,
+                    isActiveAgent ? sidebarSessionActiveClass : '',
+                  )}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65 text-[12px] font-semibold text-white">
+                      {agent.name.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[13px] font-medium text-foreground">{agent.name}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{updatedAt}</span>
+                      </div>
+                      <div className="mt-0.5">
+                        <span className="block truncate text-[12px] text-muted-foreground">{subtitle}</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Footer */}
       <div className="mt-auto px-3 pb-3 pt-2">
@@ -363,9 +342,9 @@ export function Sidebar() {
             )}
           </NavLink>
         ) : (
-          <div className="flex items-center gap-2 px-1 py-1">
+            <div className="flex items-center gap-2 px-1 py-1">
             {sessionStatus === 'authenticated' ? (
-              <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 dark:hover:bg-white/6">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors duration-200 hover:bg-white/72 dark:hover:bg-white/6">
                 <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
                   <span className="absolute inset-0 flex items-center justify-center">
                     {(sessionAccount?.displayName || sessionAccount?.nickName || 'G').slice(0, 1).toUpperCase()}
@@ -386,7 +365,7 @@ export function Sidebar() {
                 </p>
               </div>
             ) : (
-              <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-all duration-200 hover:bg-white/72 dark:hover:bg-white/6">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors duration-200 hover:bg-white/72 dark:hover:bg-white/6">
                 <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,rgba(36,93,124,0.16),rgba(36,93,124,0.06))] text-[12px] font-semibold text-primary dark:bg-[linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06))]">
                   <span className="absolute inset-0 flex items-center justify-center">G</span>
                 </div>
@@ -401,7 +380,7 @@ export function Sidebar() {
                   <button
                     type="button"
                     className={cn(
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
                       sidebarItemBaseClass,
                       isSettingsModalPath(location.pathname) && sidebarItemActiveClass,
                     )}
@@ -469,7 +448,7 @@ export function Sidebar() {
                 state={settingsModalState}
                 className={({ isActive }) =>
                   cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-200',
                     sidebarItemBaseClass,
                     (isActive || isSettingsModalPath(location.pathname)) && sidebarItemActiveClass,
                   )

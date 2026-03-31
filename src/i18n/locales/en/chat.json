@@ -16,6 +16,7 @@
         "refresh": "Refresh chat",
         "thinking": "Thinking",
         "toolCalls": "Tool calls",
+        "visibilityOptions": "Visibility options",
         "showThinking": "Show thinking",
         "hideThinking": "Hide thinking",
         "showToolCalls": "Show tool calls",

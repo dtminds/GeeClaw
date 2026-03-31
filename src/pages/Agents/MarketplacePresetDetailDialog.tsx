@@ -18,7 +18,6 @@ type MarketplacePresetDetailDialogProps = {
   onClose: () => void;
   onInstall: (presetId: string) => void;
   availabilityTitle?: string;
-  summaryTitle?: string;
   skillsTitle?: string;
   closeLabel?: string;
   locale?: string;
@@ -35,7 +34,6 @@ export function MarketplacePresetDetailDialog({
   onClose,
   onInstall,
   availabilityTitle,
-  summaryTitle,
   skillsTitle,
   closeLabel,
   locale,
@@ -85,47 +83,32 @@ export function MarketplacePresetDetailDialog({
             <DialogDescription className="modal-description mt-1 max-w-3xl text-center text-[13px] leading-7 text-foreground/42 dark:text-foreground/56 sm:text-[14px]">
               {preset.description}
             </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-6 space-y-6 sm:mt-8">
-            <section className="border-t border-black/6 pt-6 dark:border-white/10">
-              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
-                {availabilityTitle || 'Platforms'}
-              </h3>
-              <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
-                <div className="flex flex-wrap gap-2">
-                  {platformLabels.map((label) => (
-                    <Badge
-                      key={label}
-                      variant="secondary"
-                      className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                    >
-                      {label}
-                    </Badge>
-                  ))}
-                </div>
-                {availabilityCopy && (
-                  <p className="mt-3 text-[14px] leading-6 text-foreground/72">
-                    {availabilityCopy}
-                  </p>
-                )}
-              </div>
-            </section>
-
-            <section className="border-t border-black/6 pt-6 dark:border-white/10">
-              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
-                {summaryTitle || t('marketplace.detail.summary')}
-              </h3>
-              <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
-                <div className="space-y-1">
+            <div className="modal-section-surface mt-5 w-full rounded-[18px] border px-4 py-4 shadow-none text-left">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
                   <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
                     {t('fields.agentId')}
                   </p>
                   <p className="font-mono text-[13px] text-foreground">{preset.agentId}</p>
                 </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+                    {availabilityTitle || 'Platforms'}
+                  </p>
+                  <p className="text-[13px] leading-6 text-foreground/78">
+                    {platformLabels.join(' / ')}
+                  </p>
+                </div>
               </div>
-            </section>
+              {availabilityCopy && (
+                <p className="mt-4 text-[14px] leading-6 text-foreground/72">
+                  {availabilityCopy}
+                </p>
+              )}
+            </div>
+          </DialogHeader>
 
+          <div className="mt-6 space-y-6 sm:mt-8">
             <section className="border-t border-black/6 pt-6 dark:border-white/10">
               <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
                 {skillsTitle || t('marketplace.detail.skills')}
@@ -146,9 +129,9 @@ export function MarketplacePresetDetailDialog({
             </section>
           </div>
 
-          <div className="modal-footer mt-8 flex-col gap-4 pb-1 sm:mt-10">
+          <div className="modal-footer mt-8 flex-col items-stretch gap-4 pb-1 sm:mt-10">
             {isInstalling && (
-              <div className="w-full max-w-[360px] space-y-1.5">
+              <div className="preset-install-progress w-full space-y-1.5">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
                   <div
                     className="h-full rounded-full bg-foreground/75 transition-[width] duration-300"
@@ -162,7 +145,7 @@ export function MarketplacePresetDetailDialog({
             )}
 
             <Button
-              className="modal-primary-button min-w-[160px] px-8 text-[14px]"
+              className="modal-primary-button w-full px-8 text-[14px]"
               disabled={installed || !preset.supportedOnCurrentPlatform || disableInstall}
               onClick={() => onInstall(preset.presetId)}
             >

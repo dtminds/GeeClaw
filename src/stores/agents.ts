@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
+import { useGatewayStore } from '@/stores/gateway';
 import type { ChannelType } from '@/types/channel';
 import type { AgentPresetSummary, AgentSkillScope, AgentSummary, AgentsSnapshot } from '@/types/agent';
+import type { GatewayStatus } from '@/types/gateway';
 
 export const PRESET_INSTALL_STAGE_VISIBLE_MS = 120;
+export const PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS = 3200;
+export const PRESET_INSTALL_GATEWAY_RECOVERY_TIMEOUT_MS = 15000;
 
 export type PresetInstallStage =
   | 'idle'
@@ -55,6 +59,87 @@ function applySnapshot(snapshot: AgentsSnapshot | undefined) {
 function wait(ms: number) {
   return new Promise<void>((resolve) => {
     globalThis.setTimeout(resolve, ms);
+  });
+}
+
+function waitForPresetInstallGatewayRecovery(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let finished = false;
+    let sawNonRunning = useGatewayStore.getState().status.state !== 'running';
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = (unsubscribe: () => void) => {
+      unsubscribe();
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+      }
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+    };
+
+    const finishResolve = (unsubscribe: () => void) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      cleanup(unsubscribe);
+      resolve();
+    };
+
+    const finishReject = (unsubscribe: () => void, error: Error) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      cleanup(unsubscribe);
+      reject(error);
+    };
+
+    const evaluate = (state: GatewayStatus['state'], unsubscribe: () => void) => {
+      if (state === 'error') {
+        finishReject(unsubscribe, new Error('Gateway failed to recover after preset install'));
+        return;
+      }
+      if (state !== 'running') {
+        sawNonRunning = true;
+        return;
+      }
+      if (sawNonRunning) {
+        finishResolve(unsubscribe);
+      }
+    };
+
+    const unsubscribe = useGatewayStore.subscribe((gatewayState) => {
+      evaluate(gatewayState.status.state, unsubscribe);
+    });
+
+    settleTimer = globalThis.setTimeout(() => {
+      if (finished) {
+        return;
+      }
+      const state = useGatewayStore.getState().status.state;
+      if (!sawNonRunning && state === 'running') {
+        finishResolve(unsubscribe);
+        return;
+      }
+      evaluate(state, unsubscribe);
+    }, PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS);
+
+    timeoutTimer = globalThis.setTimeout(() => {
+      if (finished) {
+        return;
+      }
+      const state = useGatewayStore.getState().status.state;
+      if (state === 'running') {
+        finishResolve(unsubscribe);
+        return;
+      }
+      finishReject(unsubscribe, new Error('Gateway reload timed out after preset install'));
+    }, PRESET_INSTALL_GATEWAY_RECOVERY_TIMEOUT_MS);
+
+    evaluate(useGatewayStore.getState().status.state, unsubscribe);
   });
 }
 
@@ -163,6 +248,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       ]);
       advanceStage('finalizing', 90);
       await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await waitForPresetInstallGatewayRecovery();
       if (get().installingPresetId === presetId) {
         set({
           ...applySnapshot(snapshot),

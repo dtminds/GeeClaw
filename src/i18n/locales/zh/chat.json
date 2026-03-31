@@ -16,6 +16,7 @@
         "refresh": "刷新聊天",
         "thinking": "思考过程",
         "toolCalls": "工具调用",
+        "visibilityOptions": "显示选项",
         "showThinking": "显示思考过程",
         "hideThinking": "隐藏思考过程",
         "showToolCalls": "显示工具调用",

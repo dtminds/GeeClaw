@@ -28,7 +28,7 @@
     },
     "deleteDialog": {
         "title": "删除 Agent",
-        "message": "确认从 GeeClaw 删除“{{name}}”？该 Agent 的受管工作区和运行时目录也会一并删除"
+        "message": "确认要删除“{{name}}”？该 Agent 的工作目录也会一并删除"
     },
     "settingsDialog": {
         "title": "Agent 设置：{{name}}",
@@ -70,12 +70,12 @@
         "marketplace": "智能体广场"
     },
     "marketplace": {
-        "install": "添加",
+        "install": "一键雇佣",
         "installed": "已添加",
         "unavailable": "当前不可用",
         "installProgress": "{{progress}}%",
         "installState": {
-            "idle": "添加",
+            "idle": "一键雇佣",
             "preparing": "准备预设",
             "installing_files": "安装文件",
             "installing_skills": "安装技能",

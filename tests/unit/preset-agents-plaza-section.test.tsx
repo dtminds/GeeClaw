@@ -1,6 +1,11 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESET_INSTALL_STAGE_VISIBLE_MS, useAgentsStore } from '@/stores/agents';
+import {
+  PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+  PRESET_INSTALL_STAGE_VISIBLE_MS,
+  useAgentsStore,
+} from '@/stores/agents';
+import { useGatewayStore } from '@/stores/gateway';
 import type { AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
@@ -15,10 +20,10 @@ const translations: Record<string, string> = {
   'presetPlaza.summaryTitle': '预设摘要',
   'presetPlaza.skillsTitle': '预置技能',
   'presetPlaza.platformsTitle': '支持平台',
-  'marketplace.install': '添加',
+  'marketplace.install': '一键雇佣',
   'marketplace.installed': '已添加',
   'marketplace.unavailable': '当前不可用',
-  'marketplace.installState.idle': '添加',
+  'marketplace.installState.idle': '一键雇佣',
   'marketplace.installState.preparing': '准备预设',
   'marketplace.installState.installing_files': '安装文件',
   'marketplace.installState.installing_skills': '安装技能',
@@ -174,6 +179,19 @@ function resetAgentsStore() {
   });
 }
 
+function resetGatewayStore() {
+  useGatewayStore.setState({
+    ...useGatewayStore.getState(),
+    status: {
+      state: 'running',
+      port: 28788,
+    },
+    health: null,
+    isInitialized: true,
+    lastError: null,
+  });
+}
+
 vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
 }));
@@ -256,6 +274,7 @@ describe('PresetAgentsPlazaSection', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     resetAgentsStore();
+    resetGatewayStore();
 
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/agents') {
@@ -275,8 +294,11 @@ describe('PresetAgentsPlazaSection', () => {
     });
   });
 
-  afterEach(() => {
-    vi.runOnlyPendingTimers();
+  afterEach(async () => {
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+      await flushPromises();
+    });
     vi.useRealTimers();
   });
 
@@ -291,7 +313,6 @@ describe('PresetAgentsPlazaSection', () => {
     const categoryTablist = screen.getByRole('tablist', { name: '智能体广场' });
     const allTab = screen.getByRole('tab', { name: '全部智能体' });
 
-    expect(screen.getByText('智能体广场')).toBeInTheDocument();
     expect(categoryTablist.className).toContain('border-b');
     expect(allTab).toHaveAttribute('aria-selected', 'true');
     expect(allTab.className).toContain('relative');
@@ -346,16 +367,26 @@ describe('PresetAgentsPlazaSection', () => {
     });
 
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('预设摘要')).toBeInTheDocument();
+    expect(within(dialog).queryByText('预设摘要')).not.toBeInTheDocument();
     expect(within(dialog).getByText('预置技能')).toBeInTheDocument();
     expect(within(dialog).getByText('Agent ID')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '添加' })).toBeEnabled();
+    const infoSections = dialog.querySelectorAll('.modal-section-surface');
+    expect(infoSections).toHaveLength(2);
+    expect(infoSections[0]?.textContent).toContain('Agent ID');
+    expect(infoSections[0]?.textContent).toContain('全平台');
+    const platformText = within(infoSections[0] as HTMLElement).getByText('全平台');
+    expect(platformText.className).not.toContain('inline-flex');
+    const actionButton = within(dialog).getByRole('button', { name: '一键雇佣' });
+    expect(actionButton).toBeEnabled();
+    expect(actionButton.className).toContain('w-full');
 
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+      fireEvent.click(actionButton);
       await flushPromises();
     });
 
+    const progressBlock = dialog.querySelector('.preset-install-progress');
+    expect(progressBlock?.className).toContain('w-full');
     expect(within(dialog).getByRole('button', { name: '准备预设' })).toBeDisabled();
     expect(within(dialog).getByText(/10%/)).toBeInTheDocument();
 
@@ -393,6 +424,14 @@ describe('PresetAgentsPlazaSection', () => {
       await flushPromises();
     });
 
+    expect(within(dialog).getByRole('button', { name: '完成配置' })).toBeDisabled();
+    expect(within(dialog).getByText(/90%/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS);
+      await flushPromises();
+    });
+
     expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
     expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
 
@@ -400,5 +439,94 @@ describe('PresetAgentsPlazaSection', () => {
       vi.advanceTimersByTime(700);
       await flushPromises();
     });
+  });
+
+  it('keeps the preset in finalizing state until the gateway finishes reloading', async () => {
+    const deferredInstall = createDeferred<AgentsSnapshot>();
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
+        return deferredInstall.promise;
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Alpha Researcher'));
+    });
+
+    const dialog = screen.getByRole('dialog');
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: '一键雇佣' }));
+      await flushPromises();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      deferredInstall.resolve(buildInstalledSnapshot('alpha-researcher'));
+      await flushPromises();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      useGatewayStore.setState({
+        ...useGatewayStore.getState(),
+        status: {
+          state: 'reconnecting',
+          port: 28788,
+        },
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS + 1000);
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '完成配置' })).toBeDisabled();
+    expect(within(dialog).queryByText(/100%/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      useGatewayStore.setState({
+        ...useGatewayStore.getState(),
+        status: {
+          state: 'running',
+          port: 28788,
+        },
+      });
+      await flushPromises();
+    });
+
+    expect(useAgentsStore.getState().installStage).toBe('completed');
+    expect(useAgentsStore.getState().installProgress).toBe(100);
+    expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
+    expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
   });
 });
