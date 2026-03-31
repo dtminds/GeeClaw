@@ -98,6 +98,20 @@
             "toastDeleted": "智能体已删除",
             "toastDeleteFailed": "删除智能体失败：{{error}}"
         },
+        "skillsHint": "你可以选择默认技能范围，或指定最多 6 个技能。",
+        "skillsManagedHint": "这个受管控智能体可以添加额外技能，但预置技能不可移除。",
+        "skillScope": {
+            "default": "默认",
+            "specified": "指定",
+            "selected": "已选技能",
+            "search": "搜索技能",
+            "searchPlaceholder": "按名称、slug 或描述搜索",
+            "addSkill": "添加技能",
+            "empty": "没有匹配的技能",
+            "maxReached": "已达到技能上限",
+            "preset": "预置",
+            "save": "保存技能"
+        },
         "sections": {
             "general": {
                 "label": "通用",

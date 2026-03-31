@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { AgentGeneralPanel } from '@/pages/Chat/agent-settings/AgentGeneralPanel';
+import { AgentSkillsPanel } from '@/pages/Chat/agent-settings/AgentSkillsPanel';
 import { AgentMarkdownPanel } from '@/pages/Chat/agent-settings/AgentMarkdownPanel';
 import { useAgentPersona, type PersonaFileKey } from '@/pages/Chat/agent-settings/useAgentPersona';
 
@@ -64,6 +65,16 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
           title={activeMeta.title}
           description={activeMeta.description}
           onDeleted={() => onOpenChange(false)}
+        />
+      );
+    }
+
+    if (activeMeta.id === 'skills') {
+      return (
+        <AgentSkillsPanel
+          agentId={agentId}
+          title={activeMeta.title}
+          description={activeMeta.description}
         />
       );
     }

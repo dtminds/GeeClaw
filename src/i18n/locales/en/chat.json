@@ -98,6 +98,20 @@
             "toastDeleted": "Agent deleted",
             "toastDeleteFailed": "Failed to delete agent: {{error}}"
         },
+        "skillsHint": "Choose between the default skill scope or up to 6 specific skills.",
+        "skillsManagedHint": "This managed agent can add extra skills, but preset skills cannot be removed.",
+        "skillScope": {
+            "default": "Default",
+            "specified": "Specified",
+            "selected": "Selected skills",
+            "search": "Search skills",
+            "searchPlaceholder": "Search by name, slug, or description",
+            "addSkill": "Add skill",
+            "empty": "No matching skills",
+            "maxReached": "Skill limit reached",
+            "preset": "Preset",
+            "save": "Save Skills"
+        },
         "sections": {
             "general": {
                 "label": "General",
