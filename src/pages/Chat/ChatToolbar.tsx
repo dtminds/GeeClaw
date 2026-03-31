@@ -13,12 +13,12 @@ import { useAgentsStore } from '@/stores/agents';
 import { useSettingsStore } from '@/stores/settings';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { PersonaDrawer } from './PersonaDrawer';
-import { AiContentGenerator01Icon, Robot02Icon, UserAiIcon } from '@hugeicons/core-free-icons';
+import { AgentSettingsDialog } from '@/pages/Chat/AgentSettingsDialog';
+import { AiContentGenerator01Icon, Robot02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
 export function ChatToolbar() {
-  const [personaOpen, setPersonaOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const refresh = useChatStore((s) => s.refresh);
   const loading = useChatStore((s) => s.loading);
   const showThinking = useChatStore((s) => s.showThinking);
@@ -153,17 +153,19 @@ export function ChatToolbar() {
             variant="ghost"
             size="sm"
             className="h-7 rounded-full px-3 text-[13px] font-medium text-foreground/78"
-            onClick={() => setPersonaOpen(true)}
+            onClick={() => setSettingsOpen(true)}
+            aria-label={t('toolbar.agentSettings.open')}
+            title={t('toolbar.agentSettings.open')}
           >
-            <HugeiconsIcon icon={UserAiIcon} className="mr-1.5 h-4 w-4 text-primary" />
-            {t('toolbar.persona.button')}
+            <HugeiconsIcon icon={Robot02Icon} className="mr-1.5 h-4 w-4 text-primary" />
+            {currentAgentName}
           </Button>
         </div>
       </div>
 
-      <PersonaDrawer
-        open={personaOpen}
-        onOpenChange={setPersonaOpen}
+      <AgentSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
         agentId={currentAgentId}
       />
     </>

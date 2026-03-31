@@ -31,6 +31,9 @@
         "noTemporarySessions": "暂无对话",
         "untitledTemporarySession": "未命名对话",
         "deleteTemporarySession": "删除对话",
+        "agentSettings": {
+            "open": "打开智能体设置"
+        },
         "persona": {
             "button": "Agent设置",
             "title": "Agent设置",

@@ -12,12 +12,12 @@ import {
   Settings03Icon,
   ThreeDViewIcon,
   SmartPhone03Icon,
-  AppleIntelligenceIcon,
   TimeScheduleIcon,
   LayoutAlignLeftIcon,
   PanelLeftIcon,
   AiInnovation02Icon,
 } from '@hugeicons/core-free-icons';
+import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatShortDateTime } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
@@ -34,6 +34,7 @@ import { invokeIpc } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import { getSettingsModalPath, getSettingsModalState, isSettingsModalPath } from '@/lib/settings-modal';
 import { renderSkillMarkersAsPlainText } from '@/lib/chat-message-text';
+import { AddAgentDialog } from '@/pages/Chat/AddAgentDialog';
 
 const isMac = window.electron?.platform === 'darwin';
 const sidebarItemBaseClass = 'text-foreground/72 hover:bg-white/72 hover:text-foreground dark:text-foreground/70 dark:hover:bg-white/6 dark:hover:text-foreground';
@@ -114,6 +115,7 @@ export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [addAgentOpen, setAddAgentOpen] = useState(false);
 
   const desktopSessions = useChatStore((s) => s.desktopSessions);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
@@ -242,12 +244,12 @@ export function Sidebar() {
             </h2>
             <button
               type="button"
-              onClick={() => navigate('/agents')}
+              onClick={() => setAddAgentOpen(true)}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/72 hover:text-foreground dark:hover:bg-white/6 dark:hover:text-foreground"
-              title={t('sidebar.agents', '智能体')}
-              aria-label={t('sidebar.agents', '智能体')}
+              title={t('sidebar.createAgent', 'Create agent')}
+              aria-label={t('sidebar.createAgent', 'Create agent')}
             >
-              <SidebarGlyph icon={AppleIntelligenceIcon} size={16} />
+              <Plus className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -478,6 +480,7 @@ export function Sidebar() {
         }}
         onCancel={() => setLogoutConfirmOpen(false)}
       />
+      <AddAgentDialog open={addAgentOpen} onOpenChange={setAddAgentOpen} />
     </aside>
   );
 }

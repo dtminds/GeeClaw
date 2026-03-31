@@ -31,6 +31,8 @@ const translations: Record<string, string> = {
   'toolbar.showThinking': 'Show thinking',
   'toolbar.showToolCalls': 'Show tool calls',
   'toolbar.persona.button': 'Set Persona',
+  'toolbar.agentSettings.open': 'Open agent settings',
+  'agentSettingsDialog.title': 'Agent Settings',
   'sessionPanel.title': 'Sessions',
   'sessionPanel.expand': 'Expand session panel',
   'sessionPanel.collapse': 'Collapse session panel',
@@ -58,8 +60,8 @@ vi.mock('@/stores/agents', () => ({
   useAgentsStore: (selector: (state: typeof agentsState) => unknown) => selector(agentsState),
 }));
 
-vi.mock('@/pages/Chat/PersonaDrawer', () => ({
-  PersonaDrawer: () => null,
+vi.mock('@/pages/Chat/AgentSettingsDialog', () => ({
+  AgentSettingsDialog: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Agent Settings" /> : null),
 }));
 
 describe('ChatToolbar visibility menu', () => {
@@ -106,5 +108,19 @@ describe('ChatToolbar visibility menu', () => {
     fireEvent.click(toolCallsItem);
 
     expect(chatState.toggleToolCalls).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens agent settings from the chat toolbar', async () => {
+    const { ChatToolbar } = await import('@/pages/Chat/ChatToolbar');
+
+    render(
+      <TooltipProvider>
+        <ChatToolbar />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open agent settings' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Agent Settings' })).toBeInTheDocument();
   });
 });

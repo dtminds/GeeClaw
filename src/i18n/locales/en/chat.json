@@ -31,6 +31,9 @@
         "noTemporarySessions": "No chats",
         "untitledTemporarySession": "Untitled chat",
         "deleteTemporarySession": "Delete chat",
+        "agentSettings": {
+            "open": "Open agent settings"
+        },
         "persona": {
             "button": "Set Persona",
             "title": "Agent Settings",

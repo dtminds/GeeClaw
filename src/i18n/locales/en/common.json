@@ -5,6 +5,7 @@
         "allSessions": "All Sessions",
         "models": "Models",
         "agents": "Agents",
+        "createAgent": "Create agent",
         "cronTasks": "Cron Tasks",
         "skills": "Skills",
         "channels": "Channels",
