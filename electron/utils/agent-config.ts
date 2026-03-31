@@ -42,6 +42,8 @@ const AGENT_RUNTIME_FILES = [
   'models.json',
 ];
 const PRESET_SKILL_WRITE_CONCURRENCY = 16;
+const PRESET_AGENT_SECTION_BEGIN = '<!-- preset_agent_instruction:begin -->';
+const PRESET_AGENT_SECTION_END = '<!-- preset_agent_instruction:end -->';
 
 interface AgentModelConfig {
   primary?: string;
@@ -323,15 +325,47 @@ function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): Ag
   return nextEntry;
 }
 
+function mergeManagedMarkdownSection(
+  existing: string,
+  section: string,
+  beginMarker: string,
+  endMarker: string,
+): string {
+  const wrapped = `${beginMarker}\n${section.trim()}\n${endMarker}`;
+  const beginIdx = existing.indexOf(beginMarker);
+  const endIdx = existing.indexOf(endMarker);
+  if (beginIdx !== -1 && endIdx !== -1) {
+    return existing.slice(0, beginIdx) + wrapped + existing.slice(endIdx + endMarker.length);
+  }
+  if (!existing.trim()) {
+    return `${wrapped}\n`;
+  }
+  return `${existing.trimEnd()}\n\n${wrapped}\n`;
+}
+
 async function seedPresetFilesIntoWorkspace(
   workspace: string,
   files: Record<string, string>,
+  options?: {
+    overwriteExisting?: boolean;
+  },
 ): Promise<void> {
   await ensureDir(workspace);
 
   for (const [fileName, content] of Object.entries(files)) {
     const destination = join(workspace, fileName);
-    if (await fileExists(destination)) {
+    if (fileName === 'AGENTS.md' && options?.overwriteExisting && await fileExists(destination)) {
+      const existing = await readFile(destination, 'utf-8');
+      const merged = mergeManagedMarkdownSection(
+        existing,
+        content,
+        PRESET_AGENT_SECTION_BEGIN,
+        PRESET_AGENT_SECTION_END,
+      );
+      await writeFile(destination, merged, 'utf-8');
+      continue;
+    }
+    if (!options?.overwriteExisting && await fileExists(destination)) {
       throw new Error(`Preset-managed file "${fileName}" already exists in the target workspace`);
     }
     await writeFile(destination, content, 'utf-8');
@@ -1110,15 +1144,16 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
     list: nextEntries,
   };
 
+  await provisionAgentFilesystem(config, newEntry);
   await seedPresetFilesIntoWorkspace(
     expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
     preset.files,
+    { overwriteExisting: true },
   );
   await seedPresetSkillsIntoWorkspace(
     expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
     preset.skills,
   );
-  await provisionAgentFilesystem(config, newEntry);
   await persistAgentConfigAndPatchRuntime(config);
 
   management[nextId] = {

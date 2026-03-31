@@ -58,8 +58,8 @@ type ToolDisplayStatus = {
 
 const STREAMDOWN_ANIMATION = {
   animation: 'fadeIn' as const,
-  duration: 200,
-  easing: 'ease-out' as const,
+  // duration: 50,
+  // easing: 'ease-out' as const,
 };
 
 const STREAMDOWN_PLUGINS = {

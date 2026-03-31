@@ -47,6 +47,8 @@ async function setupManagedPresetFixture(options?: {
       skillScope?: { mode: 'default' } | { mode: 'specified'; skills: string[] };
     };
   };
+  presetFiles?: Record<string, string>;
+  mainWorkspaceFiles?: Record<string, string>;
   failAccessPaths?: string[] | ((homeDir: string) => string[]);
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
@@ -97,10 +99,15 @@ async function setupManagedPresetFixture(options?: {
     };
   });
   const configDir = join(homeDir, '.openclaw-geeclaw');
+  const mainWorkspaceDir = getExpectedWorkspacePath(homeDir, 'main');
   mkdirSync(configDir, { recursive: true });
+  mkdirSync(mainWorkspaceDir, { recursive: true });
   writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
     agents: { defaults: { workspace: getExpectedWorkspacePath(homeDir, 'main') } },
   }, null, 2), 'utf8');
+  for (const [fileName, content] of Object.entries(options?.mainWorkspaceFiles ?? {})) {
+    writeFileSync(join(mainWorkspaceDir, fileName), content, 'utf8');
+  }
 
   const storeState: Record<string, unknown> = {};
   vi.doMock('@electron/services/agents/store-instance', () => ({
@@ -148,7 +155,7 @@ async function setupManagedPresetFixture(options?: {
   };
   const presetPackage = {
     meta: presetMeta,
-    files: {
+    files: options?.presetFiles ?? {
       'AGENTS.md': '# stock expert\n',
       'SOUL.md': '# tone\n',
     },
@@ -248,6 +255,50 @@ describe('managed agent config domain', () => {
       workspace: '~/geeclaw/workspace-stockexpert',
       agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
     });
+  });
+
+  it('copies main agent bootstrap files first, then overwrites only preset-declared files', async () => {
+    const { homeDir, agentConfig } = await setupManagedPresetFixture({
+      presetFiles: {
+        'SOUL.md': '# preset tone\n',
+        'IDENTITY.md': '# preset identity\n',
+      },
+      mainWorkspaceFiles: {
+        'USER.md': '# main user\n',
+        'SOUL.md': '# main tone\n',
+        'IDENTITY.md': '# main identity\n',
+        'MEMORY.md': '# main memory\n',
+      },
+    });
+
+    await agentConfig.installPresetAgent('stock-expert');
+
+    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
+    expect(readFileSync(join(workspaceDir, 'USER.md'), 'utf8')).toBe('# main user\n');
+    expect(readFileSync(join(workspaceDir, 'MEMORY.md'), 'utf8')).toBe('# main memory\n');
+    expect(readFileSync(join(workspaceDir, 'SOUL.md'), 'utf8')).toBe('# preset tone\n');
+    expect(readFileSync(join(workspaceDir, 'IDENTITY.md'), 'utf8')).toBe('# preset identity\n');
+  });
+
+  it('appends preset AGENTS.md after the copied workspace AGENTS.md content', async () => {
+    const { homeDir, agentConfig } = await setupManagedPresetFixture({
+      presetFiles: {
+        'AGENTS.md': '# preset agent\n\nPreset instructions\n',
+      },
+      mainWorkspaceFiles: {
+        'AGENTS.md': '# main agent\n\nMain instructions\n',
+      },
+    });
+
+    await agentConfig.installPresetAgent('stock-expert');
+
+    const content = readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8');
+    expect(content).toContain('Main instructions');
+    expect(content).toContain('Preset instructions');
+    expect(content).toContain('<!-- preset_agent_instruction:begin -->');
+    expect(content).toContain('<!-- preset_agent_instruction:end -->');
+    expect(content).not.toContain('<!-- geeclaw:begin -->');
+    expect(content.indexOf('Main instructions')).toBeLessThan(content.indexOf('Preset instructions'));
   });
 
   it('installs preset agents even when direct access probes on the workspace root fail', async () => {

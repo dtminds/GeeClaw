@@ -201,10 +201,10 @@ function getSlashPickerItemSearchValues(item: SlashPickerItem, tChat: TFunction<
 }
 
 function getSlashPickerItemPriority(item: SlashPickerItem): number {
-  if (!isSlashCommandItem(item) && item.source === 'preset-agent-workspace') {
+  if (isSlashCommandItem(item)) {
     return 0;
   }
-  if (isSlashCommandItem(item)) {
+  if (item.source === 'preset-agent-workspace') {
     return 1;
   }
   return 2;
