@@ -276,6 +276,22 @@ describe('agent preset loader', () => {
         'SKILL.md': expect.stringContaining('# Stock Analyzer'),
       },
     });
+    expect(preset?.skillManifest).toEqual({
+      version: 1,
+      skills: [
+        {
+          slug: 'stock-analyzer',
+          delivery: 'bundled',
+          source: {
+            type: 'github',
+            repo: 'dtminds/GeeClaw',
+            repoPath: 'resources/agent-presets/stock-expert/skills/stock-analyzer',
+            ref: 'main',
+            version: 'a8be3fd6f1b3e94de3cbca9ef2ffeda09232ff80',
+          },
+        },
+      ],
+    });
   });
 
   it('loads preset packages and managed files from a mocked resources directory', async () => {
@@ -316,6 +332,162 @@ describe('agent preset loader', () => {
         'README.md': '# Docs\n',
       },
     });
+  });
+
+  it('loads preset-private bundled skill manifests when declared', async () => {
+    const root = createTempRoot('agent-presets-skill-manifest-');
+    writePresetPackage(
+      root,
+      'stock-expert',
+      {
+        ...createPresetMeta('stock-expert'),
+        agent: {
+          id: 'stock-expert',
+          skillScope: {
+            mode: 'specified',
+            skills: ['stock-analyzer', 'web-search'],
+          },
+        },
+      },
+      undefined,
+      {},
+    );
+    writeFileSync(
+      join(root, 'agent-presets', 'stock-expert', 'skills.manifest.json'),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            slug: 'stock-analyzer',
+            delivery: 'bundled',
+            source: {
+              type: 'github',
+              repo: 'acme/market-skills',
+              repoPath: 'skills/stock-analyzer',
+              ref: 'main',
+            },
+          },
+        ],
+      }, null, 2),
+      'utf8',
+    );
+
+    const presets = await listPresetsFrom(join(root, 'agent-presets'));
+    expect(presets[0].skillManifest?.skills).toHaveLength(1);
+  });
+
+  it('rejects preset skill manifests whose slugs are missing from agent.skillScope.skills', async () => {
+    const root = createTempRoot('agent-presets-skill-manifest-mismatch-');
+    writePresetPackage(root, 'stock-expert');
+    writeFileSync(
+      join(root, 'agent-presets', 'stock-expert', 'skills.manifest.json'),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            slug: 'not-in-scope',
+            delivery: 'bundled',
+            source: {
+              type: 'github',
+              repo: 'acme/market-skills',
+              repoPath: 'skills/not-in-scope',
+              ref: 'main',
+            },
+          },
+        ],
+      }, null, 2),
+      'utf8',
+    );
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'Preset "stock-expert" bundled skill "not-in-scope" must appear in agent.skillScope.skills',
+    );
+  });
+
+  it('rejects preset skill manifests with invalid dot slugs', async () => {
+    const root = createTempRoot('agent-presets-skill-manifest-dot-slug-');
+    writePresetPackage(
+      root,
+      'stock-expert',
+      {
+        ...createPresetMeta('stock-expert'),
+        agent: {
+          id: 'stock-expert',
+          skillScope: {
+            mode: 'specified',
+            skills: ['.'],
+          },
+        },
+      },
+      undefined,
+      {},
+    );
+    writeFileSync(
+      join(root, 'agent-presets', 'stock-expert', 'skills.manifest.json'),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            slug: '.',
+            delivery: 'bundled',
+            source: {
+              type: 'github',
+              repo: 'acme/market-skills',
+              repoPath: 'skills/stock-analyzer',
+              ref: 'main',
+            },
+          },
+        ],
+      }, null, 2),
+      'utf8',
+    );
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'Preset "stock-expert" bundled skill slug "." is invalid',
+    );
+  });
+
+  it('rejects preset skill manifests with escaping repo paths', async () => {
+    const root = createTempRoot('agent-presets-skill-manifest-escaping-repo-path-');
+    writePresetPackage(
+      root,
+      'stock-expert',
+      {
+        ...createPresetMeta('stock-expert'),
+        agent: {
+          id: 'stock-expert',
+          skillScope: {
+            mode: 'specified',
+            skills: ['stock-analyzer'],
+          },
+        },
+      },
+      undefined,
+      {},
+    );
+    writeFileSync(
+      join(root, 'agent-presets', 'stock-expert', 'skills.manifest.json'),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            slug: 'stock-analyzer',
+            delivery: 'bundled',
+            source: {
+              type: 'github',
+              repo: 'acme/market-skills',
+              repoPath: '../outside-skill',
+              ref: 'main',
+            },
+          },
+        ],
+      }, null, 2),
+      'utf8',
+    );
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'Preset "stock-expert" bundled skill repoPath "../outside-skill" is invalid',
+    );
   });
 
   it('loads preset platforms when declared in meta.json', async () => {

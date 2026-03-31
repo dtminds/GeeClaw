@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "slug": "stock-analyzer",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "dtminds/GeeClaw",
+        "repoPath": "resources/agent-presets/stock-expert/skills/stock-analyzer",
+        "ref": "main",
+        "version": "a8be3fd6f1b3e94de3cbca9ef2ffeda09232ff80"
+      }
+    }
+  ]
+}

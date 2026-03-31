@@ -3,6 +3,17 @@ import { hostApiFetch } from '@/lib/host-api';
 import type { ChannelType } from '@/types/channel';
 import type { AgentPresetSummary, AgentSkillScope, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
+export const PRESET_INSTALL_STAGE_VISIBLE_MS = 120;
+
+export type PresetInstallStage =
+  | 'idle'
+  | 'preparing'
+  | 'installing_files'
+  | 'installing_skills'
+  | 'finalizing'
+  | 'completed'
+  | 'failed';
+
 interface AgentsState {
   agents: AgentSummary[];
   presets: AgentPresetSummary[];
@@ -11,6 +22,9 @@ interface AgentsState {
   channelOwners: Record<string, string>;
   channelAccountOwners: Record<string, string>;
   explicitChannelAccountBindings: Record<string, string>;
+  installingPresetId: string | null;
+  installStage: PresetInstallStage;
+  installProgress: number;
   loading: boolean;
   error: string | null;
   fetchAgents: () => Promise<void>;
@@ -37,6 +51,12 @@ function applySnapshot(snapshot: AgentsSnapshot | undefined) {
   } : {};
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
 export const useAgentsStore = create<AgentsState>((set, get) => ({
   agents: [],
   presets: [],
@@ -45,6 +65,9 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   channelOwners: {},
   channelAccountOwners: {},
   explicitChannelAccountBindings: {},
+  installingPresetId: null,
+  installStage: 'idle',
+  installProgress: 0,
   loading: false,
   error: null,
 
@@ -108,19 +131,62 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   installPreset: async (presetId: string) => {
-    set({ error: null });
+    set({
+      error: null,
+      installingPresetId: presetId,
+      installStage: 'preparing',
+      installProgress: 10,
+    });
+    const advanceStage = (stage: PresetInstallStage, progress: number) => {
+      if (get().installingPresetId !== presetId) {
+        return;
+      }
+      set({ installStage: stage, installProgress: progress });
+    };
     try {
-      const snapshot = await hostApiFetch<AgentsSnapshot & { success?: boolean }>(
+      const installRequest = hostApiFetch<AgentsSnapshot & { success?: boolean }>(
         '/api/agents/presets/install',
         {
           method: 'POST',
           body: JSON.stringify({ presetId }),
         }
       );
-      set(applySnapshot(snapshot));
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      advanceStage('installing_files', 35);
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      advanceStage('installing_skills', 70);
+      const [snapshot] = await Promise.all([
+        installRequest,
+        wait(PRESET_INSTALL_STAGE_VISIBLE_MS),
+      ]);
+      advanceStage('finalizing', 90);
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      if (get().installingPresetId === presetId) {
+        set({
+          ...applySnapshot(snapshot),
+          installStage: 'completed',
+          installProgress: 100,
+        });
+      } else {
+        set(applySnapshot(snapshot));
+      }
     } catch (error) {
-      set({ error: String(error) });
+      if (get().installingPresetId === presetId) {
+        set({ installStage: 'failed', error: String(error) });
+      } else {
+        set({ error: String(error) });
+      }
       throw error;
+    } finally {
+      globalThis.setTimeout(() => {
+        if (get().installingPresetId === presetId) {
+          set({
+            installingPresetId: null,
+            installStage: 'idle',
+            installProgress: 0,
+          });
+        }
+      }, 600);
     }
   },
 

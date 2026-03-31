@@ -95,7 +95,9 @@ Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your pre
 GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
 
 ### 🧩 Managed Preset Agents
-GeeClaw now includes a built-in agent marketplace backed by bundled preset packages under `resources/agent-presets/<presetId>/`. 
+GeeClaw now includes a built-in agent marketplace backed by bundled preset packages under `resources/agent-presets/<presetId>/`.
+App-wide built-in skills still live under `~/.openclaw-geeclaw/skills/`, while preset-private skills are resolved from each preset's `skills.manifest.json` at build time and copied into that agent's `workspace/SKILLS/` during installation.
+Installing a preset from the marketplace is a local install flow, and the UI shows staged progress while files and preset skills are prepared.
 
 ---
 

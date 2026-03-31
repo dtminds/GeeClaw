@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { hostApiFetch } from '@/lib/host-api';
-import { useAgentsStore } from '@/stores/agents';
+import { useAgentsStore, type PresetInstallStage } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSkillsStore } from '@/stores/skills';
@@ -31,12 +31,22 @@ import wecomIcon from '@/assets/channels/wecom.svg';
 import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
+function getInstallStageLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  stage: PresetInstallStage,
+) {
+  return t(`marketplace.installState.${stage}`);
+}
+
 export function Agents() {
   const { t } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
   const {
     agents,
     presets,
+    installingPresetId,
+    installStage,
+    installProgress,
     loading,
     error,
     fetchAgents,
@@ -164,12 +174,17 @@ export function Agents() {
               <div className="grid gap-4 md:grid-cols-3">
                 {presets.map((preset) => {
                   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
+                  const isInstalling = installingPresetId === preset.presetId;
                   const installLabel = installedPresetIds.has(preset.presetId)
                     ? t('marketplace.installed')
+                    : isInstalling
+                      ? getInstallStageLabel(t, installStage)
                     : preset.supportedOnCurrentPlatform
                       ? t('marketplace.install')
                       : t('marketplace.unavailable');
-                  const installDisabled = installedPresetIds.has(preset.presetId) || !preset.supportedOnCurrentPlatform;
+                  const installDisabled = installedPresetIds.has(preset.presetId)
+                    || !preset.supportedOnCurrentPlatform
+                    || !!installingPresetId;
                   return (
                     <div
                       key={preset.presetId}
@@ -213,6 +228,20 @@ export function Agents() {
                           {installLabel}
                         </Button>
                       </div>
+
+                      {isInstalling && (
+                        <div className="space-y-1.5">
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-foreground/75 transition-[width] duration-300"
+                              style={{ width: `${installProgress}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {getInstallStageLabel(t, installStage)} · {t('marketplace.installProgress', { progress: installProgress })}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -261,6 +290,10 @@ export function Agents() {
         preset={activePreset}
         open={!!activePreset}
         installed={activePreset ? installedPresetIds.has(activePreset.presetId) : false}
+        isInstalling={activePreset ? installingPresetId === activePreset.presetId : false}
+        installStage={installStage}
+        installProgress={installProgress}
+        disableInstall={!!installingPresetId}
         onClose={() => setActivePresetId(null)}
         onInstall={(presetId) => void installPreset(presetId)}
       />

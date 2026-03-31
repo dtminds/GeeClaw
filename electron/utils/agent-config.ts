@@ -346,7 +346,7 @@ async function seedPresetSkillsIntoWorkspace(
     return;
   }
 
-  const skillsRoot = join(workspace, 'SKILLS');
+  const skillsRoot = join(workspace, 'skills');
   await ensureDir(skillsRoot);
 
   for (const [skillSlug, files] of Object.entries(skills)) {
