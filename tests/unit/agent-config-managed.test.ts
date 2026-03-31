@@ -280,6 +280,27 @@ describe('managed agent config domain', () => {
     expect(readFileSync(join(workspaceDir, 'IDENTITY.md'), 'utf8')).toBe('# preset identity\n');
   });
 
+  it('appends preset AGENTS.md after the copied workspace AGENTS.md content', async () => {
+    const { homeDir, agentConfig } = await setupManagedPresetFixture({
+      presetFiles: {
+        'AGENTS.md': '# preset agent\n\nPreset instructions\n',
+      },
+      mainWorkspaceFiles: {
+        'AGENTS.md': '# main agent\n\nMain instructions\n',
+      },
+    });
+
+    await agentConfig.installPresetAgent('stock-expert');
+
+    const content = readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8');
+    expect(content).toContain('Main instructions');
+    expect(content).toContain('Preset instructions');
+    expect(content).toContain('<!-- preset_agent_instruction:begin -->');
+    expect(content).toContain('<!-- preset_agent_instruction:end -->');
+    expect(content).not.toContain('<!-- geeclaw:begin -->');
+    expect(content.indexOf('Main instructions')).toBeLessThan(content.indexOf('Preset instructions'));
+  });
+
   it('installs preset agents even when direct access probes on the workspace root fail', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
       failAccessPaths: (homeDir) => [join(homeDir, 'geeclaw', 'workspace-stockexpert')],

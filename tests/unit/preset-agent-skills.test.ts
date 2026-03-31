@@ -104,7 +104,7 @@ describe('preset agent slash picker helpers', () => {
     expect(first).toEqual(second);
   });
 
-  it('puts current preset agent skills above commands and global skills in the slash picker', () => {
+  it('puts commands first, then current preset agent skills, then global skills in the slash picker', () => {
     const presetAgentSkill = makeSkill({
       id: 'preset-skill',
       slug: 'preset-skill',
@@ -142,8 +142,8 @@ describe('preset agent slash picker helpers', () => {
       tChat,
     );
 
-    expect(visible[0]).toMatchObject({ id: 'preset-skill', source: 'preset-agent-workspace' });
-    expect(visible[1]).toMatchObject({ id: 'compact', type: 'command' });
+    expect(visible[0]).toMatchObject({ id: 'compact', type: 'command' });
+    expect(visible[1]).toMatchObject({ id: 'preset-skill', source: 'preset-agent-workspace' });
     expect(visible[2]).toMatchObject({ id: 'global-skill', source: 'openclaw-managed' });
     expect(visible.filter((item) => 'id' in item && item.id === 'preset-skill')).toHaveLength(1);
   });
@@ -181,12 +181,18 @@ describe('preset agent slash picker helpers', () => {
     });
   });
 
-  it('keeps current preset agent skills ahead of commands even when command match rank is stronger', () => {
+  it('keeps commands ahead of skills, but keeps current preset agent skills ahead of global skills', () => {
     const presetAgentSkill = makeSkill({
       id: 'sprint-plan',
       slug: 'sprint-plan',
       name: 'Sprint Plan',
       source: 'preset-agent-workspace',
+    });
+    const globalSkill = makeSkill({
+      id: 'search',
+      slug: 'search',
+      name: 'Search',
+      source: 'openclaw-managed',
     });
     const command = makeCommand({
       id: 'status',
@@ -198,7 +204,7 @@ describe('preset agent slash picker helpers', () => {
     const items = buildSlashPickerItems({
       presetAgentSkills: [presetAgentSkill],
       commands: [command],
-      globalSkills: [],
+      globalSkills: [globalSkill],
     });
 
     const visible = getVisibleSlashItems(
@@ -207,7 +213,8 @@ describe('preset agent slash picker helpers', () => {
       tChat,
     );
 
-    expect(visible[0]).toMatchObject({ id: 'sprint-plan', source: 'preset-agent-workspace' });
-    expect(visible[1]).toMatchObject({ id: 'status', type: 'command' });
+    expect(visible[0]).toMatchObject({ id: 'status', type: 'command' });
+    expect(visible[1]).toMatchObject({ id: 'sprint-plan', source: 'preset-agent-workspace' });
+    expect(visible[2]).toMatchObject({ id: 'search', source: 'openclaw-managed' });
   });
 });
