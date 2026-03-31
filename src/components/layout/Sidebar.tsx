@@ -8,7 +8,6 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  DashboardSpeed01Icon,
   LogoutSquare01Icon,
   Settings03Icon,
   ThreeDViewIcon,
@@ -17,6 +16,7 @@ import {
   TimeScheduleIcon,
   LayoutAlignLeftIcon,
   PanelLeftIcon,
+  AiInnovation02Icon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import { formatShortDateTime } from '@/lib/utils';
@@ -199,7 +199,7 @@ export function Sidebar() {
   }, new Map<string, (typeof desktopSessions)[number]>());
 
   const navItems = [
-    { to: '/dashboard', icon: <SidebarGlyph icon={DashboardSpeed01Icon} />, label: t('sidebar.dashboard') },
+    { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard') },
     { to: '/cron', icon: <SidebarGlyph icon={TimeScheduleIcon} />, label: t('sidebar.cronTasks') },
     { to: '/skills', icon: <SidebarGlyph icon={ThreeDViewIcon} />, label: t('sidebar.skills') },
     { to: '/channels', icon: <SidebarGlyph icon={SmartPhone03Icon} />, label: t('sidebar.channels'), trailing: channelsTrailing },

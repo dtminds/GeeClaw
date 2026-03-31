@@ -3,7 +3,7 @@
   "name": "交付执行官",
   "description": "覆盖 sprint 计划、需求拆解、会议纪要、测试场景与发布说明，适合把规划推进成实际交付。",
   "emoji": "🛠️",
-  "category": "operations",
+  "category": "PM",
   "managed": true,
   "agent": {
     "id": "delivery-execution",
@@ -23,7 +23,11 @@
     }
   },
   "managedPolicy": {
-    "lockedFields": ["id", "workspace", "persona"],
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
     "canUnmanage": true
   }
 }

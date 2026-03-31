@@ -1,5 +1,15 @@
 {
-    "pageSubtitle": "Overview of gateway status, channels, and quick actions",
+    "pageSubtitle": "Check runtime health and browse preset agents or inspiration templates",
+    "runningStatus": {
+        "title": "Running Status",
+        "description": "Check OpenClaw health, connected channels, and quick actions."
+    },
+    "plaza": {
+        "tabs": {
+            "agents": "Agent Plaza",
+            "inspiration": "Inspiration Plaza"
+        }
+    },
     "gateway": "Gateway",
     "channels": "Channels",
     "skills": "Skills",
@@ -28,8 +38,21 @@
     "noSkills": "No skills enabled",
     "enableSome": "Enable some skills",
     "more": "+{{count}} more",
+    "presetPlaza": {
+        "title": "Agent Plaza",
+        "description": "Browse preset agents to jump into research, analysis, and execution workflows.",
+        "all": "All Agents",
+        "close": "Close",
+        "summaryTitle": "Preset Summary",
+        "skillsTitle": "Preset Skills",
+        "platformsTitle": "Supported Platforms",
+        "categories": {
+            "finance": "Finance",
+            "research": "Research"
+        }
+    },
     "inspirationPlaza": {
-        "title": "Plaza",
+        "title": "Inspiration Plaza",
         "description": "Browse ready-made inspiration cards for automation, study, and everyday workflows.",
         "all": "All Ideas",
         "sceneTitle": "Scenarios",

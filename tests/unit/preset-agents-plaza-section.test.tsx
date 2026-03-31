@@ -1,48 +1,37 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { PRESET_INSTALL_STAGE_VISIBLE_MS, useAgentsStore } from '@/stores/agents';
 import type { AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
-const fetchChannelsMock = vi.fn(async () => undefined);
 
 const translations: Record<string, string> = {
-  title: 'Agents',
-  subtitle: 'Manage agents',
-  refresh: 'Refresh',
-  addAgent: 'Add Agent',
-  gatewayWarning: 'Gateway warning',
-  defaultBadge: 'default',
-  inherited: 'inherited',
-  none: 'none',
-  empty: 'No agents',
-  settings: 'Settings',
-  managedBadge: 'Managed',
-  presetBadge: 'From Marketplace',
-  'tabs.agents': 'My Agents',
-  'tabs.marketplace': 'Marketplace',
-  'marketplace.install': 'Install',
-  'marketplace.installed': 'Installed',
-  'marketplace.unavailable': 'Unavailable',
-  'marketplace.installState.idle': 'Install',
-  'marketplace.installState.preparing': 'Preparing preset',
-  'marketplace.installState.installing_files': 'Installing files',
-  'marketplace.installState.installing_skills': 'Installing skills',
-  'marketplace.installState.finalizing': 'Finalizing setup',
-  'marketplace.installState.completed': 'Installed',
-  'marketplace.installState.failed': 'Install failed',
+  'presetPlaza.title': '智能体广场',
+  'presetPlaza.description': '挑一个预设智能体，快速开始具体任务。',
+  'presetPlaza.all': '全部智能体',
+  'presetPlaza.categories.finance': '金融投资',
+  'presetPlaza.categories.research': '研究分析',
+  'presetPlaza.close': '关闭',
+  'presetPlaza.summaryTitle': '预设摘要',
+  'presetPlaza.skillsTitle': '预置技能',
+  'presetPlaza.platformsTitle': '支持平台',
+  'marketplace.install': '添加',
+  'marketplace.installed': '已添加',
+  'marketplace.unavailable': '当前不可用',
+  'marketplace.installState.idle': '添加',
+  'marketplace.installState.preparing': '准备预设',
+  'marketplace.installState.installing_files': '安装文件',
+  'marketplace.installState.installing_skills': '安装技能',
+  'marketplace.installState.finalizing': '完成配置',
+  'marketplace.installState.completed': '已添加',
+  'marketplace.installState.failed': '安装失败',
   'marketplace.installProgress': '{{progress}}%',
-  'marketplace.viewDetails': 'View Details',
-  'marketplace.availableOn': 'Available on {{platforms}}',
-  'marketplace.platforms.all': 'All Platforms',
+  'marketplace.availableOn': '支持平台：{{platforms}}',
+  'marketplace.platforms.all': '全平台',
   'marketplace.platforms.darwin': 'macOS',
   'marketplace.platforms.win32': 'Windows',
   'marketplace.platforms.linux': 'Linux',
-  'marketplace.detail.summary': 'Preset summary',
-  'marketplace.detail.skills': 'Preset skills',
   'fields.agentId': 'Agent ID',
-  'fields.workspace': 'Workspace',
 };
 
 const installedTrendFinderAgent: AgentSummary = {
@@ -108,19 +97,6 @@ const marketplacePresets: AgentPresetSummary[] = [
     managedFiles: ['AGENTS.md', 'USER.md'],
     supportedOnCurrentPlatform: true,
   },
-  {
-    presetId: 'beta-scout',
-    name: 'Beta Scout',
-    description: 'Discover new market candidates',
-    emoji: '🛰️',
-    category: 'research',
-    managed: true,
-    agentId: 'beta-scout',
-    skillScope: { mode: 'specified', skills: ['web-search', 'stock-analyzer'] },
-    presetSkills: ['web-search', 'stock-analyzer'],
-    managedFiles: ['AGENTS.md'],
-    supportedOnCurrentPlatform: true,
-  },
 ];
 
 const baseSnapshot: AgentsSnapshot = {
@@ -132,7 +108,7 @@ const baseSnapshot: AgentsSnapshot = {
   explicitChannelAccountBindings: {},
 };
 
-function buildInstalledSnapshot(presetId: 'alpha-researcher' | 'beta-scout'): AgentsSnapshot {
+function buildInstalledSnapshot(presetId: 'alpha-researcher'): AgentsSnapshot {
   const preset = marketplacePresets.find((entry) => entry.presetId === presetId);
   if (!preset) {
     throw new Error(`Unknown preset ${presetId}`);
@@ -181,20 +157,6 @@ async function flushPromises() {
   await Promise.resolve();
 }
 
-async function clickAndFlush(element: HTMLElement) {
-  await act(async () => {
-    fireEvent.click(element);
-    await flushPromises();
-  });
-}
-
-async function flushUiTimers() {
-  await act(async () => {
-    vi.runOnlyPendingTimers();
-    await flushPromises();
-  });
-}
-
 function resetAgentsStore() {
   useAgentsStore.setState({
     agents: [],
@@ -222,9 +184,9 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; platforms?: string; progress?: number }) => {
+    t: (key: string, options?: { platforms?: string; progress?: number }) => {
       if (key === 'marketplace.availableOn') {
-        return `Available on ${options?.platforms ?? ''}`;
+        return `支持平台：${options?.platforms ?? ''}`;
       }
       if (key === 'marketplace.installProgress') {
         return `${options?.progress ?? 0}%`;
@@ -232,8 +194,8 @@ vi.mock('react-i18next', () => ({
       return translations[key] || key;
     },
     i18n: {
-      resolvedLanguage: 'en',
-      language: 'en',
+      resolvedLanguage: 'zh',
+      language: 'zh',
     },
   }),
 }));
@@ -273,9 +235,6 @@ vi.mock('@/components/ui/dialog', async () => {
       }
       return (
         <div role="dialog" className={className}>
-          <button type="button" aria-label="Close" onClick={() => context.onOpenChange?.(false)}>
-            Close
-          </button>
           {children}
         </div>
       );
@@ -292,26 +251,7 @@ vi.mock('@/components/ui/dialog', async () => {
   };
 });
 
-vi.mock('@/stores/channels', () => ({
-  useChannelsStore: (selector?: (state: unknown) => unknown) => {
-    const state = {
-      channels: [],
-      fetchChannels: fetchChannelsMock,
-    };
-    return selector ? selector(state) : state;
-  },
-}));
-
-vi.mock('@/stores/gateway', () => ({
-  useGatewayStore: (selector?: (state: unknown) => unknown) => {
-    const state = {
-      status: { state: 'running' },
-    };
-    return selector ? selector(state) : state;
-  },
-}));
-
-describe('Agents management page', () => {
+describe('PresetAgentsPlazaSection', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -325,7 +265,7 @@ describe('Agents management page', () => {
         return { success: true, presets: marketplacePresets };
       }
       if (path === '/api/agents/presets/install' && init?.method === 'POST') {
-        const body = JSON.parse(String(init.body ?? '{}')) as { presetId?: 'alpha-researcher' | 'beta-scout' };
+        const body = JSON.parse(String(init.body ?? '{}')) as { presetId?: 'alpha-researcher' };
         if (!body.presetId) {
           throw new Error('missing presetId');
         }
@@ -340,25 +280,125 @@ describe('Agents management page', () => {
     vi.useRealTimers();
   });
 
-  it('keeps agent management content but does not render marketplace tabs or preset plaza cards', async () => {
-    const { Agents } = await import('@/pages/Agents');
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Agents />
-      </TooltipProvider>,
-    );
+  it('renders category chips and filters preset cards', async () => {
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
 
     await act(async () => {
       await flushPromises();
     });
-    await flushUiTimers();
 
+    const categoryTablist = screen.getByRole('tablist', { name: '智能体广场' });
+    const allTab = screen.getByRole('tab', { name: '全部智能体' });
+
+    expect(screen.getByText('智能体广场')).toBeInTheDocument();
+    expect(categoryTablist.className).toContain('border-b');
+    expect(allTab).toHaveAttribute('aria-selected', 'true');
+    expect(allTab.className).toContain('relative');
+    expect(allTab.className).toContain('pb-2');
+    expect(screen.getByText('股票助手')).toBeInTheDocument();
     expect(screen.getByText('趋势助手')).toBeInTheDocument();
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Managed')).toBeInTheDocument();
-    expect(screen.getByText('From Marketplace')).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Marketplace' })).not.toBeInTheDocument();
+    expect(screen.getByText('Alpha Researcher')).toBeInTheDocument();
+    expect(screen.queryByText('macOS')).not.toBeInTheDocument();
+    expect(screen.queryByText('全平台')).not.toBeInTheDocument();
+    expect(screen.queryByText('当前不可用')).not.toBeInTheDocument();
+    expect(screen.queryByText('已添加')).not.toBeInTheDocument();
+
+    const firstTitle = screen.getByText('股票助手');
+    const firstDescription = screen.getByText('追踪个股、公告和财报');
+    expect(firstTitle.className).toContain('line-clamp-1');
+    expect(firstTitle.className).toContain('min-h');
+    expect(firstDescription.className).toContain('line-clamp-2');
+    expect(firstDescription.className).toContain('min-h');
+
+    fireEvent.click(screen.getByRole('tab', { name: '研究分析' }));
+
+    expect(screen.getByRole('tab', { name: '研究分析' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('股票助手')).not.toBeInTheDocument();
-    expect(screen.queryByText('Alpha Researcher')).not.toBeInTheDocument();
+    expect(screen.getByText('趋势助手')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Researcher')).toBeInTheDocument();
+  });
+
+  it('opens the preset detail dialog with aligned summary content and install progress', async () => {
+    const deferredInstall = createDeferred<AgentsSnapshot>();
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
+        return deferredInstall.promise;
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Alpha Researcher'));
+    });
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('预设摘要')).toBeInTheDocument();
+    expect(within(dialog).getByText('预置技能')).toBeInTheDocument();
+    expect(within(dialog).getByText('Agent ID')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '添加' })).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '准备预设' })).toBeDisabled();
+    expect(within(dialog).getByText(/10%/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '安装文件' })).toBeDisabled();
+    expect(within(dialog).getByText(/35%/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '安装技能' })).toBeDisabled();
+    expect(within(dialog).getByText(/70%/)).toBeInTheDocument();
+
+    await act(async () => {
+      deferredInstall.resolve(buildInstalledSnapshot('alpha-researcher'));
+      await flushPromises();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '完成配置' })).toBeDisabled();
+    expect(within(dialog).getByText(/90%/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await flushPromises();
+    });
+
+    expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
+    expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+      await flushPromises();
+    });
   });
 });

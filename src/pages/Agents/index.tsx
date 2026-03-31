@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { hostApiFetch } from '@/lib/host-api';
-import { useAgentsStore, type PresetInstallStage } from '@/stores/agents';
+import { useAgentsStore } from '@/stores/agents';
 import { useChannelsStore } from '@/stores/channels';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSkillsStore } from '@/stores/skills';
@@ -20,8 +20,6 @@ import { CHANNEL_ICONS, CHANNEL_NAMES, type ChannelGroup, type ChannelType } fro
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
 import { cn } from '@/lib/utils';
-import { MarketplacePresetDetailDialog } from './MarketplacePresetDetailDialog';
-import { getPresetPlatformLabels } from './preset-platforms';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
 import whatsappIcon from '@/assets/channels/whatsapp.svg';
@@ -31,65 +29,38 @@ import wecomIcon from '@/assets/channels/wecom.svg';
 import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 
-function getInstallStageLabel(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  stage: PresetInstallStage,
-) {
-  return t(`marketplace.installState.${stage}`);
-}
-
 export function Agents() {
   const { t } = useTranslation('agents');
   const gatewayStatus = useGatewayStore((state) => state.status);
   const {
     agents,
-    presets,
-    installingPresetId,
-    installStage,
-    installProgress,
     loading,
     error,
     fetchAgents,
-    fetchPresets,
     createAgent,
     deleteAgent,
-    installPreset,
   } = useAgentsStore();
   const { channels, fetchChannels } = useChannelsStore();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<AgentSummary | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'marketplace'>('agents');
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
-  }, [fetchAgents, fetchChannels, fetchPresets]);
+    void Promise.all([fetchAgents(), fetchChannels()]);
+  }, [fetchAgents, fetchChannels]);
 
   const sortedAgents = useMemo(
     () => [...agents].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)),
-    [agents],
-  );
-  const installedPresetIds = useMemo(
-    () => new Set(
-      agents
-        .filter((agent) => agent.source === 'preset' && agent.presetId)
-        .map((agent) => agent.presetId as string),
-    ),
     [agents],
   );
   const activeAgent = useMemo(
     () => agents.find((agent) => agent.id === activeAgentId) ?? null,
     [activeAgentId, agents],
   );
-  const activePreset = useMemo(
-    () => presets.find((preset) => preset.presetId === activePresetId) ?? null,
-    [activePresetId, presets],
-  );
 
   const handleRefresh = () => {
-    void Promise.all([fetchAgents(), fetchChannels(), fetchPresets()]);
+    void Promise.all([fetchAgents(), fetchChannels()]);
   };
 
   if (loading) {
@@ -144,110 +115,7 @@ export function Agents() {
             </div>
           )}
 
-          <div
-            className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/8 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]"
-            role="tablist"
-          >
-            {(['agents', 'marketplace'] as const).map((tab) => {
-              const active = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
-                    active ? 'bg-foreground text-background' : 'text-foreground/65 hover:text-foreground',
-                  )}
-                >
-                  {tab === 'agents' ? t('tabs.agents') : t('tabs.marketplace')}
-                </button>
-              );
-            })}
-          </div>
-
-          {activeTab === 'marketplace' ? (
-            <div className="space-y-5">
-
-              <div className="grid gap-4 md:grid-cols-3">
-                {presets.map((preset) => {
-                  const platformLabels = getPresetPlatformLabels(t, preset.platforms);
-                  const isInstalling = installingPresetId === preset.presetId;
-                  const installLabel = installedPresetIds.has(preset.presetId)
-                    ? t('marketplace.installed')
-                    : isInstalling
-                      ? getInstallStageLabel(t, installStage)
-                    : preset.supportedOnCurrentPlatform
-                      ? t('marketplace.install')
-                      : t('marketplace.unavailable');
-                  const installDisabled = installedPresetIds.has(preset.presetId)
-                    || !preset.supportedOnCurrentPlatform
-                    || !!installingPresetId;
-                  return (
-                    <div
-                      key={preset.presetId}
-                      className="modal-section-surface flex flex-col gap-4 rounded-3xl border p-5"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black/[0.04] text-xl dark:bg-white/[0.06]"
-                            aria-hidden="true"
-                          >
-                            {preset.emoji}
-                          </span>
-                          <h3 className="text-[18px] font-semibold text-foreground">{preset.name}</h3>
-                          {platformLabels.map((label) => (
-                            <Badge
-                              key={label}
-                              variant="secondary"
-                              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                            >
-                              {label}
-                            </Badge>
-                          ))}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{preset.description}</p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button
-                          variant="secondary"
-                          onClick={() => setActivePresetId(preset.presetId)}
-                          className="h-9 rounded-full flex-1 px-4 text-[13px] font-medium"
-                        >
-                          {t('marketplace.viewDetails')}
-                        </Button>
-                        <Button
-                          onClick={() => void installPreset(preset.presetId)}
-                          disabled={installDisabled}
-                          className="h-9 rounded-full px-4 text-[13px] font-medium shadow-none"
-                        >
-                          {installLabel}
-                        </Button>
-                      </div>
-
-                      {isInstalling && (
-                        <div className="space-y-1.5">
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                            <div
-                              className="h-full rounded-full bg-foreground/75 transition-[width] duration-300"
-                              style={{ width: `${installProgress}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {getInstallStageLabel(t, installStage)} · {t('marketplace.installProgress', { progress: installProgress })}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : sortedAgents.length === 0 ? (
+          {sortedAgents.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-black/10 bg-black/[0.03] px-6 py-12 text-center text-sm text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]">
               {t('empty')}
             </div>
@@ -285,18 +153,6 @@ export function Agents() {
           onClose={() => setActiveAgentId(null)}
         />
       )}
-
-      <MarketplacePresetDetailDialog
-        preset={activePreset}
-        open={!!activePreset}
-        installed={activePreset ? installedPresetIds.has(activePreset.presetId) : false}
-        isInstalling={activePreset ? installingPresetId === activePreset.presetId : false}
-        installStage={installStage}
-        installProgress={installProgress}
-        disableInstall={!!installingPresetId}
-        onClose={() => setActivePresetId(null)}
-        onInstall={(presetId) => void installPreset(presetId)}
-      />
 
       <ConfirmDialog
         open={!!agentToDelete}

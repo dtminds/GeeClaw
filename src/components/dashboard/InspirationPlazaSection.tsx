@@ -109,20 +109,12 @@ export function InspirationPlazaSection() {
   return (
     <>
       <section className="space-y-5">
-        <div className="space-y-1.5">
-          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
-            {t('inspirationPlaza.title')}
-          </h2>
-          <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground">
-            {t('inspirationPlaza.description')}
-          </p>
-        </div>
 
         <div className="-mx-1 overflow-x-auto px-1 pb-1">
           <div
             role="tablist"
             aria-label={t('inspirationPlaza.title')}
-            className="flex min-w-max items-center gap-2"
+            className="flex min-w-max items-center gap-6 border-b border-black/5 px-4 dark:border-white/5"
           >
             {['all', ...inspirationCategories].map((category) => {
               const active = activeCategory === category;
@@ -133,15 +125,18 @@ export function InspirationPlazaSection() {
                   type="button"
                   role="tab"
                   aria-selected={active}
-                onClick={() => setActiveCategory(category)}
-                className={cn(
-                  'rounded-full px-4 py-2 text-[13px] font-medium tracking-[-0.01em] transition-all',
-                  active
-                    ? 'bg-foreground text-background shadow-[0_10px_24px_-20px_rgba(15,23,42,0.38)]'
-                    : 'text-foreground/55 hover:bg-black/[0.035] hover:text-foreground dark:hover:bg-white/[0.06]',
+                  onClick={() => setActiveCategory(category)}
+                  className={cn(
+                    'relative pb-2 text-[15px] font-medium transition-colors',
+                    active
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {getCategoryLabel(category)}
+                  {active && (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground" />
+                  )}
                 </button>
               );
             })}
@@ -156,7 +151,7 @@ export function InspirationPlazaSection() {
               onClick={() => setSelectedItem(item)}
               className={cn(
                 'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
-                'bg-[var(--app-sidebar)] p-5 shadow-none transition-all duration-200',
+                'bg-muted/20 p-5 shadow-none transition-all duration-200',
                 'hover:-translate-y-0.5 hover:border-black/[0.09]',
                 'dark:border-white/[0.08]',
                 'dark:hover:border-white/[0.12]',
@@ -219,7 +214,7 @@ export function InspirationPlazaSection() {
                     <span className="text-xl">✨</span>
                   )}
                 </div>
-                <DialogTitle className="modal-title max-w-[24ch] text-center text-[22px] leading-[1.3] tracking-[-0.03em] sm:text-[26px]">
+                <DialogTitle className="modal-title text-center text-[22px] leading-[1.3] tracking-[-0.03em] sm:text-[26px]">
                   {selectedItem.title}
                 </DialogTitle>
                 <DialogDescription className="modal-description mt-1 max-w-3xl text-center text-[13px] leading-7 text-foreground/42 dark:text-foreground/56 sm:text-[14px]">

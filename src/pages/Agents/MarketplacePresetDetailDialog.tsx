@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,11 @@ type MarketplacePresetDetailDialogProps = {
   disableInstall: boolean;
   onClose: () => void;
   onInstall: (presetId: string) => void;
+  availabilityTitle?: string;
+  summaryTitle?: string;
+  skillsTitle?: string;
+  closeLabel?: string;
+  locale?: string;
 };
 
 export function MarketplacePresetDetailDialog({
@@ -28,8 +34,13 @@ export function MarketplacePresetDetailDialog({
   disableInstall,
   onClose,
   onInstall,
+  availabilityTitle,
+  summaryTitle,
+  skillsTitle,
+  closeLabel,
+  locale,
 }: MarketplacePresetDetailDialogProps) {
-  const { t, i18n } = useTranslation('agents');
+  const { t } = useTranslation('agents');
 
   if (!preset) {
     return null;
@@ -37,7 +48,7 @@ export function MarketplacePresetDetailDialog({
 
   const platformLabels = getPresetPlatformLabels(t, preset.platforms);
   const availabilityCopy = !preset.supportedOnCurrentPlatform
-    ? getPresetAvailabilityCopy(t, i18n.resolvedLanguage || i18n.language, preset.platforms)
+    ? getPresetAvailabilityCopy(t, locale, preset.platforms)
     : null;
   const installStageLabel = t(`marketplace.installState.${installStage}`);
   const installLabel = installed
@@ -50,57 +61,62 @@ export function MarketplacePresetDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="modal-card-surface w-[min(760px,calc(100vw-2rem))] max-w-[760px] overflow-hidden rounded-[28px] border p-0">
-        <DialogHeader className="sr-only">
-          <DialogTitle>{preset.name}</DialogTitle>
-          <DialogDescription>{preset.description}</DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        hideCloseButton
+        className="modal-card-surface w-[min(620px,calc(100vw-2rem))] max-w-[620px] overflow-hidden rounded-[28px] border bg-[var(--app-sidebar)] p-0 shadow-none"
+      >
+        <div className="relative px-6 py-6 sm:px-8 sm:py-8">
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-close-button absolute right-6 top-6"
+            aria-label={closeLabel || 'Close'}
+          >
+            <X className="h-5 w-5" />
+          </button>
 
-        <div className="flex max-h-[min(86vh,760px)] flex-col overflow-hidden">
-          <div className="border-b border-black/5 px-8 py-7 dark:border-white/10">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] text-2xl dark:bg-white/[0.06]"
-                aria-hidden="true"
-              >
-                {preset.emoji}
-              </span>
-              <h2 className="modal-title">{preset.name}</h2>
+          <DialogHeader className="items-center pt-6 text-center sm:pt-8">
+            <div className="mb-2 flex h-18 w-18 items-center justify-center text-[56px]">
+              <span aria-hidden="true">{preset.emoji}</span>
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">{preset.description}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {platformLabels.map((label) => (
-                <Badge
-                  key={label}
-                  variant="secondary"
-                  className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                >
-                  {label}
-                </Badge>
-              ))}
-            </div>
-          </div>
+            <DialogTitle className="modal-title max-w-[24ch] text-center text-[22px] leading-[1.3] tracking-[-0.03em] sm:text-[26px]">
+              {preset.name}
+            </DialogTitle>
+            <DialogDescription className="modal-description mt-1 max-w-3xl text-center text-[13px] leading-7 text-foreground/42 dark:text-foreground/56 sm:text-[14px]">
+              {preset.description}
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex-1 space-y-8 overflow-y-auto px-8 py-7">
-
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">{t('marketplace.detail.skills')}</h3>
-              <div className="flex flex-wrap gap-2">
-                {preset.presetSkills.map((skill) => (
-                  <Badge
-                    key={skill}
-                    variant="secondary"
-                    className=" px-2.5 py-1 text-[11px] font-medium"
-                  >
-                    {skill}
-                  </Badge>
-                ))}
+          <div className="mt-6 space-y-6 sm:mt-8">
+            <section className="border-t border-black/6 pt-6 dark:border-white/10">
+              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                {availabilityTitle || 'Platforms'}
+              </h3>
+              <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
+                <div className="flex flex-wrap gap-2">
+                  {platformLabels.map((label) => (
+                    <Badge
+                      key={label}
+                      variant="secondary"
+                      className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    >
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
+                {availabilityCopy && (
+                  <p className="mt-3 text-[14px] leading-6 text-foreground/72">
+                    {availabilityCopy}
+                  </p>
+                )}
               </div>
             </section>
 
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">{t('marketplace.detail.summary')}</h3>
-              <div className="modal-section-surface space-y-3 rounded-2xl border p-4">
+            <section className="border-t border-black/6 pt-6 dark:border-white/10">
+              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                {summaryTitle || t('marketplace.detail.summary')}
+              </h3>
+              <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
                     {t('fields.agentId')}
@@ -110,29 +126,43 @@ export function MarketplacePresetDetailDialog({
               </div>
             </section>
 
-            {availabilityCopy && (
-              <p className="text-sm text-muted-foreground">{availabilityCopy}</p>
-            )}
+            <section className="border-t border-black/6 pt-6 dark:border-white/10">
+              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+                {skillsTitle || t('marketplace.detail.skills')}
+              </h3>
+              <div className="modal-section-surface mt-4 rounded-[18px] border px-4 py-4 shadow-none">
+                <div className="flex flex-wrap gap-2">
+                  {preset.presetSkills.map((skill) => (
+                    <Badge
+                      key={skill}
+                      variant="secondary"
+                      className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    >
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </section>
           </div>
 
-          <div className="modal-footer flex-wrap justify-between gap-4 px-8 py-5">
-            {isInstalling ? (
-              <div className="min-w-[220px] flex-1 space-y-1.5">
+          <div className="modal-footer mt-8 flex-col gap-4 pb-1 sm:mt-10">
+            {isInstalling && (
+              <div className="w-full max-w-[360px] space-y-1.5">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
                   <div
                     className="h-full rounded-full bg-foreground/75 transition-[width] duration-300"
                     style={{ width: `${installProgress}%` }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-center text-xs text-muted-foreground">
                   {installStageLabel} · {t('marketplace.installProgress', { progress: installProgress })}
                 </p>
               </div>
-            ) : (
-              <div className="flex-1" />
             )}
+
             <Button
-              className="modal-primary-button"
+              className="modal-primary-button min-w-[160px] px-8 text-[14px]"
               disabled={installed || !preset.supportedOnCurrentPlatform || disableInstall}
               onClick={() => onInstall(preset.presetId)}
             >

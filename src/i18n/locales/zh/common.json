@@ -10,7 +10,7 @@
         "channels": "聊天频道",
         "onlineCount": "{{count}} 在线",
         "offlineCount": "{{count}} 在线",
-        "dashboard": "仪表盘",
+        "dashboard": "广场",
         "defaultAgent": "默认",
         "agentMainSessionHint": "点击进入会话",
         "settings": "设置",

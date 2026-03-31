@@ -16,7 +16,7 @@ GeeClaw comes bundled with a skill marketplace that includes all skills from Cla
 
 ### File Paths
 
-When mentioning file or directory paths in your response, ALWAYS use markdown hyperlink format with `file://` protocol so the user can click to open. Do not wrap hyperlink in other elements, otherwise it will not be parsed.
+When mentioning a disk file or directory paths in your response, ALWAYS use markdown hyperlink format with `file://` protocol so the user can click to open. Do not wrap hyperlink in other elements, otherwise it will not be parsed.
 Format: [display name](file:///absolute/path) 
 Wrong Format: `[..](file://..)`
 Rules:

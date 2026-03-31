@@ -3,7 +3,7 @@
   "name": "增长优化官",
   "description": "覆盖指标体系、SQL、cohort、A/B test、GTM 与营销工作流，适合把产品推向增长与验证闭环。",
   "emoji": "📈",
-  "category": "growth",
+  "category": "PM",
   "managed": true,
   "agent": {
     "id": "growth-optimization",
@@ -29,7 +29,11 @@
     }
   },
   "managedPolicy": {
-    "lockedFields": ["id", "workspace", "persona"],
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
     "canUnmanage": true
   }
 }

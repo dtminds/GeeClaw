@@ -1,0 +1,29 @@
+{
+  "presetId": "marketing-growth-assistant",
+  "name": "营销增长助手",
+  "description": "覆盖 SEO 机会、内容打磨、增长实验、EDM与线索转化，适合把营销增长工作集中在一个 Agent 内完成。",
+  "emoji": "🚀",
+  "category": "Marketing",
+  "managed": true,
+  "agent": {
+    "id": "marketing-growth-assistant",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "sales-pipeline",
+        "cold-outbound-optimizer",
+        "expert-panel",
+        "growth-engine",
+        "seo-ops"
+      ]
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

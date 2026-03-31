@@ -1,5 +1,15 @@
 {
-    "pageSubtitle": "查看 OpenClaw 状态、频道连接与常用快捷操作",
+    "pageSubtitle": "查看运行状态，并探索预设智能体与灵感模板",
+    "runningStatus": {
+        "title": "运行状态",
+        "description": "查看 OpenClaw、频道连接与常用快捷操作。"
+    },
+    "plaza": {
+        "tabs": {
+            "agents": "智能体广场",
+            "inspiration": "灵感广场"
+        }
+    },
     "gateway": "OpenClaw 服务",
     "channels": "频道",
     "skills": "技能",
@@ -28,6 +38,19 @@
     "noSkills": "未启用技能",
     "enableSome": "启用一些技能",
     "more": "+{{count}} 更多",
+    "presetPlaza": {
+        "title": "智能体广场",
+        "description": "浏览预设智能体，快速开始研究、分析和执行类任务。",
+        "all": "全部智能体",
+        "close": "关闭",
+        "summaryTitle": "预设摘要",
+        "skillsTitle": "预置技能",
+        "platformsTitle": "支持平台",
+        "categories": {
+            "finance": "金融投资",
+            "research": "研究分析"
+        }
+    },
     "inspirationPlaza": {
         "title": "灵感广场",
         "description": "从灵感模板里挑一个方向，快速发现适合你的自动化、学习和生活玩法。",
