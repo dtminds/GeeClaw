@@ -3,8 +3,9 @@
  * Left shows agent + session id, right shows visibility toggles and refresh.
  * Rendered inside the Chat page header.
  */
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useMemo, useState } from 'react';
-import { RefreshCw, Brain, Wrench } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useChatStore } from '@/stores/chat';
@@ -51,7 +52,6 @@ export function ChatToolbar() {
         </div>
 
         <div className="flex items-center gap-2">
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -76,39 +76,57 @@ export function ChatToolbar() {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-7 w-7 rounded-full',
-                  showThinking && 'bg-primary/5 text-primary/80',
-                )}
-                onClick={toggleThinking}
-              >
-                <Brain className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{showThinking ? t('toolbar.hideThinking') : t('toolbar.showThinking')}</p>
-            </TooltipContent>
-          </Tooltip>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 rounded-full px-2.5 text-foreground/78"
+                    aria-label={t('toolbar.visibilityOptions')}
+                    title={t('toolbar.visibilityOptions')}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <ChevronDown className="ml-1 h-3 w-3 opacity-45" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="bottom"
+                    align="end"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className="z-50 min-w-[180px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=bottom]:animate-in data-[side=bottom]:slide-in-from-top-2 dark:border-white/10 dark:bg-card"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    <DropdownMenu.CheckboxItem
+                      checked={showThinking}
+                      onCheckedChange={() => toggleThinking()}
+                      className="relative mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 pl-8 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
+                    >
+                      <DropdownMenu.ItemIndicator className="absolute left-3 inline-flex items-center justify-center">
+                        <Check className="h-3.5 w-3.5" />
+                      </DropdownMenu.ItemIndicator>
+                      <span>{t('toolbar.showThinking')}</span>
+                    </DropdownMenu.CheckboxItem>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-7 w-7 rounded-full',
-                  showToolCalls && 'bg-primary/5 text-primary/80',
-                )}
-                onClick={toggleToolCalls}
-              >
-                <Wrench className="h-3.5 w-3.5" />
-              </Button>
+                    <DropdownMenu.CheckboxItem
+                      checked={showToolCalls}
+                      onCheckedChange={() => toggleToolCalls()}
+                      className="relative mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 pl-8 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
+                    >
+                      <DropdownMenu.ItemIndicator className="absolute left-3 inline-flex items-center justify-center">
+                        <Check className="h-3.5 w-3.5" />
+                      </DropdownMenu.ItemIndicator>
+                      <span>{t('toolbar.showToolCalls')}</span>
+                    </DropdownMenu.CheckboxItem>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{showToolCalls ? t('toolbar.hideToolCalls') : t('toolbar.showToolCalls')}</p>
+              <p>{t('toolbar.visibilityOptions')}</p>
             </TooltipContent>
           </Tooltip>
 

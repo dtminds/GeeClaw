@@ -1,7 +1,7 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { PRESET_INSTALL_STAGE_VISIBLE_MS, useAgentsStore } from '@/stores/agents';
+import { useAgentsStore } from '@/stores/agents';
 import type { AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
@@ -166,26 +166,9 @@ function buildInstalledSnapshot(presetId: 'alpha-researcher' | 'beta-scout'): Ag
   };
 }
 
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
-}
-
-async function clickAndFlush(element: HTMLElement) {
-  await act(async () => {
-    fireEvent.click(element);
-    await flushPromises();
-  });
 }
 
 async function flushUiTimers() {
@@ -311,7 +294,7 @@ vi.mock('@/stores/gateway', () => ({
   },
 }));
 
-describe('Agents marketplace view', () => {
+describe('Agents management page', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -340,21 +323,7 @@ describe('Agents marketplace view', () => {
     vi.useRealTimers();
   });
 
-  it('allows installing supported presets from preset details while keeping unsupported presets unavailable', async () => {
-    const deferredInstall = createDeferred<AgentsSnapshot>();
-    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
-      if (path === '/api/agents') {
-        return baseSnapshot;
-      }
-      if (path === '/api/agents/presets') {
-        return { success: true, presets: marketplacePresets };
-      }
-      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
-        return deferredInstall.promise;
-      }
-      throw new Error(`Unhandled hostApiFetch call: ${path}`);
-    });
-
+  it('keeps agent management content but does not render marketplace tabs or preset plaza cards', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(
       <TooltipProvider delayDuration={0}>
@@ -371,124 +340,8 @@ describe('Agents marketplace view', () => {
     expect(fetchChannelsMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Managed')).toBeInTheDocument();
     expect(screen.getByText('From Marketplace')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
-
-    const stockCard = screen.getByText('股票助手').closest('div.modal-section-surface');
-    expect(stockCard).not.toBeNull();
-    await clickAndFlush(within(stockCard as HTMLElement).getByText('View Details').closest('button') as HTMLElement);
-    await flushUiTimers();
-
-    const unsupportedDialog = screen.getByRole('dialog');
-    expect(within(unsupportedDialog).getByText('Preset summary')).toBeInTheDocument();
-    expect(within(unsupportedDialog).getByText('Preset skills')).toBeInTheDocument();
-    expect(within(unsupportedDialog).getByText('stock-announcements')).toBeInTheDocument();
-    expect(within(unsupportedDialog).getByText('macOS')).toBeInTheDocument();
-    expect(within(unsupportedDialog).getByText('Available on macOS')).toBeInTheDocument();
-    expect(within(unsupportedDialog).queryByText('Workspace')).not.toBeInTheDocument();
-    expect(within(unsupportedDialog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
-
-    const betaCard = screen.getByText('Beta Scout').closest('div.modal-section-surface');
-    expect(betaCard).not.toBeNull();
-    await clickAndFlush(within(betaCard as HTMLElement).getByText('View Details').closest('button') as HTMLElement);
-
-    const supportedDialog = screen.getByRole('dialog');
-    const supportedInstallButton = within(supportedDialog).getByRole('button', { name: 'Install' });
-    expect(supportedInstallButton).toBeEnabled();
-    await act(async () => {
-      fireEvent.click(supportedInstallButton);
-      await flushPromises();
-      deferredInstall.resolve(buildInstalledSnapshot('beta-scout'));
-      await flushPromises();
-      vi.advanceTimersByTime((PRESET_INSTALL_STAGE_VISIBLE_MS * 4) + 700);
-      await flushPromises();
-    });
-
-    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/presets/install', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ presetId: 'beta-scout' }),
-    }));
-  });
-
-  it('shows staged install progress in marketplace card and detail actions while install is in flight', async () => {
-    const deferredInstall = createDeferred<AgentsSnapshot>();
-    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
-      if (path === '/api/agents') {
-        return baseSnapshot;
-      }
-      if (path === '/api/agents/presets') {
-        return { success: true, presets: marketplacePresets };
-      }
-      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
-        return deferredInstall.promise;
-      }
-      throw new Error(`Unhandled hostApiFetch call: ${path}`);
-    });
-
-    const { Agents } = await import('@/pages/Agents');
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Agents />
-      </TooltipProvider>,
-    );
-
-    await act(async () => {
-      await flushPromises();
-    });
-    await flushUiTimers();
-
-    screen.getByText('趋势助手');
-    fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
-
-    const alphaCard = screen.getByText('Alpha Researcher').closest('div.modal-section-surface');
-    expect(alphaCard).not.toBeNull();
-    await clickAndFlush(within(alphaCard as HTMLElement).getByRole('button', { name: 'Install' }));
-
-    expect(within(alphaCard as HTMLElement).getByRole('button', { name: 'Preparing preset' })).toBeDisabled();
-    expect(within(alphaCard as HTMLElement).getByText(/10%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await Promise.resolve();
-    });
-    expect(within(alphaCard as HTMLElement).getByRole('button', { name: 'Installing files' })).toBeDisabled();
-    expect(within(alphaCard as HTMLElement).getByText(/35%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await Promise.resolve();
-    });
-    expect(within(alphaCard as HTMLElement).getByRole('button', { name: 'Installing skills' })).toBeDisabled();
-    expect(within(alphaCard as HTMLElement).getByText(/70%/)).toBeInTheDocument();
-
-    await clickAndFlush(within(alphaCard as HTMLElement).getByRole('button', { name: 'View Details' }));
-    const detailDialog = screen.getByRole('dialog');
-    expect(within(detailDialog).getByRole('button', { name: 'Installing skills' })).toBeDisabled();
-    expect(within(detailDialog).getByText(/70%/)).toBeInTheDocument();
-
-    await act(async () => {
-      deferredInstall.resolve(buildInstalledSnapshot('alpha-researcher'));
-      await flushPromises();
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await flushPromises();
-    });
-    expect(within(alphaCard as HTMLElement).getByText('Finalizing setup').closest('button')).toBeDisabled();
-    expect(within(alphaCard as HTMLElement).getByText(/90%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await flushPromises();
-    });
-    expect(within(alphaCard as HTMLElement).getByText('Installed').closest('button')).toBeDisabled();
-    expect(within(detailDialog).getByText('Installed').closest('button')).toBeDisabled();
-    expect(within(detailDialog).getByText(/100%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(700);
-      await Promise.resolve();
-    });
-    expect(within(detailDialog).queryByText(/100%/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Marketplace' })).not.toBeInTheDocument();
+    expect(screen.queryByText('股票助手')).not.toBeInTheDocument();
+    expect(screen.queryByText('Alpha Researcher')).not.toBeInTheDocument();
   });
 });

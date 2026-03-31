@@ -10,7 +10,7 @@
         "channels": "Channels",
         "onlineCount": "{{count}} online",
         "offlineCount": "· {{count}} online",
-        "dashboard": "Dashboard",
+        "dashboard": "Plaza",
         "defaultAgent": "Default",
         "agentMainSessionHint": "Open main session",
         "settings": "Settings",

@@ -3,7 +3,7 @@
   "name": "用户研究官",
   "description": "覆盖产品发现、用户研究、需求归因与竞品洞察，适合从机会识别一路推进到验证计划。",
   "emoji": "🔍",
-  "category": "research",
+  "category": "PM",
   "managed": true,
   "agent": {
     "id": "discovery-research",

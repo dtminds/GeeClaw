@@ -148,4 +148,48 @@ describe('Sidebar settings menu trigger', () => {
     expect(await screen.findByText('Log out')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
+
+  it('shows the agent section immediately when expanding the sidebar', async () => {
+    vi.useFakeTimers();
+    settingsState.sidebarCollapsed = true;
+    agentsState.agents = [
+      {
+        id: 'agent-1',
+        name: 'Alpha',
+        isDefault: true,
+      },
+    ];
+    chatState.desktopSessions = [
+      {
+        gatewaySessionKey: 'agent:agent-1:main',
+        updatedAt: '2026-03-31T08:00:00.000Z',
+        lastMessagePreview: '',
+      },
+    ];
+
+    try {
+      const { Sidebar } = await import('@/components/layout/Sidebar');
+
+      const { rerender } = render(
+        <MemoryRouter initialEntries={['/chat']}>
+          <Sidebar />
+        </MemoryRouter>,
+      );
+
+      expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+
+      settingsState.sidebarCollapsed = false;
+      rerender(
+        <MemoryRouter initialEntries={['/chat']}>
+          <Sidebar />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByText('Alpha')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+      agentsState.agents = [];
+      chatState.desktopSessions = [];
+    }
+  });
 });

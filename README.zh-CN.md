@@ -94,12 +94,6 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 ### 📦 内置 OpenClaw Runtime
 GeeClaw 固定使用内置 OpenClaw Runtime，避免依赖系统 PATH 或覆盖已有的系统 OpenClaw 安装。
 
-### 🧩 受管控的预设 Agent
-GeeClaw 现在内置了一个智能体广场，底层由 `resources/agent-presets/<presetId>/` 下的 preset 包驱动。
-全局内置技能仍然部署在 `~/.openclaw-geeclaw/skills/` 下；而 preset 私有技能会在构建期根据各自的 `skills.manifest.json` 解析并打入应用，安装该 preset 时再复制到对应 Agent 的 `workspace/SKILLS/` 中。
-从广场添加 preset Agent 现在是一个本地安装流程，界面会展示准备文件与预设技能的阶段进度。
-当前内置的 PM preset 采用 4 个面向工作流的合并角色：发现研究、战略规划、交付执行、增长优化。Preset 的技能白名单上限也已放宽到 20 个技能，用更少的 Agent 承接更长的连续工作流，减少频繁切换上下文。
-
 ---
 
 ## 快速上手

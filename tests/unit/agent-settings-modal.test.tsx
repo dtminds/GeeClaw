@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const updateAgentSettingsMock = vi.fn(async () => undefined);
 const updateAgentMock = vi.fn(async () => undefined);
 const unmanageAgentMock = vi.fn(async () => undefined);
+const deleteAgentMock = vi.fn(async () => undefined);
 const fetchSkillsMock = vi.fn(async () => undefined);
 
 const translations: Record<string, string> = {
@@ -50,10 +51,24 @@ const translations: Record<string, string> = {
   'settingsDialog.unmanageConfirm.secondConfirm': 'Unmanage now',
   'toast.agentUpdated': 'Agent updated',
   'toast.agentUpdateFailed': 'Failed to update agent',
+  deleteAgent: 'Delete Agent',
+  'deleteDialog.title': 'Delete Agent',
+  'deleteDialog.message': 'Delete {{name}}?',
+  'common:actions.delete': 'Delete',
   'common:actions.save': 'Save',
   'common:actions.cancel': 'Cancel',
   'empty': 'No agents',
 };
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -114,7 +129,7 @@ vi.mock('@/stores/agents', () => ({
       fetchAgents: vi.fn(async () => undefined),
       fetchPresets: vi.fn(async () => undefined),
       createAgent: vi.fn(),
-      deleteAgent: vi.fn(),
+      deleteAgent: deleteAgentMock,
       installPreset: vi.fn(),
       updateAgent: updateAgentMock,
       updateAgentSettings: updateAgentSettingsMock,
@@ -158,6 +173,30 @@ vi.mock('@/stores/skills', () => ({
 }));
 
 describe('managed agent settings modal', () => {
+  it('shows a loading state while deleting an agent', async () => {
+    const deferredDelete = createDeferred<void>();
+    deleteAgentMock.mockImplementationOnce(() => deferredDelete.promise);
+
+    const { Agents } = await import('@/pages/Agents');
+    render(<Agents />);
+
+    fireEvent.click(screen.getByTitle('Delete Agent'));
+    expect(await screen.findByText('Delete Agent')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteAgentMock).toHaveBeenCalledWith('stockexpert'));
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByText('Delete Agent')).toBeInTheDocument();
+
+    await act(async () => {
+      deferredDelete.resolve();
+      await Promise.resolve();
+    });
+  });
+
   it('allows renaming the default main agent', async () => {
     const { Agents } = await import('@/pages/Agents');
     render(<Agents />);
