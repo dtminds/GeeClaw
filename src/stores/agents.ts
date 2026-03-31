@@ -287,6 +287,15 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         { method: 'DELETE' }
       );
       set(applySnapshot(snapshot));
+      invalidatePresetAgentSkillsCache();
+      try {
+        const { useChatStore } = await import('./chat');
+        await useChatStore.getState().handleAgentDeleted(agentId);
+      } catch (error) {
+        console.warn('[agentsStore] Failed to sync deleted agent with chat store:', error);
+        set({ error: String(error) });
+        throw error;
+      }
     } catch (error) {
       set({ error: String(error) });
       throw error;

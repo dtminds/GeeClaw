@@ -81,6 +81,23 @@
             "loading": "正在加载智能体人格...",
             "error": "加载人格失败"
         },
+        "general": {
+            "nameLabel": "智能体名称",
+            "namePlaceholder": "Assistant",
+            "agentIdLabel": "智能体 ID",
+            "modelLabel": "模型",
+            "inheritedSuffix": "（继承）",
+            "deleteLabel": "删除智能体",
+            "deleteTitle": "删除智能体",
+            "deleteMessage": "确认删除该智能体？其工作区与运行目录也会被移除。",
+            "deleteDisabledHint": "默认智能体不可删除。",
+            "deleteConfirm": "删除",
+            "deleteCancel": "取消",
+            "toastSaved": "智能体已更新",
+            "toastSaveFailed": "更新智能体失败：{{error}}",
+            "toastDeleted": "智能体已删除",
+            "toastDeleteFailed": "删除智能体失败：{{error}}"
+        },
         "sections": {
             "general": {
                 "label": "通用",

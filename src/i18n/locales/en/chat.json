@@ -81,6 +81,23 @@
             "loading": "Loading agent persona...",
             "error": "Failed to load persona"
         },
+        "general": {
+            "nameLabel": "Agent Name",
+            "namePlaceholder": "Assistant",
+            "agentIdLabel": "Agent ID",
+            "modelLabel": "Model",
+            "inheritedSuffix": "(inherited)",
+            "deleteLabel": "Delete Agent",
+            "deleteTitle": "Delete Agent",
+            "deleteMessage": "Delete this agent? Its workspace and runtime directories will be removed.",
+            "deleteDisabledHint": "Default agent cannot be deleted.",
+            "deleteConfirm": "Delete",
+            "deleteCancel": "Cancel",
+            "toastSaved": "Agent updated",
+            "toastSaveFailed": "Failed to update agent: {{error}}",
+            "toastDeleted": "Agent deleted",
+            "toastDeleteFailed": "Failed to delete agent: {{error}}"
+        },
         "sections": {
             "general": {
                 "label": "General",

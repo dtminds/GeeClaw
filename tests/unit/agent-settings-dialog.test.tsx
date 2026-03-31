@@ -10,7 +10,17 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.sections.general.label': 'General',
   'agentSettingsDialog.sections.general.title': 'General',
   'agentSettingsDialog.sections.general.description': 'General settings',
-  'agentSettingsDialog.sections.general.placeholder': 'General settings are coming soon.',
+  'agentSettingsDialog.general.nameLabel': 'Agent Name',
+  'agentSettingsDialog.general.namePlaceholder': 'Assistant',
+  'agentSettingsDialog.general.agentIdLabel': 'Agent ID',
+  'agentSettingsDialog.general.modelLabel': 'Model',
+  'agentSettingsDialog.general.inheritedSuffix': '(inherited)',
+  'agentSettingsDialog.general.deleteLabel': 'Delete Agent',
+  'agentSettingsDialog.general.deleteTitle': 'Delete Agent',
+  'agentSettingsDialog.general.deleteMessage': 'Delete this agent?',
+  'agentSettingsDialog.general.deleteConfirm': 'Delete',
+  'agentSettingsDialog.general.deleteCancel': 'Cancel',
+  'agentSettingsDialog.general.deleteDisabledHint': 'Default agent cannot be deleted.',
   'agentSettingsDialog.sections.skills.label': 'Skills',
   'agentSettingsDialog.sections.skills.title': 'Skills',
   'agentSettingsDialog.sections.skills.description': 'Skills settings',
@@ -34,6 +44,9 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.panels.loading': 'Loading agent persona...',
   'agentSettingsDialog.panels.error': 'Failed to load persona',
   'common:actions.close': 'Close',
+  'common:actions.save': 'Save',
+  'common:actions.cancel': 'Cancel',
+  'common:actions.delete': 'Delete',
 };
 
 vi.mock('react-i18next', () => ({
@@ -68,8 +81,36 @@ describe('AgentSettingsDialog shell', () => {
     },
   };
 
+  const agentSummary = {
+    id: 'writer',
+    name: 'Writer Bot',
+    isDefault: true,
+    modelDisplay: 'gpt-4.1',
+    inheritedModel: false,
+    workspace: '/tmp/writer',
+    agentDir: '/tmp/writer/agent',
+    mainSessionKey: 'agent:writer:main',
+    channelTypes: [],
+    channelAccounts: [],
+    source: 'custom',
+    managed: false,
+    presetId: undefined,
+    lockedFields: [],
+    canUnmanage: false,
+    managedFiles: [],
+    skillScope: { mode: 'default' },
+    presetSkills: [],
+    canUseDefaultSkillScope: true,
+  };
+
   it('renders left navigation and switches sections', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+
+    const { useAgentsStore } = await import('@/stores/agents');
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
 
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
@@ -88,7 +129,11 @@ describe('AgentSettingsDialog shell', () => {
     expect(within(tablist).getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'General' })).toBeInTheDocument();
     expect(screen.getByTestId('agent-settings-content')).toHaveClass('overflow-y-auto');
-    expect(screen.getByTestId('agent-settings-panel-body')).toHaveClass('overflow-y-auto');
+
+    expect(screen.getByLabelText('Agent Name')).toHaveValue('Writer Bot');
+    expect(screen.getByLabelText('Agent ID')).toHaveValue('writer');
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-4.1');
+    expect(screen.getByRole('button', { name: 'Delete Agent' })).toBeInTheDocument();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
     expect(await screen.findByRole('tabpanel', { name: 'Identity' })).toBeInTheDocument();
@@ -99,8 +144,31 @@ describe('AgentSettingsDialog shell', () => {
     expect(await screen.findByText('owner text')).toBeInTheDocument();
   });
 
+  it('disables delete for the default agent', async () => {
+    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+
+    const { useAgentsStore } = await import('@/stores/agents');
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    const deleteButton = screen.getByRole('button', { name: 'Delete Agent' });
+    expect(deleteButton).toBeDisabled();
+    expect(screen.getByText('Default agent cannot be deleted.')).toBeInTheDocument();
+  });
+
   it('loads persona snapshot for the active agent', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+
+    const { useAgentsStore } = await import('@/stores/agents');
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
 
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);

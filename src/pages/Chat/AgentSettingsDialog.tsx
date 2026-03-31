@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { AgentGeneralPanel } from '@/pages/Chat/agent-settings/AgentGeneralPanel';
 import { AgentMarkdownPanel } from '@/pages/Chat/agent-settings/AgentMarkdownPanel';
 import { useAgentPersona, type PersonaFileKey } from '@/pages/Chat/agent-settings/useAgentPersona';
 
@@ -56,6 +57,17 @@ export function AgentSettingsDialog({ open, agentId, onOpenChange }: AgentSettin
   const getPanelId = (sectionId: AgentSettingsSection) => `agent-settings-panel-${sectionId}`;
 
   const renderPanel = () => {
+    if (activeMeta.id === 'general') {
+      return (
+        <AgentGeneralPanel
+          agentId={agentId}
+          title={activeMeta.title}
+          description={activeMeta.description}
+          onDeleted={() => onOpenChange(false)}
+        />
+      );
+    }
+
     if (!activeMeta.personaKey) {
       return (
         <AgentMarkdownPanel
