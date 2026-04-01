@@ -6,7 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { ensureDir, getGeeClawConfigDir, getResourcesDir } from './paths';
-import { getBundledNpmPath, getBundledNpxPath } from './managed-bin';
+import { getBundledNpmPath, getBundledNpxPath, getBundledPathEntries } from './managed-bin';
+import { prependPathEntries } from './env-path';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
 import { ensureManagedNpmPrefixOnUserPath, type UserPathUpdateStatus } from './user-path';
@@ -579,6 +580,8 @@ async function runBundledCommand(options: {
     npm_config_fund: 'false',
     npm_config_audit: 'false',
   };
+  const bundledPath = prependPathEntries(env, getBundledPathEntries());
+  const commandEnv = bundledPath.env;
 
   options.appendLog?.(`$ ${options.displayCommand} ${options.args.join(' ')}\n`);
 
@@ -586,7 +589,7 @@ async function runBundledCommand(options: {
     const forceShell = process.platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(options.executablePath);
     const { command, args: spawnArgs, shell } = prepareWinSpawn(options.executablePath, options.args, forceShell);
     const child = spawn(command, spawnArgs, {
-      env,
+      env: commandEnv,
       windowsHide: true,
       shell,
       stdio: ['ignore', 'pipe', 'pipe'],
