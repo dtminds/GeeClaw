@@ -1,0 +1,18 @@
+{
+  "presetId": "hotspot-intel-assistant",
+  "name": "热点情报助手",
+  "description": "跨平台追踪热榜、热点、问答、社区讨论与科技资讯，适合快速判断一个话题正在被哪些中文平台放大。",
+  "emoji": "🔥",
+  "category": "资讯热点",
+  "managed": true,
+  "agent": {
+    "id": "hotspot-intel-assistant",
+    "skillScope": {
+      "mode": "default"
+    }
+  },
+  "managedPolicy": {
+    "lockedFields": ["id", "workspace", "persona"],
+    "canUnmanage": true
+  }
+}

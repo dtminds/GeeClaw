@@ -107,7 +107,7 @@ export function MarketplacePresetDetailDialog({
               )}
             </div>
           </DialogHeader>
-
+          {preset.presetSkills?.length > 0 &&
           <div className="mt-6 space-y-6 sm:mt-8">
             <section className="border-t border-black/6 pt-6 dark:border-white/10">
               <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
@@ -127,7 +127,7 @@ export function MarketplacePresetDetailDialog({
                 </div>
               </div>
             </section>
-          </div>
+          </div>}
 
           <div className="modal-footer mt-8 flex-col items-stretch gap-4 pb-1 sm:mt-10">
             {isInstalling && (
