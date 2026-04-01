@@ -195,8 +195,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'app-sidebar flex shrink-0 flex-col',
-        sidebarCollapsed ? 'w-12' : 'w-56'
+        'app-sidebar flex h-full w-full shrink-0 flex-col'
       )}
     >
       {/* Top Header Toggle */}
