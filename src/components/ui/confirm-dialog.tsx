@@ -50,7 +50,7 @@ export function ConfirmDialog({
 
   return createPortal(
     <div
-      className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4"
+      className="overlay-backdrop pointer-events-auto fixed inset-0 z-[140] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
@@ -58,7 +58,7 @@ export function ConfirmDialog({
     >
       <div
         className={cn(
-          'mx-4 max-w-md rounded-lg border bg-card p-6 shadow-lg',
+          'pointer-events-auto mx-4 max-w-md rounded-lg border bg-card p-6 shadow-lg',
           'focus:outline-none'
         )}
         tabIndex={-1}

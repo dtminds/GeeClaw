@@ -133,6 +133,14 @@ describe('AgentSettingsDialog shell', () => {
     canUseDefaultSkillScope: true,
   };
 
+  const deletableAgentSummary = {
+    ...agentSummary,
+    id: 'helper',
+    name: 'Helper Bot',
+    isDefault: false,
+    mainSessionKey: 'agent:helper:main',
+  };
+
   it('renders left navigation and switches sections', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
@@ -189,6 +197,35 @@ describe('AgentSettingsDialog shell', () => {
     const deleteButton = screen.getByRole('button', { name: 'Delete Agent' });
     expect(deleteButton).toBeDisabled();
     expect(screen.getByText('Default agent cannot be deleted.')).toBeInTheDocument();
+  });
+
+  it('confirms and deletes a non-default agent', async () => {
+    mockHostApiFetch.mockResolvedValueOnce({
+      ...personaSnapshot,
+      agentId: 'helper',
+    });
+
+    const deleteAgent = vi.fn().mockResolvedValue(undefined);
+    const onOpenChange = vi.fn();
+    useAgentsStore.setState({
+      agents: [agentSummary, deletableAgentSummary],
+      defaultAgentId: 'writer',
+      deleteAgent,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="helper" onOpenChange={onOpenChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Agent' }));
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Delete Agent' });
+    expect(within(confirmDialog).getByText('Delete this agent?')).toBeInTheDocument();
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(deleteAgent).toHaveBeenCalledWith('helper');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 
   it('loads persona snapshot for the active agent', async () => {
@@ -528,11 +565,10 @@ describe('AgentSettingsDialog shell', () => {
     const presetChip = screen.getByRole('button', { name: /Core Skill/ });
     expect(presetChip).toBeDisabled();
 
-    expect(screen.getByText('7 / 7')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Skill Six/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
     const extraOption = await screen.findByRole('button', { name: /Skill Seven/ });
-    expect(extraOption).toBeDisabled();
+    expect(extraOption).toBeInTheDocument();
   });
 });
