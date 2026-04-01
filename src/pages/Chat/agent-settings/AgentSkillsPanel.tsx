@@ -207,7 +207,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     : null;
 
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section className="flex h-full min-h-0 flex-col px-1">
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {description ? (
@@ -339,7 +339,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
             <p className="text-xs text-muted-foreground">
               {selectedSkills.length >= maxSelectable
                 ? t('agentSettingsDialog.skillScope.maxReached')
-                : t('agentSettingsDialog.skillScope.searchPlaceholder')}
+                : ''}
             </p>
           </div>
         )}

@@ -65,7 +65,7 @@ export function AgentSoulPanel({
   const saveDisabled = !onSave || !canSave || saving || isLocked || !isEditable || showLoading;
 
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section className="flex h-full min-h-0 flex-col px-1">
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {helperText ? (
