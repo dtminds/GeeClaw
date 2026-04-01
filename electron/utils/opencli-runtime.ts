@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { logger } from './logger';
 import { prepareWinSpawn } from './paths';
-import { getGeeClawCommandSearchDirs } from './runtime-path';
+import { getGeeClawCommandSearchDirs, getGeeClawRuntimeEnv } from './runtime-path';
 
 const execFileAsync = promisify(execFile);
 
@@ -139,7 +139,7 @@ async function runCapturedCommand(command: string, args: string[], timeoutMs = 5
   return await new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(prepared.command, prepared.args, {
       cwd: homedir(),
-      env: process.env,
+      env: getGeeClawRuntimeEnv(process.env),
       windowsHide: true,
       shell: prepared.shell,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -204,7 +204,7 @@ async function runOpenCliCommand(
   return await new Promise((resolve) => {
     const child = spawn(prepared.command, prepared.args, {
       cwd: homedir(),
-      env: process.env,
+      env: getGeeClawRuntimeEnv(process.env),
       windowsHide: true,
       shell: prepared.shell,
       stdio: ['ignore', 'pipe', 'pipe'],

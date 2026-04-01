@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalPlatform = process.platform;
 const originalPath = process.env.PATH;
+const originalHome = process.env.HOME;
 
 const {
   mockExistsSync,
@@ -10,12 +11,14 @@ const {
   mockExecFile,
   mockSpawn,
   mockLoggerInfo,
+  mockGetBundledPathEntries,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn<(path: string) => boolean>(),
   mockRealpathSync: vi.fn<(path: string) => string>(),
   mockExecFile: vi.fn(),
   mockSpawn: vi.fn(),
   mockLoggerInfo: vi.fn(),
+  mockGetBundledPathEntries: vi.fn(() => [] as string[]),
 }));
 
 function setPlatform(platform: string) {
@@ -72,12 +75,17 @@ vi.mock('@electron/utils/logger', () => ({
   },
 }));
 
+vi.mock('@electron/utils/managed-bin', () => ({
+  getBundledPathEntries: mockGetBundledPathEntries,
+}));
+
 describe('opencli runtime', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     setPlatform('darwin');
     process.env.PATH = '/usr/local/bin:/usr/bin:/bin';
+    process.env.HOME = '/Users/test';
     mockExistsSync.mockImplementation((value: string) => value === '/usr/local/bin/opencli');
     mockRealpathSync.mockImplementation((value: string) => value);
     mockExecFile.mockImplementation((command: string, args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
@@ -93,6 +101,7 @@ describe('opencli runtime', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
     process.env.PATH = originalPath;
+    process.env.HOME = originalHome;
   });
 
   it('parses a healthy doctor report', async () => {
@@ -189,12 +198,24 @@ Issues:
   it('falls back to the GeeClaw managed npm prefix when GUI PATH does not include opencli', async () => {
     process.env.PATH = '/usr/bin:/bin';
     const managedOpenCliPath = `${process.env.HOME || '/Users/test'}/.geeclaw/npm-global/bin/opencli`;
+    mockGetBundledPathEntries.mockReturnValue([
+      '/Applications/GeeClaw.app/Contents/Resources/bin/bin',
+      '/Applications/GeeClaw.app/Contents/Resources/bin',
+    ]);
+    const expectedRuntimePath = [
+      `${process.env.HOME || '/Users/test'}/.geeclaw/npm-global/bin`,
+      '/Applications/GeeClaw.app/Contents/Resources/bin/bin',
+      '/Applications/GeeClaw.app/Contents/Resources/bin',
+      '/usr/bin',
+      '/bin',
+    ].join(':');
 
     mockExistsSync.mockImplementation((value: string) => value === managedOpenCliPath);
     mockExecFile.mockImplementation((_command: string, _args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
       callback(new Error('not found'), '', '');
     });
-    mockSpawn.mockImplementation((command: string, args: string[]) => {
+    mockSpawn.mockImplementation((command: string, args: string[], options?: { env?: Record<string, string | undefined> }) => {
+      expect(options?.env?.PATH).toBe(expectedRuntimePath);
       if (args[0] === '--version') {
         expect(command).toBe(managedOpenCliPath);
         return createMockChild('opencli 1.5.5');
