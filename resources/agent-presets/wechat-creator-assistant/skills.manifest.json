@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "slug": "wewrite",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "oaker-io/wewrite",
+        "repoPath": "dist/openclaw",
+        "ref": "main"
+      }
+    },
+    {
+      "slug": "md2wechat",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "geekjourneyx/md2wechat-skill",
+        "repoPath": "skills/md2wechat",
+        "ref": "main"
+      }
+    }
+  ]
+}
