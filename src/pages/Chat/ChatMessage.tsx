@@ -3,7 +3,7 @@
  * Renders user / assistant / system / toolresult messages
  * with markdown, thinking sections, images, and tool cards.
  */
-import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo } from 'react';
 import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, X, FolderOpen, FolderSymlink, ZoomIn } from 'lucide-react';
 import { Streamdown, defaultRehypePlugins, defaultRemarkPlugins, type LinkSafetyModalProps } from 'streamdown';
 import { code } from '@streamdown/code';
@@ -87,11 +87,6 @@ const STREAMDOWN_REHYPE_PLUGINS: Pluggable[] = [
   STREAMDOWN_REHYPE_SANITIZE_PLUGIN,
 ];
 const FILE_NOT_FOUND_ERROR_REGEX = /path not found|no such file|does not exist/i;
-
-const MESSAGE_VISIBILITY_STYLE: CSSProperties = {
-  contentVisibility: 'auto',
-  containIntrinsicSize: '320px',
-};
 
 type SpinnerName = keyof typeof spinners;
 
@@ -706,7 +701,6 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <div
-      style={MESSAGE_VISIBILITY_STYLE}
       className={cn(
         'flex gap-3 group',
         isUser ? 'flex-row-reverse' : 'flex-row',
