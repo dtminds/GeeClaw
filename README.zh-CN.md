@@ -85,6 +85,8 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 - `TAVILY_API_KEY`：用于 `tavily-search`（上游运行时也可能支持 OAuth）
 - `BOCHA_API_KEY`：用于 `bocha-skill`
 
+现在也可以直接在 **设置 → 环境变量** 中管理 GeeClaw 自己托管运行时使用的全局环境变量。GeeClaw 会把这批变量注入到托管的 Gateway / Agent 运行时中，并在检查 preset 的 `requires.env` 时一并考虑；保存后会自动重启 Gateway 使其立即生效。
+
 ### 🔐 安全的供应商集成
 连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。OpenAI 同时支持 API Key 与浏览器 OAuth（Codex 订阅）登录。
 
@@ -178,6 +180,14 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 ### MCP Runtime 检查
 
 打开 **设置 → MCP** 可以查看系统 PATH 中是否已经有 `mcporter`。如果 GeeClaw 还没有检测到它，页面会优先引导你前往 **设置 → CLI 市场** 一键安装，同时保留上游项目链接作为辅助信息。
+
+### 环境变量
+
+打开 **设置 → 环境变量** 可以管理 GeeClaw 托管运行时使用的应用级环境变量。
+
+- 这些值会注入到托管 Gateway，并由托管 Agent 运行时继承。
+- preset 安装前的 `requires.env` 检查会同时读取这批应用级变量与当前进程环境。
+- 保存后会自动重启 Gateway，让变更立即生效。
 
 ### CLI 市场
 

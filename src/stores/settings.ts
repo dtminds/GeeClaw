@@ -44,6 +44,7 @@ interface SettingsState {
 
   // UI State
   sidebarCollapsed: boolean;
+  sidebarWidth: number;
   chatSessionsPanelCollapsed: boolean;
   devModeUnlocked: boolean;
 
@@ -71,6 +72,7 @@ interface SettingsState {
   setAutoCheckUpdate: (value: boolean) => void;
   setAutoDownloadUpdate: (value: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
+  setSidebarWidth: (value: number) => void;
   setChatSessionsPanelCollapsed: (value: boolean) => void;
   setDevModeUnlocked: (value: boolean) => void;
   markSetupComplete: () => void;
@@ -97,6 +99,7 @@ const defaultSettings = {
   autoCheckUpdate: true,
   autoDownloadUpdate: false,
   sidebarCollapsed: false,
+  sidebarWidth: 224,
   chatSessionsPanelCollapsed: false,
   devModeUnlocked: false,
   setupComplete: false,
@@ -250,6 +253,7 @@ export const useSettingsStore = create<SettingsState>()(
         }).catch(() => {});
       },
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setChatSessionsPanelCollapsed: (chatSessionsPanelCollapsed) => set({ chatSessionsPanelCollapsed }),
       setDevModeUnlocked: (devModeUnlocked) => set({ devModeUnlocked }),
       markSetupComplete: () => set({ setupComplete: true }),
@@ -257,7 +261,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'geeclaw-settings',
-      version: 6,
+      version: 7,
       migrate: (persistedState, version) => {
         if (!persistedState || typeof persistedState !== 'object') {
           return persistedState;
@@ -275,6 +279,9 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (version < 6) {
           nextState.chatSessionsPanelCollapsed = false;
+        }
+        if (version < 7) {
+          nextState.sidebarWidth = 224;
         }
         if (nextState.workspaceOnly !== false) {
           nextState.workspaceOnly = false;

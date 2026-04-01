@@ -23,6 +23,7 @@ const translations: Record<string, string> = {
   'marketplace.install': '一键雇佣',
   'marketplace.installed': '已添加',
   'marketplace.unavailable': '当前不可用',
+  'marketplace.requirementsMissing': '缺少依赖',
   'marketplace.installState.idle': '一键雇佣',
   'marketplace.installState.preparing': '准备预设',
   'marketplace.installState.installing_files': '安装文件',
@@ -32,6 +33,11 @@ const translations: Record<string, string> = {
   'marketplace.installState.failed': '安装失败',
   'marketplace.installProgress': '{{progress}}%',
   'marketplace.availableOn': '支持平台：{{platforms}}',
+  'marketplace.detail.requirements': '安装前依赖',
+  'marketplace.requirements.missingBin': '缺少依赖：{{items}}',
+  'marketplace.requirements.missingBins': '缺少依赖：{{items}}',
+  'marketplace.requirements.missingAnyBins': '需要以下依赖之一：{{items}}',
+  'marketplace.requirements.missingEnv': '缺少环境变量：{{items}}',
   'marketplace.platforms.all': '全平台',
   'marketplace.platforms.darwin': 'macOS',
   'marketplace.platforms.win32': 'Windows',
@@ -74,6 +80,7 @@ const marketplacePresets: AgentPresetSummary[] = [
     presetSkills: ['stock-analyzer', 'stock-announcements'],
     managedFiles: ['AGENTS.md', 'SOUL.md'],
     platforms: ['darwin'],
+    installable: false,
     supportedOnCurrentPlatform: false,
   },
   {
@@ -87,6 +94,7 @@ const marketplacePresets: AgentPresetSummary[] = [
     skillScope: { mode: 'specified', skills: ['web-search'] },
     presetSkills: ['web-search'],
     managedFiles: ['AGENTS.md'],
+    installable: true,
     supportedOnCurrentPlatform: true,
   },
   {
@@ -100,6 +108,26 @@ const marketplacePresets: AgentPresetSummary[] = [
     skillScope: { mode: 'specified', skills: ['web-search', 'stock-analyzer'] },
     presetSkills: ['web-search', 'stock-analyzer'],
     managedFiles: ['AGENTS.md', 'USER.md'],
+    installable: true,
+    supportedOnCurrentPlatform: true,
+  },
+  {
+    presetId: 'notion-ops',
+    name: 'Notion Ops',
+    description: '依赖外部命令和 API Key 的工作流 Agent',
+    emoji: '🗂️',
+    category: 'research',
+    managed: true,
+    agentId: 'notion-ops',
+    skillScope: { mode: 'specified', skills: ['web-search'] },
+    presetSkills: ['web-search'],
+    managedFiles: ['AGENTS.md'],
+    installable: false,
+    missingRequirements: {
+      bins: ['opencli'],
+      anyBins: ['python3', 'python'],
+      env: ['NOTION_API_KEY'],
+    },
     supportedOnCurrentPlatform: true,
   },
 ];
@@ -208,6 +236,15 @@ vi.mock('react-i18next', () => ({
       }
       if (key === 'marketplace.installProgress') {
         return `${options?.progress ?? 0}%`;
+      }
+      if (key === 'marketplace.requirements.missingBin' || key === 'marketplace.requirements.missingBins') {
+        return `缺少依赖：${(options as { items?: string })?.items ?? ''}`;
+      }
+      if (key === 'marketplace.requirements.missingAnyBins') {
+        return `需要以下依赖之一：${(options as { items?: string })?.items ?? ''}`;
+      }
+      if (key === 'marketplace.requirements.missingEnv') {
+        return `缺少环境变量：${(options as { items?: string })?.items ?? ''}`;
       }
       return translations[key] || key;
     },
@@ -528,5 +565,25 @@ describe('PresetAgentsPlazaSection', () => {
     expect(useAgentsStore.getState().installProgress).toBe(100);
     expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
     expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
+  });
+
+  it('disables install when preset requirements are missing and shows the missing items', async () => {
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Notion Ops'));
+    });
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText('安装前依赖')).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/缺少依赖：opencli/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/需要以下依赖之一：python3/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/缺少环境变量：NOTION_API_KEY/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '缺少依赖' })).toBeDisabled();
   });
 });

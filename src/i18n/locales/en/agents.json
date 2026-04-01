@@ -73,6 +73,7 @@
         "install": "Install",
         "installed": "Installed",
         "unavailable": "Unavailable",
+        "requirementsMissing": "Requirements Missing",
         "installProgress": "{{progress}}%",
         "installState": {
             "idle": "Install",
@@ -97,7 +98,14 @@
         "detail": {
             "summary": "Preset summary",
             "skills": "Preset skills",
-            "files": "Managed files"
+            "files": "Managed files",
+            "requirements": "Install requirements"
+        },
+        "requirements": {
+            "missingBin": "Missing binary: {{items}}",
+            "missingBins": "Missing binaries: {{items}}",
+            "missingAnyBins": "Need one of these binaries: {{items}}",
+            "missingEnv": "Missing environment variables: {{items}}"
         }
     },
     "removeChannelDialog": {

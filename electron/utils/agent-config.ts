@@ -1,5 +1,5 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
-import { constants } from 'fs';
+import { accessSync, constants } from 'fs';
 import { dirname, join, normalize } from 'path';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
@@ -17,6 +17,8 @@ import { listProviderAccounts, providerAccountToConfig } from '../services/provi
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import { getAgentPreset, listAgentPresets } from './agent-presets';
+import { resolveGeeClawAppEnvironment } from './app-env';
+import { getGeeClawCommandSearchDirs } from './runtime-path';
 import {
   formatPresetPlatforms,
   isPresetSupportedOnPlatform,
@@ -112,6 +114,12 @@ interface ManagedAgentMetadata {
   managedFiles: string[];
   installedAt: string;
   unmanagedAt?: string;
+}
+
+interface AgentPresetMissingRequirements {
+  bins?: string[];
+  anyBins?: string[];
+  env?: string[];
 }
 
 export interface AgentSettingsUpdate {
@@ -1070,6 +1078,8 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   category: string;
   managed: boolean;
   platforms?: AgentPresetPlatform[];
+  installable: boolean;
+  missingRequirements?: AgentPresetMissingRequirements;
   supportedOnCurrentPlatform: boolean;
   agentId: string;
   skillScope: AgentSkillScope;
@@ -1077,22 +1087,30 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   managedFiles: string[];
 }>> {
   const presets = await listAgentPresets();
-  return presets.map((preset) => ({
-    presetId: preset.meta.presetId,
-    name: preset.meta.name,
-    description: preset.meta.description,
-    emoji: preset.meta.emoji,
-    category: preset.meta.category,
-    managed: true,
-    platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
-    supportedOnCurrentPlatform: isPresetSupportedOnPlatform(preset.meta.platforms, process.platform),
-    agentId: preset.meta.agent.id,
-    skillScope: preset.meta.agent.skillScope,
-    presetSkills: preset.meta.agent.skillScope.mode === 'specified'
-      ? [...preset.meta.agent.skillScope.skills]
-      : [],
-    managedFiles: Object.keys(preset.files),
-  }));
+  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
+  return presets.map((preset) => {
+    const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(preset.meta.platforms, process.platform);
+    const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
+
+    return {
+      presetId: preset.meta.presetId,
+      name: preset.meta.name,
+      description: preset.meta.description,
+      emoji: preset.meta.emoji,
+      category: preset.meta.category,
+      managed: true,
+      platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
+      installable: supportedOnCurrentPlatform && !missingRequirements,
+      missingRequirements,
+      supportedOnCurrentPlatform,
+      agentId: preset.meta.agent.id,
+      skillScope: preset.meta.agent.skillScope,
+      presetSkills: preset.meta.agent.skillScope.mode === 'specified'
+        ? [...preset.meta.agent.skillScope.skills]
+        : [],
+      managedFiles: Object.keys(preset.files),
+    };
+  });
 }
 
 function assertPresetSupportedOnCurrentPlatform(preset: {
@@ -1111,9 +1129,80 @@ function assertPresetSupportedOnCurrentPlatform(preset: {
   );
 }
 
+function isCommandAvailable(command: string): boolean {
+  const relativeCandidates = process.platform === 'win32'
+    ? [`${command}.exe`, `${command}.cmd`, `${command}.bat`, `${command}.ps1`, command]
+    : [command, `${command}.sh`];
+
+  for (const directory of getGeeClawCommandSearchDirs()) {
+    for (const candidate of relativeCandidates) {
+      try {
+        accessSync(
+          join(directory, candidate),
+          process.platform === 'win32' ? constants.F_OK : constants.X_OK,
+        );
+        return true;
+      } catch {
+        // Try the next candidate.
+      }
+    }
+  }
+
+  return false;
+}
+
+function getPresetMissingRequirements(preset: {
+  meta: {
+    requires?: {
+      bins?: string[];
+      anyBins?: string[];
+      env?: string[];
+    };
+  };
+}, resolvedEnv: Record<string, string | undefined> = process.env): AgentPresetMissingRequirements | undefined {
+  const missingBins = preset.meta.requires?.bins?.filter((bin) => !isCommandAvailable(bin)) ?? [];
+  const anyBins = preset.meta.requires?.anyBins;
+  const missingAnyBins = anyBins && !anyBins.some((bin) => isCommandAvailable(bin))
+    ? [...anyBins]
+    : [];
+  const missingEnv = preset.meta.requires?.env?.filter((name) => !resolvedEnv[name]?.trim()) ?? [];
+
+  if (missingBins.length === 0 && missingAnyBins.length === 0 && missingEnv.length === 0) {
+    return undefined;
+  }
+
+  return {
+    ...(missingBins.length > 0 ? { bins: missingBins } : {}),
+    ...(missingAnyBins.length > 0 ? { anyBins: missingAnyBins } : {}),
+    ...(missingEnv.length > 0 ? { env: missingEnv } : {}),
+  };
+}
+
+function formatPresetMissingRequirementsError(
+  presetId: string,
+  missingRequirements: AgentPresetMissingRequirements,
+): Error {
+  const clauses: string[] = [];
+  if (missingRequirements.bins?.length) {
+    clauses.push(`is missing required binaries: ${missingRequirements.bins.join(', ')}`);
+  }
+  if (missingRequirements.anyBins?.length) {
+    clauses.push(`requires one of these binaries: ${missingRequirements.anyBins.join(', ')}`);
+  }
+  if (missingRequirements.env?.length) {
+    clauses.push(`is missing required environment variables: ${missingRequirements.env.join(', ')}`);
+  }
+  return new Error(`Preset "${presetId}" ${clauses.join('; ')}`);
+}
+
 export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
   const preset = await getAgentPreset(presetId);
   assertPresetSupportedOnCurrentPlatform(preset);
+  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
+  const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
+  if (missingRequirements) {
+    throw formatPresetMissingRequirementsError(preset.meta.presetId, missingRequirements);
+  }
   const config = await readOpenClawConfig() as AgentConfigDocument;
   const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
   const management = await readAgentManagementMap();

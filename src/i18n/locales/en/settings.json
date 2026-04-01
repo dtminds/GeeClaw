@@ -6,7 +6,31 @@
     "gateway": "OpenClaw",
     "cliMarketplace": "CLI Market",
     "opencli": "OpenCLI",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "environment": "Environment"
+  },
+  "environment": {
+    "title": "Environment Variables",
+    "description": "Manage the global environment variables injected into GeeClaw-managed runtimes.",
+    "runtime": {
+      "title": "Global Injection",
+      "description": "These variables are injected into GeeClaw-managed Gateway and Agent runtimes and are also used for dependency checks.",
+      "restartHint": "Saving automatically restarts the Gateway so changes take effect."
+    },
+    "list": {
+      "empty": "No environment variables have been configured yet.",
+      "add": "Add Variable",
+      "showValues": "Show Values",
+      "hideValues": "Hide Values",
+      "keyPlaceholder": "Variable Name",
+      "valuePlaceholder": "Variable Value",
+      "save": "Save Environment Variables"
+    },
+    "toast": {
+      "loadFailed": "Failed to load environment variables",
+      "saved": "Environment variables saved",
+      "saveFailed": "Failed to save environment variables"
+    }
   },
   "cliMarketplace": {
     "title": "CLI Market",

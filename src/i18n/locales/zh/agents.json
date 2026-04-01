@@ -73,6 +73,7 @@
         "install": "一键雇佣",
         "installed": "已添加",
         "unavailable": "当前不可用",
+        "requirementsMissing": "缺少依赖",
         "installProgress": "{{progress}}%",
         "installState": {
             "idle": "一键雇佣",
@@ -97,7 +98,14 @@
         "detail": {
             "summary": "预设摘要",
             "skills": "预置技能",
-            "files": "受管文件"
+            "files": "受管文件",
+            "requirements": "安装前依赖"
+        },
+        "requirements": {
+            "missingBin": "缺少依赖：{{items}}",
+            "missingBins": "缺少依赖：{{items}}",
+            "missingAnyBins": "需要以下依赖之一：{{items}}",
+            "missingEnv": "缺少环境变量：{{items}}"
         }
     },
     "removeChannelDialog": {

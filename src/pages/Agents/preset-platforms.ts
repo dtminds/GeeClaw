@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { AgentPresetPlatform } from '@/types/agent';
+import type { AgentPresetMissingRequirements, AgentPresetPlatform } from '@/types/agent';
 
 const PLATFORM_KEYS: Record<AgentPresetPlatform, 'marketplace.platforms.darwin' | 'marketplace.platforms.win32' | 'marketplace.platforms.linux'> = {
   darwin: 'marketplace.platforms.darwin',
@@ -33,4 +33,49 @@ export function getPresetAvailabilityCopy(
     : labels.join(', ');
 
   return t('marketplace.availableOn', { platforms: joined });
+}
+
+export function getPresetRequirementMessages(
+  t: TFunction<'agents'>,
+  locale: string | undefined,
+  missingRequirements?: AgentPresetMissingRequirements,
+): string[] {
+  if (!missingRequirements) {
+    return [];
+  }
+
+  const formatList = (items: string[]) => (
+    typeof Intl !== 'undefined' && 'ListFormat' in Intl
+      ? new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(items)
+      : items.join(', ')
+  );
+
+  const messages: string[] = [];
+  if (missingRequirements.bins?.length) {
+    const items = formatList(missingRequirements.bins);
+    messages.push(
+      t(
+        missingRequirements.bins.length > 1
+          ? 'marketplace.requirements.missingBins'
+          : 'marketplace.requirements.missingBin',
+        { items },
+      ),
+    );
+  }
+  if (missingRequirements.anyBins?.length) {
+    messages.push(
+      t('marketplace.requirements.missingAnyBins', {
+        items: formatList(missingRequirements.anyBins),
+      }),
+    );
+  }
+  if (missingRequirements.env?.length) {
+    messages.push(
+      t('marketplace.requirements.missingEnv', {
+        items: formatList(missingRequirements.env),
+      }),
+    );
+  }
+
+  return messages;
 }

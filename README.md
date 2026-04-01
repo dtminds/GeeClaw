@@ -85,6 +85,8 @@ Environment variables for bundled search skills:
 - `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
 - `BOCHA_API_KEY` for `bocha-skill`
 
+Global runtime environment variables can now be managed directly in **Settings → Environment**. GeeClaw injects them into its managed Gateway and Agent runtimes, uses them when checking preset install requirements such as `requires.env`, and restarts the Gateway automatically after you save changes.
+
 ### 🔐 Secure Provider Integration
 Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 
@@ -177,6 +179,14 @@ Open **Settings → OpenCLI** to:
 ### MCP Runtime Check
 
 Open **Settings → MCP** to review whether `mcporter` is installed on your system PATH. If GeeClaw cannot find it, the page sends you to **Settings → CLI Market** for one-click installation and still offers the upstream project links as secondary references.
+
+### Environment Variables
+
+Open **Settings → Environment** to manage app-level environment variables for GeeClaw's managed runtime.
+
+- These values are merged into the managed Gateway process and inherited by managed Agent runs.
+- Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
+- Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
 
 ### CLI Market
 

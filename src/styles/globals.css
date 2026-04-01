@@ -574,6 +574,12 @@
   padding: 0;
 }
 
+.chat-markdown [data-streamdown="image"] {
+  max-width: 320px;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 
 /* Typing indicator animation */
 @keyframes bounce {

@@ -23,6 +23,7 @@ describe('Settings Store', () => {
       colorTheme: 'standard',
       language: 'en',
       sidebarCollapsed: false,
+      sidebarWidth: 224,
       devModeUnlocked: false,
       gatewayAutoStart: true,
       gatewayPort: 28788,
@@ -39,6 +40,7 @@ describe('Settings Store', () => {
     expect(state.theme).toBe('system');
     expect(state.colorTheme).toBe('standard');
     expect(state.sidebarCollapsed).toBe(false);
+    expect(state.sidebarWidth).toBe(224);
     expect(state.gatewayAutoStart).toBe(true);
   });
   
@@ -75,6 +77,7 @@ describe('Settings Store', () => {
       colorTheme: 'ocean',
       language: 'en',
       sidebarCollapsed: false,
+      sidebarWidth: 280,
       devModeUnlocked: false,
       gatewayAutoStart: true,
       gatewayPort: 28788,
@@ -89,6 +92,7 @@ describe('Settings Store', () => {
 
     expect(useSettingsStore.getState().theme).toBe('dark');
     expect(useSettingsStore.getState().colorTheme).toBe('ocean');
+    expect(useSettingsStore.getState().sidebarWidth).toBe(280);
     expect(hostApiFetchMock).toHaveBeenNthCalledWith(1, '/api/settings');
     expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/theme', {
       method: 'PUT',
@@ -104,6 +108,12 @@ describe('Settings Store', () => {
     const { setSidebarCollapsed } = useSettingsStore.getState();
     setSidebarCollapsed(true);
     expect(useSettingsStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it('should update sidebar width', () => {
+    const { setSidebarWidth } = useSettingsStore.getState();
+    setSidebarWidth(320);
+    expect(useSettingsStore.getState().sidebarWidth).toBe(320);
   });
   
   it('should unlock dev mode', () => {

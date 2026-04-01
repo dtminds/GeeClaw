@@ -10,6 +10,10 @@ describe('settings modal paths', () => {
     expect(getSettingsModalPath('mcp')).toBe('/settings/mcp');
   });
 
+  it('builds the environment settings path', () => {
+    expect(getSettingsModalPath('environment')).toBe('/settings/environment');
+  });
+
   it('builds the cli marketplace settings path', () => {
     expect(getSettingsModalPath('cliMarketplace')).toBe('/settings/cli-marketplace');
   });
@@ -22,6 +26,11 @@ describe('settings modal paths', () => {
   it('resolves the mcp settings section from the route', () => {
     expect(resolveSettingsSection('/settings/mcp')).toBe('mcp');
     expect(resolveSettingsSection('/settings/mcp/status')).toBe('mcp');
+  });
+
+  it('resolves the environment settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/environment')).toBe('environment');
+    expect(resolveSettingsSection('/settings/environment/runtime')).toBe('environment');
   });
 
   it('resolves the cli marketplace settings section from the route', () => {

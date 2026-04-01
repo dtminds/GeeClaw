@@ -2,6 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { applyProxySettings } from '../../main/proxy';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../../utils/store';
 import {
+  getManagedAppEnvironmentEntries,
+  replaceManagedAppEnvironmentEntries,
+} from '../../utils/app-env';
+import {
   buildOpenClawSafetySettings,
   isSecurityPolicy,
   syncOpenClawSafetySettings,
@@ -121,6 +125,37 @@ export async function handleSettingsRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/settings/environment' && req.method === 'GET') {
+    try {
+      sendJson(res, 200, {
+        entries: await getManagedAppEnvironmentEntries(),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/environment' && req.method === 'PUT') {
+    try {
+      const body = await parseJsonBody<{ entries?: unknown }>(req);
+      if (!Array.isArray(body.entries)) {
+        sendJson(res, 400, { success: false, error: 'entries must be an array' });
+        return true;
+      }
+
+      const entries = await replaceManagedAppEnvironmentEntries(body.entries);
+      if (ctx.gatewayManager.getStatus().state === 'running') {
+        await ctx.gatewayManager.restart();
+      }
+
+      sendJson(res, 200, { success: true, entries });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
   if (url.pathname.startsWith('/api/settings/') && req.method === 'GET') {
     const key = url.pathname.slice('/api/settings/'.length) as keyof AppSettings;
     try {
@@ -159,6 +194,7 @@ export async function handleSettingsRoutes(
   if (url.pathname === '/api/settings/reset' && req.method === 'POST') {
     try {
       await resetSettings();
+      await replaceManagedAppEnvironmentEntries([]);
       await handleSafetySettingsChange(ctx);
       await handleProxySettingsChange(ctx);
       sendJson(res, 200, { success: true, settings: await getAllSettings() });
