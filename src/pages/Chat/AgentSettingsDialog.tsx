@@ -148,7 +148,6 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
       return (
         <AgentSoulPanel
           title={activeMeta.title}
-          description={activeMeta.description}
           templates={SOUL_TEMPLATES}
           templateId={soulTemplateId}
           value={personaValue}
@@ -175,7 +174,6 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
     return (
       <AgentMarkdownPanel
         title={activeMeta.title}
-        description={activeMeta.description}
         fileLabel={fileLabel}
         helperText={t(`toolbar.persona.notes.${personaKey}`)}
         value={personaValue}
@@ -199,15 +197,18 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
   return (
     <DialogContent
       hideCloseButton
-      className="modal-card-surface w-[min(980px,calc(100vw-2rem))] max-w-[980px] max-h-[min(88vh,860px)] overflow-hidden rounded-[28px] border p-0"
+      onInteractOutside={(event) => {
+        event.preventDefault();
+      }}
+      className="modal-card-surface h-[min(88vh,860px)] min-h-[620px] w-[min(980px,calc(100vw-2rem))] max-w-[980px] overflow-hidden rounded-[28px] border p-0"
     >
       <div className="flex h-full flex-col">
-        <div className="flex items-start justify-between gap-6 border-b border-black/6 px-6 py-5 dark:border-white/10 sm:px-7">
+        <div className="flex items-start justify-between gap-6 border-b border-black/6 px-6 py-4 dark:border-white/10 sm:px-7">
           <DialogHeader className="pr-8">
             <DialogTitle className="modal-title">
               {t('agentSettingsDialog.title')}
             </DialogTitle>
-            <DialogDescription className="modal-description mt-2">
+            <DialogDescription className="modal-description mt-0">
               {t('agentSettingsDialog.description')}
             </DialogDescription>
           </DialogHeader>
@@ -223,8 +224,8 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
           </Button>
         </div>
 
-          <div className="flex min-h-0 flex-1 flex-col sm:grid sm:grid-cols-[220px_minmax(0,1fr)]">
-            <aside className="border-b border-black/6 px-4 py-3 dark:border-white/10 sm:border-b-0 sm:border-r sm:px-5 sm:py-5">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:grid sm:grid-cols-[220px_minmax(0,1fr)]">
+            <aside className="min-h-0 bg-sidebar border-b border-black/6 px-3 py-4 dark:border-white/10 sm:border-b-0 sm:border-r">
               <div
                 role="tablist"
                 aria-label={t('agentSettingsDialog.navigation')}
@@ -245,10 +246,10 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
                       aria-controls={panelId}
                       tabIndex={selected ? 0 : -1}
                       className={cn(
-                        'inline-flex items-center justify-between gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition-colors sm:w-full',
+                        'inline-flex items-center justify-between gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors sm:w-full',
                         selected
-                          ? 'modal-field-surface text-foreground shadow-sm'
-                          : 'text-foreground/52 hover:text-foreground/80 surface-hover',
+                          ? 'sidebar-item-active text-foreground'
+                          : 'text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/6 dark:hover:text-foreground',
                       )}
                     >
                       <span className="truncate">{section.label}</span>
@@ -259,7 +260,7 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
             </aside>
 
             <div
-              className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-5 sm:px-6"
               data-testid="agent-settings-content"
             >
               <div
@@ -267,7 +268,7 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
                 id={getPanelId(activeSection)}
                 aria-labelledby={getTabId(activeSection)}
                 tabIndex={0}
-                className="min-h-0 flex-1"
+                className="flex min-h-0 flex-1 flex-col overflow-y-auto"
               >
                 {renderPanel()}
               </div>

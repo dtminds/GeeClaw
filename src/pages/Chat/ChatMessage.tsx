@@ -56,11 +56,11 @@ type ToolDisplayStatus = {
   result?: string;
 };
 
-const STREAMDOWN_ANIMATION = {
-  animation: 'fadeIn' as const,
-  // duration: 50,
-  // easing: 'ease-out' as const,
-};
+// const STREAMDOWN_ANIMATION = {
+//   animation: 'fadeIn' as const,
+//   duration: 50,
+//   easing: 'ease-out' as const,
+// };
 
 const STREAMDOWN_PLUGINS = {
   code,
@@ -715,8 +715,8 @@ export const ChatMessage = memo(function ChatMessage({
       {/* Content */}
       <div
         className={cn(
-          'flex flex-col w-full min-w-0 max-w-[80%] space-y-2',
-          isUser ? 'items-end' : 'items-start',
+          'flex flex-col w-full min-w-0 space-y-2',
+          isUser ? 'items-end max-w-[80%]' : 'max-w-[100%] items-start',
         )}
       >
         {/* Images — rendered ABOVE text bubble for user messages */}
@@ -1267,8 +1267,8 @@ function MessageBubble({
         <div className="chat-markdown prose dark:prose-invert max-w-none [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
           <Streamdown
             mode={isStreaming ? undefined : 'static'}
-            animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
-            isAnimating={isStreaming}
+            // animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
+            // isAnimating={isStreaming}
             plugins={STREAMDOWN_PLUGINS}
             components={STREAMDOWN_COMPONENTS}
             rehypePlugins={STREAMDOWN_REHYPE_PLUGINS}
@@ -1312,8 +1312,8 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
           <div className={cn('chat-markdown max-w-none opacity-75', isStreaming && 'transition-opacity')}>
             <Streamdown
               mode={isStreaming ? undefined : 'static'}
-              animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
-              isAnimating={isStreaming}
+              // animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
+              // isAnimating={isStreaming}
               components={STREAMDOWN_COMPONENTS}
               rehypePlugins={STREAMDOWN_REHYPE_PLUGINS}
               remarkPlugins={STREAMDOWN_REMARK_PLUGINS}

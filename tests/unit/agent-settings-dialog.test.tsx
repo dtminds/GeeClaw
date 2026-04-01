@@ -157,7 +157,9 @@ describe('AgentSettingsDialog shell', () => {
 
     expect(within(tablist).getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'General' })).toBeInTheDocument();
-    expect(screen.getByTestId('agent-settings-content')).toHaveClass('overflow-y-auto');
+    expect(screen.getByTestId('agent-settings-content')).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden');
+    expect(screen.getByRole('tabpanel', { name: 'General' })).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto');
+    expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toHaveClass('h-[min(88vh,860px)]', 'min-h-[620px]');
 
     expect(screen.getByLabelText('Agent Name')).toHaveValue('Writer Bot');
     expect(screen.getByLabelText('Agent ID')).toHaveValue('writer');
@@ -201,6 +203,29 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     await waitFor(() => expect(mockHostApiFetch).toHaveBeenCalledWith('/api/agents/writer/persona'));
+  });
+
+  it('does not close when clicking the overlay mask', async () => {
+    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+    });
+
+    const onOpenChange = vi.fn();
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={onOpenChange} />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Agent Settings' });
+    const overlay = dialog.parentElement?.previousElementSibling as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+
+    fireEvent.pointerDown(overlay!);
+    fireEvent.click(overlay!);
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toBeInTheDocument();
   });
 
   it('refetches persona on reopen and resets drafts', async () => {
@@ -404,6 +429,9 @@ describe('AgentSettingsDialog shell', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
     fireEvent.click(screen.getByRole('button', { name: 'Specified' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
+
+    const popover = document.body.querySelector('[data-radix-popper-content-wrapper] > div');
+    expect(popover).toHaveClass('z-[130]');
 
     const searchInput = await screen.findByPlaceholderText('Search by name, slug, or description');
     fireEvent.change(searchInput, { target: { value: 'reports' } });

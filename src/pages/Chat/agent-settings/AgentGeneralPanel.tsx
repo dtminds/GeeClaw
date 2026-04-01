@@ -73,7 +73,7 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   };
 
   return (
-    <section className="modal-section-surface flex h-full min-h-0 flex-col rounded-[24px] border p-5">
+    <section className="flex h-full min-h-0 flex-col pr-1">
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {description ? (

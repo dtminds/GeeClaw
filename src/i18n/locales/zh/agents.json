@@ -46,7 +46,7 @@
             "specified": "指定",
             "selected": "已选技能",
             "search": "搜索技能",
-            "searchPlaceholder": "按名称、slug 或描述搜索",
+            "searchPlaceholder": "搜索技能",
             "addSkill": "添加技能",
             "empty": "没有匹配的技能",
             "maxReached": "已达到技能上限",

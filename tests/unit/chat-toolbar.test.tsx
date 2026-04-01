@@ -101,13 +101,18 @@ describe('ChatToolbar visibility menu', () => {
 
     const thinkingItem = await screen.findByRole('menuitemcheckbox', { name: 'Show thinking' });
     const toolCallsItem = await screen.findByRole('menuitemcheckbox', { name: 'Show tool calls' });
+    const refreshItem = await screen.findByRole('menuitem', { name: 'Refresh chat' });
 
     expect(thinkingItem).toHaveAttribute('aria-checked', 'true');
     expect(toolCallsItem).toHaveAttribute('aria-checked', 'false');
 
-    fireEvent.click(toolCallsItem);
+    fireEvent.click(refreshItem);
+    expect(chatState.refresh).toHaveBeenCalledTimes(1);
 
+    fireEvent.pointerDown(visibilityButton, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Show tool calls' }));
     expect(chatState.toggleToolCalls).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Refresh chat' })).not.toBeInTheDocument();
   });
 
   it('opens agent settings from the chat toolbar', async () => {

@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 
 interface AgentMarkdownPanelProps {
   title: string;
-  description?: string;
   fileLabel: string;
   helperText?: string;
   value: string;
@@ -29,7 +28,6 @@ interface AgentMarkdownPanelProps {
 
 export function AgentMarkdownPanel({
   title,
-  description,
   fileLabel,
   helperText,
   value,
@@ -57,11 +55,11 @@ export function AgentMarkdownPanel({
   const saveDisabled = !onSave || !canSave || saving || readOnly || showLoading;
 
   return (
-    <section className="modal-section-surface flex h-full min-h-0 flex-col rounded-[24px] border p-5">
+    <section className="flex h-full min-h-0 flex-col">
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+        {helperText ? (
+          <p className="text-xs text-muted-foreground">{helperText}</p>
         ) : null}
       </header>
 
@@ -74,7 +72,7 @@ export function AgentMarkdownPanel({
       <div
         data-testid="agent-settings-panel-body"
         className={cn(
-          'modal-field-surface mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border p-4 text-sm text-foreground shadow-sm',
+          'modal-field-surface mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border p-4 text-sm text-foreground',
           (showLoading || showError) && 'items-center justify-center',
         )}
       >
@@ -100,9 +98,6 @@ export function AgentMarkdownPanel({
                 </span>
               ) : null}
             </div>
-            {helperText ? (
-              <p className="text-xs text-muted-foreground">{helperText}</p>
-            ) : null}
             <Textarea
               id={textareaId}
               value={value}
@@ -110,7 +105,7 @@ export function AgentMarkdownPanel({
               placeholder={placeholder}
               disabled={inputDisabled}
               className={cn(
-                'min-h-[220px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 text-foreground shadow-none outline-none ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                'min-h-[260px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 text-foreground shadow-none outline-none ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
                 inputDisabled && 'text-muted-foreground',
               )}
             />

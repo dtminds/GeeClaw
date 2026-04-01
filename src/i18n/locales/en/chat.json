@@ -101,7 +101,6 @@
             "toastDeleted": "Agent deleted",
             "toastDeleteFailed": "Failed to delete agent: {{error}}"
         },
-        "skillsHint": "Choose between the default skill scope or up to 6 specific skills.",
         "skillsManagedHint": "This managed agent can add extra skills, but preset skills cannot be removed.",
         "skillScope": {
             "default": "Default",
@@ -120,36 +119,32 @@
                 "label": "General",
                 "title": "General",
                 "description": "Core identity and runtime defaults.",
-                "placeholder": "General settings are coming soon."
+                "placeholder": ""
             },
             "skills": {
                 "label": "Skills",
                 "title": "Skills",
                 "description": "Skill scope and capabilities.",
-                "placeholder": "Skills settings are coming soon."
+                "placeholder": ""
             },
             "identity": {
                 "label": "Identity",
                 "title": "Identity",
-                "description": "Defines how this agent sees itself.",
                 "placeholder": "Identity details will appear here."
             },
             "soul": {
                 "label": "Soul",
                 "title": "Soul",
-                "description": "Guides tone, personality, and response style.",
                 "placeholder": "Soul details will appear here."
             },
             "memory": {
                 "label": "Long-term Memory",
                 "title": "Long-term Memory",
-                "description": "Persistent facts the agent should retain.",
                 "placeholder": "Long-term memory will appear here."
             },
             "ownerProfile": {
                 "label": "Owner Profile",
                 "title": "Owner Profile",
-                "description": "Details about the agent owner.",
                 "placeholder": "Owner profile details will appear here."
             }
         }
@@ -158,24 +153,24 @@
         "title": "Sessions",
         "collapse": "Collapse session panel",
         "expand": "Expand session panel",
-  "mainSection": "Main session",
-  "mainSession": "Main session",
-  "mainSessionHint": "Long-lived context that stays with this agent",
-  "temporaryTab": "Chats",
-  "cronTab": "Scheduled",
-  "temporarySection": "Chats",
-  "temporarySessionHint": "A separate chat branch for one-off tasks",
-  "cronRunHint": "Scheduled task run",
-  "cronRunTitleFallback": "Scheduled task",
-  "loadingCronRuns": "Loading scheduled task runs...",
-  "new": "New",
-  "delete": "Delete",
-  "draftTemporarySession": "New chat",
-  "draftTemporarySessionHint": "It will appear in the list after the first message is sent",
-  "emptyTemporarySessions": "No chats yet",
-  "emptyTemporarySessionsHint": "Create a separate chat to keep one-off work away from the main thread",
-  "emptyCronRuns": "No scheduled task runs yet",
-  "emptyCronRunsHint": "Runs from this agent's scheduled tasks will appear here"
+        "mainSection": "Main session",
+        "mainSession": "Main session",
+        "mainSessionHint": "Long-lived context that stays with this agent",
+        "temporaryTab": "Chats",
+        "cronTab": "Scheduled",
+        "temporarySection": "Chats",
+        "temporarySessionHint": "A separate chat branch for one-off tasks",
+        "cronRunHint": "Scheduled task run",
+        "cronRunTitleFallback": "Scheduled task",
+        "loadingCronRuns": "Loading scheduled task runs...",
+        "new": "New",
+        "delete": "Delete",
+        "draftTemporarySession": "New chat",
+        "draftTemporarySessionHint": "It will appear in the list after the first message is sent",
+        "emptyTemporarySessions": "No chats yet",
+        "emptyTemporarySessionsHint": "Create a separate chat to keep one-off work away from the main thread",
+        "emptyCronRuns": "No scheduled task runs yet",
+        "emptyCronRunsHint": "Runs from this agent's scheduled tasks will appear here"
     },
     "composer": {
         "attachFiles": "Attach files",
@@ -218,10 +213,10 @@
                 }
             }
         },
-  "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
-  "gatewayDisconnectedPlaceholder": "Gateway not connected...",
-  "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
-  "safety": {
+        "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
+        "gatewayDisconnectedPlaceholder": "Gateway not connected...",
+        "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
+        "safety": {
             "accessRange": "File Access",
             "workspaceOnly": "Workspace",
             "unrestricted": "Unlimited",

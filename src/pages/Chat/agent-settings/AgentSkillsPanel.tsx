@@ -69,7 +69,7 @@ function SkillScopeOption({
       disabled={disabled}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors',
-        selected ? 'surface-muted text-foreground' : 'surface-hover',
+        selected ? 'text-foreground' : 'surface-hover',
         disabled && !selected && 'cursor-not-allowed opacity-60',
       )}
     >
@@ -96,7 +96,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
   const [selectedSkills, setSelectedSkills] = useState<string[]>(
     agent?.skillScope.mode === 'specified' ? agent.skillScope.skills : [],
   );
-  const [maxSelectable, setMaxSelectable] = useState(6);
+  const [maxSelectable, setMaxSelectable] = useState(20);
   const [savingSkills, setSavingSkills] = useState(false);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
@@ -112,8 +112,8 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     setSelectedSkills(agent.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
     setMaxSelectable(
       agent.skillScope.mode === 'specified'
-        ? Math.max(6, agent.skillScope.skills.length)
-        : 6,
+        ? Math.max(20, agent.skillScope.skills.length)
+        : 20,
     );
   }, [agent]);
 
@@ -204,10 +204,10 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
 
   const skillScopeHint = agent?.managed && (agent.presetSkills?.length ?? 0) > 0
     ? t('agentSettingsDialog.skillsManagedHint')
-    : t('agentSettingsDialog.skillsHint');
+    : null;
 
   return (
-    <section className="modal-section-surface flex h-full min-h-0 flex-col rounded-[24px] border p-5">
+    <section className="flex h-full min-h-0 flex-col">
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {description ? (
@@ -215,7 +215,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
         ) : null}
       </header>
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-5">
-        <p className="text-sm text-muted-foreground">{skillScopeHint}</p>
+        {skillScopeHint && <p className="text-sm text-muted-foreground">{skillScopeHint}</p>}
 
         <div className="flex flex-wrap gap-2">
           <Button
@@ -300,17 +300,16 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
                   align="start"
                   side="bottom"
                   sideOffset={8}
-                  className="z-50 w-[min(32rem,calc(100vw-5rem))] overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card"
+                  className="z-[130] w-[min(36rem,calc(100vw-5rem))] overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card"
                 >
                   <div className="relative px-1 pb-2">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       ref={skillSearchInputRef}
                       value={skillSearch}
                       onChange={(event) => setSkillSearch(event.target.value)}
                       aria-label={t('agentSettingsDialog.skillScope.search')}
                       placeholder={t('agentSettingsDialog.skillScope.searchPlaceholder')}
-                      className="modal-field-surface h-10 rounded-xl border-0 pl-9 pr-3 text-[13px] shadow-none"
+                      className="modal-field-surface h-10 rounded-xl border-0 px-3 text-[13px] shadow-none"
                     />
                   </div>
                   <div className="max-h-64 overflow-y-auto pr-1">
