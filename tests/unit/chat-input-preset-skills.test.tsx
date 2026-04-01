@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
@@ -12,18 +12,32 @@ import type { AgentSummary } from '@/types/agent';
 const {
   fetchPresetAgentSkillsMock,
   hostApiFetchMock,
+  buildSlashPickerItemsMock,
+  isSlashCommandItemMock,
+  editorInsertContentMock,
+  editorChainFocusMock,
+  editorRunMock,
+  editorCommandsFocusMock,
 } = vi.hoisted(() => ({
   fetchPresetAgentSkillsMock: vi.fn(),
   hostApiFetchMock: vi.fn(),
+  buildSlashPickerItemsMock: vi.fn(({ presetAgentSkills = [], globalSkills = [] }: { presetAgentSkills?: unknown[]; globalSkills?: unknown[] }) => (
+    [...presetAgentSkills, ...globalSkills]
+  )),
+  isSlashCommandItemMock: vi.fn((item: { type?: string }) => item?.type === 'command'),
+  editorInsertContentMock: vi.fn(),
+  editorChainFocusMock: vi.fn(),
+  editorRunMock: vi.fn(),
+  editorCommandsFocusMock: vi.fn(),
 }));
 
 vi.mock('@/pages/Chat/slash-picker', () => ({
-  buildSlashPickerItems: vi.fn(() => []),
+  buildSlashPickerItems: buildSlashPickerItemsMock,
   fetchPresetAgentSkills: fetchPresetAgentSkillsMock,
   getSlashCommandDescription: vi.fn(() => ''),
   getSlashCommandName: vi.fn(() => ''),
   getVisibleSlashItems: vi.fn(() => []),
-  isSlashCommandItem: vi.fn(() => false),
+  isSlashCommandItem: isSlashCommandItemMock,
 }));
 
 vi.mock('@/lib/host-api', () => ({
@@ -46,7 +60,15 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string, fallback?: string) => fallback ?? key,
+      t: (key: string, value?: string | { defaultValue?: string }) => {
+        if (typeof value === 'string') {
+          return value;
+        }
+        if (value && typeof value === 'object' && typeof value.defaultValue === 'string') {
+          return value.defaultValue;
+        }
+        return key;
+      },
     }),
   };
 });
@@ -65,32 +87,43 @@ vi.mock('@tiptap/react', () => ({
   NodeViewWrapper: ({ children }: { children?: React.ReactNode }) => React.createElement('span', null, children),
   ReactNodeViewRenderer: vi.fn(() => () => null),
   mergeAttributes: (...items: Array<Record<string, unknown>>) => Object.assign({}, ...items),
-  useEditor: vi.fn(() => ({
-    chain: () => ({
-      focus: () => ({
-        insertContent: () => ({
-          run: () => true,
-        }),
-      }),
-    }),
-    commands: {
-      focus: vi.fn(),
-    },
-    setEditable: vi.fn(),
-    getJSON: () => ({ type: 'doc', content: [] }),
-    state: {
-      selection: {
-        empty: true,
-        from: 0,
-        $from: {
-          parentOffset: 0,
-          parent: {
-            textBetween: () => '',
+  useEditor: vi.fn(() => {
+    const chain = {
+      focus: (...args: unknown[]) => {
+        editorChainFocusMock(...args);
+        return chain;
+      },
+      insertContent: (...args: unknown[]) => {
+        editorInsertContentMock(...args);
+        return chain;
+      },
+      run: (...args: unknown[]) => {
+        editorRunMock(...args);
+        return true;
+      },
+    };
+
+    return {
+      chain: () => chain,
+      commands: {
+        focus: editorCommandsFocusMock,
+      },
+      setEditable: vi.fn(),
+      getJSON: () => ({ type: 'doc', content: [] }),
+      state: {
+        selection: {
+          empty: true,
+          from: 0,
+          $from: {
+            parentOffset: 0,
+            parent: {
+              textBetween: () => '',
+            },
           },
         },
       },
-    },
-  })),
+    };
+  }),
 }));
 
 describe('ChatInput preset agent skills loading', () => {
@@ -135,6 +168,12 @@ describe('ChatInput preset agent skills loading', () => {
     fetchPresetAgentSkillsMock.mockReset();
     fetchPresetAgentSkillsMock.mockResolvedValue([]);
     hostApiFetchMock.mockReset();
+    buildSlashPickerItemsMock.mockClear();
+    isSlashCommandItemMock.mockClear();
+    editorInsertContentMock.mockReset();
+    editorChainFocusMock.mockReset();
+    editorRunMock.mockReset();
+    editorCommandsFocusMock.mockReset();
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/settings/safety') {
         return {
@@ -179,8 +218,9 @@ describe('ChatInput preset agent skills loading', () => {
         id: 'global-skill',
         slug: 'global-skill',
         name: 'Global Skill',
-        description: '',
+        description: 'Useful helper for repetitive tasks',
         enabled: true,
+        source: 'openclaw-managed',
       }],
       loading: false,
       fetchSkills: vi.fn(async () => {}),
@@ -188,6 +228,7 @@ describe('ChatInput preset agent skills loading', () => {
   });
 
   afterEach(() => {
+    cleanup();
     useAgentsStore.setState(agentsState);
     useChatStore.setState(chatState);
     useGatewayStore.setState(gatewayState);
@@ -217,5 +258,38 @@ describe('ChatInput preset agent skills loading', () => {
       expect(fetchPresetAgentSkillsMock).toHaveBeenCalledTimes(1);
     });
     expect(fetchPresetAgentSkillsMock).toHaveBeenCalledWith('delivery-execution', expect.any(Function));
+  });
+
+  it('opens the toolbar skill menu with descriptive skill items and inserts a skill token', async () => {
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    const skillsButton = screen.getByRole('button', { name: 'composer.skillsMenuLabel' });
+    fireEvent.pointerDown(skillsButton);
+
+    expect(await screen.findByText('Global Skill')).toBeInTheDocument();
+    expect(screen.getByText('Useful helper for repetitive tasks')).toBeInTheDocument();
+    expect(screen.getByText('Managed')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Global Skill').closest('[role="menuitem"]') as HTMLElement);
+
+    expect(editorInsertContentMock).toHaveBeenCalledWith([
+      {
+        type: 'skillToken',
+        attrs: {
+          id: 'global-skill',
+          label: 'Global Skill',
+          slug: 'global-skill',
+          skillPath: null,
+        },
+      },
+      { type: 'text', text: ' ' },
+    ]);
+    expect(editorRunMock).toHaveBeenCalled();
   });
 });
