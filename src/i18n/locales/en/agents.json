@@ -17,7 +17,7 @@
     "rename": "Rename",
     "createDialog": {
         "title": "Add Agent",
-        "description": "Create a new agent with both name and ID. Agent ID must be unique and only contain lowercase letters, numbers, and hyphens.",
+        "description": "Workspaces, personas, and memories will be completely isolated between different agents.",
         "nameLabel": "Agent Name",
         "namePlaceholder": "Coding Helper",
         "idLabel": "Agent ID",
