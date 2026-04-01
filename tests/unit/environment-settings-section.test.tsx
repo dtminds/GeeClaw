@@ -74,13 +74,16 @@ describe('EnvironmentSettingsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '显示值' }));
     expect(screen.getByDisplayValue('secret-notion')).toBeInTheDocument();
+    const notionKeyInput = screen.getByDisplayValue('NOTION_API_KEY');
 
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
     fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
     const keyInputs = screen.getAllByPlaceholderText('变量名');
     const valueInputs = screen.getAllByPlaceholderText('变量值');
 
     fireEvent.change(keyInputs[1], { target: { value: 'TAVILY_API_KEY' } });
     fireEvent.change(valueInputs[1], { target: { value: 'secret-tavily' } });
+    fireEvent.change(keyInputs[2], { target: { value: 'EMPTY_VALUE_KEY' } });
     fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
 
     await waitFor(() => {
@@ -97,6 +100,7 @@ describe('EnvironmentSettingsSection', () => {
         }),
       });
     });
+    expect(screen.getByDisplayValue('NOTION_API_KEY')).toBe(notionKeyInput);
     expect(toastSuccessMock).toHaveBeenCalledWith('环境变量已保存');
   });
 });

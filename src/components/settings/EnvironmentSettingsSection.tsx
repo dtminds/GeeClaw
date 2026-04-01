@@ -96,7 +96,7 @@ export function EnvironmentSettingsSection() {
           key: entry.key.trim(),
           value: entry.value,
         }))
-        .filter((entry) => entry.key || entry.value.trim());
+        .filter((entry) => entry.key && entry.value.trim());
 
       await hostApiFetch('/api/settings/environment', {
         method: 'PUT',
@@ -108,7 +108,7 @@ export function EnvironmentSettingsSection() {
         }),
       });
 
-      setEntries(nextEntries.map((entry) => createEditableEntry(entry)));
+      setEntries(nextEntries);
       toast.success(t('environment.toast.saved'));
     } catch (error) {
       toast.error(`${t('environment.toast.saveFailed')}: ${toUserMessage(error)}`);
