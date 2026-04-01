@@ -3,6 +3,7 @@ import path from 'path';
 import { existsSync, rmSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { getAllSettings } from '../utils/store';
+import { resolveGeeClawAppEnvironment } from '../utils/app-env';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
@@ -165,6 +166,7 @@ async function ensureManagedProfileSetup(options: {
   openclawDir: string;
   entryScript: string;
   finalPath: string;
+  managedAppEnv: Record<string, string | undefined>;
   uvEnv: Record<string, string | undefined>;
   proxyEnv: Record<string, string | undefined>;
   gatewayPort: number;
@@ -182,6 +184,7 @@ async function ensureManagedProfileSetup(options: {
     baseEnv: process.env,
     finalPath: options.finalPath,
     injectedEnv: {
+      ...options.managedAppEnv,
       ...options.uvEnv,
       ...options.proxyEnv,
     },
@@ -474,6 +477,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const appSettings = await getAllSettings();
   const uvEnv = await getUvMirrorEnv();
   const proxyEnv = buildProxyEnv(appSettings);
+  const managedAppEnv = await resolveGeeClawAppEnvironment({});
   const openclawConfigDir = getOpenClawConfigDir();
 
   await ensureManagedProfileSetup({
@@ -481,6 +485,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     openclawDir,
     entryScript,
     finalPath,
+    managedAppEnv,
     uvEnv,
     proxyEnv,
     gatewayPort: port,
@@ -506,6 +511,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     baseEnv: process.env,
     finalPath,
     injectedEnv: {
+      ...managedAppEnv,
       ...providerEnv,
       ...uvEnv,
       ...proxyEnv,

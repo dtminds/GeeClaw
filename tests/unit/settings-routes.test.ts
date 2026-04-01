@@ -9,6 +9,8 @@ const setSettingMock = vi.fn();
 const buildOpenClawSafetySettingsMock = vi.fn();
 const isSecurityPolicyMock = vi.fn();
 const syncOpenClawSafetySettingsMock = vi.fn();
+const getManagedAppEnvironmentEntriesMock = vi.fn();
+const replaceManagedAppEnvironmentEntriesMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
 const sendJsonMock = vi.fn();
 
@@ -27,6 +29,11 @@ vi.mock('@electron/utils/openclaw-safety-settings', () => ({
   buildOpenClawSafetySettings: (...args: unknown[]) => buildOpenClawSafetySettingsMock(...args),
   isSecurityPolicy: (...args: unknown[]) => isSecurityPolicyMock(...args),
   syncOpenClawSafetySettings: (...args: unknown[]) => syncOpenClawSafetySettingsMock(...args),
+}));
+
+vi.mock('@electron/utils/app-env', () => ({
+  getManagedAppEnvironmentEntries: (...args: unknown[]) => getManagedAppEnvironmentEntriesMock(...args),
+  replaceManagedAppEnvironmentEntries: (...args: unknown[]) => replaceManagedAppEnvironmentEntriesMock(...args),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -49,6 +56,7 @@ describe('handleSettingsRoutes', () => {
     isSecurityPolicyMock.mockImplementation((value: unknown) => (
       value === 'moderate' || value === 'strict' || value === 'fullAccess'
     ));
+    getManagedAppEnvironmentEntriesMock.mockResolvedValue([]);
   });
 
   it('debounces a gateway reload after saving safety settings while running', async () => {
@@ -120,5 +128,62 @@ describe('handleSettingsRoutes', () => {
     });
     expect(debouncedReload).not.toHaveBeenCalled();
     expect(restart).not.toHaveBeenCalled();
+  });
+
+  it('reads and replaces managed app environment entries, restarting the gateway when running', async () => {
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    getManagedAppEnvironmentEntriesMock.mockResolvedValueOnce([
+      { key: 'NOTION_API_KEY', value: 'secret-notion' },
+    ]);
+
+    const res = {} as ServerResponse;
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:3210/api/settings/environment'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(sendJsonMock).toHaveBeenCalledWith(res, 200, {
+      entries: [{ key: 'NOTION_API_KEY', value: 'secret-notion' }],
+    });
+
+    parseJsonBodyMock.mockResolvedValueOnce({
+      entries: [
+        { key: 'NOTION_API_KEY', value: 'secret-notion' },
+        { key: 'TAVILY_API_KEY', value: 'secret-tavily' },
+      ],
+    });
+
+    const restart = vi.fn();
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:3210/api/settings/environment'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+          restart,
+        },
+      } as never,
+    );
+
+    expect(replaceManagedAppEnvironmentEntriesMock).toHaveBeenCalledWith([
+      { key: 'NOTION_API_KEY', value: 'secret-notion' },
+      { key: 'TAVILY_API_KEY', value: 'secret-tavily' },
+    ]);
+    expect(restart).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenLastCalledWith(
+      res,
+      200,
+      expect.objectContaining({ success: true }),
+    );
   });
 });

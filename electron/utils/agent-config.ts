@@ -17,6 +17,7 @@ import { listProviderAccounts, providerAccountToConfig } from '../services/provi
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import { getAgentPreset, listAgentPresets } from './agent-presets';
+import { resolveGeeClawAppEnvironment } from './app-env';
 import { getGeeClawCommandSearchDirs } from './runtime-path';
 import {
   formatPresetPlatforms,
@@ -1086,9 +1087,10 @@ export async function listAgentPresetSummaries(): Promise<Array<{
   managedFiles: string[];
 }>> {
   const presets = await listAgentPresets();
+  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
   return presets.map((preset) => {
     const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(preset.meta.platforms, process.platform);
-    const missingRequirements = getPresetMissingRequirements(preset);
+    const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
 
     return {
       presetId: preset.meta.presetId,
@@ -1157,13 +1159,13 @@ function getPresetMissingRequirements(preset: {
       env?: string[];
     };
   };
-}): AgentPresetMissingRequirements | undefined {
+}, resolvedEnv: Record<string, string | undefined> = process.env): AgentPresetMissingRequirements | undefined {
   const missingBins = preset.meta.requires?.bins?.filter((bin) => !isCommandAvailable(bin)) ?? [];
   const anyBins = preset.meta.requires?.anyBins;
   const missingAnyBins = anyBins && !anyBins.some((bin) => isCommandAvailable(bin))
     ? [...anyBins]
     : [];
-  const missingEnv = preset.meta.requires?.env?.filter((name) => !process.env[name]?.trim()) ?? [];
+  const missingEnv = preset.meta.requires?.env?.filter((name) => !resolvedEnv[name]?.trim()) ?? [];
 
   if (missingBins.length === 0 && missingAnyBins.length === 0 && missingEnv.length === 0) {
     return undefined;
@@ -1196,7 +1198,8 @@ function formatPresetMissingRequirementsError(
 export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
   const preset = await getAgentPreset(presetId);
   assertPresetSupportedOnCurrentPlatform(preset);
-  const missingRequirements = getPresetMissingRequirements(preset);
+  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
+  const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
   if (missingRequirements) {
     throw formatPresetMissingRequirementsError(preset.meta.presetId, missingRequirements);
   }

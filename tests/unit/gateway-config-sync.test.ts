@@ -23,6 +23,12 @@ vi.mock('@electron/utils/store', () => ({
   })),
 }));
 
+vi.mock('@electron/utils/app-env', () => ({
+  resolveGeeClawAppEnvironment: vi.fn(async () => ({
+    CUSTOM_RUNTIME_TOKEN: 'managed-secret',
+  })),
+}));
+
 vi.mock('@electron/utils/secure-storage', () => ({
   getApiKey: vi.fn(async () => null),
   getDefaultProvider: vi.fn(async () => null),
@@ -325,6 +331,7 @@ describe('prepareGatewayLaunchContext', () => {
       stdoutHandler?.(Buffer.from(`Workspace OK: ${managedWorkspaceDir}\nSessions OK: ${sessionsDir}\n`));
 
       const launchContext = await launchPromise;
+      expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
       expect(launchContext.gatewayArgs).toEqual([
         '--profile',
         'geeclaw',

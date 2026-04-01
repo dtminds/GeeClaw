@@ -8,6 +8,7 @@ export type SettingsModalSection =
   | 'cliMarketplace'
   | 'opencli'
   | 'mcp'
+  | 'environment'
   | 'general';
 
 const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
@@ -18,6 +19,7 @@ const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
   cliMarketplace: 'cli-marketplace',
   opencli: 'opencli',
   mcp: 'mcp',
+  environment: 'environment',
   general: 'general',
 };
 
@@ -47,6 +49,7 @@ export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/cli-marketplace')) return 'cliMarketplace';
   if (pathname.startsWith('/settings/opencli')) return 'opencli';
   if (pathname.startsWith('/settings/mcp')) return 'mcp';
+  if (pathname.startsWith('/settings/environment')) return 'environment';
   if (pathname.startsWith('/settings/general')) return 'general';
   if (pathname.startsWith('/settings/app')) return 'appearance';
   if (pathname.startsWith('/settings/models')) return 'models';

@@ -6,7 +6,31 @@
     "gateway": "OpenClaw",
     "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "environment": "环境变量"
+  },
+  "environment": {
+    "title": "环境变量",
+    "description": "管理插件、技能运行时的所需的环境变量",
+    "runtime": {
+      "title": "全局注入",
+      "description": "这些变量会注入到 GeeClaw 管理的 Gateway / Agent 运行时，并用于依赖检查",
+      "restartHint": "保存后会自动重启 Gateway 使变更生效"
+    },
+    "list": {
+      "empty": "还没有配置环境变量",
+      "add": "添加变量",
+      "showValues": "显示值",
+      "hideValues": "隐藏值",
+      "keyPlaceholder": "变量名",
+      "valuePlaceholder": "变量值",
+      "save": "保存环境变量"
+    },
+    "toast": {
+      "loadFailed": "加载环境变量失败",
+      "saved": "环境变量已保存",
+      "saveFailed": "保存环境变量失败"
+    }
   },
   "cliMarketplace": {
     "title": "CLI 市场",
@@ -35,7 +59,7 @@
   "safety": {
     "navTitle": "安全",
     "title": "安全",
-    "description": "在这里管理安全级别，并查看 GeeClaw 当前使用的托管目录。",
+    "description": "在这里管理安全级别，并查看 GeeClaw 当前使用的托管目录",
     "loadFailed": "加载安全配置失败",
     "saveFailed": "保存安全配置失败",
     "openDirFailed": "打开目录失败",
@@ -50,25 +74,25 @@
     "workspaceOnly": {
       "title": "限制文件访问范围",
       "description": "决定 AI 是否只能访问当前工作目录里的文件",
-      "help": "推荐开启。开启后，AI 只能在当前工作目录内读取和修改文件；关闭后，可访问更大范围，误操作风险也会更高。",
-      "note": "无论是否开启，都建议提前备份重要文件。由于技术限制，我们无法保证完全阻止目录外操作，请根据自己的使用场景谨慎设置。"
+      "help": "推荐开启。开启后，AI 只能在当前工作目录内读取和修改文件；关闭后，可访问更大范围，误操作风险也会更高",
+      "note": "无论是否开启，都建议提前备份重要文件。由于技术限制，我们无法保证完全阻止目录外操作，请根据自己的使用场景谨慎设置"
     },
     "policy": {
       "title": "安全策略",
-      "description": "选择 AI 可以使用的功能范围。",
+      "description": "选择 AI 可以使用的功能范围",
       "saved": "安全策略已更新",
       "options": {
         "moderate": {
           "title": "默认",
-          "description": "适合大多数人。保留常用能力，同时限制少量高风险操作，兼顾易用性和安全性。"
+          "description": "适合大多数人。保留常用能力，同时限制少量高风险操作，兼顾易用性和安全性"
         },
         "strict": {
           "title": "严格",
-          "description": "接近纯聊天模式。AI 将不再具备文件读写、自动化等能力，适合你只想安全地对话交流。"
+          "description": "接近纯聊天模式。AI 将不再具备文件读写、自动化等能力，适合你只想安全地对话交流"
         },
         "fullAccess": {
           "title": "疯狂模式",
-          "description": "限制最少。AI 可使用更多能力，但也更容易因误操作带来影响，只建议在你明确了解风险时使用。"
+          "description": "限制最少。AI 可使用更多能力，但也更容易因误操作带来影响，只建议在你明确了解风险时使用"
         }
       }
     }
@@ -116,7 +140,7 @@
     "description": "配置 AI 模型提供商和 API 密钥",
     "overview": {
       "title": "提供商账户",
-      "description": "这里汇总当前已配置的 provider 账户与模型信息。",
+      "description": "这里汇总当前已配置的 provider 账户与模型信息",
       "noModelSelected": "未选择模型",
       "multiAccountReady": "支持多账户",
       "singletonVendor": "单例提供商"
@@ -160,17 +184,17 @@
       "desc": "配置新的 AI 模型提供商",
       "displayName": "显示名称",
       "apiKey": "API 密钥",
-      "apiKeyConfigured": "该提供商已经保存了 API key。",
-      "apiKeyMissing": "该提供商还没有保存 API key。",
-      "apiKeyStored": "您的 API 密钥存储在本地机器上。",
+      "apiKeyConfigured": "该提供商已经保存了 API key",
+      "apiKeyMissing": "该提供商还没有保存 API key",
+      "apiKeyStored": "您的 API 密钥存储在本地机器上",
       "replaceApiKey": "替换 API Key",
-      "replaceApiKeyHelp": "如果想保留当前已保存的 API key，这里留空即可。",
+      "replaceApiKeyHelp": "如果想保留当前已保存的 API key，这里留空即可",
       "baseUrl": "基础 URL",
       "authMode": "授权方式",
       "codePlanPreset": "Code Plan 预设",
       "codePlanMode": "Code Plan",
       "useCodePlanPreset": "使用 Ark Code Plan 预设",
-      "codePlanPresetDesc": "Code Plan 使用 https://ark.cn-beijing.volces.com/api/coding/v3 与模型 ark-code-latest。请勿把 /api/v3 用于 Code Plan 流量。",
+      "codePlanPresetDesc": "Code Plan 使用 https://ark.cn-beijing.volces.com/api/coding/v3 与模型 ark-code-latest。请勿把 /api/v3 用于 Code Plan 流量",
       "codePlanDoc": "Code Plan 文档",
       "protocol": "协议",
       "modelId": "模型 ID",
@@ -180,8 +204,8 @@
       "fallbackProviders": "跨模型提供商回退",
       "fallbackModelIds": "同模型提供商回退模型 ID",
       "fallbackModelIdsPlaceholder": "gpt-4.1-mini\nanother-model-id",
-      "fallbackModelIdsHelp": "每行一个模型 ID。会先使用当前提供商的这些模型，再回退到其他提供商。",
-      "noFallbackOptions": "请先添加其他提供商，才能把它设为回退目标。",
+      "fallbackModelIdsHelp": "每行一个模型 ID。会先使用当前提供商的这些模型，再回退到其他提供商",
+      "noFallbackOptions": "请先添加其他提供商，才能把它设为回退目标",
       "cancel": "取消",
       "reset": "重置",
       "change": "更换提供商",
@@ -208,7 +232,7 @@
       "delete": "删除提供商",
       "deleteDisabledDefault": "默认提供商不可删除，请先切换默认提供商后再删除",
       "deleteConfirmTitle": "确认删除提供商",
-      "deleteConfirmDesc": "将删除「{{name}}」及其全部配置，包括 API 密钥。此操作不可撤销。",
+      "deleteConfirmDesc": "将删除「{{name}}」及其全部配置，包括 API 密钥。此操作不可撤销",
       "deleteConfirm": "确认删除"
     },
     "toast": {
@@ -223,7 +247,7 @@
       "failedUpdate": "更新提供商失败",
       "invalidKey": "无效的 API 密钥",
       "modelRequired": "需要模型 ID",
-      "minimaxConflict": "不能同时添加 MiniMax 国际站和国内站的服务商。"
+      "minimaxConflict": "不能同时添加 MiniMax 国际站和国内站的服务商"
     },
     "oauth": {
       "loginMode": "OAuth 登录",
@@ -237,15 +261,15 @@
       "cancel": "取消",
       "codeCopied": "代码已复制到剪贴板",
       "authFailed": "认证失败",
-      "browserFlowUnavailable": "该提供商的浏览器 OAuth 登录链路暂未接通。",
+      "browserFlowUnavailable": "该提供商的浏览器 OAuth 登录链路暂未接通",
       "tryAgain": "重试",
       "approveLogin": "确认登录",
-      "step1": "复制下方的授权码。",
-      "step2": "在浏览器中打开登录页面。",
-      "step3": "粘贴授权码以批准访问。",
+      "step1": "复制下方的授权码",
+      "step2": "在浏览器中打开登录页面",
+      "step3": "粘贴授权码以批准访问",
       "requestingCode": "正在获取安全登录码...",
       "manualTitle": "完成 OpenAI 登录",
-      "manualMessage": "打开授权页面并完成登录后，将最终回调 URL 或授权码粘贴到下方继续。",
+      "manualMessage": "打开授权页面并完成登录后，将最终回调 URL 或授权码粘贴到下方继续",
       "manualOpenAuthorizationPage": "打开授权页面",
       "manualInputPlaceholder": "粘贴回调 URL 或授权码",
       "manualSubmit": "提交授权码"
@@ -261,13 +285,13 @@
     "refresh": "刷新",
     "dialog": {
       "title": "配置 Agent Fallback",
-      "desc": "Fallback 是 Agent 级别配置。这里填写的每一项都必须已经定义在下方某个 provider 的模型列表中。",
+      "desc": "Fallback 是 Agent 级别配置。这里填写的每一项都必须已经定义在下方某个 provider 的模型列表中",
       "fallbacksLabel": "Fallback 模型引用",
       "fallbacksEmpty": "请从下方可用模型中点击选择",
       "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeeclaw/kimi-k2.5",
       "fallbacksHelp": "每行一个完整 model ref，例如 provider/model-id。",
       "available": "当前可用模型",
-      "availableHelp": "这些是当前已经定义在各个 provider 下、允许作为 fallback 使用的模型引用。",
+      "availableHelp": "这些是当前已经定义在各个 provider 下、允许作为 fallback 使用的模型引用",
       "save": "保存 Fallback"
     },
     "toast": {

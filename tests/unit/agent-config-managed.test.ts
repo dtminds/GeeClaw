@@ -57,6 +57,7 @@ async function setupManagedPresetFixture(options?: {
   presetFiles?: Record<string, string>;
   mainWorkspaceFiles?: Record<string, string>;
   failAccessPaths?: string[] | ((homeDir: string) => string[]);
+  managedAppEnv?: Record<string, string>;
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
   tempDirs.push(homeDir);
@@ -126,6 +127,13 @@ async function setupManagedPresetFixture(options?: {
       delete: (key: string) => {
         delete storeState[key];
       },
+    })),
+  }));
+
+  vi.doMock('@electron/utils/app-env', () => ({
+    resolveGeeClawAppEnvironment: vi.fn(async (baseEnv?: Record<string, string | undefined>) => ({
+      ...(baseEnv ?? process.env),
+      ...(options?.managedAppEnv ?? {}),
     })),
   }));
 
@@ -202,6 +210,7 @@ afterEach(() => {
   vi.unmock('fs/promises');
   vi.unmock('@electron/services/agents/store-instance');
   vi.unmock('@electron/utils/agent-presets');
+  vi.unmock('@electron/utils/app-env');
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) rmSync(dir, { recursive: true, force: true });
@@ -576,6 +585,26 @@ describe('managed agent config domain', () => {
 
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
     expect(existsSync(workspaceDir)).toBe(false);
+  });
+
+  it('accepts preset env requirements from GeeClaw managed app environment', async () => {
+    delete process.env.NOTION_API_KEY;
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        requires: {
+          env: ['NOTION_API_KEY'],
+        },
+      },
+      managedAppEnv: {
+        NOTION_API_KEY: 'managed-secret',
+      },
+    });
+
+    await expect(agentConfig.installPresetAgent('stock-expert')).resolves.toMatchObject({
+      agents: expect.arrayContaining([
+        expect.objectContaining({ id: 'stockexpert', managed: true }),
+      ]),
+    });
   });
 
   it('rejects installing presets when no anyBins candidate is available', async () => {
