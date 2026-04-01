@@ -283,6 +283,11 @@ function resolveSkillMarkerPath(skill: Pick<Skill, 'filePath' | 'baseDir'>): str
     : `${baseDir.replace(/[\\/]+$/, '')}/SKILL.md`;
 }
 
+function getSkillDescription(skill: Pick<Skill, 'description'>): string | null {
+  const description = skill.description?.trim();
+  return description || null;
+}
+
 function insertSkillTokenIntoEditor(
   editor: NonNullable<ReturnType<typeof useEditor>>,
   skill: Skill,
@@ -603,6 +608,7 @@ export const ChatInput = memo(function ChatInput({
   isEmpty = false,
 }: ChatInputProps) {
   const { t } = useTranslation('chat');
+  const { t: tSkills } = useTranslation('skills');
   const tRef = useRef(t);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [targetAgentId, setTargetAgentId] = useState<string | null>(null);
@@ -861,6 +867,10 @@ export const ChatInput = memo(function ChatInput({
   const filteredSlashItems = useMemo(
     () => getVisibleSlashItems(availableSlashItems, slashQuery, t),
     [availableSlashItems, slashQuery, t],
+  );
+  const toolbarSkillItems = useMemo(
+    () => availableSlashItems.filter((item): item is Skill => !isSlashCommandItem(item)),
+    [availableSlashItems],
   );
 
   const selectedTarget = useMemo(
@@ -1287,6 +1297,12 @@ export const ChatInput = memo(function ChatInput({
     editor?.commands.focus('end');
   }, [disabled, editor, onSend, sending]);
 
+  const handleToolbarSkillSelect = useCallback((skill: Skill) => {
+    if (!editor || disabled || sending) return;
+    insertSkillTokenIntoEditor(editor, skill);
+    editor.commands.focus('end');
+  }, [disabled, editor, sending]);
+
   const handleAgentSelect = useCallback((agent: AgentSummary) => {
     setTargetAgentIdState(agent.id);
     if (typedMentionQuery !== null) {
@@ -1658,6 +1674,88 @@ export const ChatInput = memo(function ChatInput({
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
+
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="surface-hover h-8 max-w-[220px] shrink-0 rounded-full px-3 text-xs text-muted-foreground/80 transition-colors"
+                    disabled={disabled || sending || toolbarSkillItems.length === 0}
+                    title={t('composer.skillsMenuTitle')}
+                  >
+                    <span className="truncate">{t('composer.skillsMenuLabel')}</span>
+                    <ChevronDown className="h-3.5 w-3.5 opacity-20" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="z-50 w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 text-popover-foreground shadow-[0_20px_50px_rgba(15,23,42,0.12)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
+                  >
+                    <div className="px-3 py-2 text-[12px]">
+                      <div className="flex items-center gap-2 text-muted-foreground/80">
+                        <Package2 className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate text-foreground">{t('composer.skillsMenuTitle')}</span>
+                      </div>
+                    </div>
+                    <div className="mt-1 max-h-64 overflow-y-auto pr-1">
+                      {toolbarSkillItems.map((skill) => {
+                        const source = (skill.source || '').trim().toLowerCase();
+                        const sourceLabel = source === 'preset-agent-workspace'
+                          ? t('composer.presetAgentSkillBadge')
+                          : skill.isCore
+                            ? tSkills('detail.coreSystem', { defaultValue: 'Core System' })
+                            : skill.isBundled
+                              ? tSkills('source.badge.bundled', { defaultValue: 'Bundled' })
+                              : source === 'agents-skills-personal'
+                                ? tSkills('source.badge.agentsPersonal', { defaultValue: 'Personal .agents' })
+                                : source === 'agents-skills-project'
+                                  ? tSkills('source.badge.agentsProject', { defaultValue: 'Project .agents' })
+                                  : source === 'openclaw-extra'
+                                    ? tSkills('source.badge.extra', { defaultValue: 'Extra dirs' })
+                                    : source === 'openclaw-managed'
+                                      ? tSkills('source.badge.managed', { defaultValue: 'Managed' })
+                                      : tSkills('source.badge.unknown', { defaultValue: 'Skill' });
+                        const description = getSkillDescription(skill);
+
+                        return (
+                          <DropdownMenu.Item
+                            key={skill.id}
+                            onSelect={() => handleToolbarSkillSelect(skill)}
+                            className="mx-1 flex cursor-default items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
+                          >
+                            <span className="flex h-6 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                              <Package2 className="h-3.5 w-3.5" />
+                            </span>
+                            <span className={cn(
+                              'min-w-0 flex flex-1 overflow-hidden',
+                              description ? 'items-baseline gap-2' : 'items-center',
+                            )}>
+                              <span className="shrink-0 truncate text-[13px] font-medium text-foreground">{skill.name}</span>
+                              {description && (
+                                <span className="truncate text-[11px] text-muted-foreground">{description}</span>
+                              )}
+                            </span>
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
+                              {sourceLabel}
+                            </span>
+                          </DropdownMenu.Item>
+                        );
+                      })}
+                      {toolbarSkillItems.length === 0 && (
+                        <DropdownMenu.Item
+                          disabled
+                          className="flex cursor-default items-center rounded-xl px-3 py-2 text-[13px] text-muted-foreground outline-none"
+                        >
+                          {t('composer.skillsMenuEmpty')}
+                        </DropdownMenu.Item>
+                      )}
+                    </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
 
             <Button
@@ -1872,27 +1970,27 @@ function SkillPickerItem({
   const { t } = useTranslation('skills');
   const { t: tChat } = useTranslation('chat');
   const isCommand = isSlashCommandItem(item);
-  const source = isCommand ? '' : (item.source || '').trim().toLowerCase();
-  let sourceLabel = tChat('composer.slashCommands.commandBadge');
   const itemName = isCommand ? getSlashCommandName(item, tChat) : item.name;
-  const itemDescription = isCommand ? getSlashCommandDescription(item, tChat) : item.description || `/${item.slug || item.id}`;
+  const itemDescription = isCommand ? getSlashCommandDescription(item, tChat) : getSkillDescription(item);
+  let sourceLabel = tChat('composer.slashCommands.commandBadge');
 
   if (!isCommand) {
+    const source = (item.source || '').trim().toLowerCase();
     sourceLabel = source === 'preset-agent-workspace'
       ? tChat('composer.presetAgentSkillBadge')
       : item.isCore
-      ? t('detail.coreSystem', { defaultValue: 'Core System' })
-      : item.isBundled
-        ? t('source.badge.bundled', { defaultValue: 'Bundled' })
-        : source === 'agents-skills-personal'
-          ? t('source.badge.agentsPersonal', { defaultValue: 'Personal .agents' })
-          : source === 'agents-skills-project'
-            ? t('source.badge.agentsProject', { defaultValue: 'Project .agents' })
-            : source === 'openclaw-extra'
-              ? t('source.badge.extra', { defaultValue: 'Extra dirs' })
-              : source === 'openclaw-managed'
-                ? t('source.badge.managed', { defaultValue: 'Managed' })
-                : t('source.badge.unknown', { defaultValue: 'Skill' });
+        ? t('detail.coreSystem', { defaultValue: 'Core System' })
+        : item.isBundled
+          ? t('source.badge.bundled', { defaultValue: 'Bundled' })
+          : source === 'agents-skills-personal'
+            ? t('source.badge.agentsPersonal', { defaultValue: 'Personal .agents' })
+            : source === 'agents-skills-project'
+              ? t('source.badge.agentsProject', { defaultValue: 'Project .agents' })
+              : source === 'openclaw-extra'
+                ? t('source.badge.extra', { defaultValue: 'Extra dirs' })
+                : source === 'openclaw-managed'
+                  ? t('source.badge.managed', { defaultValue: 'Managed' })
+                  : t('source.badge.unknown', { defaultValue: 'Skill' });
   }
 
   return (
@@ -1914,9 +2012,14 @@ function SkillPickerItem({
       )}>
         {isCommand ? <Terminal className="h-3.5 w-3.5" /> : <Package2 className="h-3.5 w-3.5" />}
       </span>
-      <span className="min-w-0 flex flex-1 items-baseline gap-2 overflow-hidden">
+      <span className={cn(
+        'min-w-0 flex flex-1 overflow-hidden',
+        itemDescription ? 'items-baseline gap-2' : 'items-center',
+      )}>
         <span className="shrink-0 truncate text-[13px] font-medium text-foreground">{itemName}</span>
-        <span className="truncate text-[11px] text-muted-foreground">{itemDescription}</span>
+        {itemDescription && (
+          <span className="truncate text-[11px] text-muted-foreground">{itemDescription}</span>
+        )}
       </span>
       <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
         {sourceLabel}

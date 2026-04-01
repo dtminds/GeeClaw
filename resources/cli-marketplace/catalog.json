@@ -64,5 +64,23 @@
             "win32"
         ],
         "installArgs": []
+    },
+    {
+        "id": "md2wechat",
+        "title": "md2wechat",
+        "packageName": "@geekjourneyx/md2wechat",
+        "binNames": [
+            "md2wechat"
+        ],
+        "postInstallSkills": [
+            "geekjourneyx/md2wechat-skill"
+        ],
+        "description": "一套面向 AI Agent 的微信公众号发布接口，用于把 Markdown 转成微信可用 HTML、创建图文消息草稿、创建小绿书草稿、批量上传素材",
+        "homepage": "https://www.md2wechat.com/zh",
+        "platforms": [
+            "darwin",
+            "win32"
+        ],
+        "installArgs": []
     }
 ]

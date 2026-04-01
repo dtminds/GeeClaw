@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { setPathEnvValue } from './env-path';
 import { getBundledPathEntries } from './managed-bin';
 import { getGeeClawConfigDir } from './paths';
 import { getManagedNpmBinDir } from './user-path';
@@ -75,6 +76,13 @@ export function getGeeClawRuntimePath(
   options: RuntimePathOptions = {},
 ): string {
   return getGeeClawRuntimePathEntries(env, options).join(pathDelimiter());
+}
+
+export function getGeeClawRuntimeEnv(
+  env: EnvMap = process.env,
+  options: RuntimePathOptions = {},
+): EnvMap {
+  return setPathEnvValue(env, getGeeClawRuntimePath(env, options));
 }
 
 export function getGeeClawCommandSearchDirs(env: EnvMap = process.env): string[] {

@@ -56,6 +56,8 @@ vi.mock('@electron/utils/managed-bin', async () => {
   return {
     ...actual,
     getBundledNpmPath: vi.fn(() => 'C:\\Program Files\\GeeClaw\\resources\\bin\\npm.cmd'),
+    getBundledNpxPath: vi.fn(() => 'C:\\Program Files\\GeeClaw\\resources\\bin\\npx.cmd'),
+    getBundledPathEntries: vi.fn(() => []),
   };
 });
 
@@ -223,6 +225,47 @@ describe('cli marketplace service', () => {
       'C:\\Program Files\\GeeClaw\\resources\\bin\\npm.cmd',
       ['install', '--global', '@geeclaw-test/wecom-cli'],
       true,
+    );
+  });
+
+  it('prepends bundled runtime paths when spawning bundled npm on POSIX', async () => {
+    setPlatform('darwin');
+    vi.doMock('@electron/utils/managed-bin', async () => {
+      const actual = await vi.importActual<typeof import('@electron/utils/managed-bin')>('@electron/utils/managed-bin');
+      return {
+        ...actual,
+        getBundledNpmPath: vi.fn(() => '/Applications/GeeClaw.app/Contents/Resources/bin/bin/npm'),
+        getBundledNpxPath: vi.fn(() => '/Applications/GeeClaw.app/Contents/Resources/bin/bin/npx'),
+        getBundledPathEntries: vi.fn(() => [
+          '/Applications/GeeClaw.app/Contents/Resources/managed-bin',
+          '/Applications/GeeClaw.app/Contents/Resources/bin/bin',
+          '/Applications/GeeClaw.app/Contents/Resources/bin',
+        ]),
+      };
+    });
+
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        { id: 'opencli', title: 'OpenCLI', packageName: '@jackwener/opencli', binNames: ['opencli'] },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => true),
+      ensureManagedPrefixOnUserPath: vi.fn(async () => 'updated'),
+      managedPrefixDir: join(process.cwd(), 'tmp', 'cli-marketplace-prefix-posix'),
+    });
+
+    await service.install({ id: 'opencli' });
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      '/Applications/GeeClaw.app/Contents/Resources/bin/bin/npm',
+      ['install', '--global', '@jackwener/opencli'],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PATH: expect.stringContaining('/Applications/GeeClaw.app/Contents/Resources/managed-bin:/Applications/GeeClaw.app/Contents/Resources/bin/bin:/Applications/GeeClaw.app/Contents/Resources/bin'),
+        }),
+      }),
     );
   });
 
