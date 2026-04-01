@@ -5,14 +5,10 @@
  * Responsibilities:
  * 1. Auto-scroll to the bottom whenever new content is appended (messages,
  *    streaming text, tool output, pending-final transitions).
- * 2. Pause auto-scroll when the user intentionally scrolls upward (wheel,
- *    touch-drag, scrollbar drag).
+ * 2. Pause auto-scroll once the user leaves the bottom area.
  * 3. Resume auto-scroll when the user scrolls back to the bottom (manually
  *    or via the "scroll to bottom" button).
- * 4. Continuously follow Streamdown's height animation during active
- *    streaming via a requestAnimationFrame loop so the viewport never
- *    lags behind ResizeObserver callbacks.
- * 5. Snap instantly to the bottom on session switch (before paint) so the
+ * 4. Snap instantly to the bottom on session switch (before paint) so the
  *    user never sees a top→bottom scroll animation.
  */
 
@@ -22,9 +18,6 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, type RefObje
 
 /** How close to the bottom the user must be for us to consider them "at bottom". */
 const BOTTOM_FOLLOW_THRESHOLD_PX = 64;
-
-/** Tolerance (px) when comparing scroll positions to detect upward scrolling. */
-const SCROLL_UP_TOLERANCE_PX = 1;
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -68,9 +61,6 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
   /** True when a session switch is pending and we need to snap to bottom before paint. */
   const pendingSessionScrollRef = useRef(true);
 
-  /** Last known scrollTop, used to detect scroll direction. */
-  const lastScrollTopRef = useRef(0);
-
   /**
    * True while a programmatic `scrollToBottom()` is in progress.
    * Prevents the scroll event handler from interpreting the resulting
@@ -83,22 +73,6 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
 
   /** rAF id for the queued single-shot follow scheduled by ResizeObserver / structural changes. */
   const scheduledFollowFrameRef = useRef<number | null>(null);
-
-  /** rAF id for the continuous follow loop active during streaming. */
-  const activeFollowLoopFrameRef = useRef<number | null>(null);
-
-  /** rAF id used to throttle scroll-position sampling to once per frame. */
-  const scrollMeasureFrameRef = useRef<number | null>(null);
-
-  /**
-   * True while the pointer (mouse button) is held down inside the scroll container.
-   * Used to detect scrollbar-drag, which fires `scroll` events that should NOT be
-   * treated as programmatic even though `isProgrammaticScrollRef` might be set.
-   */
-  const pointerScrollActiveRef = useRef(false);
-
-  /** The last Y coordinate during a touch gesture, used to detect swipe direction. */
-  const touchYRef = useRef<number | null>(null);
 
   /** Synchronous mirror of `isAutoScrollEnabled` state, readable from event handlers. */
   const isAutoScrollEnabledRef = useRef(true);
@@ -138,17 +112,9 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
       cancelAnimationFrame(scrollReleaseFrameRef.current);
       scrollReleaseFrameRef.current = null;
     }
-    if (scrollMeasureFrameRef.current !== null) {
-      cancelAnimationFrame(scrollMeasureFrameRef.current);
-      scrollMeasureFrameRef.current = null;
-    }
     if (scheduledFollowFrameRef.current !== null) {
       cancelAnimationFrame(scheduledFollowFrameRef.current);
       scheduledFollowFrameRef.current = null;
-    }
-    if (activeFollowLoopFrameRef.current !== null) {
-      cancelAnimationFrame(activeFollowLoopFrameRef.current);
-      activeFollowLoopFrameRef.current = null;
     }
   }, []);
 
@@ -174,10 +140,9 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
 
     isProgrammaticScrollRef.current = true;
     container.scrollTop = container.scrollHeight;
-    lastScrollTopRef.current = container.scrollTop;
 
     // Release the programmatic flag one frame later so that the resulting
-    // `scroll` event is ignored by handleMessagesScroll.
+    // `scroll` event is ignored by the user-scroll handler.
     if (scrollReleaseFrameRef.current !== null) {
       cancelAnimationFrame(scrollReleaseFrameRef.current);
     }
@@ -193,25 +158,13 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     scrollToBottom();
   }, [setFollowEnabled, scrollToBottom]);
 
-  // ── Event handlers (stable refs via useCallback) ─────────────
-
-  const measureScrollPosition = useCallback(() => {
-    scrollMeasureFrameRef.current = null;
-
+  const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const currentScrollTop = container.scrollTop;
     const nextIsNearBottom = isNearBottom(container);
-    const previousScrollTop = lastScrollTopRef.current;
-    const isScrollingUp = currentScrollTop < previousScrollTop - SCROLL_UP_TOLERANCE_PX;
-    lastScrollTopRef.current = currentScrollTop;
+    if (isProgrammaticScrollRef.current && nextIsNearBottom) return;
 
-    // Ignore scroll events triggered by our own programmatic scrollToBottom,
-    // unless the user is actively dragging (pointer down).
-    if (isProgrammaticScrollRef.current && !pointerScrollActiveRef.current) return;
-
-    // If the user has scrolled (back) to the bottom, re-enable auto-follow.
     if (nextIsNearBottom) {
       if (!isAutoScrollEnabledRef.current) {
         setFollowEnabled(true);
@@ -219,48 +172,10 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
       return;
     }
 
-    // Only disable follow when the user is scrolling upward.
-    if (!isScrollingUp) return;
-
-    setFollowEnabled(false);
+    if (isAutoScrollEnabledRef.current) {
+      setFollowEnabled(false);
+    }
   }, [isNearBottom, setFollowEnabled]);
-
-  const queueScrollMeasurement = useCallback(() => {
-    if (scrollMeasureFrameRef.current !== null) return;
-    scrollMeasureFrameRef.current = requestAnimationFrame(() => {
-      measureScrollPosition();
-    });
-  }, [measureScrollPosition]);
-
-  const handleWheel = useCallback((event: WheelEvent) => {
-    if (event.deltaY < 0 && isAutoScrollEnabledRef.current) {
-      setFollowEnabled(false);
-    }
-  }, [setFollowEnabled]);
-
-  const handlePointerDown = useCallback(() => {
-    pointerScrollActiveRef.current = true;
-  }, []);
-
-  const handleTouchStart = useCallback((event: TouchEvent) => {
-    touchYRef.current = event.touches[0]?.clientY ?? null;
-  }, []);
-
-  const handleTouchMove = useCallback((event: TouchEvent) => {
-    const nextTouchY = event.touches[0]?.clientY;
-    const previousTouchY = touchYRef.current;
-    touchYRef.current = nextTouchY ?? null;
-
-    if (nextTouchY === undefined || previousTouchY === null) return;
-    // Swiping downward (finger moves down) means the user wants to scroll UP → disable follow.
-    if (nextTouchY > previousTouchY + SCROLL_UP_TOLERANCE_PX && isAutoScrollEnabledRef.current) {
-      setFollowEnabled(false);
-    }
-  }, [setFollowEnabled]);
-
-  const handleTouchEnd = useCallback(() => {
-    touchYRef.current = null;
-  }, []);
 
   // ── Effects ──────────────────────────────────────────────────
 
@@ -280,39 +195,12 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     const container = containerRef.current;
     if (!container) return;
 
-    container.addEventListener('scroll', queueScrollMeasurement, { passive: true });
-    container.addEventListener('wheel', handleWheel, { passive: true });
-    container.addEventListener('pointerdown', handlePointerDown, { passive: true });
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
-    container.addEventListener('touchmove', handleTouchMove, { passive: true });
-    container.addEventListener('touchend', handleTouchEnd, { passive: true });
-    container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+    container.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      container.removeEventListener('scroll', queueScrollMeasurement);
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('pointerdown', handlePointerDown);
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-      container.removeEventListener('touchcancel', handleTouchEnd);
+      container.removeEventListener('scroll', handleScroll);
     };
-  }, [handlePointerDown, handleTouchEnd, handleTouchMove, handleTouchStart, handleWheel, queueScrollMeasurement]);
-
-  // Clear the pointer-active flag when the pointer is released anywhere in the window.
-  useEffect(() => {
-    const clearPointerScroll = () => {
-      pointerScrollActiveRef.current = false;
-    };
-
-    window.addEventListener('pointerup', clearPointerScroll);
-    window.addEventListener('pointercancel', clearPointerScroll);
-
-    return () => {
-      window.removeEventListener('pointerup', clearPointerScroll);
-      window.removeEventListener('pointercancel', clearPointerScroll);
-    };
-  }, []);
+  }, [handleScroll]);
 
   // On session switch or initial load, snap to the bottom *before paint* so
   // the user never sees a top→bottom scroll animation.
@@ -341,9 +229,6 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
     });
 
     observer.observe(innerRef.current);
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
 
     return () => {
       observer.disconnect();
@@ -365,37 +250,6 @@ export function useAutoScroll(options: UseAutoScrollOptions): UseAutoScrollRetur
       scrollToBottom();
     });
   }, [messagesLength, sending, pendingFinal, isAutoScrollEnabled, scrollToBottom]);
-
-  // Continuous rAF follow loop during active streaming – ensures Streamdown's
-  // CSS height animation doesn't outrun the scroll position between
-  // ResizeObserver callbacks.
-  useEffect(() => {
-    if (!isAutoScrollEnabled || !sending) {
-      if (activeFollowLoopFrameRef.current !== null) {
-        cancelAnimationFrame(activeFollowLoopFrameRef.current);
-        activeFollowLoopFrameRef.current = null;
-      }
-      return;
-    }
-
-    const follow = () => {
-      if (!isAutoScrollEnabledRef.current) {
-        activeFollowLoopFrameRef.current = null;
-        return;
-      }
-      scrollToBottom();
-      activeFollowLoopFrameRef.current = requestAnimationFrame(follow);
-    };
-
-    follow();
-
-    return () => {
-      if (activeFollowLoopFrameRef.current !== null) {
-        cancelAnimationFrame(activeFollowLoopFrameRef.current);
-        activeFollowLoopFrameRef.current = null;
-      }
-    };
-  }, [sending, isAutoScrollEnabled, scrollToBottom]);
 
   // ── Return ───────────────────────────────────────────────────
 

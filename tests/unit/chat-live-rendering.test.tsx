@@ -117,4 +117,25 @@ describe('chat live rendering', () => {
 
     expect(invokeIpcMock).toHaveBeenCalledWith('shell:openPath', '/tmp/project plan.md');
   });
+
+  it('does not use content-visibility auto on chat message rows', () => {
+    const message: RawMessage = {
+      role: 'assistant',
+      id: 'assistant-simple-text',
+      timestamp: 1,
+      content: '普通文本消息',
+    };
+
+    const { container } = render(
+      <ChatMessage
+        message={message}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstElementChild).toBeInstanceOf(HTMLElement);
+    expect((container.firstElementChild as HTMLElement).style.contentVisibility).toBe('');
+    expect((container.firstElementChild as HTMLElement).style.containIntrinsicSize).toBe('');
+  });
 });
