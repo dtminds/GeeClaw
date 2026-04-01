@@ -40,6 +40,16 @@
         "repoPath": "skills/baoyu-url-to-markdown",
         "ref": "main"
       }
+    },
+    {
+      "slug": "baoyu-image-gen",
+      "delivery": "bundled",
+      "source": {
+        "type": "github",
+        "repo": "JimLiu/baoyu-skills",
+        "repoPath": "skills/baoyu-image-gen",
+        "ref": "main"
+      }
     }
   ]
 }
