@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { PresetInstallStage } from '@/stores/agents';
 import type { AgentPresetSummary } from '@/types/agent';
-import { getPresetAvailabilityCopy, getPresetPlatformLabels } from './preset-platforms';
+import {
+  getPresetAvailabilityCopy,
+  getPresetPlatformLabels,
+  getPresetRequirementMessages,
+} from './preset-platforms';
 
 type MarketplacePresetDetailDialogProps = {
   preset: AgentPresetSummary | null;
@@ -48,14 +52,17 @@ export function MarketplacePresetDetailDialog({
   const availabilityCopy = !preset.supportedOnCurrentPlatform
     ? getPresetAvailabilityCopy(t, locale, preset.platforms)
     : null;
+  const requirementMessages = getPresetRequirementMessages(t, locale, preset.missingRequirements);
   const installStageLabel = t(`marketplace.installState.${installStage}`);
   const installLabel = installed
     ? t('marketplace.installed')
     : isInstalling
       ? installStageLabel
-    : preset.supportedOnCurrentPlatform
+    : !preset.supportedOnCurrentPlatform
+      ? t('marketplace.unavailable')
+    : preset.installable
       ? t('marketplace.install')
-      : t('marketplace.unavailable');
+      : t('marketplace.requirementsMissing');
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
@@ -128,8 +135,12 @@ export function MarketplacePresetDetailDialog({
               </div>
             </section>
           </div>}
-
           <div className="modal-footer mt-8 flex-col items-stretch gap-4 pb-1 sm:mt-10">
+            {requirementMessages.length > 0 && (
+              <p className="text-center text-[13px] leading-6 text-foreground/68">
+                {requirementMessages.join('，')}
+              </p>
+            )}
             {isInstalling && (
               <div className="preset-install-progress w-full space-y-1.5">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
@@ -146,7 +157,7 @@ export function MarketplacePresetDetailDialog({
 
             <Button
               className="modal-primary-button w-full px-8 text-[14px]"
-              disabled={installed || !preset.supportedOnCurrentPlatform || disableInstall}
+              disabled={installed || !preset.installable || disableInstall}
               onClick={() => onInstall(preset.presetId)}
             >
               {installLabel}

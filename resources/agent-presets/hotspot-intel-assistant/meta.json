@@ -11,8 +11,17 @@
       "mode": "default"
     }
   },
+  "requires": {
+    "bins": [
+      "opencli"
+    ]
+  },
   "managedPolicy": {
-    "lockedFields": ["id", "workspace", "persona"],
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
     "canUnmanage": true
   }
 }

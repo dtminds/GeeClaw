@@ -21,6 +21,7 @@ const RECOGNIZED_META_KEYS = new Set([
   'emoji',
   'category',
   'managed',
+  'requires',
   'platforms',
   'agent',
   'managedPolicy',
@@ -34,6 +35,7 @@ const RECOGNIZED_MODEL_KEYS = new Set(['primary', 'fallbacks']);
 const RECOGNIZED_SKILL_SCOPE_KEYS = new Set(['mode', 'skills']);
 const RECOGNIZED_LOCKED_FIELDS = new Set(['id', 'workspace', 'persona']);
 const RECOGNIZED_MANAGED_POLICY_KEYS = new Set(['lockedFields', 'canUnmanage']);
+const RECOGNIZED_REQUIRES_KEYS = new Set(['bins', 'anyBins', 'env']);
 const RECOGNIZED_SKILL_MANIFEST_KEYS = new Set(['version', 'skills']);
 const RECOGNIZED_SKILL_MANIFEST_SKILL_KEYS = new Set(['slug', 'delivery', 'source']);
 const RECOGNIZED_SKILL_MANIFEST_SOURCE_KEYS = new Set(['type', 'repo', 'repoPath', 'ref', 'version']);
@@ -46,6 +48,11 @@ export interface AgentPresetMeta {
   emoji: string;
   category: string;
   managed: true;
+  requires?: {
+    bins?: string[];
+    anyBins?: string[];
+    env?: string[];
+  };
   platforms?: AgentPresetPlatform[];
   agent: {
     id: string;
@@ -105,6 +112,30 @@ function requireNonEmptyString(value: unknown, field: string, presetId?: string)
     throw new Error(`Preset ${field} is required`);
   }
   return value.trim();
+}
+
+function normalizeOptionalStringList(
+  value: unknown,
+  field: string,
+  presetId: string,
+): string[] | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    throw new Error(`Preset "${presetId}" ${field} is invalid`);
+  }
+
+  if (value.length === 0) {
+    throw new Error(`Preset "${presetId}" ${field} must contain at least 1 entry`);
+  }
+
+  const normalized = value.map((entry) => entry.trim());
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`Preset "${presetId}" ${field} must not contain duplicate entries`);
+  }
+
+  return normalized;
 }
 
 function sanitizeManifestSkillSlug(presetId: string, slug: string): string {
@@ -242,6 +273,32 @@ function normalizeManagedPolicy(
   };
 }
 
+function normalizePresetRequirements(
+  presetId: string,
+  requires: unknown,
+): AgentPresetMeta['requires'] | undefined {
+  if (requires == null) {
+    return undefined;
+  }
+
+  const record = requirePlainObject(requires, 'requires', presetId);
+  assertSupportedKeys(record, RECOGNIZED_REQUIRES_KEYS, 'requires', presetId);
+
+  const bins = normalizeOptionalStringList(record.bins, 'requires.bins', presetId);
+  const anyBins = normalizeOptionalStringList(record.anyBins, 'requires.anyBins', presetId);
+  const env = normalizeOptionalStringList(record.env, 'requires.env', presetId);
+
+  if (!bins && !anyBins && !env) {
+    throw new Error(`Preset "${presetId}" requires must declare at least 1 dependency`);
+  }
+
+  return {
+    ...(bins ? { bins } : {}),
+    ...(anyBins ? { anyBins } : {}),
+    ...(env ? { env } : {}),
+  };
+}
+
 function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
   const metaRecord = requirePlainObject(meta, 'meta.json');
   const presetId = requireNonEmptyString(metaRecord.presetId, 'presetId');
@@ -263,6 +320,7 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
     emoji: requireNonEmptyString(metaRecord.emoji, 'emoji', presetId),
     category: requireNonEmptyString(metaRecord.category, 'category', presetId),
     managed: true,
+    requires: normalizePresetRequirements(presetId, metaRecord.requires),
     platforms: normalizePresetPlatforms(presetId, metaRecord.platforms),
     agent: {
       id: agentId,

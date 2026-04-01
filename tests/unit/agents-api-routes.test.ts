@@ -37,6 +37,7 @@ const {
     presetId: 'stock-expert',
     name: '股票助手',
     platforms: ['darwin'],
+    installable: true,
     supportedOnCurrentPlatform: true,
   }]),
   listAgentsSnapshot: vi.fn(async () => ({
@@ -120,6 +121,7 @@ describe('agent API routes', () => {
         presetId: 'stock-expert',
         name: '股票助手',
         platforms: ['darwin'],
+        installable: true,
         supportedOnCurrentPlatform: true,
       }],
     }));

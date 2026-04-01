@@ -185,6 +185,14 @@
       "ref": "main",
       "version": "main",
       "autoEnable": true
+    },
+    {
+      "slug": "byted-seedream-image-generate",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "byted-seedream-image-generate",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
     }
   ]
 }

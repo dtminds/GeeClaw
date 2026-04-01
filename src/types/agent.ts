@@ -4,6 +4,12 @@ export type AgentSkillScope =
 
 export type AgentPresetPlatform = 'darwin' | 'win32' | 'linux';
 
+export interface AgentPresetMissingRequirements {
+  bins?: string[];
+  anyBins?: string[];
+  env?: string[];
+}
+
 export interface AgentPresetSummary {
   presetId: string;
   name: string;
@@ -16,6 +22,8 @@ export interface AgentPresetSummary {
   presetSkills: string[];
   managedFiles: string[];
   platforms?: AgentPresetPlatform[];
+  installable: boolean;
+  missingRequirements?: AgentPresetMissingRequirements;
   supportedOnCurrentPlatform: boolean;
 }
 

@@ -24,7 +24,6 @@
 
 当用户要看全网热点时，按以下优先级组合：
 
-- 生活方式、消费、种草和年轻用户内容优先 `opencli xiaohongshu search "<关键词>"`
 - 大众热点优先 `opencli weibo hot`
 - 问答和观点优先 `opencli zhihu hot`
 - 视频与内容趋势优先 `opencli bilibili hot`、`opencli bilibili ranking`

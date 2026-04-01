@@ -1,0 +1,41 @@
+{
+  "presetId": "xhs-creator-assistant",
+  "name": "小红书创作者助手",
+  "description": "聚焦小红书的选题搜索、评论观察、内容采集、笔记发布与创作者后台数据，适合做单平台深度运营。",
+  "emoji": "📕",
+  "category": "内容运营",
+  "managed": true,
+  "agent": {
+    "id": "xhs-creator-assistant",
+    "skillScope": {
+      "mode": "specified",
+      "skills": [
+        "baoyu-xhs-images",
+        "baoyu-infographic",
+        "baoyu-cover-image",
+        "baoyu-url-to-markdown",
+        "byted-seedream-image-generate"
+      ]
+    }
+  },
+  "requires": {
+    "bins": [
+      "opencli"
+    ],
+    "anyBins": [
+      "python",
+      "python3"
+    ],
+    "env": [
+      "ARK_API_KEY"
+    ]
+  },
+  "managedPolicy": {
+    "lockedFields": [
+      "id",
+      "workspace",
+      "persona"
+    ],
+    "canUnmanage": true
+  }
+}

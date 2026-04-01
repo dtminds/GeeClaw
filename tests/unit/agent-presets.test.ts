@@ -408,6 +408,54 @@ describe('agent preset loader', () => {
     expect(presets[0].skillManifest?.skills).toHaveLength(1);
   });
 
+  it('loads preset installation requirements when declared in meta.json', async () => {
+    const root = createTempRoot('agent-presets-requires-');
+    writePresetPackage(root, 'stock-expert', {
+      ...createPresetMeta('stock-expert'),
+      requires: {
+        bins: ['opencli', 'python'],
+        anyBins: ['python3', 'python'],
+        env: ['NOTION_API_KEY', 'TAVILY_API_KEY'],
+      },
+    } as never, {});
+
+    const presets = await listPresetsFrom(join(root, 'agent-presets'));
+
+    expect(presets[0].meta.requires).toEqual({
+      bins: ['opencli', 'python'],
+      anyBins: ['python3', 'python'],
+      env: ['NOTION_API_KEY', 'TAVILY_API_KEY'],
+    });
+  });
+
+  it('rejects presets with invalid requires definitions', async () => {
+    const root = createTempRoot('agent-presets-invalid-requires-');
+    writePresetPackage(root, 'stock-expert', {
+      ...createPresetMeta('stock-expert'),
+      requires: {
+        bins: ['opencli', 'opencli'],
+      },
+    } as never, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'requires.bins must not contain duplicate entries',
+    );
+  });
+
+  it('rejects presets with invalid requires.anyBins definitions', async () => {
+    const root = createTempRoot('agent-presets-invalid-any-bins-');
+    writePresetPackage(root, 'stock-expert', {
+      ...createPresetMeta('stock-expert'),
+      requires: {
+        anyBins: [],
+      },
+    } as never, {});
+
+    await expect(listPresetsFrom(join(root, 'agent-presets'))).rejects.toThrow(
+      'requires.anyBins must contain at least 1 entry',
+    );
+  });
+
   it('rejects preset skill manifests whose slugs are missing from agent.skillScope.skills', async () => {
     const root = createTempRoot('agent-presets-skill-manifest-mismatch-');
     writePresetPackage(root, 'stock-expert');

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+const originalPath = process.env.PATH;
+const originalNotionApiKey = process.env.NOTION_API_KEY;
 
 function setPlatform(platform: NodeJS.Platform): void {
   if (originalPlatformDescriptor && 'value' in originalPlatformDescriptor) {
@@ -38,6 +40,11 @@ async function setupManagedPresetFixture(options?: {
   presetMeta?: {
     name?: string;
     platforms?: Array<'darwin' | 'win32' | 'linux'>;
+    requires?: {
+      bins?: string[];
+      anyBins?: string[];
+      env?: string[];
+    };
     managedPolicy?: {
       lockedFields?: Array<'id' | 'workspace' | 'persona'>;
       canUnmanage?: boolean;
@@ -129,6 +136,7 @@ async function setupManagedPresetFixture(options?: {
     emoji: '📈',
     category: 'finance',
     managed: true,
+    requires: undefined as { bins?: string[]; anyBins?: string[]; env?: string[] } | undefined,
     agent: {
       id: 'stockexpert',
       skillScope: {
@@ -181,6 +189,12 @@ async function setupManagedPresetFixture(options?: {
 
 afterEach(() => {
   restorePlatform();
+  process.env.PATH = originalPath;
+  if (originalNotionApiKey === undefined) {
+    delete process.env.NOTION_API_KEY;
+  } else {
+    process.env.NOTION_API_KEY = originalNotionApiKey;
+  }
   vi.resetModules();
   vi.unmock('electron');
   vi.unmock('os');
@@ -208,6 +222,7 @@ describe('managed agent config domain', () => {
         presetId: 'stock-expert',
         emoji: '📈',
         platforms: ['darwin'],
+        installable: true,
         supportedOnCurrentPlatform: true,
       }),
     ]);
@@ -218,7 +233,56 @@ describe('managed agent config domain', () => {
         presetId: 'stock-expert',
         emoji: '📈',
         platforms: ['darwin'],
+        installable: false,
         supportedOnCurrentPlatform: false,
+      }),
+    ]);
+  });
+
+  it('reports missing preset requirements in preset summaries', async () => {
+    delete process.env.NOTION_API_KEY;
+    process.env.PATH = '/tmp/geeclaw-empty-bin';
+
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        requires: {
+          bins: ['preset-required-bin'],
+          anyBins: ['missing-python3', 'missing-python'],
+          env: ['NOTION_API_KEY'],
+        },
+      },
+    });
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        presetId: 'stock-expert',
+        installable: false,
+        supportedOnCurrentPlatform: true,
+        missingRequirements: {
+          bins: ['preset-required-bin'],
+          anyBins: ['missing-python3', 'missing-python'],
+          env: ['NOTION_API_KEY'],
+        },
+      }),
+    ]);
+  });
+
+  it('treats anyBins as satisfied when at least one command exists', async () => {
+    process.env.PATH = '/usr/bin:/bin';
+
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        requires: {
+          anyBins: ['definitely-missing-command', 'sh'],
+        },
+      },
+    });
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        presetId: 'stock-expert',
+        installable: true,
+        missingRequirements: undefined,
       }),
     ]);
   });
@@ -480,6 +544,53 @@ describe('managed agent config domain', () => {
 
     await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
       'Preset "stock-expert" is only available on macOS',
+    );
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string }> };
+    };
+
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
+    expect(existsSync(workspaceDir)).toBe(false);
+  });
+
+  it('rejects installing presets when required dependencies are missing', async () => {
+    delete process.env.NOTION_API_KEY;
+    const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
+      presetMeta: {
+        requires: {
+          anyBins: ['missing-candidate', 'sh'],
+          env: ['NOTION_API_KEY'],
+        },
+      },
+    });
+    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
+
+    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
+      'Preset "stock-expert" is missing required environment variables: NOTION_API_KEY',
+    );
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string }> };
+    };
+
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
+    expect(existsSync(workspaceDir)).toBe(false);
+  });
+
+  it('rejects installing presets when no anyBins candidate is available', async () => {
+    process.env.PATH = '/tmp/geeclaw-empty-bin';
+    const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
+      presetMeta: {
+        requires: {
+          anyBins: ['missing-python3', 'missing-python'],
+        },
+      },
+    });
+    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
+
+    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
+      'Preset "stock-expert" requires one of these binaries: missing-python3, missing-python',
     );
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {

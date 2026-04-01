@@ -18,6 +18,12 @@
       ]
     }
   },
+  "requires": {
+    "anyBins": [
+      "python",
+      "python3"
+    ]
+  },
   "managedPolicy": {
     "lockedFields": [
       "id",
