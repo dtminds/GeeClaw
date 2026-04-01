@@ -5,6 +5,7 @@
         "allSessions": "全部会话",
         "models": "模型",
         "agents": "智能体",
+        "createAgent": "创建智能体",
         "cronTasks": "自动化",
         "skills": "技能",
         "channels": "聊天频道",

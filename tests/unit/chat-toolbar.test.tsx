@@ -31,6 +31,8 @@ const translations: Record<string, string> = {
   'toolbar.showThinking': 'Show thinking',
   'toolbar.showToolCalls': 'Show tool calls',
   'toolbar.persona.button': 'Set Persona',
+  'toolbar.agentSettings.open': 'Open agent settings',
+  'agentSettingsDialog.title': 'Agent Settings',
   'sessionPanel.title': 'Sessions',
   'sessionPanel.expand': 'Expand session panel',
   'sessionPanel.collapse': 'Collapse session panel',
@@ -58,8 +60,8 @@ vi.mock('@/stores/agents', () => ({
   useAgentsStore: (selector: (state: typeof agentsState) => unknown) => selector(agentsState),
 }));
 
-vi.mock('@/pages/Chat/PersonaDrawer', () => ({
-  PersonaDrawer: () => null,
+vi.mock('@/pages/Chat/AgentSettingsDialog', () => ({
+  AgentSettingsDialog: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Agent Settings" /> : null),
 }));
 
 describe('ChatToolbar visibility menu', () => {
@@ -99,12 +101,31 @@ describe('ChatToolbar visibility menu', () => {
 
     const thinkingItem = await screen.findByRole('menuitemcheckbox', { name: 'Show thinking' });
     const toolCallsItem = await screen.findByRole('menuitemcheckbox', { name: 'Show tool calls' });
+    const refreshItem = await screen.findByRole('menuitem', { name: 'Refresh chat' });
 
     expect(thinkingItem).toHaveAttribute('aria-checked', 'true');
     expect(toolCallsItem).toHaveAttribute('aria-checked', 'false');
 
-    fireEvent.click(toolCallsItem);
+    fireEvent.click(refreshItem);
+    expect(chatState.refresh).toHaveBeenCalledTimes(1);
 
+    fireEvent.pointerDown(visibilityButton, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Show tool calls' }));
     expect(chatState.toggleToolCalls).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Refresh chat' })).not.toBeInTheDocument();
+  });
+
+  it('opens agent settings from the chat toolbar', async () => {
+    const { ChatToolbar } = await import('@/pages/Chat/ChatToolbar');
+
+    render(
+      <TooltipProvider>
+        <ChatToolbar />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open agent settings' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Agent Settings' })).toBeInTheDocument();
   });
 });

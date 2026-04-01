@@ -31,6 +31,9 @@
         "noTemporarySessions": "No chats",
         "untitledTemporarySession": "Untitled chat",
         "deleteTemporarySession": "Delete chat",
+        "agentSettings": {
+            "open": "Open agent settings"
+        },
         "persona": {
             "button": "Set Persona",
             "title": "Agent Settings",
@@ -73,28 +76,101 @@
             }
         }
     },
+    "agentSettingsDialog": {
+        "title": "Agent Settings",
+        "description": "Manage this agent's profile, skills, and memory.",
+        "navigation": "Agent settings sections",
+        "panels": {
+            "loading": "Loading agent persona...",
+            "error": "Failed to load persona"
+        },
+        "general": {
+            "nameLabel": "Agent Name",
+            "namePlaceholder": "Assistant",
+            "agentIdLabel": "Agent ID",
+            "modelLabel": "Model",
+            "inheritedSuffix": "(inherited)",
+            "deleteLabel": "Delete Agent",
+            "deleteTitle": "Delete Agent",
+            "deleteMessage": "Delete this agent? Its workspace and runtime directories will be removed.",
+            "deleteDisabledHint": "Default agent cannot be deleted.",
+            "deleteConfirm": "Delete",
+            "deleteCancel": "Cancel",
+            "toastSaved": "Agent updated",
+            "toastSaveFailed": "Failed to update agent: {{error}}",
+            "toastDeleted": "Agent deleted",
+            "toastDeleteFailed": "Failed to delete agent: {{error}}"
+        },
+        "skillsManagedHint": "This managed agent can add extra skills, but preset skills cannot be removed.",
+        "skillScope": {
+            "default": "Default",
+            "specified": "Specified",
+            "selected": "Selected skills",
+            "search": "Search skills",
+            "searchPlaceholder": "Search by name, slug, or description",
+            "addSkill": "Add skill",
+            "empty": "No matching skills",
+            "maxReached": "Skill limit reached",
+            "preset": "Preset",
+            "save": "Save Skills"
+        },
+        "sections": {
+            "general": {
+                "label": "General",
+                "title": "General",
+                "description": "Core identity and runtime defaults.",
+                "placeholder": ""
+            },
+            "skills": {
+                "label": "Skills",
+                "title": "Skills",
+                "description": "Skill scope and capabilities.",
+                "placeholder": ""
+            },
+            "identity": {
+                "label": "Identity",
+                "title": "Identity",
+                "placeholder": "Identity details will appear here."
+            },
+            "soul": {
+                "label": "Soul",
+                "title": "Soul",
+                "placeholder": "Soul details will appear here."
+            },
+            "memory": {
+                "label": "Long-term Memory",
+                "title": "Long-term Memory",
+                "placeholder": "Long-term memory will appear here."
+            },
+            "ownerProfile": {
+                "label": "Owner Profile",
+                "title": "Owner Profile",
+                "placeholder": "Owner profile details will appear here."
+            }
+        }
+    },
     "sessionPanel": {
         "title": "Sessions",
         "collapse": "Collapse session panel",
         "expand": "Expand session panel",
-  "mainSection": "Main session",
-  "mainSession": "Main session",
-  "mainSessionHint": "Long-lived context that stays with this agent",
-  "temporaryTab": "Chats",
-  "cronTab": "Scheduled",
-  "temporarySection": "Chats",
-  "temporarySessionHint": "A separate chat branch for one-off tasks",
-  "cronRunHint": "Scheduled task run",
-  "cronRunTitleFallback": "Scheduled task",
-  "loadingCronRuns": "Loading scheduled task runs...",
-  "new": "New",
-  "delete": "Delete",
-  "draftTemporarySession": "New chat",
-  "draftTemporarySessionHint": "It will appear in the list after the first message is sent",
-  "emptyTemporarySessions": "No chats yet",
-  "emptyTemporarySessionsHint": "Create a separate chat to keep one-off work away from the main thread",
-  "emptyCronRuns": "No scheduled task runs yet",
-  "emptyCronRunsHint": "Runs from this agent's scheduled tasks will appear here"
+        "mainSection": "Main session",
+        "mainSession": "Main session",
+        "mainSessionHint": "Long-lived context that stays with this agent",
+        "temporaryTab": "Chats",
+        "cronTab": "Scheduled",
+        "temporarySection": "Chats",
+        "temporarySessionHint": "A separate chat branch for one-off tasks",
+        "cronRunHint": "Scheduled task run",
+        "cronRunTitleFallback": "Scheduled task",
+        "loadingCronRuns": "Loading scheduled task runs...",
+        "new": "New",
+        "delete": "Delete",
+        "draftTemporarySession": "New chat",
+        "draftTemporarySessionHint": "It will appear in the list after the first message is sent",
+        "emptyTemporarySessions": "No chats yet",
+        "emptyTemporarySessionsHint": "Create a separate chat to keep one-off work away from the main thread",
+        "emptyCronRuns": "No scheduled task runs yet",
+        "emptyCronRunsHint": "Runs from this agent's scheduled tasks will appear here"
     },
     "composer": {
         "attachFiles": "Attach files",
@@ -137,10 +213,10 @@
                 }
             }
         },
-  "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
-  "gatewayDisconnectedPlaceholder": "Gateway not connected...",
-  "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
-  "safety": {
+        "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
+        "gatewayDisconnectedPlaceholder": "Gateway not connected...",
+        "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
+        "safety": {
             "accessRange": "File Access",
             "workspaceOnly": "Workspace",
             "unrestricted": "Unlimited",

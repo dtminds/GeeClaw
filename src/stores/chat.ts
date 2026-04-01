@@ -143,6 +143,7 @@ interface ChatState {
   abortRun: () => Promise<void>;
   handleChatEvent: (event: Record<string, unknown>) => void;
   handleAgentEvent: (event: Record<string, unknown>) => void;
+  handleAgentDeleted: (agentId: string) => Promise<void>;
   toggleThinking: () => void;
   toggleToolCalls: () => void;
   refresh: () => Promise<void>;
@@ -1540,6 +1541,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
         toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
       };
     });
+  },
+
+  handleAgentDeleted: async (agentId: string) => {
+    const { currentAgentId, currentSessionKey } = get();
+    const activeAgentId = currentSessionKey
+      ? getAgentIdFromSessionKey(currentSessionKey)
+      : currentAgentId;
+
+    if (agentId !== currentAgentId && agentId !== activeAgentId) {
+      return;
+    }
+
+    const agentsState = useAgentsStore.getState();
+    const fallbackCandidates = [
+      agentsState.defaultAgentId,
+      ...agentsState.agents.map((agent) => agent.id),
+      'main',
+    ].filter(Boolean) as string[];
+    const fallbackAgentId = fallbackCandidates.find((id) => id !== agentId) ?? 'main';
+
+    await get().openAgentMainSession(fallbackAgentId);
   },
 
   // ── Toggle thinking visibility ──

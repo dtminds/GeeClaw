@@ -11,7 +11,6 @@ import { MainLayout } from './components/layout/MainLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Chat } from './pages/Chat';
 import { Dashboard } from './pages/Dashboard';
-import { Agents } from './pages/Agents';
 import { Channels } from './pages/Channels';
 import { Skills } from './pages/Skills';
 import { Cron } from './pages/Cron';
@@ -233,7 +232,7 @@ function App() {
             <Route path="/models" element={<Navigate to="/settings/models" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/channels" element={<Channels />} />
-            <Route path="/agents" element={<Agents />} />
+            <Route path="/agents" element={<Navigate to="/dashboard" replace />} />
             <Route path="/skills" element={<Skills />} />
             <Route path="/cron" element={<Cron />} />
             <Route path="/cron/:jobId/runs" element={<CronRunHistoryPage />} />

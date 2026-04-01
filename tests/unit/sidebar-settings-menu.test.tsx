@@ -53,10 +53,12 @@ const translations: Record<string, string> = {
   'sidebar.logout': 'Log out',
   'sidebar.login': 'Log in',
   'sidebar.agents': 'Agents',
+  'sidebar.createAgent': 'Create agent',
   'sidebar.agentMainSessionHint': 'Open session',
   'sidebar.expand': 'Expand sidebar',
   'sidebar.collapse': 'Collapse sidebar',
   'actions.cancel': 'Cancel',
+  'createDialog.title': 'Add Agent',
 };
 
 vi.mock('react-i18next', () => ({
@@ -191,5 +193,19 @@ describe('Sidebar settings menu trigger', () => {
       agentsState.agents = [];
       chatState.desktopSessions = [];
     }
+  });
+
+  it('opens the add agent dialog from the sidebar plus action', async () => {
+    const { Sidebar } = await import('@/components/layout/Sidebar');
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Sidebar />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Add Agent' })).toBeInTheDocument();
   });
 });
