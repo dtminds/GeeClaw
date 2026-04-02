@@ -182,6 +182,7 @@ describe('provider metadata', () => {
     const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
+    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
 
     expect(openai).toMatchObject({
       showModelId: true,
@@ -202,15 +203,21 @@ describe('provider metadata', () => {
       showModelIdInDevModeOnly: true,
       defaultModelId: 'deepseek-ai/DeepSeek-V3',
     });
+    expect(modelstudio).toMatchObject({
+      showModelId: true,
+      defaultModelId: 'qwen3.6-plus',
+    });
 
     expect(shouldShowProviderModelId(openai, false)).toBe(false);
     expect(shouldShowProviderModelId(google, false)).toBe(false);
     expect(shouldShowProviderModelId(openrouter, false)).toBe(true);
     expect(shouldShowProviderModelId(siliconflow, false)).toBe(false);
+    expect(shouldShowProviderModelId(modelstudio, false)).toBe(true);
     expect(shouldShowProviderModelId(openai, true)).toBe(true);
     expect(shouldShowProviderModelId(google, true)).toBe(true);
     expect(shouldShowProviderModelId(openrouter, true)).toBe(true);
     expect(shouldShowProviderModelId(siliconflow, true)).toBe(true);
+    expect(shouldShowProviderModelId(modelstudio, true)).toBe(true);
   });
 
   it('saves OpenRouter model overrides by default and keeps SiliconFlow developer-only', () => {
@@ -223,7 +230,7 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBeUndefined();
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBeUndefined();
-    expect(resolveProviderModelForSave(modelstudio, 'qwen3.6-plus', false)).toBeUndefined();
+    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-plus', false)).toBe('qwen3.5-plus');
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
@@ -233,6 +240,7 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(google, '   ', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
+    expect(resolveProviderModelForSave(modelstudio, '   ', false)).toBe('qwen3.6-plus');
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
     expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.6-plus');
