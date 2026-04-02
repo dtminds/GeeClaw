@@ -18,6 +18,10 @@ describe('settings modal paths', () => {
     expect(getSettingsModalPath('cliMarketplace')).toBe('/settings/cli-marketplace');
   });
 
+  it('builds the quick actions settings path', () => {
+    expect(getSettingsModalPath('quickActions')).toBe('/settings/quick-actions');
+  });
+
   it('resolves the opencli settings section from the route', () => {
     expect(resolveSettingsSection('/settings/opencli')).toBe('opencli');
     expect(resolveSettingsSection('/settings/opencli/status')).toBe('opencli');
@@ -36,5 +40,10 @@ describe('settings modal paths', () => {
   it('resolves the cli marketplace settings section from the route', () => {
     expect(resolveSettingsSection('/settings/cli-marketplace')).toBe('cliMarketplace');
     expect(resolveSettingsSection('/settings/cli-marketplace/feishu')).toBe('cliMarketplace');
+  });
+
+  it('resolves the quick actions settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/quick-actions')).toBe('quickActions');
+    expect(resolveSettingsSection('/settings/quick-actions/translate')).toBe('quickActions');
   });
 });

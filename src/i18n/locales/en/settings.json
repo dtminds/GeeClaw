@@ -7,7 +7,40 @@
     "cliMarketplace": "CLI Market",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "quickActions": "Quick Actions",
     "environment": "Environment"
+  },
+  "quickActions": {
+    "title": "Quick Actions",
+    "description": "Configure shortcut-driven floating actions for translate, reply, lookup, and custom prompts.",
+    "preferencesTitle": "Window Behavior",
+    "preferencesDescription": "Tune how the quick action window behaves after generating or copying results.",
+    "closeOnCopy": "Close after copy or paste",
+    "closeOnCopyDescription": "Hide the floating window after sending the result to the clipboard.",
+    "preferClipboardFallback": "Allow clipboard fallback",
+    "preferClipboardFallbackDescription": "Use clipboard text when native selection capture is unavailable.",
+    "actionsTitle": "Actions",
+    "actionsDescription": "Each action can have its own shortcut, prompt mode, and output behavior.",
+    "addCustom": "Add Custom Action",
+    "remove": "Remove",
+    "noShortcut": "No shortcut assigned",
+    "fields": {
+      "title": "Button Title",
+      "shortcut": "Shortcut",
+      "kind": "Mode",
+      "outputMode": "Result Delivery",
+      "promptTemplate": "Prompt Template"
+    },
+    "kinds": {
+      "translate": "Translate",
+      "reply": "Reply",
+      "lookup": "Lookup",
+      "customPrompt": "Custom Prompt"
+    },
+    "outputModes": {
+      "copy": "Copy",
+      "paste": "Paste"
+    }
   },
   "environment": {
     "title": "Environment Variables",

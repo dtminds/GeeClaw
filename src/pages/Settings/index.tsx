@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -70,6 +71,7 @@ import { OpenCliSettingsSection } from '@/components/settings/OpenCliSettingsSec
 import { McpSettingsSection } from '@/components/settings/McpSettingsSection';
 import { CliMarketplaceSettingsSection } from '@/components/settings/CliMarketplaceSettingsSection';
 import { EnvironmentSettingsSection } from '@/components/settings/EnvironmentSettingsSection';
+import { QuickActionsSettingsSection } from '@/components/settings/QuickActionsSettingsSection';
 import {
   getSettingsModalPath,
   getSettingsModalState,
@@ -1371,6 +1373,7 @@ export function Settings({ embedded = false }: SettingsProps) {
   const settingsGroups: Array<{ key: SettingsModalSection; title: string; icon: React.ReactNode }> = [
     { key: 'appearance', title: t('appearance.title'), icon: <Palette className="h-4 w-4" /> },
     { key: 'models', title: t('common:sidebar.models', 'Models'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
+    { key: 'quickActions', title: t('nav.quickActions'), icon: <Sparkles className="h-4 w-4" /> },
     { key: 'environment', title: t('nav.environment'), icon: <Key className="h-4 w-4" /> },
     { key: 'gateway', title: t('nav.gateway'), icon: <HugeiconsIcon icon={AiProgrammingIcon} size={16} strokeWidth={1.9} /> },
     { key: 'cliMarketplace', title: t('nav.cliMarketplace'), icon: <HugeiconsIcon icon={ComputerTerminal01Icon} size={16} strokeWidth={1.9} /> },
@@ -1432,6 +1435,7 @@ export function Settings({ embedded = false }: SettingsProps) {
         <div className="mx-auto max-w-5xl">
           {section === 'appearance' && <AppearanceSettingsPanel />}
           {section === 'safety' && <SafetySettingsPanel />}
+          {section === 'quickActions' && <QuickActionsSettingsSection />}
           {section === 'gateway' && (
             <AppSettingsPanel
               section="gateway"

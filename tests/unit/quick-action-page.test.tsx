@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_QUICK_ACTIONS } from '@shared/quick-actions';
 import type { QuickActionContext } from '@shared/quick-actions';
 
 const settingsState = {
@@ -8,6 +9,7 @@ const settingsState = {
   theme: 'light' as const,
   colorTheme: 'blue',
   language: 'en',
+  quickActions: structuredClone(DEFAULT_QUICK_ACTIONS),
 };
 
 const updateState = {
@@ -22,6 +24,9 @@ const bootstrapState = {
 const getQuickActionLastContextMock = vi.fn<() => Promise<QuickActionContext | null>>();
 const subscribeQuickActionInvokedMock = vi.fn<(listener: (context: QuickActionContext) => void) => () => void>();
 const closeQuickActionWindowMock = vi.fn<() => Promise<void>>();
+const runQuickActionMock = vi.fn();
+const copyQuickActionResultMock = vi.fn();
+const pasteQuickActionResultMock = vi.fn();
 
 vi.mock('../../src/i18n', () => ({
   default: {
@@ -88,6 +93,9 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('sonner', () => ({
   Toaster: () => null,
+  toast: {
+    success: vi.fn(),
+  },
 }));
 
 vi.mock('../../src/stores/settings', () => ({
@@ -113,6 +121,9 @@ vi.mock('../../src/lib/quick-actions', () => ({
   getQuickActionLastContext: () => getQuickActionLastContextMock(),
   subscribeQuickActionInvoked: (listener: (context: QuickActionContext) => void) => subscribeQuickActionInvokedMock(listener),
   closeQuickActionWindow: () => closeQuickActionWindowMock(),
+  runQuickAction: (...args: unknown[]) => runQuickActionMock(...args),
+  copyQuickActionResult: (...args: unknown[]) => copyQuickActionResultMock(...args),
+  pasteQuickActionResult: (...args: unknown[]) => pasteQuickActionResultMock(...args),
 }));
 
 vi.mock('../../src/lib/settings-modal', () => ({
@@ -157,6 +168,14 @@ describe('Quick action page', () => {
     getQuickActionLastContextMock.mockReset().mockResolvedValue(createContext());
     closeQuickActionWindowMock.mockReset().mockResolvedValue(undefined);
     subscribeQuickActionInvokedMock.mockReset().mockImplementation(() => vi.fn());
+    runQuickActionMock.mockReset().mockResolvedValue({
+      success: true,
+      actionId: 'translate',
+      text: 'translated text',
+      prompt: 'prompt',
+    });
+    copyQuickActionResultMock.mockReset().mockResolvedValue({ success: true });
+    pasteQuickActionResultMock.mockReset().mockResolvedValue({ success: true, pasted: false });
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -186,8 +205,8 @@ describe('Quick action page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Translate')).toBeInTheDocument();
-    expect(screen.getByText('cold start clipboard')).toBeInTheDocument();
+    expect(await screen.findByText('cold start clipboard')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Translate' })).toBeInTheDocument();
     expect(screen.queryByTestId('main-layout')).not.toBeInTheDocument();
     expect(getQuickActionLastContextMock).toHaveBeenCalledTimes(1);
 
@@ -227,7 +246,8 @@ describe('Quick action page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Translate')).toBeInTheDocument();
+    expect(await screen.findByText('cold start clipboard')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Translate' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Close quick action window' }));
@@ -237,6 +257,43 @@ describe('Quick action page', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
 
+    expect(closeQuickActionWindowMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs, copies, and paste-copies quick action results from the floating window', async () => {
+    const { default: App } = await import('@/App');
+
+    render(
+      <MemoryRouter initialEntries={['/quick-action']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('cold start clipboard')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Translate' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Run Translate' }));
+    });
+
+    expect(runQuickActionMock).toHaveBeenCalledWith('translate', {
+      text: 'cold start clipboard',
+      source: 'clipboard',
+      obtainedAt: 1,
+    });
+
+    expect(await screen.findByText('translated text')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy result' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Paste result' }));
+    });
+
+    expect(copyQuickActionResultMock).toHaveBeenCalledWith('translated text');
+    expect(pasteQuickActionResultMock).toHaveBeenCalledWith('translated text');
     expect(closeQuickActionWindowMock).toHaveBeenCalledTimes(2);
   });
 });

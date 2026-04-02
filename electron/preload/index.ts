@@ -64,6 +64,9 @@ const electronAPI = {
         'quickAction:list',
         'quickAction:getLastContext',
         'quickAction:trigger',
+        'quickAction:run',
+        'quickAction:copyResult',
+        'quickAction:pasteResult',
         // Update
         'update:status',
         'update:version',

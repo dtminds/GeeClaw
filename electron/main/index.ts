@@ -50,6 +50,7 @@ import {
 } from './global-shortcuts';
 import { createQuickActionWindowController } from './quick-action-window';
 import { getQuickActionInput } from '../services/quick-actions/selection-provider';
+import { createQuickActionExecutor } from '../services/quick-actions/executor';
 import { createQuickActionService } from '../services/quick-actions/service';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
@@ -124,8 +125,20 @@ const quickActionService = createQuickActionService({
     const quickActions = await getSetting('quickActions');
     return quickActions.actions.find((action) => action.id === actionId) ?? null;
   },
-  getQuickActionInput,
+  getQuickActionInput: async () => {
+    const quickActions = await getSetting('quickActions');
+    return await getQuickActionInput({
+      allowClipboardFallback: quickActions.preferClipboardFallback,
+    });
+  },
   showWindow: (context) => quickActionWindowController.show(context),
+});
+const quickActionExecutor = createQuickActionExecutor({
+  getActionById: async (actionId) => {
+    const quickActions = await getSetting('quickActions');
+    return quickActions.actions.find((action) => action.id === actionId) ?? null;
+  },
+  runPrompt: async (prompt) => await gatewayManager.rpc('chat.send', { content: prompt }, 120000),
 });
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
@@ -285,7 +298,7 @@ async function initialize(): Promise<void> {
   );
 
   // Register IPC handlers
-  registerIpcHandlers(gatewayManager, clawHubService, mainWindow, quickActionService);
+  registerIpcHandlers(gatewayManager, clawHubService, mainWindow, quickActionService, quickActionExecutor);
 
   const settings = await getAllSettings();
   registerQuickActionShortcuts(settings.quickActions.actions);

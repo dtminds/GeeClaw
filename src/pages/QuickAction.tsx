@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { QuickActionContext } from '@shared/quick-actions';
-import { closeQuickActionWindow, getQuickActionLastContext, subscribeQuickActionInvoked } from '@/lib/quick-actions';
+import { toast } from 'sonner';
+import { QuickActionWindow } from '@/components/quick-actions/QuickActionWindow';
+import {
+  closeQuickActionWindow,
+  copyQuickActionResult,
+  getQuickActionLastContext,
+  pasteQuickActionResult,
+  runQuickAction,
+  subscribeQuickActionInvoked,
+} from '@/lib/quick-actions';
+import { useSettingsStore } from '@/stores/settings';
 
 function formatInvocationSource(source: QuickActionContext['source']): string {
   return source === 'shortcut' ? 'Triggered from shortcut' : 'Triggered from app';
@@ -8,6 +18,10 @@ function formatInvocationSource(source: QuickActionContext['source']): string {
 
 export function QuickActionPage() {
   const [context, setContext] = useState<QuickActionContext | null>(null);
+  const [result, setResult] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const quickActionSettings = useSettingsStore((state) => state.quickActions);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,6 +34,9 @@ export function QuickActionPage() {
 
     const unsubscribe = subscribeQuickActionInvoked((payload) => {
       setContext(payload ?? null);
+      setResult('');
+      setError(null);
+      setRunning(false);
     });
 
     return () => {
@@ -41,57 +58,78 @@ export function QuickActionPage() {
     };
   }, []);
 
+  const availableActions = quickActionSettings.actions.filter((action) => action.enabled);
+  const windowActions = availableActions.some((action) => action.id === context?.action.id)
+    ? availableActions
+    : context
+      ? [context.action, ...availableActions.filter((action) => action.id !== context.action.id)]
+      : availableActions;
+  const windowKey = context ? `${context.invokedAt}:${context.actionId}` : 'quick-action-idle';
+
+  const handleRun = async (actionId: string) => {
+    if (!context) return;
+
+    setRunning(true);
+    setError(null);
+
+    try {
+      const next = await runQuickAction(actionId, context.input);
+      if (!next.success) {
+        setResult('');
+        setError(next.message ?? `Quick action failed: ${next.reason}`);
+        return;
+      }
+
+      setResult(next.text);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!result) return;
+
+    await copyQuickActionResult(result);
+    toast.success('Quick action result copied');
+    if (quickActionSettings.closeOnCopy) {
+      await closeQuickActionWindow();
+    }
+  };
+
+  const handlePaste = async () => {
+    if (!result) return;
+
+    const pasteResult = await pasteQuickActionResult(result);
+    toast.success(pasteResult.pasted ? 'Quick action result pasted' : 'Quick action result copied to clipboard');
+    if (quickActionSettings.closeOnCopy) {
+      await closeQuickActionWindow();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-transparent p-3 text-foreground">
-      <div className="modal-card-surface flex min-h-[calc(100vh-1.5rem)] flex-col rounded-[28px] border p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className="modal-title text-[18px]">Quick Action</p>
-            <p className="modal-description text-[13px]">
-              {context ? formatInvocationSource(context.source) : 'Waiting for a quick action to be invoked.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close quick action window"
-            className="modal-field-surface flex h-10 w-10 items-center justify-center rounded-full text-lg text-muted-foreground transition hover:text-foreground"
-            onClick={() => {
-              void closeQuickActionWindow();
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="mt-4 flex-1">
-          {context ? (
-            <div className="space-y-4">
-              <div className="modal-field-surface rounded-2xl border p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Action
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{context.action.title}</p>
-              </div>
-
-              <div className="modal-field-surface rounded-2xl border p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Input
-                  </p>
-                  <span className="text-[11px] text-muted-foreground">{context.input.source}</span>
-                </div>
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
-                  {context.input.text}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="modal-field-surface flex h-full min-h-[180px] items-center justify-center rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Copy text, then trigger a quick action to populate this window.
-            </div>
-          )}
-        </div>
-      </div>
+      <QuickActionWindow
+        key={windowKey}
+        actions={windowActions}
+        initialActionId={context?.actionId ?? windowActions[0]?.id ?? 'translate'}
+        input={context?.input ?? null}
+        running={running}
+        result={result}
+        error={error}
+        subtitle={context ? formatInvocationSource(context.source) : 'Waiting for a quick action to be invoked.'}
+        onRun={(actionId) => {
+          void handleRun(actionId);
+        }}
+        onCopy={() => {
+          void handleCopy();
+        }}
+        onPaste={() => {
+          void handlePaste();
+        }}
+        onClose={() => {
+          void closeQuickActionWindow();
+        }}
+      />
     </div>
   );
 }

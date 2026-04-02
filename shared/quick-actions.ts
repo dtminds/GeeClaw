@@ -12,7 +12,7 @@ export interface QuickActionDefinition {
   outputMode: QuickActionOutputMode;
 }
 
-export type QuickActionInputSource = 'clipboard';
+export type QuickActionInputSource = 'selection' | 'clipboard';
 export type QuickActionInvocationSource = 'shortcut' | 'ipc';
 
 export interface QuickActionInput {
@@ -31,6 +31,12 @@ export interface QuickActionContext {
 
 export type QuickActionTriggerFailureReason = 'action-not-found' | 'action-disabled' | 'no-input';
 
+export type QuickActionRunFailureReason =
+  | 'action-not-found'
+  | 'action-disabled'
+  | 'gateway-error'
+  | 'empty-result';
+
 export type QuickActionTriggerResult =
   | {
       success: true;
@@ -40,6 +46,28 @@ export type QuickActionTriggerResult =
       success: false;
       reason: QuickActionTriggerFailureReason;
     };
+
+export type QuickActionRunResult =
+  | {
+      success: true;
+      actionId: string;
+      text: string;
+      prompt: string;
+    }
+  | {
+      success: false;
+      reason: QuickActionRunFailureReason;
+      message?: string;
+    };
+
+export interface QuickActionCopyResult {
+  success: true;
+}
+
+export interface QuickActionPasteResult {
+  success: true;
+  pasted: boolean;
+}
 
 export interface QuickActionSettings {
   actions: QuickActionDefinition[];

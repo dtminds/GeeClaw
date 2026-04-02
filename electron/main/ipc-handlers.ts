@@ -2,7 +2,7 @@
  * IPC Handlers
  * Registers all IPC handlers for main-renderer communication
  */
-import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
+import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage, clipboard } from 'electron';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename, dirname, isAbsolute, resolve } from 'node:path';
@@ -69,6 +69,8 @@ import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
 import type { QuickActionService } from '../services/quick-actions/service';
+import type { QuickActionExecutor } from '../services/quick-actions/executor';
+import type { QuickActionInput } from '@shared/quick-actions';
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -87,6 +89,7 @@ export function registerIpcHandlers(
   clawHubService: ClawHubService,
   mainWindow: BrowserWindow,
   quickActionService: QuickActionService,
+  quickActionExecutor: QuickActionExecutor,
 ): void {
   // Unified request protocol (non-breaking: legacy channels remain available)
   registerUnifiedRequestHandlers(gatewayManager);
@@ -129,7 +132,7 @@ export function registerIpcHandlers(
   registerUsageHandlers();
 
   // Quick action hotkey handlers
-  registerQuickActionHandlers(quickActionService);
+  registerQuickActionHandlers(quickActionService, quickActionExecutor);
 
   // Skill config handlers (direct file access, no Gateway RPC)
   registerSkillConfigHandlers();
@@ -2061,7 +2064,10 @@ function registerAppHandlers(): void {
   });
 }
 
-function registerQuickActionHandlers(quickActionService: QuickActionService): void {
+function registerQuickActionHandlers(
+  quickActionService: QuickActionService,
+  quickActionExecutor: QuickActionExecutor,
+): void {
   ipcMain.handle('quickAction:getHotkeyStatus', () => {
     return getQuickActionHotkeyStatus();
   });
@@ -2077,6 +2083,20 @@ function registerQuickActionHandlers(quickActionService: QuickActionService): vo
   ipcMain.handle('quickAction:trigger', async (_, actionId: string) => {
     const result = await triggerQuickAction(actionId);
     return result ?? { success: false, reason: 'action-not-found' as const };
+  });
+
+  ipcMain.handle('quickAction:run', async (_, actionId: string, input: QuickActionInput) => {
+    return await quickActionExecutor.run(actionId, input);
+  });
+
+  ipcMain.handle('quickAction:copyResult', async (_, value: string) => {
+    clipboard.writeText(value);
+    return { success: true as const };
+  });
+
+  ipcMain.handle('quickAction:pasteResult', async (_, value: string) => {
+    clipboard.writeText(value);
+    return { success: true as const, pasted: false };
   });
 }
 

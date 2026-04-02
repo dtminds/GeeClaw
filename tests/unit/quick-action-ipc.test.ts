@@ -59,4 +59,38 @@ describe('quick action renderer ipc api', () => {
       },
     });
   });
+
+  it('routes run, copy, and paste requests through quick action IPC helpers', async () => {
+    invokeIpcMock
+      .mockResolvedValueOnce({
+        success: true,
+        actionId: 'translate',
+        text: 'translated text',
+        prompt: 'prompt',
+      })
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: true, pasted: false });
+
+    const {
+      runQuickAction,
+      copyQuickActionResult,
+      pasteQuickActionResult,
+    } = await import('@/lib/quick-actions');
+
+    await runQuickAction('translate', {
+      text: 'hello',
+      source: 'clipboard',
+      obtainedAt: 1,
+    });
+    await copyQuickActionResult('translated text');
+    await pasteQuickActionResult('translated text');
+
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(1, 'quickAction:run', 'translate', {
+      text: 'hello',
+      source: 'clipboard',
+      obtainedAt: 1,
+    });
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(2, 'quickAction:copyResult', 'translated text');
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(3, 'quickAction:pasteResult', 'translated text');
+  });
 });
