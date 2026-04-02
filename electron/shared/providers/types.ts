@@ -9,7 +9,7 @@ export const PROVIDER_TYPES = [
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
-  'qwen-portal',
+  'modelstudio',
   'ollama',
   'custom',
 ] as const;
@@ -25,7 +25,7 @@ export const BUILTIN_PROVIDER_TYPES = [
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
-  'qwen-portal',
+  'modelstudio',
   'ollama',
 ] as const;
 
@@ -94,6 +94,7 @@ export interface ProviderTypeInfo {
   codePlanPresetBaseUrl?: string;
   codePlanPresetModelId?: string;
   codePlanDocsUrl?: string;
+  hidden?: boolean;
 }
 
 export interface ProviderModelEntry extends Record<string, unknown> {

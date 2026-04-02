@@ -63,6 +63,8 @@ async function sanitizePluginPathList(pathEntries: unknown[]): Promise<{ changed
 export async function sanitizeOpenClawConfig(): Promise<void> {
   const modified = await mutateOpenClawConfigDocument<boolean>(async (config) => {
     let changed = false;
+    const LEGACY_QWEN_PROVIDER = 'qwen-portal';
+    const LEGACY_QWEN_PLUGIN_ID = 'qwen-portal-auth';
 
     const managedWorkspaceDir = getManagedAgentWorkspacePath('main');
     const agentsForDefaults = (
@@ -168,6 +170,12 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           console.log('[sanitize] Removed legacy plugins.entries.whatsapp for built-in channel');
         }
 
+        if (LEGACY_QWEN_PLUGIN_ID in entries) {
+          delete entries[LEGACY_QWEN_PLUGIN_ID];
+          changed = true;
+          console.log(`[sanitize] Removed deprecated plugins.entries.${LEGACY_QWEN_PLUGIN_ID}`);
+        }
+
         const configuredBuiltIns = new Set<string>();
         const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
         if (channelsObj && typeof channelsObj === 'object') {
@@ -180,7 +188,9 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           }
         }
 
-        const externalPluginIds = allow.filter((pluginId) => !BUILTIN_CHANNEL_IDS.has(pluginId));
+        const externalPluginIds = allow.filter(
+          (pluginId) => pluginId !== LEGACY_QWEN_PLUGIN_ID && !BUILTIN_CHANNEL_IDS.has(pluginId),
+        );
         const nextAllow = [...externalPluginIds];
         if (externalPluginIds.length > 0) {
           for (const channelId of configuredBuiltIns) {
@@ -259,6 +269,28 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
     }
 
     const providers = ((config.models as Record<string, unknown> | undefined)?.providers as Record<string, unknown> | undefined) || {};
+    if (providers[LEGACY_QWEN_PROVIDER]) {
+      delete providers[LEGACY_QWEN_PROVIDER];
+      changed = true;
+      console.log(`[sanitize] Removed deprecated models.providers.${LEGACY_QWEN_PROVIDER}`);
+    }
+
+    const auth = (
+      config.auth && typeof config.auth === 'object' && !Array.isArray(config.auth)
+        ? (config.auth as Record<string, unknown>)
+        : undefined
+    );
+    const authProfiles = (
+      auth?.profiles && typeof auth.profiles === 'object' && !Array.isArray(auth.profiles)
+        ? (auth.profiles as Record<string, unknown>)
+        : undefined
+    );
+    if (authProfiles?.[LEGACY_QWEN_PROVIDER]) {
+      delete authProfiles[LEGACY_QWEN_PROVIDER];
+      changed = true;
+      console.log(`[sanitize] Removed deprecated auth.profiles.${LEGACY_QWEN_PROVIDER}`);
+    }
+
     if (providers[OPENCLAW_PROVIDER_KEY_MOONSHOT]) {
       const tools = (config.tools as Record<string, unknown> | undefined) || {};
       const web = (tools.web as Record<string, unknown> | undefined) || {};

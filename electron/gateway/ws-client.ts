@@ -21,7 +21,7 @@ export async function probeGatewayReady(
       settled = true;
       clearTimeout(timeout);
       try {
-        testWs.close();
+        testWs.terminate();
       } catch {
         // ignore
       }
@@ -170,7 +170,7 @@ export async function connectGatewaySocket(options: {
   getToken: () => Promise<string>;
   onHandshakeComplete: (ws: WebSocket) => void;
   onMessage: (message: unknown) => void;
-  onCloseAfterHandshake: () => void;
+  onCloseAfterHandshake: (code: number) => void;
 }): Promise<WebSocket> {
   logger.debug(`Connecting Gateway WebSocket (ws://localhost:${options.port}/ws)`);
 
@@ -303,7 +303,7 @@ export async function connectGatewaySocket(options: {
         return;
       }
       cleanupHandshakeRequest();
-      options.onCloseAfterHandshake();
+      options.onCloseAfterHandshake(code);
     });
 
     ws.on('error', (error) => {

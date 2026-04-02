@@ -37,6 +37,16 @@ function getMetadataRuntimeProviderId(value: string | undefined): string | null 
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? null : trimmed;
 }
 
+function getMultiInstanceRuntimeProviderId(vendorId: ProviderType, accountId: string): string {
+  const prefix = `${vendorId}-`;
+  if (accountId.startsWith(prefix) && !accountId.slice(prefix.length).includes('-')) {
+    return accountId;
+  }
+
+  const suffix = accountId.replace(/-/g, '').slice(0, 8);
+  return `${vendorId}-${suffix}`;
+}
+
 export async function fetchProviderSnapshot(): Promise<ProviderSnapshot> {
   const [accounts, statuses, vendors, defaultInfo] = await Promise.all([
     hostApiFetch<ProviderAccount[]>('/api/provider-accounts'),
@@ -82,8 +92,7 @@ export function getProviderAccountRuntimeKey(
   }
 
   if (MULTI_INSTANCE_PROVIDER_TYPES.has(account.vendorId)) {
-    const suffix = account.id.replace(/-/g, '').slice(0, 8);
-    return `${account.vendorId}-${suffix}`;
+    return getMultiInstanceRuntimeProviderId(account.vendorId, account.id);
   }
 
   if (account.vendorId === 'minimax-portal-cn') {

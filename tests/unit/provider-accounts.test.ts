@@ -46,6 +46,21 @@ describe('provider account runtime namespaces', () => {
     }))).toBe('custom-customa1');
   });
 
+  it('preserves existing multi-instance runtime keys', () => {
+    expect(getProviderAccountRuntimeKey(makeAccount({
+      id: 'custom-a1b2c3d4',
+      vendorId: 'custom',
+      label: 'Custom API',
+    }))).toBe('custom-a1b2c3d4');
+
+    expect(getProviderAccountRuntimeKey(makeAccount({
+      id: 'ollama-a1b2c3d4',
+      vendorId: 'ollama',
+      label: 'Ollama',
+      authMode: 'local',
+    }))).toBe('ollama-a1b2c3d4');
+  });
+
   it('preserves runtime provider ids when building provider list items', () => {
     const items = buildProviderListItems([
       makeAccount({

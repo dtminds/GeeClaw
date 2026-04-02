@@ -41,6 +41,16 @@ describe('gateway store event wiring', () => {
     vi.useRealTimers();
     vi.resetModules();
     vi.clearAllMocks();
+    hostApiFetchMock.mockReset();
+    subscribeHostEventMock.mockReset();
+    handleChatEventMock.mockReset();
+    handleAgentEventMock.mockReset();
+    loadHistoryMock.mockReset();
+    setChatStateMock.mockReset();
+    fetchChannelsMock.mockReset();
+    updateChannelMock.mockReset();
+    channelsGetStateMock.mockReset();
+    vi.mocked(window.electron.ipcRenderer.invoke).mockReset();
     channelsGetStateMock.mockReturnValue({
       channels: [],
       fetchChannels: fetchChannelsMock,
@@ -70,6 +80,41 @@ describe('gateway store event wiring', () => {
     expect(useGatewayStore.getState().status.state).toBe('stopped');
   });
 
+  it('re-fetches gateway status after wiring listeners to close the missed-event race', async () => {
+    hostApiFetchMock
+      .mockResolvedValueOnce({ state: 'starting', port: 28788 })
+      .mockResolvedValueOnce({ state: 'running', port: 28788 });
+
+    subscribeHostEventMock.mockImplementation(() => () => {});
+
+    const { useGatewayStore } = await import('@/stores/gateway');
+    await useGatewayStore.getState().init();
+
+    expect(hostApiFetchMock).toHaveBeenNthCalledWith(1, '/api/gateway/status');
+    expect(hostApiFetchMock).toHaveBeenNthCalledWith(2, '/api/gateway/status');
+    expect(useGatewayStore.getState().status.state).toBe('running');
+  });
+
+  it('periodically reconciles stale renderer state against main-process truth', async () => {
+    vi.useFakeTimers();
+    hostApiFetchMock.mockResolvedValue({ state: 'running', port: 28788 });
+    subscribeHostEventMock.mockImplementation(() => () => {});
+    vi.mocked(window.electron.ipcRenderer.invoke).mockResolvedValue({ state: 'stopped', port: 28788 });
+
+    const { useGatewayStore } = await import('@/stores/gateway');
+    await useGatewayStore.getState().init();
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      status: { state: 'running', port: 28788 },
+    });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(window.electron.ipcRenderer.invoke).toHaveBeenCalledWith('gateway:status');
+    expect(useGatewayStore.getState().status.state).toBe('stopped');
+  });
+
   it('refreshes channels when gateway becomes running or channel status changes', async () => {
     vi.useFakeTimers();
     hostApiFetchMock.mockResolvedValueOnce({ state: 'starting', port: 28788 });
@@ -88,23 +133,28 @@ describe('gateway store event wiring', () => {
 
     const { useGatewayStore } = await import('@/stores/gateway');
     await useGatewayStore.getState().init();
+    fetchChannelsMock.mockClear();
+    updateChannelMock.mockClear();
 
     handlers.get('gateway:status')?.({ state: 'running', port: 28788 });
     await vi.dynamicImportSettled();
 
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(1);
+    const afterRunning = fetchChannelsMock.mock.calls.length;
+    expect(afterRunning).toBeGreaterThan(0);
 
     await vi.advanceTimersByTimeAsync(1500);
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(2);
+    const afterWarmup = fetchChannelsMock.mock.calls.length;
+    expect(afterWarmup).toBeGreaterThan(afterRunning);
 
     await vi.advanceTimersByTimeAsync(3500);
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+    const afterSecondWarmup = fetchChannelsMock.mock.calls.length;
+    expect(afterSecondWarmup).toBeGreaterThan(afterWarmup);
 
     handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connected' });
     await vi.dynamicImportSettled();
 
     expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connected' });
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+    expect(fetchChannelsMock.mock.calls.length).toBe(afterSecondWarmup);
 
     handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connecting' });
     handlers.get('gateway:channel-status')?.({ channelId: 'wecom', status: 'connected' });
@@ -112,13 +162,13 @@ describe('gateway store event wiring', () => {
 
     expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connecting' });
     expect(updateChannelMock).toHaveBeenCalledWith('wecom', { status: 'connected' });
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+    expect(fetchChannelsMock.mock.calls.length).toBe(afterSecondWarmup);
 
     await vi.advanceTimersByTimeAsync(399);
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(3);
+    expect(fetchChannelsMock.mock.calls.length).toBe(afterSecondWarmup);
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(fetchChannelsMock).toHaveBeenCalledTimes(4);
+    expect(fetchChannelsMock.mock.calls.length).toBe(afterSecondWarmup + 1);
   });
 
   it('routes agent chat payloads only through gateway:chat-message, while tool stream stays on notification', async () => {

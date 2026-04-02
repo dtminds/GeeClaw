@@ -1707,6 +1707,10 @@ function AddProviderDialog({
   };
 
   const availableTypes = PROVIDER_TYPE_INFO.filter((type) => {
+    if (type.hidden) {
+      return false;
+    }
+
     const vendor = vendorMap.get(type.id);
     if (!vendor) {
       return !existingVendorIds.has(type.id) || type.id === 'custom';

@@ -59,12 +59,21 @@ vi.mock('@electron/utils/logger', () => ({
 import type { ProviderAccount } from '@electron/shared/providers/types';
 import { getProviderAccount } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
-import { syncDefaultProviderToRuntime } from '@electron/services/providers/provider-runtime-sync';
+import {
+  syncDefaultProviderToRuntime,
+  syncSavedProviderToRuntime,
+  syncUpdatedProviderToRuntime,
+} from '@electron/services/providers/provider-runtime-sync';
 import { getDefaultAgentModelConfig } from '@electron/utils/agent-config';
 import { removeProviderKeyFromOpenClaw, saveOAuthTokenToOpenClaw } from '@electron/utils/openclaw-auth';
-import { removeProviderFromOpenClaw, setOpenClawDefaultModel } from '@electron/utils/openclaw-provider-config';
+import {
+  removeProviderFromOpenClaw,
+  setOpenClawDefaultModel,
+  setOpenClawDefaultModelWithOverride,
+  syncProviderConfigToOpenClaw,
+} from '@electron/utils/openclaw-provider-config';
 import type { ProviderConfig } from '@electron/utils/secure-storage';
-import { getApiKey, getProvider } from '@electron/utils/secure-storage';
+import { getApiKey, getDefaultProvider, getProvider } from '@electron/utils/secure-storage';
 import {
   syncDeletedProviderApiKeyToRuntime,
   syncDeletedProviderToRuntime,
@@ -217,5 +226,83 @@ describe('provider runtime sync for browser OAuth', () => {
 
     expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
     expect(removeProviderFromOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('syncs Ollama provider config to runtime with the openai-completions protocol', async () => {
+    const ollamaProvider = makeProvider({
+      id: 'ollamafd',
+      name: 'Ollama',
+      type: 'ollama',
+      model: 'qwen3:30b',
+      baseUrl: 'http://localhost:11434/v1',
+    });
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'local',
+      accountId: 'ollamafd',
+      apiKey: 'ollama-local',
+    });
+
+    await syncSavedProviderToRuntime(ollamaProvider, undefined);
+
+    expect(syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'ollama-ollamafd',
+      ['qwen3:30b'],
+      expect.objectContaining({
+        baseUrl: 'http://localhost:11434/v1',
+        api: 'openai-completions',
+      }),
+    );
+  });
+
+  it('syncs Ollama default providers with an explicit runtime override', async () => {
+    const ollamaProvider = makeProvider({
+      id: 'ollamafd',
+      name: 'Ollama',
+      type: 'ollama',
+      model: 'qwen3:30b',
+      baseUrl: 'http://localhost:11434/v1',
+    });
+    vi.mocked(getProvider).mockResolvedValue(ollamaProvider);
+
+    await syncDefaultProviderToRuntime('ollamafd');
+
+    expect(setOpenClawDefaultModelWithOverride).toHaveBeenCalledWith(
+      'ollama-ollamafd',
+      'ollama-ollamafd/qwen3:30b',
+      expect.objectContaining({
+        baseUrl: 'http://localhost:11434/v1',
+        api: 'openai-completions',
+      }),
+      ['anthropic/claude-sonnet-4-5'],
+    );
+  });
+
+  it('keeps the explicit override path when updating the default Ollama provider', async () => {
+    const ollamaProvider = makeProvider({
+      id: 'ollamafd',
+      name: 'Ollama',
+      type: 'ollama',
+      model: 'qwen3:30b',
+      baseUrl: 'http://localhost:11434/v1',
+    });
+    vi.mocked(getDefaultProvider).mockResolvedValue('ollamafd');
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'local',
+      accountId: 'ollamafd',
+      apiKey: 'ollama-local',
+    });
+
+    await syncUpdatedProviderToRuntime(ollamaProvider, undefined);
+
+    expect(setOpenClawDefaultModelWithOverride).toHaveBeenCalledWith(
+      'ollama-ollamafd',
+      'ollama-ollamafd/qwen3:30b',
+      expect.objectContaining({
+        baseUrl: 'http://localhost:11434/v1',
+        api: 'openai-completions',
+      }),
+      ['anthropic/claude-sonnet-4-5'],
+    );
+    expect(setOpenClawDefaultModel).not.toHaveBeenCalled();
   });
 });

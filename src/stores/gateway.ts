@@ -11,6 +11,7 @@ import type { GatewayStatus } from '../types/gateway';
 
 let gatewayInitPromise: Promise<void> | null = null;
 let gatewayEventUnsubscribers: Array<() => void> | null = null;
+let gatewayReconcileTimer: ReturnType<typeof setInterval> | null = null;
 let channelWarmupRefreshTimers: Array<ReturnType<typeof setTimeout>> = [];
 let channelStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -244,6 +245,43 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
             },
           ));
           gatewayEventUnsubscribers = unsubscribers;
+
+          if (gatewayReconcileTimer !== null) {
+            clearInterval(gatewayReconcileTimer);
+          }
+          gatewayReconcileTimer = setInterval(() => {
+            const ipc = window.electron?.ipcRenderer;
+            if (!ipc) {
+              return;
+            }
+
+            ipc.invoke('gateway:status')
+              .then((result: unknown) => {
+                const latest = result as GatewayStatus;
+                const current = get().status;
+                if (latest?.state && latest.state !== current.state) {
+                  console.info(`[gateway-store] reconciled stale state: ${current.state} -> ${latest.state}`);
+                  set({ status: latest });
+                }
+              })
+              .catch(() => {
+                // best-effort safety net
+              });
+          }, 30_000);
+        }
+
+        try {
+          const refreshed = await hostApiFetch<GatewayStatus>('/api/gateway/status');
+          const current = get().status;
+          if (refreshed.state !== current.state) {
+            set({ status: refreshed });
+          }
+          if (refreshed.state === 'running') {
+            refreshChannelsSnapshot();
+            scheduleChannelWarmupRefreshes();
+          }
+        } catch {
+          // best-effort; periodic reconciliation will recover later
         }
       } catch (error) {
         console.error('Failed to initialize Gateway:', error);
