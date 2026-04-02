@@ -30,6 +30,7 @@ import {
   ensureBuiltinSkillsInstalled,
   ensureSkillEntriesDefaultDisabled,
 } from '../utils/skill-config';
+import { getAllSettings } from '../utils/store';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
 import { deviceOAuthManager } from '../utils/device-oauth';
@@ -42,6 +43,7 @@ import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
+import { registerQuickActionShortcuts, triggerQuickAction } from './global-shortcuts';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -267,6 +269,9 @@ async function initialize(): Promise<void> {
 
   // Register IPC handlers
   registerIpcHandlers(gatewayManager, clawHubService, mainWindow);
+
+  const settings = await getAllSettings();
+  registerQuickActionShortcuts(settings.quickActions.actions, triggerQuickAction);
 
   hostApiServer = startHostApiServer({
     gatewayManager,

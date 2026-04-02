@@ -60,6 +60,8 @@ const electronAPI = {
         'settings:reset',
         'tray:updateLanguage',
         'usage:recentTokenHistory',
+        'quickAction:getHotkeyStatus',
+        'quickAction:trigger',
         // Update
         'update:status',
         'update:version',

@@ -49,6 +49,7 @@ import { deviceOAuthManager, OAuthProviderType } from '../utils/device-oauth';
 import { browserOAuthManager, type BrowserOAuthProviderType } from '../utils/browser-oauth';
 import { applyProxySettings } from './proxy';
 import { getRecentTokenUsageHistory } from '../utils/token-usage';
+import { getQuickActionHotkeyStatus, registerQuickActionShortcuts, triggerQuickAction } from './global-shortcuts';
 import { getProviderService } from '../services/providers/provider-service';
 import {
   getOpenClawProviderKey,
@@ -124,6 +125,9 @@ export function registerIpcHandlers(
 
   // Usage handlers
   registerUsageHandlers();
+
+  // Quick action hotkey handlers
+  registerQuickActionHandlers();
 
   // Skill config handlers (direct file access, no Gateway RPC)
   registerSkillConfigHandlers();
@@ -2055,6 +2059,17 @@ function registerAppHandlers(): void {
   });
 }
 
+function registerQuickActionHandlers(): void {
+  ipcMain.handle('quickAction:getHotkeyStatus', () => {
+    return getQuickActionHotkeyStatus();
+  });
+
+  ipcMain.handle('quickAction:trigger', (_, actionId: string) => {
+    triggerQuickAction(actionId);
+    return { success: true };
+  });
+}
+
 function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   const handleProxySettingsChange = async () => {
     const settings = await getAllSettings();
@@ -2082,6 +2097,10 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('settings:set', async (_, key: keyof AppSettings, value: AppSettings[keyof AppSettings]) => {
     await setSetting(key, value as never);
 
+    if (key === 'quickActions') {
+      registerQuickActionShortcuts((value as AppSettings['quickActions']).actions, triggerQuickAction);
+    }
+
     if (isSafetyKey(key)) {
       await handleSafetySettingsChange();
     }
@@ -2099,6 +2118,14 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
       await setSetting(key, value as never);
     }
 
+    const quickActionsEntry = entries.find(([key]) => key === 'quickActions');
+    if (quickActionsEntry) {
+      registerQuickActionShortcuts(
+        (quickActionsEntry[1] as AppSettings['quickActions']).actions,
+        triggerQuickAction,
+      );
+    }
+
     if (entries.some(([key]) => isSafetyKey(key))) {
       await handleSafetySettingsChange();
     }
@@ -2113,6 +2140,7 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('settings:reset', async () => {
     await resetSettings();
     const settings = await getAllSettings();
+    registerQuickActionShortcuts(settings.quickActions.actions, triggerQuickAction);
     await handleSafetySettingsChange();
     await handleProxySettingsChange();
     return { success: true, settings };
