@@ -271,7 +271,7 @@ async function initialize(): Promise<void> {
   registerIpcHandlers(gatewayManager, clawHubService, mainWindow);
 
   const settings = await getAllSettings();
-  registerQuickActionShortcuts(settings.quickActions.actions, () => {});
+  registerQuickActionShortcuts(settings.quickActions.actions);
 
   hostApiServer = startHostApiServer({
     gatewayManager,

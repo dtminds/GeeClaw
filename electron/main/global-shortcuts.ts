@@ -7,6 +7,7 @@ import type {
 
 let registeredActionIds: string[] = [];
 let lastInvocation: QuickActionInvocationState | null = null;
+let quickActionDispatchHandler: ((actionId: string) => void) | null = null;
 
 function recordInvocation(actionId: string, source: QuickActionInvocationState['source']): void {
   lastInvocation = {
@@ -16,9 +17,13 @@ function recordInvocation(actionId: string, source: QuickActionInvocationState['
   };
 }
 
+function dispatchQuickAction(actionId: string, source: QuickActionInvocationState['source']): void {
+  recordInvocation(actionId, source);
+  quickActionDispatchHandler?.(actionId);
+}
+
 export function registerQuickActionShortcuts(
   actions: QuickActionDefinition[],
-  onInvoke: (actionId: string) => void,
 ): void {
   globalShortcut.unregisterAll();
   registeredActionIds = [];
@@ -34,8 +39,7 @@ export function registerQuickActionShortcuts(
     }
 
     const registered = globalShortcut.register(shortcut, () => {
-      recordInvocation(action.id, 'shortcut');
-      onInvoke(action.id);
+      dispatchQuickAction(action.id, 'shortcut');
     });
 
     if (registered) {
@@ -53,6 +57,10 @@ export function getQuickActionHotkeyStatus(): QuickActionHotkeyStatus {
   };
 }
 
+export function setQuickActionDispatchHandler(handler: ((actionId: string) => void) | null): void {
+  quickActionDispatchHandler = handler;
+}
+
 export function triggerQuickAction(actionId: string): void {
-  recordInvocation(actionId, 'ipc');
+  dispatchQuickAction(actionId, 'ipc');
 }
