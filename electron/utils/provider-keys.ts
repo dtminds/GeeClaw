@@ -14,8 +14,16 @@ const PROVIDER_KEY_ALIASES: Record<string, string> = {
   'minimax-portal-cn': OPENCLAW_PROVIDER_KEY_MINIMAX,
 };
 
+export function isMultiInstanceProviderType(type: string): boolean {
+  return MULTI_INSTANCE_PROVIDER_TYPES.has(type);
+}
+
 export function getOpenClawProviderKeyForType(type: string, providerId: string): string {
-  if (MULTI_INSTANCE_PROVIDER_TYPES.has(type)) {
+  if (isMultiInstanceProviderType(type)) {
+    const prefix = `${type}-`;
+    if (providerId.startsWith(prefix) && !providerId.slice(prefix.length).includes('-')) {
+      return providerId;
+    }
     const suffix = providerId.replace(/-/g, '').slice(0, 8);
     return `${type}-${suffix}`;
   }

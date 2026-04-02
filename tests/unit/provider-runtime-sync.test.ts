@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getOpenClawProviderKey,
   getProviderCatalogModelIds,
   getProviderCatalogModelRefs,
 } from '@electron/services/providers/provider-runtime-sync';
@@ -45,5 +46,10 @@ describe('provider runtime model catalogs', () => {
       'gpt-4.1',
       'gpt-4.1-mini',
     ]);
+  });
+
+  it('preserves existing multi-instance runtime provider keys', () => {
+    expect(getOpenClawProviderKey('custom', 'custom-a1b2c3d4')).toBe('custom-a1b2c3d4');
+    expect(getOpenClawProviderKey('ollama', 'ollama-a1b2c3d4')).toBe('ollama-a1b2c3d4');
   });
 });

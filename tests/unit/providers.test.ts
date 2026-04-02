@@ -223,7 +223,7 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBeUndefined();
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBeUndefined();
-    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-plus', false)).toBeUndefined();
+    expect(resolveProviderModelForSave(modelstudio, 'qwen3.6-plus', false)).toBeUndefined();
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
@@ -235,7 +235,7 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
-    expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.5-plus');
+    expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.6-plus');
   });
 
   it('normalizes provider API keys for save flow', () => {

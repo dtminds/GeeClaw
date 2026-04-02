@@ -17,6 +17,7 @@ import {
   syncProviderConfigToOpenClaw,
   updateAgentModelProvider,
 } from '../../utils/openclaw-provider-config';
+import { getOpenClawProviderKeyForType, isMultiInstanceProviderType } from '../../utils/provider-keys';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { logger } from '../../utils/logger';
 
@@ -24,6 +25,10 @@ const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
 const GOOGLE_OAUTH_DEFAULT_MODEL_REF = `${GOOGLE_OAUTH_RUNTIME_PROVIDER}/gemini-3-flash-preview`;
 const OPENAI_OAUTH_RUNTIME_PROVIDER = 'openai-codex';
 const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4`;
+
+function isUnregisteredProviderType(type: string): boolean {
+  return isMultiInstanceProviderType(type);
+}
 
 type RuntimeProviderSyncContext = {
   runtimeProviderKey: string;
@@ -46,7 +51,7 @@ function normalizeProviderBaseUrl(
     return normalized.replace(/\/v1$/, '').replace(/\/anthropic$/, '').replace(/\/$/, '') + '/anthropic';
   }
 
-  if (config.type === 'custom' || config.type === 'ollama') {
+  if (isUnregisteredProviderType(config.type)) {
     const protocol = apiProtocol || config.apiProtocol || 'openai-completions';
     if (protocol === 'openai-responses') {
       return normalized.replace(/\/responses?$/i, '');
@@ -63,14 +68,7 @@ function normalizeProviderBaseUrl(
 }
 
 export function getOpenClawProviderKey(type: string, providerId: string): string {
-  if (type === 'custom' || type === 'ollama') {
-    const suffix = providerId.replace(/-/g, '').slice(0, 8);
-    return `${type}-${suffix}`;
-  }
-  if (type === 'minimax-portal-cn') {
-    return 'minimax-portal';
-  }
-  return type;
+  return getOpenClawProviderKeyForType(type, providerId);
 }
 
 async function resolveRuntimeProviderKey(config: ProviderConfig): Promise<string> {
@@ -293,7 +291,7 @@ async function syncProviderSecretToRuntime(
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {
   const runtimeProviderKey = await resolveRuntimeProviderKey(config);
   const meta = getProviderConfig(config.type);
-  const api = config.type === 'custom' || config.type === 'ollama'
+  const api = isUnregisteredProviderType(config.type)
     ? (config.apiProtocol || 'openai-completions')
     : meta?.api;
   if (!api) {
@@ -333,7 +331,7 @@ async function syncAgentProviderModelCatalog(
   const baseUrl = normalizeProviderBaseUrl(
     config,
     config.baseUrl || context.meta?.baseUrl,
-    config.type === 'custom' || config.type === 'ollama'
+    isUnregisteredProviderType(config.type)
       ? (config.apiProtocol || 'openai-completions')
       : context.api,
   );
@@ -342,7 +340,7 @@ async function syncAgentProviderModelCatalog(
     return;
   }
 
-  if (config.type === 'custom' || config.type === 'ollama') {
+  if (isUnregisteredProviderType(config.type)) {
     const resolvedKey = apiKey !== undefined ? (apiKey.trim() || null) : await getApiKey(config.id);
     if (!resolvedKey) {
       return;
@@ -427,7 +425,7 @@ export async function syncUpdatedProviderToRuntime(
   const defaultProviderId = await getDefaultProvider();
   if (defaultProviderId === config.id) {
     const modelOverride = getProviderModelRef(config);
-    if (config.type !== 'custom' && config.type !== 'ollama') {
+    if (!isUnregisteredProviderType(config.type)) {
       await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
     } else {
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
@@ -494,7 +492,7 @@ export async function syncDefaultProviderToRuntime(
   if (!isOAuthProvider) {
     const modelOverride = getProviderModelRef(provider);
 
-    if (provider.type === 'custom' || provider.type === 'ollama') {
+    if (isUnregisteredProviderType(provider.type)) {
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
         baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
         api: provider.apiProtocol || 'openai-completions',

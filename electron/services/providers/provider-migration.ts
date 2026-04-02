@@ -10,7 +10,7 @@ import { getGeeClawProviderStore } from './store-instance';
 const PROVIDER_STORE_SCHEMA_VERSION = 2;
 const LEGACY_QWEN_PROVIDER = 'qwen-portal';
 const MODELSTUDIO_PROVIDER = 'modelstudio';
-const MODELSTUDIO_DEFAULT_MODEL_REF = 'modelstudio/qwen3.5-plus';
+const MODELSTUDIO_DEFAULT_MODEL_REF = 'modelstudio/qwen3.6-plus';
 
 function normalizeLegacyQwenModelRef(value: unknown): unknown {
   if (typeof value !== 'string') {
@@ -22,7 +22,7 @@ function normalizeLegacyQwenModelRef(value: unknown): unknown {
   }
 
   const modelId = value.slice(LEGACY_QWEN_PROVIDER.length + 1);
-  const nextModelId = !modelId || modelId === 'coder-model' ? 'qwen3.5-plus' : modelId;
+  const nextModelId = !modelId || modelId === 'coder-model' ? 'qwen3.6-plus' : modelId;
   return `${MODELSTUDIO_PROVIDER}/${nextModelId}`;
 }
 

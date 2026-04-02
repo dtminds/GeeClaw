@@ -89,12 +89,12 @@ describe('provider store migration', () => {
     await ensureProviderStoreMigrated();
 
     expect((storeState.providers['qwen-account'] as Record<string, unknown>).type).toBe('modelstudio');
-    expect((storeState.providers['qwen-account'] as Record<string, unknown>).model).toBe('modelstudio/qwen3.5-plus');
-    expect((storeState.providers['qwen-account'] as Record<string, unknown>).models).toEqual(['modelstudio/qwen3.5-plus']);
+    expect((storeState.providers['qwen-account'] as Record<string, unknown>).model).toBe('modelstudio/qwen3.6-plus');
+    expect((storeState.providers['qwen-account'] as Record<string, unknown>).models).toEqual(['modelstudio/qwen3.6-plus']);
 
     expect((storeState.providerAccounts['qwen-account'] as Record<string, unknown>).vendorId).toBe('modelstudio');
     expect((storeState.providerAccounts['qwen-account'] as Record<string, unknown>).authMode).toBe('api_key');
-    expect((storeState.providerAccounts['qwen-account'] as Record<string, unknown>).model).toBe('modelstudio/qwen3.5-plus');
+    expect((storeState.providerAccounts['qwen-account'] as Record<string, unknown>).model).toBe('modelstudio/qwen3.6-plus');
     expect(storeState.schemaVersion).toBeGreaterThanOrEqual(2);
   });
 });
