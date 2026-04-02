@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import geeclawLogo from '@/assets/logo.svg';
+// import geeclawLogo from '@/assets/logo.svg';
 import noiseWatercolorTexture from '@/assets/noise-watercolor.png';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
@@ -523,17 +523,17 @@ function loadNoiseTexture(gl: WebGL2RenderingContext): NoiseTextureLoad {
 }
 
 export function BrandOrbLogo({
-  alt,
+  // alt,
   size = 160,
   orbTheme = 'auto',
   className,
-  logoClassName,
+  // logoClassName,
 }: {
-  alt: string;
+  // alt: string;
   size?: number;
   orbTheme?: BrandOrbThemePreference;
   className?: string;
-  logoClassName?: string;
+  // logoClassName?: string;
 }) {
   const appTheme = useSettingsStore((state) => state.theme);
   const colorTheme = useSettingsStore((state) => state.colorTheme);
