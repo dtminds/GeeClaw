@@ -176,6 +176,7 @@ const electronAPI = {
         'gateway:exit',
         'gateway:error',
         'navigate',
+        'quickAction:invoked',
         'update:status-changed',
         'update:checking',
         'update:available',

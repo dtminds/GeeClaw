@@ -1,25 +1,23 @@
 import { globalShortcut } from 'electron';
 import type {
   QuickActionDefinition,
+  QuickActionInvocationEvent,
   QuickActionHotkeyStatus,
   QuickActionInvocationState,
 } from '../services/quick-actions/types';
 
 let registeredActionIds: string[] = [];
 let lastInvocation: QuickActionInvocationState | null = null;
-let quickActionDispatchHandler: ((actionId: string) => void) | null = null;
+let quickActionDispatchHandler: ((event: QuickActionInvocationEvent) => void) | null = null;
 
-function recordInvocation(actionId: string, source: QuickActionInvocationState['source']): void {
-  lastInvocation = {
+function dispatchQuickAction(actionId: string, source: QuickActionInvocationState['source']): void {
+  const invocation = {
     actionId,
     invokedAt: Date.now(),
     source,
-  };
-}
-
-function dispatchQuickAction(actionId: string, source: QuickActionInvocationState['source']): void {
-  recordInvocation(actionId, source);
-  quickActionDispatchHandler?.(actionId);
+  } satisfies QuickActionInvocationEvent;
+  lastInvocation = invocation;
+  quickActionDispatchHandler?.(invocation);
 }
 
 export function registerQuickActionShortcuts(
@@ -57,8 +55,18 @@ export function getQuickActionHotkeyStatus(): QuickActionHotkeyStatus {
   };
 }
 
-export function setQuickActionDispatchHandler(handler: ((actionId: string) => void) | null): void {
+export function setQuickActionDispatchHandler(
+  handler: ((event: QuickActionInvocationEvent) => void) | null,
+): void {
   quickActionDispatchHandler = handler;
+}
+
+export function installQuickActionDispatchTarget(target: {
+  webContents: Pick<Electron.WebContents, 'send'>;
+}): void {
+  setQuickActionDispatchHandler((event) => {
+    target.webContents.send('quickAction:invoked', event);
+  });
 }
 
 export function triggerQuickAction(actionId: string): void {

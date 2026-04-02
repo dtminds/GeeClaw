@@ -16,15 +16,19 @@ describe('global shortcut manager', () => {
     registerMock.mockReturnValue(true);
   });
 
-  it('registers enabled quick-action shortcuts and tracks shortcut versus ipc invocation state', async () => {
+  it('registers enabled quick-action shortcuts and emits production invocation events', async () => {
     const {
       getQuickActionHotkeyStatus,
+      installQuickActionDispatchTarget,
       registerQuickActionShortcuts,
-      setQuickActionDispatchHandler,
       triggerQuickAction,
     } = await import('@electron/main/global-shortcuts');
-    const dispatchHandler = vi.fn();
-    setQuickActionDispatchHandler(dispatchHandler);
+    const sendMock = vi.fn();
+    installQuickActionDispatchTarget({
+      webContents: {
+        send: sendMock,
+      },
+    } as never);
 
     registerQuickActionShortcuts([
       { id: 'translate', shortcut: 'CommandOrControl+Shift+1', enabled: true },
@@ -44,7 +48,13 @@ describe('global shortcut manager', () => {
 
     const callback = registerMock.mock.calls[0][1] as () => void;
     callback();
-    expect(dispatchHandler).toHaveBeenCalledWith('translate');
+    expect(sendMock).toHaveBeenCalledWith(
+      'quickAction:invoked',
+      expect.objectContaining({
+        actionId: 'translate',
+        source: 'shortcut',
+      }),
+    );
     expect(getQuickActionHotkeyStatus()).toMatchObject({
       registered: true,
       registeredCount: 1,
@@ -56,7 +66,13 @@ describe('global shortcut manager', () => {
     });
 
     triggerQuickAction('reply');
-    expect(dispatchHandler).toHaveBeenLastCalledWith('reply');
+    expect(sendMock).toHaveBeenLastCalledWith(
+      'quickAction:invoked',
+      expect.objectContaining({
+        actionId: 'reply',
+        source: 'ipc',
+      }),
+    );
     expect(getQuickActionHotkeyStatus()).toMatchObject({
       lastInvocation: {
         actionId: 'reply',

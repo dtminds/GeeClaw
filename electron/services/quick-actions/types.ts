@@ -8,6 +8,8 @@ export interface QuickActionInvocationState {
   source: 'shortcut' | 'ipc';
 }
 
+export type QuickActionInvocationEvent = QuickActionInvocationState;
+
 export interface QuickActionHotkeyStatus {
   registered: boolean;
   registeredCount: number;
