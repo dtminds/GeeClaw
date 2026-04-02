@@ -295,7 +295,7 @@ async function initialize(): Promise<void> {
         if (channel !== 'quickAction:invoked') {
           return;
         }
-        void quickActionService.handleInvocation(payload as never);
+        return quickActionService.handleInvocation(payload as never);
       },
     },
   });

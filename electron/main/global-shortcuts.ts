@@ -8,16 +8,19 @@ import type {
 
 let registeredActionIds: string[] = [];
 let lastInvocation: QuickActionInvocationState | null = null;
-let quickActionDispatchHandler: ((event: QuickActionInvocationEvent) => void) | null = null;
+let quickActionDispatchHandler: ((event: QuickActionInvocationEvent) => void | Promise<void>) | null = null;
 
-function dispatchQuickAction(actionId: string, source: QuickActionInvocationState['source']): void {
+async function dispatchQuickAction(
+  actionId: string,
+  source: QuickActionInvocationState['source'],
+): Promise<void> {
   const invocation = {
     actionId,
     invokedAt: Date.now(),
     source,
   } satisfies QuickActionInvocationEvent;
   lastInvocation = invocation;
-  quickActionDispatchHandler?.(invocation);
+  await quickActionDispatchHandler?.(invocation);
 }
 
 export function registerQuickActionShortcuts(
@@ -37,7 +40,9 @@ export function registerQuickActionShortcuts(
     }
 
     const registered = globalShortcut.register(shortcut, () => {
-      dispatchQuickAction(action.id, 'shortcut');
+      void dispatchQuickAction(action.id, 'shortcut').catch((error) => {
+        console.warn('[quick-actions] Failed to dispatch shortcut invocation', error);
+      });
     });
 
     if (registered) {
@@ -56,13 +61,15 @@ export function getQuickActionHotkeyStatus(): QuickActionHotkeyStatus {
 }
 
 export function setQuickActionDispatchHandler(
-  handler: ((event: QuickActionInvocationEvent) => void) | null,
+  handler: ((event: QuickActionInvocationEvent) => void | Promise<void>) | null,
 ): void {
   quickActionDispatchHandler = handler;
 }
 
 export function installQuickActionDispatchTarget(target: {
-  webContents: Pick<Electron.WebContents, 'send'>;
+  webContents: {
+    send: (channel: string, payload: QuickActionInvocationEvent) => void | Promise<void>;
+  };
 }): void {
   setQuickActionDispatchHandler((event) => {
     target.webContents.send('quickAction:invoked', event);
@@ -73,6 +80,6 @@ export function clearQuickActionDispatchTarget(): void {
   setQuickActionDispatchHandler(null);
 }
 
-export function triggerQuickAction(actionId: string): void {
-  dispatchQuickAction(actionId, 'ipc');
+export function triggerQuickAction(actionId: string): Promise<void> {
+  return dispatchQuickAction(actionId, 'ipc');
 }

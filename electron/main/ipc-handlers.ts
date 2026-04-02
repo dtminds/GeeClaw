@@ -2074,8 +2074,8 @@ function registerQuickActionHandlers(quickActionService: QuickActionService): vo
     return quickActionService.getLastContext();
   });
 
-  ipcMain.handle('quickAction:trigger', (_, actionId: string) => {
-    triggerQuickAction(actionId);
+  ipcMain.handle('quickAction:trigger', async (_, actionId: string) => {
+    await triggerQuickAction(actionId);
     return { success: true };
   });
 }
