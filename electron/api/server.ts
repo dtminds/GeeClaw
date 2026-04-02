@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { PORTS } from '../utils/config';
+import { getPort } from '../utils/config';
 import { logger } from '../utils/logger';
 import type { HostApiContext } from './context';
 import { handleAppRoutes } from './routes/app';
@@ -55,7 +55,7 @@ export function getHostApiToken(): string {
   return hostApiToken;
 }
 
-export function startHostApiServer(ctx: HostApiContext, port = PORTS.GEECLAW_HOST_API): Server {
+export function startHostApiServer(ctx: HostApiContext, port = getPort('GEECLAW_HOST_API')): Server {
   hostApiToken = randomBytes(32).toString('hex');
 
   const server = createServer(async (req, res) => {
@@ -94,6 +94,19 @@ export function startHostApiServer(ctx: HostApiContext, port = PORTS.GEECLAW_HOS
       logger.error('Host API request failed:', error);
       sendJson(res, 500, { success: false, error: String(error) });
     }
+  });
+
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EACCES' || error.code === 'EADDRINUSE') {
+      logger.error(
+        `Host API server failed to bind port ${port}: ${error.message}. `
+        + 'On Windows this is often caused by Hyper-V reserving the port range. '
+        + 'Set GEECLAW_PORT_GEECLAW_HOST_API env var to override the default port.',
+      );
+      return;
+    }
+
+    logger.error('Host API server error:', error);
   });
 
   server.listen(port, '127.0.0.1', () => {

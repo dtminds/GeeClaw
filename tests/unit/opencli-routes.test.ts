@@ -33,7 +33,7 @@ describe('handleOpenCliRoutes', () => {
     const handled = await handleOpenCliRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/opencli/status'),
+      new URL('http://127.0.0.1:13210/api/opencli/status'),
       {} as never,
     );
 
@@ -56,7 +56,7 @@ describe('handleOpenCliRoutes', () => {
     const handled = await handleOpenCliRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/opencli/other'),
+      new URL('http://127.0.0.1:13210/api/opencli/other'),
       {} as never,
     );
 

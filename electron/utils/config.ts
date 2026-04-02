@@ -14,7 +14,7 @@ export const PORTS = {
   GEECLAW_GUI: 23333,
 
   /** Local host API server port */
-  GEECLAW_HOST_API: 3210,
+  GEECLAW_HOST_API: 13210,
   
   /** OpenClaw Gateway port */
   OPENCLAW_GATEWAY: 28788,

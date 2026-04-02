@@ -66,7 +66,7 @@ describe('host-api', () => {
 
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3210/api/test',
+      'http://127.0.0.1:13210/api/test',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer test-host-api-token',
@@ -105,7 +105,7 @@ describe('host-api', () => {
 
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3210/api/test',
+      'http://127.0.0.1:13210/api/test',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer fallback-token',
@@ -136,7 +136,7 @@ describe('host-api', () => {
     createHostEventSource('/api/events?channel=settings');
 
     expect(eventSourceMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3210/api/events?channel=settings&token=event-token',
+      'http://127.0.0.1:13210/api/events?channel=settings&token=event-token',
     );
   });
 });

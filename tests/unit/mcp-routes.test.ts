@@ -30,7 +30,7 @@ describe('handleMcpRoutes', () => {
     const handled = await handleMcpRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/mcp/status'),
+      new URL('http://127.0.0.1:13210/api/mcp/status'),
       {} as never,
     );
 
@@ -58,7 +58,7 @@ describe('handleMcpRoutes', () => {
     const handled = await handleMcpRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/mcp/other'),
+      new URL('http://127.0.0.1:13210/api/mcp/other'),
       {} as never,
     );
 
