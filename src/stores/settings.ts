@@ -7,6 +7,7 @@ import { persist } from 'zustand/middleware';
 import i18n from '@/i18n';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
+import { DEFAULT_QUICK_ACTIONS, type QuickActionSettings } from '@shared/quick-actions';
 import { DEFAULT_COLOR_THEME_ID, type ColorTheme } from '@/theme/color-themes';
 import { useGatewayStore } from './gateway';
 
@@ -14,57 +15,6 @@ type Theme = 'light' | 'dark' | 'system';
 type UpdateChannel = 'stable' | 'beta' | 'dev';
 export type SecurityPolicy = 'moderate' | 'strict' | 'fullAccess';
 export type { ColorTheme } from '@/theme/color-themes';
-
-type QuickActionKind = 'translate' | 'reply' | 'lookup' | 'customPrompt';
-type QuickActionOutputMode = 'copy' | 'paste';
-
-interface QuickActionDefinition {
-  id: string;
-  title: string;
-  kind: QuickActionKind;
-  shortcut: string;
-  enabled: boolean;
-  icon?: string;
-  promptTemplate?: string;
-  outputMode: QuickActionOutputMode;
-}
-
-interface QuickActionSettings {
-  actions: QuickActionDefinition[];
-  closeOnCopy: boolean;
-  preferClipboardFallback: boolean;
-}
-
-const defaultQuickActions: QuickActionSettings = {
-  actions: [
-    {
-      id: 'translate',
-      title: 'Translate',
-      kind: 'translate',
-      shortcut: 'CommandOrControl+Shift+1',
-      enabled: true,
-      outputMode: 'copy',
-    },
-    {
-      id: 'reply',
-      title: 'Reply',
-      kind: 'reply',
-      shortcut: 'CommandOrControl+Shift+2',
-      enabled: true,
-      outputMode: 'copy',
-    },
-    {
-      id: 'lookup',
-      title: 'Lookup',
-      kind: 'lookup',
-      shortcut: 'CommandOrControl+Shift+3',
-      enabled: true,
-      outputMode: 'copy',
-    },
-  ],
-  closeOnCopy: true,
-  preferClipboardFallback: true,
-};
 
 interface SettingsState {
   // General
@@ -155,7 +105,7 @@ const defaultSettings = {
   sidebarWidth: 224,
   chatSessionsPanelCollapsed: false,
   devModeUnlocked: false,
-  quickActions: defaultQuickActions,
+  quickActions: DEFAULT_QUICK_ACTIONS,
   setupComplete: false,
 };
 

@@ -7,7 +7,7 @@ import { loginOpenAICodexOAuth, type OpenAICodexOAuthCredentials } from './opena
 import { getProviderService } from '../services/providers/provider-service';
 import { getSecretStore } from '../services/secrets/secret-store';
 import { saveOAuthTokenToOpenClaw } from './openclaw-auth';
-import { normalizeProviderModelList } from '../shared/providers/config-models';
+import { normalizeProviderModelList } from '@shared/providers/config-models';
 
 export type BrowserOAuthProviderType = 'google' | 'openai';
 

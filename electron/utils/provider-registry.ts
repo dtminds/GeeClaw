@@ -6,17 +6,17 @@ export {
   BUILTIN_PROVIDER_TYPES,
   type BuiltinProviderType,
   type ProviderType,
-} from '../shared/providers/types';
+} from '@shared/providers/types';
 import {
   type ProviderBackendConfig,
   type ProviderModelEntry,
-} from '../shared/providers/types';
+} from '@shared/providers/types';
 import {
   getKeyableProviderTypes as getSharedKeyableProviderTypes,
   getProviderBackendConfig,
   getProviderDefaultModel as getSharedProviderDefaultModel,
   getProviderEnvVar as getSharedProviderEnvVar,
-} from '../shared/providers/registry';
+} from '@shared/providers/registry';
 
 // Additional env-backed providers that are not yet exposed in the UI.
 const EXTRA_ENV_ONLY_PROVIDERS: Record<string, { envVar: string }> = {

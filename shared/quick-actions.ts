@@ -1,0 +1,50 @@
+export type QuickActionKind = 'translate' | 'reply' | 'lookup' | 'customPrompt';
+export type QuickActionOutputMode = 'copy' | 'paste';
+
+export interface QuickActionDefinition {
+  id: string;
+  title: string;
+  kind: QuickActionKind;
+  shortcut: string;
+  enabled: boolean;
+  icon?: string;
+  promptTemplate?: string;
+  outputMode: QuickActionOutputMode;
+}
+
+export interface QuickActionSettings {
+  actions: QuickActionDefinition[];
+  closeOnCopy: boolean;
+  preferClipboardFallback: boolean;
+}
+
+export const DEFAULT_QUICK_ACTIONS: QuickActionSettings = {
+  actions: [
+    {
+      id: 'translate',
+      title: 'Translate',
+      kind: 'translate',
+      shortcut: 'CommandOrControl+Shift+1',
+      enabled: true,
+      outputMode: 'copy',
+    },
+    {
+      id: 'reply',
+      title: 'Reply',
+      kind: 'reply',
+      shortcut: 'CommandOrControl+Shift+2',
+      enabled: true,
+      outputMode: 'copy',
+    },
+    {
+      id: 'lookup',
+      title: 'Lookup',
+      kind: 'lookup',
+      shortcut: 'CommandOrControl+Shift+3',
+      enabled: true,
+      outputMode: 'copy',
+    },
+  ],
+  closeOnCopy: true,
+  preferClipboardFallback: true,
+};

@@ -4,6 +4,7 @@
  */
 
 import { randomBytes } from 'crypto';
+import { DEFAULT_QUICK_ACTIONS, type QuickActionSettings } from '@shared/quick-actions';
 
 // Lazy-load electron-store (ESM module)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,28 +17,12 @@ function generateToken(): string {
   return `geeclaw-${randomBytes(16).toString('hex')}`;
 }
 
-/**
- * Application settings schema
- */
-export type QuickActionKind = 'translate' | 'reply' | 'lookup' | 'customPrompt';
-export type QuickActionOutputMode = 'copy' | 'paste';
-
-export interface QuickActionDefinition {
-  id: string;
-  title: string;
-  kind: QuickActionKind;
-  shortcut: string;
-  enabled: boolean;
-  icon?: string;
-  promptTemplate?: string;
-  outputMode: QuickActionOutputMode;
-}
-
-export interface QuickActionSettings {
-  actions: QuickActionDefinition[];
-  closeOnCopy: boolean;
-  preferClipboardFallback: boolean;
-}
+export type {
+  QuickActionKind,
+  QuickActionOutputMode,
+  QuickActionDefinition,
+  QuickActionSettings,
+} from '@shared/quick-actions';
 
 export interface AppSettings {
   // General
@@ -118,36 +103,7 @@ const defaults: AppSettings = {
   devModeUnlocked: false,
 
   // Quick Actions
-  quickActions: {
-    actions: [
-      {
-        id: 'translate',
-        title: 'Translate',
-        kind: 'translate',
-        shortcut: 'CommandOrControl+Shift+1',
-        enabled: true,
-        outputMode: 'copy',
-      },
-      {
-        id: 'reply',
-        title: 'Reply',
-        kind: 'reply',
-        shortcut: 'CommandOrControl+Shift+2',
-        enabled: true,
-        outputMode: 'copy',
-      },
-      {
-        id: 'lookup',
-        title: 'Lookup',
-        kind: 'lookup',
-        shortcut: 'CommandOrControl+Shift+3',
-        enabled: true,
-        outputMode: 'copy',
-      },
-    ],
-    closeOnCopy: true,
-    preferClipboardFallback: true,
-  },
+  quickActions: DEFAULT_QUICK_ACTIONS,
   
   // Presets
   selectedBundles: ['productivity', 'developer'],

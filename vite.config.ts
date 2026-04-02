@@ -45,10 +45,11 @@ export default defineConfig({
     renderer(),
   ],
   resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-      '@electron': resolve(__dirname, 'electron'),
-    },
+    alias: [
+      { find: '@shared', replacement: resolve(__dirname, 'shared') },
+      { find: '@electron', replacement: resolve(__dirname, 'electron') },
+      { find: '@', replacement: resolve(__dirname, 'src') },
+    ],
   },
   server: {
     port: 5173,

@@ -1,5 +1,5 @@
-import type { ProviderConfig } from '../../shared/providers/types';
-import type { ProviderAccount } from '../../shared/providers/types';
+import type { ProviderConfig } from '@shared/providers/types';
+import type { ProviderAccount } from '@shared/providers/types';
 import {
   getDefaultProviderAccountId,
   providerConfigToAccount,

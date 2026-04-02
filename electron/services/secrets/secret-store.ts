@@ -1,4 +1,4 @@
-import type { ProviderSecret } from '../../shared/providers/types';
+import type { ProviderSecret } from '@shared/providers/types';
 import { getGeeClawProviderStore } from '../providers/store-instance';
 
 export interface SecretStore {

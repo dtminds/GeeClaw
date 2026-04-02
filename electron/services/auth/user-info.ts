@@ -1,4 +1,4 @@
-import { isUserStatus, type UserStatus } from '../../../shared/auth/user-status';
+import { isUserStatus, type UserStatus } from '@shared/auth/user-status';
 import { logger } from '../../utils/logger';
 import { proxyAwareFetch } from '../../utils/proxy-fetch';
 import { GEECLAW_AUTH_API_ORIGIN, buildGeeclawAuthHeaders } from './geeclaw-auth-api';

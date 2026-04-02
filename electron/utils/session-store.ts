@@ -6,7 +6,7 @@ import {
   USER_STATUS_ACTIVE,
   USER_STATUS_DISABLED,
   type UserStatus,
-} from '../../shared/auth/user-status';
+} from '@shared/auth/user-status';
 import { bindInviteCode } from '../services/auth/invite-bind';
 import { fetchGeeclawUserInfo } from '../services/auth/user-info';
 import { runWechatLoginFlow } from '../services/auth/wechat-auth';

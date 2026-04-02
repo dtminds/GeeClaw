@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { USER_STATUS_REQUIRES_INVITE } from '../../shared/auth/user-status';
 import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
 import { useSessionStore, type SessionAccount } from '@/stores/session';
+import { USER_STATUS_REQUIRES_INVITE } from '@shared/auth/user-status';
 
 export type BootstrapPhase =
   | 'idle'

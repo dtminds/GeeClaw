@@ -6,7 +6,7 @@
  */
 
 import { BUILTIN_PROVIDER_TYPES, type ProviderType } from './provider-registry';
-import type { ProviderProtocol } from '../shared/providers/types';
+import type { ProviderProtocol } from '@shared/providers/types';
 import { getActiveOpenClawProviders } from './openclaw-provider-config';
 import {
   deleteProviderAccount,
