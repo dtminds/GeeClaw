@@ -106,6 +106,38 @@
   }
 }
 
+@keyframes brand-orb-drift {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1);
+  }
+
+  33% {
+    transform: translate3d(4%, 3%, 0) scale(1.08);
+  }
+
+  66% {
+    transform: translate3d(-2%, 4%, 0) scale(0.96);
+  }
+
+  100% {
+    transform: translate3d(-3%, -2%, 0) scale(1);
+  }
+}
+
+@keyframes brand-orb-spin {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.04);
+  }
+
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
 /* ── Base layer ────────────────────────────────────────────── */
 @layer base {
   html {
@@ -214,6 +246,18 @@
     --sidebar-accent-foreground: var(--accent-foreground);
     --sidebar-border: var(--border);
     --sidebar-ring: var(--ring);
+  }
+}
+
+@layer utilities {
+  .brand-orb-fallback-blob {
+    animation: brand-orb-drift 7.8s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .brand-orb-fallback-ring {
+    animation: brand-orb-spin 13s linear infinite;
+    will-change: transform;
   }
 }
 

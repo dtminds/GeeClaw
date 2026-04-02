@@ -41,22 +41,17 @@ import { PORTS } from '../utils/config';
 import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
+import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
 
-// Disable GPU hardware acceleration globally for maximum stability across
-// all GPU configurations (no GPU, integrated, discrete).
+// Enable GPU hardware acceleration by default so motion-heavy branding and
+// other accelerated rendering paths work out of the box.
 //
-// Rationale (following VS Code's philosophy):
-// - Page/file loading is async data fetching — zero GPU dependency.
-// - The original per-platform GPU branching was added to avoid CPU rendering
-//   competing with sync I/O on Windows, but all file I/O is now async
-//   (fs/promises), so that concern no longer applies.
-// - Software rendering is deterministic across all hardware; GPU compositing
-//   behaviour varies between vendors (Intel, AMD, NVIDIA, Apple Silicon) and
-//   driver versions, making it the #1 source of rendering bugs in Electron.
-//
-// Users who want GPU acceleration can pass `--enable-gpu` on the CLI or
-// set `"disable-hardware-acceleration": false` in the app config (future).
-app.disableHardwareAcceleration();
+// Users who hit vendor/driver-specific rendering issues can opt out with
+// `--disable-gpu`. `--enable-gpu` is accepted as an explicit override and
+// wins if both flags are present.
+if (shouldDisableHardwareAcceleration(process.argv)) {
+  app.disableHardwareAcceleration();
+}
 
 // On Linux, set CHROME_DESKTOP so Chromium can find the correct .desktop file.
 // On Wayland this maps the running window to geeclaw.desktop (→ icon + app grouping);
