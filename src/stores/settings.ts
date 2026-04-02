@@ -15,6 +15,57 @@ type UpdateChannel = 'stable' | 'beta' | 'dev';
 export type SecurityPolicy = 'moderate' | 'strict' | 'fullAccess';
 export type { ColorTheme } from '@/theme/color-themes';
 
+type QuickActionKind = 'translate' | 'reply' | 'lookup' | 'customPrompt';
+type QuickActionOutputMode = 'copy' | 'paste';
+
+interface QuickActionDefinition {
+  id: string;
+  title: string;
+  kind: QuickActionKind;
+  shortcut: string;
+  enabled: boolean;
+  icon?: string;
+  promptTemplate?: string;
+  outputMode: QuickActionOutputMode;
+}
+
+interface QuickActionSettings {
+  actions: QuickActionDefinition[];
+  closeOnCopy: boolean;
+  preferClipboardFallback: boolean;
+}
+
+const defaultQuickActions: QuickActionSettings = {
+  actions: [
+    {
+      id: 'translate',
+      title: 'Translate',
+      kind: 'translate',
+      shortcut: 'CommandOrControl+Shift+1',
+      enabled: true,
+      outputMode: 'copy',
+    },
+    {
+      id: 'reply',
+      title: 'Reply',
+      kind: 'reply',
+      shortcut: 'CommandOrControl+Shift+2',
+      enabled: true,
+      outputMode: 'copy',
+    },
+    {
+      id: 'lookup',
+      title: 'Lookup',
+      kind: 'lookup',
+      shortcut: 'CommandOrControl+Shift+3',
+      enabled: true,
+      outputMode: 'copy',
+    },
+  ],
+  closeOnCopy: true,
+  preferClipboardFallback: true,
+};
+
 interface SettingsState {
   // General
   theme: Theme;
@@ -47,6 +98,7 @@ interface SettingsState {
   sidebarWidth: number;
   chatSessionsPanelCollapsed: boolean;
   devModeUnlocked: boolean;
+  quickActions: QuickActionSettings;
 
   // Setup
   setupComplete: boolean;
@@ -75,6 +127,7 @@ interface SettingsState {
   setSidebarWidth: (value: number) => void;
   setChatSessionsPanelCollapsed: (value: boolean) => void;
   setDevModeUnlocked: (value: boolean) => void;
+  setQuickActions: (value: QuickActionSettings) => void;
   markSetupComplete: () => void;
   resetSettings: () => void;
 }
@@ -102,6 +155,7 @@ const defaultSettings = {
   sidebarWidth: 224,
   chatSessionsPanelCollapsed: false,
   devModeUnlocked: false,
+  quickActions: defaultQuickActions,
   setupComplete: false,
 };
 
@@ -256,6 +310,10 @@ export const useSettingsStore = create<SettingsState>()(
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setChatSessionsPanelCollapsed: (chatSessionsPanelCollapsed) => set({ chatSessionsPanelCollapsed }),
       setDevModeUnlocked: (devModeUnlocked) => set({ devModeUnlocked }),
+      setQuickActions: (quickActions) => {
+        set({ quickActions });
+        persistSettingValue('quickActions', quickActions);
+      },
       markSetupComplete: () => set({ setupComplete: true }),
       resetSettings: () => set(defaultSettings),
     }),

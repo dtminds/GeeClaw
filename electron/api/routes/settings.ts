@@ -170,6 +170,7 @@ export async function handleSettingsRoutes(
     const key = url.pathname.slice('/api/settings/'.length) as keyof AppSettings;
     try {
       const body = await parseJsonBody<{ value: AppSettings[keyof AppSettings] }>(req);
+      // This generic path persists new nested settings like quickActions too.
       await setSetting(key, body.value);
       if (key === 'workspaceOnly' || key === 'securityPolicy') {
         await handleSafetySettingsChange(ctx);
