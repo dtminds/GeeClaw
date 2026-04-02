@@ -298,7 +298,7 @@ export function ChatWelcomeScreen() {
   return (
     <div className="flex flex-col items-center justify-center text-center h-[60vh]">
       <div className="flex h-48 w-48 items-center justify-center">
-        <BrandOrbLogo alt="GeeClaw" size={192} orbTheme="auto" />
+        <BrandOrbLogo size={192} orbTheme="auto" />
       </div>
       <p className="text-[18px] text-foreground/80 mb-8 font-medium">
         {t('welcome.subtitle')}

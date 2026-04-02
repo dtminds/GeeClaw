@@ -8,7 +8,7 @@ describe('BrandOrbLogo', () => {
 
   it('renders the GeeClaw logo with a themed orb wrapper', async () => {
     const { BrandOrbLogo } = await import('@/components/branding/BrandOrbLogo');
-    render(<BrandOrbLogo alt="GeeClaw" orbTheme="crimson" size={160} />);
+    render(<BrandOrbLogo orbTheme="crimson" size={160} />);
 
     // expect(screen.getByAltText('GeeClaw')).toBeInTheDocument();
     expect(screen.getByTestId('brand-orb-logo')).toHaveAttribute('data-orb-theme', 'crimson');
@@ -16,17 +16,17 @@ describe('BrandOrbLogo', () => {
 
   it('supports demo-style explicit orb themes', async () => {
     const { BrandOrbLogo } = await import('@/components/branding/BrandOrbLogo');
-    const { rerender } = render(<BrandOrbLogo alt="GeeClaw" orbTheme="blue" size={160} />);
+    const { rerender } = render(<BrandOrbLogo orbTheme="blue" size={160} />);
 
     expect(screen.getByTestId('brand-orb-logo')).toHaveAttribute('data-orb-theme', 'blue');
 
-    rerender(<BrandOrbLogo alt="GeeClaw" orbTheme="purple" size={160} />);
+    rerender(<BrandOrbLogo orbTheme="purple" size={160} />);
     expect(screen.getByTestId('brand-orb-logo')).toHaveAttribute('data-orb-theme', 'purple');
   });
 
   it('keeps themed surface styling instead of a generic white inner wash', async () => {
     const { BrandOrbLogo } = await import('@/components/branding/BrandOrbLogo');
-    const { container } = render(<BrandOrbLogo alt="GeeClaw" orbTheme="green" size={160} />);
+    const { container } = render(<BrandOrbLogo orbTheme="green" size={160} />);
 
     expect(container.querySelector('.bg-white\\/18')).not.toBeInTheDocument();
   });
@@ -40,7 +40,7 @@ describe('BrandOrbLogo', () => {
     });
 
     const { BrandOrbLogo } = await import('@/components/branding/BrandOrbLogo');
-    render(<BrandOrbLogo alt="GeeClaw" orbTheme="orange" />);
+    render(<BrandOrbLogo orbTheme="orange" />);
 
     expect(screen.getByTestId('brand-orb-fallback')).toBeInTheDocument();
     expect(document.querySelector('.brand-orb-fallback-blob')).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('BrandOrbLogo', () => {
     const caf = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
 
     const { BrandOrbLogo } = await import('@/components/branding/BrandOrbLogo');
-    render(<BrandOrbLogo alt="GeeClaw" orbTheme="orange" size={160} />);
+    render(<BrandOrbLogo orbTheme="orange" size={160} />);
 
     expect(screen.queryByTestId('brand-orb-fallback')).not.toBeInTheDocument();
 
