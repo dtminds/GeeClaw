@@ -2098,7 +2098,7 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
     await setSetting(key, value as never);
 
     if (key === 'quickActions') {
-      registerQuickActionShortcuts((value as AppSettings['quickActions']).actions, triggerQuickAction);
+      registerQuickActionShortcuts((value as AppSettings['quickActions']).actions, () => {});
     }
 
     if (isSafetyKey(key)) {
@@ -2122,7 +2122,7 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
     if (quickActionsEntry) {
       registerQuickActionShortcuts(
         (quickActionsEntry[1] as AppSettings['quickActions']).actions,
-        triggerQuickAction,
+        () => {},
       );
     }
 
@@ -2140,7 +2140,7 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('settings:reset', async () => {
     await resetSettings();
     const settings = await getAllSettings();
-    registerQuickActionShortcuts(settings.quickActions.actions, triggerQuickAction);
+    registerQuickActionShortcuts(settings.quickActions.actions, () => {});
     await handleSafetySettingsChange();
     await handleProxySettingsChange();
     return { success: true, settings };
