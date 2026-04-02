@@ -3,7 +3,7 @@ import { getConfiguredProviderModels } from '../../shared/providers/config-model
 import { getProviderDefinition } from '../../shared/providers/registry';
 import { getGeeClawProviderStore } from './store-instance';
 
-const PROVIDER_STORE_SCHEMA_VERSION = 1;
+const PROVIDER_STORE_SCHEMA_VERSION = 2;
 
 function inferAuthMode(type: ProviderType): ProviderAccount['authMode'] {
   if (type === 'ollama') {

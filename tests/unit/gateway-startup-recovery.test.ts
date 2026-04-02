@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   hasInvalidConfigFailureSignal,
+  isTransientGatewayStartError,
   isInvalidConfigSignal,
   shouldAttemptConfigAutoRepair,
 } from '@electron/gateway/startup-recovery';
@@ -48,5 +49,10 @@ describe('gateway startup recovery heuristics', () => {
     expect(isInvalidConfigSignal('Run: openclaw doctor --fix')).toBe(true);
     expect(isInvalidConfigSignal('Gateway ready after 3 attempts')).toBe(false);
   });
-});
 
+  it('treats lingering port-occupied failures as transient startup errors', () => {
+    expect(
+      isTransientGatewayStartError(new Error('Port 28788 still occupied after 30000ms')),
+    ).toBe(true);
+  });
+});

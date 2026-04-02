@@ -21,6 +21,7 @@ export const providerIcons: Record<string, string> = {
     siliconflow,
     'minimax-portal': minimaxPortal,
     'minimax-portal-cn': minimaxPortal,
+    modelstudio: qwenPortal,
     'qwen-portal': qwenPortal,
     ollama,
     custom,

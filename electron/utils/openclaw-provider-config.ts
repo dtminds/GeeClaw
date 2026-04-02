@@ -456,6 +456,7 @@ export async function setOpenClawDefaultModelWithOverride(
 
 export async function getActiveOpenClawProviders(): Promise<Set<string>> {
   const activeProviders = new Set<string>();
+  const deprecatedProviders = new Set(['qwen-portal']);
 
   try {
     const config = await readOpenClawJson();
@@ -477,6 +478,10 @@ export async function getActiveOpenClawProviders(): Promise<Set<string>> {
     }
   } catch (err) {
     console.warn('Failed to read openclaw.json for active providers:', err);
+  }
+
+  for (const provider of deprecatedProviders) {
+    activeProviders.delete(provider);
   }
 
   return activeProviders;

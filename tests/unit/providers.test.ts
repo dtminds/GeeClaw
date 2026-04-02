@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
+  SETUP_PROVIDERS,
   getProviderDocsUrl,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
@@ -120,8 +121,22 @@ describe('provider metadata', () => {
 
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'qwen-portal', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
+  });
+
+  it('keeps Model Studio hidden from setup while preserving metadata', () => {
+    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
+
+    expect(modelstudio).toMatchObject({
+      id: 'modelstudio',
+      name: '阿里云百炼',
+      requiresApiKey: true,
+      defaultBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+      defaultModelId: 'qwen3.6-plus',
+      hidden: true,
+    });
+    expect(SETUP_PROVIDERS.some((provider) => provider.id === 'modelstudio')).toBe(false);
   });
 
   it('uses OpenAI-compatible Ollama default base URL', () => {
@@ -203,20 +218,24 @@ describe('provider metadata', () => {
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
     const ark = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'ark');
+    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBeUndefined();
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBeUndefined();
+    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-plus', false)).toBeUndefined();
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', true)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
+    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-turbo', true)).toBe('qwen3.5-turbo');
 
     expect(resolveProviderModelForSave(google, '   ', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
+    expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.5-plus');
   });
 
   it('normalizes provider API keys for save flow', () => {

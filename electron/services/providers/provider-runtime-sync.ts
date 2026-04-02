@@ -487,7 +487,7 @@ export async function syncDefaultProviderToRuntime(
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
   const { fallbacks } = await getDefaultAgentModelConfig();
-  const oauthTypes = ['qwen-portal', 'minimax-portal', 'minimax-portal-cn'];
+  const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
   const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
 
@@ -544,26 +544,21 @@ export async function syncDefaultProviderToRuntime(
 
     const defaultBaseUrl = provider.type === 'minimax-portal'
       ? 'https://api.minimax.io/anthropic'
-      : (provider.type === 'minimax-portal-cn' ? 'https://api.minimaxi.com/anthropic' : 'https://portal.qwen.ai/v1');
-    const api: 'anthropic-messages' | 'openai-completions' =
-      (provider.type === 'minimax-portal' || provider.type === 'minimax-portal-cn')
-        ? 'anthropic-messages'
-        : 'openai-completions';
+      : 'https://api.minimaxi.com/anthropic';
+    const api = 'anthropic-messages' as const;
 
     let baseUrl = provider.baseUrl || defaultBaseUrl;
-    if ((provider.type === 'minimax-portal' || provider.type === 'minimax-portal-cn') && baseUrl) {
+    if (baseUrl) {
       baseUrl = baseUrl.replace(/\/v1$/, '').replace(/\/anthropic$/, '').replace(/\/$/, '') + '/anthropic';
     }
 
-    const targetProviderKey = (provider.type === 'minimax-portal' || provider.type === 'minimax-portal-cn')
-      ? 'minimax-portal'
-      : provider.type;
+    const targetProviderKey = 'minimax-portal';
 
     await setOpenClawDefaultModelWithOverride(targetProviderKey, getProviderModelRef(provider), {
       baseUrl,
       api,
-      authHeader: targetProviderKey === 'minimax-portal' ? true : undefined,
-      apiKeyEnv: targetProviderKey === 'minimax-portal' ? 'minimax-oauth' : 'qwen-oauth',
+      authHeader: true,
+      apiKeyEnv: 'minimax-oauth',
     }, fallbacks);
 
     logger.info(`Configured openclaw.json for OAuth provider "${provider.type}"`);
@@ -573,8 +568,8 @@ export async function syncDefaultProviderToRuntime(
       await updateAgentModelProvider(targetProviderKey, {
         baseUrl,
         api,
-        authHeader: targetProviderKey === 'minimax-portal' ? true : undefined,
-        apiKey: targetProviderKey === 'minimax-portal' ? 'minimax-oauth' : 'qwen-oauth',
+        authHeader: true,
+        apiKey: 'minimax-oauth',
         models,
       });
     } catch (err) {

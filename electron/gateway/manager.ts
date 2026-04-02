@@ -244,7 +244,6 @@ export class GatewayManager extends EventEmitter {
     try {
       await runGatewayStartupSequence({
         port: this.status.port,
-        ownedPid: this.process?.pid,
         shouldWaitForPortFree: process.platform === 'win32',
         resetStartupStderrLines: () => {
           this.recentStartupStderrLines = [];
@@ -253,10 +252,10 @@ export class GatewayManager extends EventEmitter {
         assertLifecycle: (phase) => {
           this.lifecycleController.assert(startEpoch, phase);
         },
-        findExistingGateway: async (port, ownedPid) => {
+        findExistingGateway: async (port) => {
           return await findExistingGatewayProcess({
             port,
-            ownedPid,
+            ownedPid: this.process?.pid,
             terminateForeignProcess: false,
             allowForeignAttach: false,
             rejectForeignProcess: true,
@@ -361,9 +360,14 @@ export class GatewayManager extends EventEmitter {
       }
     }
 
-    // Close WebSocket
+    // Force-close the socket immediately so restart cycles do not accumulate
+    // half-closed connections when the child process exits concurrently.
     if (this.ws) {
-      this.ws.close(1000, shutdownExternal ? 'Gateway stopped by user' : 'GeeClaw quitting');
+      try {
+        this.ws.terminate();
+      } catch {
+        // ignore
+      }
       this.ws = null;
     }
 
@@ -743,11 +747,13 @@ export class GatewayManager extends EventEmitter {
       onMessage: (message) => {
         this.handleMessage(message);
       },
-      onCloseAfterHandshake: () => {
+      onCloseAfterHandshake: (closeCode) => {
         this.connectionMonitor.clear();
         if (this.status.state === 'running') {
           this.setStatus({ state: 'stopped' });
-          this.scheduleReconnect();
+          if (process.platform !== 'win32' || closeCode === 1012) {
+            this.scheduleReconnect();
+          }
         }
       },
     });
