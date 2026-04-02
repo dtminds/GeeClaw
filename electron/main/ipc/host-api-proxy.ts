@@ -1,6 +1,5 @@
 import { ipcMain } from 'electron';
-import { getHostApiToken } from '../../api/server';
-import { PORTS } from '../../utils/config';
+import { getHostApiBase, getHostApiToken } from '../../api/server';
 import { proxyAwareFetch } from '../../utils/proxy-fetch';
 
 type HostApiFetchRequest = {
@@ -11,6 +10,7 @@ type HostApiFetchRequest = {
 };
 
 export function registerHostApiProxyHandlers(): void {
+  ipcMain.handle('hostapi:base', () => getHostApiBase());
   ipcMain.handle('hostapi:token', () => getHostApiToken());
 
   ipcMain.handle('hostapi:fetch', async (_, request: HostApiFetchRequest) => {
@@ -39,7 +39,7 @@ export function registerHostApiProxyHandlers(): void {
         }
       }
 
-      const response = await proxyAwareFetch(`http://127.0.0.1:${PORTS.GEECLAW_HOST_API}${path}`, {
+      const response = await proxyAwareFetch(`${getHostApiBase()}${path}`, {
         method,
         headers,
         body,

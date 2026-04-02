@@ -20,7 +20,7 @@ describe('external-links', () => {
     const { isSafeExternalUrl, openSafeExternalUrl } = await import('@electron/utils/external-links');
 
     expect(isSafeExternalUrl('https://example.com')).toBe(true);
-    expect(isSafeExternalUrl('http://127.0.0.1:3210/path')).toBe(true);
+    expect(isSafeExternalUrl('http://127.0.0.1:13210/path')).toBe(true);
     await expect(openSafeExternalUrl('https://example.com')).resolves.toBe(true);
     expect(shell.openExternal).toHaveBeenCalledWith('https://example.com');
   });

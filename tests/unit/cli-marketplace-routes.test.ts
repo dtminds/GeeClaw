@@ -31,7 +31,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/catalog'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/catalog'),
       { cliMarketplaceService: { getCatalog } } as never,
     );
 
@@ -69,7 +69,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'POST' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/install'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/install'),
       { cliMarketplaceService: { startInstallJob } } as never,
     );
 
@@ -105,7 +105,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'POST' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/uninstall'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/uninstall'),
       { cliMarketplaceService: { startUninstallJob } } as never,
     );
 
@@ -139,7 +139,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/jobs/job-install-1'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/jobs/job-install-1'),
       { cliMarketplaceService: { getJob } } as never,
     );
 
@@ -165,7 +165,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/jobs/missing-job'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/jobs/missing-job'),
       { cliMarketplaceService: { getJob } } as never,
     );
 
@@ -187,7 +187,7 @@ describe('handleCliMarketplaceRoutes', () => {
     const handled = await handleCliMarketplaceRoutes(
       { method: 'GET' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/cli-marketplace/other'),
+      new URL('http://127.0.0.1:13210/api/cli-marketplace/other'),
       {} as never,
     );
 

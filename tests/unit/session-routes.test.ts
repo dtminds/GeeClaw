@@ -44,7 +44,7 @@ describe('handleAuthSessionRoutes invite code flow', () => {
     const handled = await handleAuthSessionRoutes(
       { method: 'POST' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/session/invite-code'),
+      new URL('http://127.0.0.1:13210/api/session/invite-code'),
       {} as never,
     );
 
@@ -73,7 +73,7 @@ describe('handleAuthSessionRoutes invite code flow', () => {
     await handleAuthSessionRoutes(
       { method: 'POST' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/session/invite-code'),
+      new URL('http://127.0.0.1:13210/api/session/invite-code'),
       {} as never,
     );
 

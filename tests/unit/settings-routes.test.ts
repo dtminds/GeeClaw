@@ -68,7 +68,7 @@ describe('handleSettingsRoutes', () => {
     const handled = await handleSettingsRoutes(
       { method: 'PUT' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/settings/safety'),
+      new URL('http://127.0.0.1:13210/api/settings/safety'),
       {
         gatewayManager: {
           getStatus: () => ({ state: 'running' }),
@@ -111,7 +111,7 @@ describe('handleSettingsRoutes', () => {
     await handleSettingsRoutes(
       { method: 'PUT' } as IncomingMessage,
       {} as ServerResponse,
-      new URL('http://127.0.0.1:3210/api/settings/safety'),
+      new URL('http://127.0.0.1:13210/api/settings/safety'),
       {
         gatewayManager: {
           getStatus: () => ({ state: 'stopped' }),
@@ -140,7 +140,7 @@ describe('handleSettingsRoutes', () => {
     await handleSettingsRoutes(
       { method: 'GET' } as IncomingMessage,
       res,
-      new URL('http://127.0.0.1:3210/api/settings/environment'),
+      new URL('http://127.0.0.1:13210/api/settings/environment'),
       {
         gatewayManager: {
           getStatus: () => ({ state: 'stopped' }),
@@ -165,7 +165,7 @@ describe('handleSettingsRoutes', () => {
     await handleSettingsRoutes(
       { method: 'PUT' } as IncomingMessage,
       res,
-      new URL('http://127.0.0.1:3210/api/settings/environment'),
+      new URL('http://127.0.0.1:13210/api/settings/environment'),
       {
         gatewayManager: {
           getStatus: () => ({ state: 'running' }),
