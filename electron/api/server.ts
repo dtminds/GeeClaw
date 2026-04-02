@@ -50,13 +50,19 @@ const routeHandlers: RouteHandler[] = [
 ];
 
 let hostApiToken = '';
+let hostApiBase = `http://127.0.0.1:${getPort('GEECLAW_HOST_API')}`;
 
 export function getHostApiToken(): string {
   return hostApiToken;
 }
 
+export function getHostApiBase(): string {
+  return hostApiBase;
+}
+
 export function startHostApiServer(ctx: HostApiContext, port = getPort('GEECLAW_HOST_API')): Server {
   hostApiToken = randomBytes(32).toString('hex');
+  hostApiBase = `http://127.0.0.1:${port}`;
 
   const server = createServer(async (req, res) => {
     try {
@@ -110,7 +116,11 @@ export function startHostApiServer(ctx: HostApiContext, port = getPort('GEECLAW_
   });
 
   server.listen(port, '127.0.0.1', () => {
-    logger.info(`Host API server listening on http://127.0.0.1:${port}`);
+    const address = server.address();
+    if (address && typeof address === 'object') {
+      hostApiBase = `http://127.0.0.1:${address.port}`;
+    }
+    logger.info(`Host API server listening on ${hostApiBase}`);
   });
 
   return server;

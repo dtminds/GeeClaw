@@ -2,10 +2,25 @@ import { invokeIpc } from '@/lib/api-client';
 import { trackUiEvent } from './telemetry';
 import { normalizeAppError } from './error-model';
 
-const HOST_API_PORT = 13210;
-const HOST_API_BASE = `http://127.0.0.1:${HOST_API_PORT}`;
+const DEFAULT_HOST_API_BASE = 'http://127.0.0.1:13210';
 
 let cachedHostApiToken: string | null = null;
+let cachedHostApiBase: string | null = null;
+
+async function getHostApiBase(): Promise<string> {
+  if (cachedHostApiBase !== null) {
+    return cachedHostApiBase;
+  }
+
+  try {
+    const base = await invokeIpc<string>('hostapi:base');
+    cachedHostApiBase = typeof base === 'string' && base ? base : DEFAULT_HOST_API_BASE;
+    return cachedHostApiBase;
+  } catch {
+    cachedHostApiBase = DEFAULT_HOST_API_BASE;
+    return cachedHostApiBase;
+  }
+}
 
 async function getHostApiToken(): Promise<string> {
   if (cachedHostApiToken !== null) {
@@ -179,6 +194,7 @@ export async function hostApiFetch<T>(path: string, init?: RequestInit): Promise
   }
 
   // Browser-only fallback (non-Electron environments).
+  const base = await getHostApiBase();
   const token = await getHostApiToken();
   const headers = headersToRecord(init?.headers);
   if (init?.body !== undefined && init.body !== null && !headers['Content-Type'] && !headers['content-type']) {
@@ -188,7 +204,7 @@ export async function hostApiFetch<T>(path: string, init?: RequestInit): Promise
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${HOST_API_BASE}${path}`, {
+  const response = await fetch(`${base}${path}`, {
     ...init,
     headers,
   });
@@ -206,11 +222,13 @@ export async function hostApiFetch<T>(path: string, init?: RequestInit): Promise
   }
 }
 
-export function createHostEventSource(path = '/api/events'): EventSource {
+export async function createHostEventSource(path = '/api/events'): Promise<EventSource> {
+  const base = await getHostApiBase();
+  const token = await getHostApiToken();
   const separator = path.includes('?') ? '&' : '?';
-  return new EventSource(`${HOST_API_BASE}${path}${separator}token=${encodeURIComponent(cachedHostApiToken ?? '')}`);
+  return new EventSource(`${base}${path}${separator}token=${encodeURIComponent(token)}`);
 }
 
-export function getHostApiBase(): string {
-  return HOST_API_BASE;
+export async function resolveHostApiBase(): Promise<string> {
+  return getHostApiBase();
 }

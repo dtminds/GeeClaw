@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleMock = vi.fn();
 const proxyAwareFetchMock = vi.fn();
+const getHostApiBaseMock = vi.fn(() => 'http://127.0.0.1:14001');
 const getHostApiTokenMock = vi.fn(() => 'test-token');
 
 vi.mock('electron', () => ({
@@ -15,6 +16,7 @@ vi.mock('@electron/utils/proxy-fetch', () => ({
 }));
 
 vi.mock('@electron/api/server', () => ({
+  getHostApiBase: () => getHostApiBaseMock(),
   getHostApiToken: () => getHostApiTokenMock(),
 }));
 
@@ -65,5 +67,17 @@ describe('host api proxy handlers', () => {
         }),
       }),
     );
+  });
+
+  it('exposes the active host api base over IPC', async () => {
+    const { registerHostApiProxyHandlers } = await import('@electron/main/ipc/host-api-proxy');
+    registerHostApiProxyHandlers();
+
+    const hostApiBaseHandler = handleMock.mock.calls.find(([channel]) => channel === 'hostapi:base')?.[1] as
+      | (() => string)
+      | undefined;
+
+    expect(hostApiBaseHandler).toBeTypeOf('function');
+    expect(hostApiBaseHandler?.()).toBe('http://127.0.0.1:14001');
   });
 });

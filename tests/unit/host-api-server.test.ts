@@ -38,7 +38,7 @@ describe('host-api server', () => {
   });
 
   it('reads the host api port from environment when no explicit port is provided', async () => {
-    const { startHostApiServer } = await import('@electron/api/server');
+    const { getHostApiBase, startHostApiServer } = await import('@electron/api/server');
     const server = startHostApiServer({} as never);
 
     await new Promise((resolve) => server.once('listening', resolve));
@@ -46,6 +46,7 @@ describe('host-api server', () => {
     const address = server.address() as AddressInfo | null;
     expect(address?.port).toBeTypeOf('number');
     expect(address?.port).not.toBe(3210);
+    expect(getHostApiBase()).toBe(`http://127.0.0.1:${address?.port}`);
 
     await closeServer(server);
   });

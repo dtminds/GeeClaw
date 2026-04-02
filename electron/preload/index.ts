@@ -22,6 +22,7 @@ const electronAPI = {
         'gateway:restart',
         'gateway:rpc',
         'gateway:httpProxy',
+        'hostapi:base',
         'hostapi:fetch',
         'hostapi:token',
         'gateway:health',

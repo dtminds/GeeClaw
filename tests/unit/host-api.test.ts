@@ -59,6 +59,7 @@ describe('host-api', () => {
         ok: false,
         error: { message: 'No handler registered for hostapi:fetch' },
       })
+      .mockResolvedValueOnce('http://127.0.0.1:14001')
       .mockResolvedValueOnce('test-host-api-token');
 
     const { hostApiFetch } = await import('@/lib/host-api');
@@ -66,14 +67,15 @@ describe('host-api', () => {
 
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:13210/api/test',
+      'http://127.0.0.1:14001/api/test',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer test-host-api-token',
         }),
       }),
     );
-    expect(invokeIpcMock).toHaveBeenNthCalledWith(2, 'hostapi:token');
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(2, 'hostapi:base');
+    expect(invokeIpcMock).toHaveBeenNthCalledWith(3, 'hostapi:token');
   });
 
   it('throws message from legacy non-ok envelope', async () => {
@@ -98,6 +100,7 @@ describe('host-api', () => {
 
     invokeIpcMock
       .mockRejectedValueOnce(new Error('Invalid IPC channel: hostapi:fetch'))
+      .mockResolvedValueOnce('http://127.0.0.1:14001')
       .mockResolvedValueOnce('fallback-token');
 
     const { hostApiFetch } = await import('@/lib/host-api');
@@ -105,7 +108,7 @@ describe('host-api', () => {
 
     expect(result.fallback).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:13210/api/test',
+      'http://127.0.0.1:14001/api/test',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer fallback-token',
@@ -129,14 +132,15 @@ describe('host-api', () => {
         ok: false,
         error: { message: 'No handler registered for hostapi:fetch' },
       })
+      .mockResolvedValueOnce('http://127.0.0.1:14001')
       .mockResolvedValueOnce('event-token');
 
     const { createHostEventSource, hostApiFetch } = await import('@/lib/host-api');
     await hostApiFetch('/api/test');
-    createHostEventSource('/api/events?channel=settings');
+    await createHostEventSource('/api/events?channel=settings');
 
     expect(eventSourceMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:13210/api/events?channel=settings&token=event-token',
+      'http://127.0.0.1:14001/api/events?channel=settings&token=event-token',
     );
   });
 });

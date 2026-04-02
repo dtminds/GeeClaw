@@ -7,7 +7,7 @@ const eventSourceMock = {
   removeEventListener: removeEventListenerMock,
 } as unknown as EventSource;
 
-const createHostEventSourceMock = vi.fn(() => eventSourceMock);
+const createHostEventSourceMock = vi.fn(async () => eventSourceMock);
 
 vi.mock('@/lib/host-api', () => ({
   createHostEventSource: () => createHostEventSourceMock(),
@@ -87,6 +87,7 @@ describe('host-events', () => {
     const unsubscribe = subscribeHostEvent('unknown:event', handler);
 
     expect(createHostEventSourceMock).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
     expect(addEventListenerMock).toHaveBeenCalledWith('unknown:event', expect.any(Function));
 
     const listener = addEventListenerMock.mock.calls[0][1] as (event: Event) => void;

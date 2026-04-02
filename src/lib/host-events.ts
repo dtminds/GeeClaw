@@ -1,6 +1,6 @@
 import { createHostEventSource } from './host-api';
 
-let eventSource: EventSource | null = null;
+let eventSourcePromise: Promise<EventSource> | null = null;
 
 const HOST_EVENT_TO_IPC_CHANNEL: Record<string, string> = {
   'gateway:status': 'gateway:status-changed',
@@ -23,11 +23,11 @@ const HOST_EVENT_TO_IPC_CHANNEL: Record<string, string> = {
   'channel:openclaw-weixin-error': 'channel:openclaw-weixin-error',
 };
 
-function getEventSource(): EventSource {
-  if (!eventSource) {
-    eventSource = createHostEventSource();
+function getEventSource(): Promise<EventSource> {
+  if (!eventSourcePromise) {
+    eventSourcePromise = createHostEventSource();
   }
-  return eventSource;
+  return eventSourcePromise;
 }
 
 function allowSseFallback(): boolean {
@@ -67,13 +67,23 @@ export function subscribeHostEvent<T = unknown>(
     return () => {};
   }
 
-  const source = getEventSource();
   const listener = (event: Event) => {
     const payload = JSON.parse((event as MessageEvent).data) as T;
     handler(payload);
   };
-  source.addEventListener(eventName, listener);
+  let unsubscribed = false;
+  let sourceRef: EventSource | null = null;
+  void getEventSource()
+    .then((source) => {
+      if (unsubscribed) return;
+      sourceRef = source;
+      source.addEventListener(eventName, listener);
+    })
+    .catch((error) => {
+      console.warn(`[host-events] failed to initialize SSE fallback for "${eventName}"`, error);
+    });
   return () => {
-    source.removeEventListener(eventName, listener);
+    unsubscribed = true;
+    sourceRef?.removeEventListener(eventName, listener);
   };
 }
