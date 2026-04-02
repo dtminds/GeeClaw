@@ -68,6 +68,7 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
+import type { QuickActionService } from '../services/quick-actions/service';
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -84,7 +85,8 @@ function getManagedChannelPluginInstallError(channelType: string): string | null
 export function registerIpcHandlers(
   gatewayManager: GatewayManager,
   clawHubService: ClawHubService,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  quickActionService: QuickActionService,
 ): void {
   // Unified request protocol (non-breaking: legacy channels remain available)
   registerUnifiedRequestHandlers(gatewayManager);
@@ -127,7 +129,7 @@ export function registerIpcHandlers(
   registerUsageHandlers();
 
   // Quick action hotkey handlers
-  registerQuickActionHandlers();
+  registerQuickActionHandlers(quickActionService);
 
   // Skill config handlers (direct file access, no Gateway RPC)
   registerSkillConfigHandlers();
@@ -2059,9 +2061,17 @@ function registerAppHandlers(): void {
   });
 }
 
-function registerQuickActionHandlers(): void {
+function registerQuickActionHandlers(quickActionService: QuickActionService): void {
   ipcMain.handle('quickAction:getHotkeyStatus', () => {
     return getQuickActionHotkeyStatus();
+  });
+
+  ipcMain.handle('quickAction:list', async () => {
+    return await quickActionService.list();
+  });
+
+  ipcMain.handle('quickAction:getLastContext', () => {
+    return quickActionService.getLastContext();
   });
 
   ipcMain.handle('quickAction:trigger', (_, actionId: string) => {

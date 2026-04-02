@@ -61,6 +61,8 @@ const electronAPI = {
         'tray:updateLanguage',
         'usage:recentTokenHistory',
         'quickAction:getHotkeyStatus',
+        'quickAction:list',
+        'quickAction:getLastContext',
         'quickAction:trigger',
         // Update
         'update:status',
@@ -227,6 +229,7 @@ const electronAPI = {
         'gateway:exit',
         'gateway:error',
         'navigate',
+        'quickAction:invoked',
         'update:status-changed',
         'update:checking',
         'update:available',

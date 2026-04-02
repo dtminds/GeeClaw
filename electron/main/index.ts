@@ -48,6 +48,9 @@ import {
   installQuickActionDispatchTarget,
   registerQuickActionShortcuts,
 } from './global-shortcuts';
+import { createQuickActionWindowController } from './quick-action-window';
+import { getQuickActionInput } from '../services/quick-actions/selection-provider';
+import { createQuickActionService } from '../services/quick-actions/service';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -114,6 +117,16 @@ let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
+const quickActionWindowController = createQuickActionWindowController();
+const quickActionService = createQuickActionService({
+  listActions: async () => (await getSetting('quickActions')).actions,
+  getActionById: async (actionId) => {
+    const quickActions = await getSetting('quickActions');
+    return quickActions.actions.find((action) => action.id === actionId) ?? null;
+  },
+  getQuickActionInput,
+  showWindow: (context) => quickActionWindowController.show(context),
+});
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
   try {
@@ -211,8 +224,6 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' };
   });
 
-  installQuickActionDispatchTarget(win);
-
   // Load the app
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -274,10 +285,20 @@ async function initialize(): Promise<void> {
   );
 
   // Register IPC handlers
-  registerIpcHandlers(gatewayManager, clawHubService, mainWindow);
+  registerIpcHandlers(gatewayManager, clawHubService, mainWindow, quickActionService);
 
   const settings = await getAllSettings();
   registerQuickActionShortcuts(settings.quickActions.actions);
+  installQuickActionDispatchTarget({
+    webContents: {
+      send: (channel, payload) => {
+        if (channel !== 'quickAction:invoked') {
+          return;
+        }
+        void quickActionService.handleInvocation(payload as never);
+      },
+    },
+  });
 
   hostApiServer = startHostApiServer({
     gatewayManager,
