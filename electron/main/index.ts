@@ -43,7 +43,11 @@ import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
-import { installQuickActionDispatchTarget, registerQuickActionShortcuts } from './global-shortcuts';
+import {
+  clearQuickActionDispatchTarget,
+  installQuickActionDispatchTarget,
+  registerQuickActionShortcuts,
+} from './global-shortcuts';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -207,6 +211,8 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' };
   });
 
+  installQuickActionDispatchTarget(win);
+
   // Load the app
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -271,7 +277,6 @@ async function initialize(): Promise<void> {
   registerIpcHandlers(gatewayManager, clawHubService, mainWindow);
 
   const settings = await getAllSettings();
-  installQuickActionDispatchTarget(mainWindow);
   registerQuickActionShortcuts(settings.quickActions.actions);
 
   hostApiServer = startHostApiServer({
@@ -297,6 +302,7 @@ async function initialize(): Promise<void> {
   });
 
   mainWindow.on('closed', () => {
+    clearQuickActionDispatchTarget();
     mainWindow = null;
   });
 

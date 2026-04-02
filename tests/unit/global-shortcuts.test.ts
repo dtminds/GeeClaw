@@ -80,4 +80,40 @@ describe('global shortcut manager', () => {
       },
     });
   });
+
+  it('replaces the dispatch target when a new window installs', async () => {
+    const {
+      installQuickActionDispatchTarget,
+      registerQuickActionShortcuts,
+    } = await import('@electron/main/global-shortcuts');
+    const firstSendMock = vi.fn();
+    const secondSendMock = vi.fn();
+
+    installQuickActionDispatchTarget({
+      webContents: {
+        send: firstSendMock,
+      },
+    } as never);
+    installQuickActionDispatchTarget({
+      webContents: {
+        send: secondSendMock,
+      },
+    } as never);
+
+    registerQuickActionShortcuts([
+      { id: 'translate', shortcut: 'CommandOrControl+Shift+1', enabled: true },
+    ] as never);
+
+    const callback = registerMock.mock.calls[0][1] as () => void;
+    callback();
+
+    expect(firstSendMock).not.toHaveBeenCalled();
+    expect(secondSendMock).toHaveBeenCalledWith(
+      'quickAction:invoked',
+      expect.objectContaining({
+        actionId: 'translate',
+        source: 'shortcut',
+      }),
+    );
+  });
 });

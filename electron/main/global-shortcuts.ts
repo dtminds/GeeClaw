@@ -69,6 +69,10 @@ export function installQuickActionDispatchTarget(target: {
   });
 }
 
+export function clearQuickActionDispatchTarget(): void {
+  setQuickActionDispatchHandler(null);
+}
+
 export function triggerQuickAction(actionId: string): void {
   dispatchQuickAction(actionId, 'ipc');
 }
