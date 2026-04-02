@@ -133,6 +133,10 @@ describe('quick action window', () => {
 
     await controller.show(payload);
 
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledWith(
+      expect.stringContaining('dist/index.html'),
+      expect.objectContaining({ hash: '/quick-action' }),
+    );
     expect(browserWindowInstance.setPosition).toHaveBeenCalledWith(112, 212);
     expect(browserWindowInstance.webContents.send).toHaveBeenCalledWith('quickAction:invoked', payload);
     expect(browserWindowInstance.show).toHaveBeenCalledTimes(1);

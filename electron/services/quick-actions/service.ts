@@ -1,14 +1,5 @@
-import type { QuickActionDefinition } from '@shared/quick-actions';
+import type { QuickActionContext, QuickActionDefinition, QuickActionInput } from '@shared/quick-actions';
 import type { QuickActionInvocationEvent } from './types';
-import type { QuickActionInput } from './selection-provider';
-
-export interface QuickActionContext {
-  actionId: string;
-  action: QuickActionDefinition;
-  input: QuickActionInput;
-  invokedAt: number;
-  source: QuickActionInvocationEvent['source'];
-}
 
 interface QuickActionServiceDeps {
   listActions?: () => Promise<QuickActionDefinition[]> | QuickActionDefinition[];

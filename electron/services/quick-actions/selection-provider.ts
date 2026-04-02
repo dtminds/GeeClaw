@@ -1,10 +1,5 @@
 import { clipboard } from 'electron';
-
-export interface QuickActionInput {
-  text: string;
-  source: 'clipboard';
-  obtainedAt: number;
-}
+import type { QuickActionInput } from '@shared/quick-actions';
 
 export async function getQuickActionInput(): Promise<QuickActionInput | null> {
   const clipboardText = clipboard.readText().trim();

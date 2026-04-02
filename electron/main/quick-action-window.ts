@@ -1,10 +1,11 @@
 import { BrowserWindow, screen } from 'electron';
 import { join } from 'node:path';
-import type { QuickActionContext } from '../services/quick-actions/service';
+import type { QuickActionContext } from '@shared/quick-actions';
 
 const QUICK_ACTION_WINDOW_WIDTH = 420;
 const QUICK_ACTION_WINDOW_HEIGHT = 320;
 const QUICK_ACTION_WINDOW_OFFSET = 12;
+const QUICK_ACTION_ROUTE = '/quick-action';
 
 export function createQuickActionWindow(): BrowserWindow {
   return new BrowserWindow({
@@ -46,9 +47,13 @@ export function createQuickActionWindowController() {
 
     quickActionWindow = createQuickActionWindow();
     if (process.env.VITE_DEV_SERVER_URL) {
-      windowReady = quickActionWindow.loadURL(process.env.VITE_DEV_SERVER_URL).then(() => undefined);
+      const quickActionUrl = new URL(process.env.VITE_DEV_SERVER_URL);
+      quickActionUrl.hash = QUICK_ACTION_ROUTE;
+      windowReady = quickActionWindow.loadURL(quickActionUrl.toString()).then(() => undefined);
     } else {
-      windowReady = quickActionWindow.loadFile(join(__dirname, '../../dist/index.html')).then(() => undefined);
+      windowReady = quickActionWindow
+        .loadFile(join(__dirname, '../../dist/index.html'), { hash: QUICK_ACTION_ROUTE })
+        .then(() => undefined);
     }
 
     quickActionWindow.on('closed', () => {

@@ -45,8 +45,8 @@ import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
 import {
   clearQuickActionDispatchTarget,
-  installQuickActionDispatchTarget,
   registerQuickActionShortcuts,
+  setQuickActionDispatchHandler,
 } from './global-shortcuts';
 import { createQuickActionWindowController } from './quick-action-window';
 import { getQuickActionInput } from '../services/quick-actions/selection-provider';
@@ -289,16 +289,7 @@ async function initialize(): Promise<void> {
 
   const settings = await getAllSettings();
   registerQuickActionShortcuts(settings.quickActions.actions);
-  installQuickActionDispatchTarget({
-    webContents: {
-      send: (channel, payload) => {
-        if (channel !== 'quickAction:invoked') {
-          return;
-        }
-        return quickActionService.handleInvocation(payload as never);
-      },
-    },
-  });
+  setQuickActionDispatchHandler((event) => quickActionService.handleInvocation(event));
 
   hostApiServer = startHostApiServer({
     gatewayManager,

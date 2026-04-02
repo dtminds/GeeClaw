@@ -12,6 +12,23 @@ export interface QuickActionDefinition {
   outputMode: QuickActionOutputMode;
 }
 
+export type QuickActionInputSource = 'clipboard';
+export type QuickActionInvocationSource = 'shortcut' | 'ipc';
+
+export interface QuickActionInput {
+  text: string;
+  source: QuickActionInputSource;
+  obtainedAt: number;
+}
+
+export interface QuickActionContext {
+  actionId: string;
+  action: QuickActionDefinition;
+  input: QuickActionInput;
+  invokedAt: number;
+  source: QuickActionInvocationSource;
+}
+
 export interface QuickActionSettings {
   actions: QuickActionDefinition[];
   closeOnCopy: boolean;
