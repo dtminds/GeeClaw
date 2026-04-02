@@ -18,7 +18,7 @@ import { ChatMessagesViewport } from './ChatMessagesViewport';
 import { useAutoScroll } from './useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import logoSvg from '@/assets/logo.svg';
+import { BrandOrbLogo } from '@/components/branding/BrandOrbLogo';
 import telegramIcon from '@/assets/channels/telegram.svg';
 import discordIcon from '@/assets/channels/discord.svg';
 import whatsappIcon from '@/assets/channels/whatsapp.svg';
@@ -292,13 +292,13 @@ export function Chat() {
 
 // ── Welcome Screen ──────────────────────────────────────────────
 
-function WelcomeScreen() {
+export function ChatWelcomeScreen() {
   const { t } = useTranslation('chat');
 
   return (
     <div className="flex flex-col items-center justify-center text-center h-[60vh]">
       <div className="flex h-48 w-48 items-center justify-center">
-        <img src={logoSvg} alt="GeeClaw" className="h-48 w-auto" />
+        <BrandOrbLogo alt="GeeClaw" size={192} orbTheme="auto" />
       </div>
       <p className="text-[18px] text-foreground/80 mb-8 font-medium">
         {t('welcome.subtitle')}
@@ -326,6 +326,10 @@ function WelcomeScreen() {
       </div>
     </div>
   );
+}
+
+function WelcomeScreen() {
+  return <ChatWelcomeScreen />;
 }
 
 function ChannelWelcomeIcon({ type }: { type: ChannelType }) {

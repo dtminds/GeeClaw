@@ -106,6 +106,12 @@ GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime s
 - **Memory**: 4GB RAM minimum (8GB recommended)
 - **Storage**: 1GB available disk space
 
+### GPU Acceleration
+
+GeeClaw now enables Electron GPU acceleration by default so animated brand surfaces and other accelerated rendering paths work without extra flags.
+
+If you hit driver-specific rendering issues on a particular machine, launch the app with `--disable-gpu` to force software rendering again.
+
 ### Installation
 
 #### Pre-built Releases (Recommended)
