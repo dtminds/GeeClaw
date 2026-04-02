@@ -1,4 +1,5 @@
 import { globalShortcut } from 'electron';
+import type { QuickActionTriggerResult } from '@shared/quick-actions';
 import type {
   QuickActionDefinition,
   QuickActionInvocationEvent,
@@ -8,19 +9,19 @@ import type {
 
 let registeredActionIds: string[] = [];
 let lastInvocation: QuickActionInvocationState | null = null;
-let quickActionDispatchHandler: ((event: QuickActionInvocationEvent) => void | Promise<void>) | null = null;
+let quickActionDispatchHandler: ((event: QuickActionInvocationEvent) => unknown | Promise<unknown>) | null = null;
 
 async function dispatchQuickAction(
   actionId: string,
   source: QuickActionInvocationState['source'],
-): Promise<void> {
+): Promise<QuickActionTriggerResult | undefined> {
   const invocation = {
     actionId,
     invokedAt: Date.now(),
     source,
   } satisfies QuickActionInvocationEvent;
   lastInvocation = invocation;
-  await quickActionDispatchHandler?.(invocation);
+  return await quickActionDispatchHandler?.(invocation) as QuickActionTriggerResult | undefined;
 }
 
 export function registerQuickActionShortcuts(
@@ -61,7 +62,7 @@ export function getQuickActionHotkeyStatus(): QuickActionHotkeyStatus {
 }
 
 export function setQuickActionDispatchHandler(
-  handler: ((event: QuickActionInvocationEvent) => void | Promise<void>) | null,
+  handler: ((event: QuickActionInvocationEvent) => unknown | Promise<unknown>) | null,
 ): void {
   quickActionDispatchHandler = handler;
 }
@@ -80,6 +81,6 @@ export function clearQuickActionDispatchTarget(): void {
   setQuickActionDispatchHandler(null);
 }
 
-export function triggerQuickAction(actionId: string): Promise<void> {
+export function triggerQuickAction(actionId: string): Promise<QuickActionTriggerResult | undefined> {
   return dispatchQuickAction(actionId, 'ipc');
 }

@@ -15,6 +15,7 @@ function createBrowserWindowInstance() {
     isDestroyed: vi.fn().mockReturnValue(false),
     setPosition: vi.fn(),
     show: vi.fn(),
+    hide: vi.fn(),
     focus: vi.fn(),
     webContents: {
       send: vi.fn(),
@@ -63,7 +64,7 @@ describe('quick action service', () => {
       }),
     } as never);
 
-    await service.trigger('translate');
+    const result = await service.trigger('translate');
 
     expect(showMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -71,6 +72,12 @@ describe('quick action service', () => {
         input: expect.objectContaining({ text: 'clipboard text', source: 'clipboard' }),
       }),
     );
+    expect(result).toMatchObject({
+      success: true,
+      context: expect.objectContaining({
+        actionId: 'translate',
+      }),
+    });
   });
 });
 
@@ -147,6 +154,12 @@ describe('quick action window', () => {
     expect(
       browserWindowInstance.show.mock.invocationCallOrder[0],
     ).toBeLessThan(browserWindowInstance.focus.mock.invocationCallOrder[0]);
+
+    const blurHandler = browserWindowInstance.on.mock.calls.find(([eventName]) => eventName === 'blur')?.[1] as
+      | (() => void)
+      | undefined;
+    blurHandler?.();
+    expect(browserWindowInstance.hide).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -177,7 +190,7 @@ describe('quick action dispatch', () => {
 
     const triggerPromise = triggerQuickAction('translate');
     expect(triggerPromise).toBeInstanceOf(Promise);
-    void (triggerPromise as Promise<void>).then(() => {
+    void triggerPromise.then(() => {
       settled = true;
     });
     expect(resolved).toBe(false);

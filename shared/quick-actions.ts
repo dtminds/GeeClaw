@@ -29,6 +29,18 @@ export interface QuickActionContext {
   source: QuickActionInvocationSource;
 }
 
+export type QuickActionTriggerFailureReason = 'action-not-found' | 'action-disabled' | 'no-input';
+
+export type QuickActionTriggerResult =
+  | {
+      success: true;
+      context: QuickActionContext;
+    }
+  | {
+      success: false;
+      reason: QuickActionTriggerFailureReason;
+    };
+
 export interface QuickActionSettings {
   actions: QuickActionDefinition[];
   closeOnCopy: boolean;

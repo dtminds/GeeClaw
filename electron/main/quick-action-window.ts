@@ -60,6 +60,9 @@ export function createQuickActionWindowController() {
       quickActionWindow = null;
       windowReady = null;
     });
+    quickActionWindow.on('blur', () => {
+      quickActionWindow?.hide();
+    });
 
     return quickActionWindow;
   };

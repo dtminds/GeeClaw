@@ -2075,8 +2075,8 @@ function registerQuickActionHandlers(quickActionService: QuickActionService): vo
   });
 
   ipcMain.handle('quickAction:trigger', async (_, actionId: string) => {
-    await triggerQuickAction(actionId);
-    return { success: true };
+    const result = await triggerQuickAction(actionId);
+    return result ?? { success: false, reason: 'action-not-found' as const };
   });
 }
 
@@ -2172,24 +2172,28 @@ function registerUsageHandlers(): void {
 function registerWindowHandlers(mainWindow: BrowserWindow): void {
   const trafficLightPosition = { x: 16, y: 16 };
 
-  ipcMain.handle('window:minimize', () => {
-    mainWindow.minimize();
+  ipcMain.handle('window:minimize', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    targetWindow.minimize();
   });
 
-  ipcMain.handle('window:maximize', () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
+  ipcMain.handle('window:maximize', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (targetWindow.isMaximized()) {
+      targetWindow.unmaximize();
     } else {
-      mainWindow.maximize();
+      targetWindow.maximize();
     }
   });
 
-  ipcMain.handle('window:close', () => {
-    mainWindow.close();
+  ipcMain.handle('window:close', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    targetWindow.close();
   });
 
-  ipcMain.handle('window:isMaximized', () => {
-    return mainWindow.isMaximized();
+  ipcMain.handle('window:isMaximized', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    return targetWindow.isMaximized();
   });
 
   ipcMain.handle('window:setButtonsVisible', (_event, visible?: boolean) => {

@@ -1,4 +1,10 @@
-import type { QuickActionContext, QuickActionDefinition, QuickActionInput } from '@shared/quick-actions';
+import type {
+  QuickActionContext,
+  QuickActionDefinition,
+  QuickActionInput,
+  QuickActionTriggerFailureReason,
+  QuickActionTriggerResult,
+} from '@shared/quick-actions';
 import type { QuickActionInvocationEvent } from './types';
 
 interface QuickActionServiceDeps {
@@ -11,42 +17,56 @@ interface QuickActionServiceDeps {
 export interface QuickActionService {
   list: () => Promise<QuickActionDefinition[]>;
   getLastContext: () => QuickActionContext | null;
-  handleInvocation: (event: QuickActionInvocationEvent) => Promise<QuickActionContext | null>;
-  trigger: (actionId: string) => Promise<QuickActionContext | null>;
+  handleInvocation: (event: QuickActionInvocationEvent) => Promise<QuickActionTriggerResult>;
+  trigger: (actionId: string) => Promise<QuickActionTriggerResult>;
 }
 
 export function createQuickActionService(deps: QuickActionServiceDeps): QuickActionService {
   let lastContext: QuickActionContext | null = null;
 
-  const buildContext = async (event: QuickActionInvocationEvent): Promise<QuickActionContext | null> => {
+  const buildContext = async (
+    event: QuickActionInvocationEvent,
+  ): Promise<{ context: QuickActionContext } | { reason: QuickActionTriggerFailureReason }> => {
     const action = await deps.getActionById(event.actionId);
-    if (!action || !action.enabled) {
-      return null;
+    if (!action) {
+      return { reason: 'action-not-found' };
+    }
+    if (!action.enabled) {
+      return { reason: 'action-disabled' };
     }
 
     const input = await deps.getQuickActionInput();
     if (!input) {
-      return null;
+      return { reason: 'no-input' };
     }
 
     return {
-      actionId: action.id,
-      action,
-      input,
-      invokedAt: event.invokedAt,
-      source: event.source,
+      context: {
+        actionId: action.id,
+        action,
+        input,
+        invokedAt: event.invokedAt,
+        source: event.source,
+      },
     };
   };
 
-  const handleInvocation = async (event: QuickActionInvocationEvent): Promise<QuickActionContext | null> => {
-    const context = await buildContext(event);
-    if (!context) {
-      return null;
+  const handleInvocation = async (event: QuickActionInvocationEvent): Promise<QuickActionTriggerResult> => {
+    const result = await buildContext(event);
+    if ('reason' in result) {
+      return {
+        success: false,
+        reason: result.reason,
+      };
     }
 
+    const { context } = result;
     lastContext = context;
     await deps.showWindow(context);
-    return context;
+    return {
+      success: true,
+      context,
+    };
   };
 
   return {

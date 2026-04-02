@@ -1,6 +1,7 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { QuickActionContext } from '@shared/quick-actions';
 
 const settingsState = {
   init: vi.fn(async () => undefined),
@@ -17,6 +18,10 @@ const bootstrapState = {
   phase: 'ready' as const,
   init: vi.fn(async () => undefined),
 };
+
+const getQuickActionLastContextMock = vi.fn<() => Promise<QuickActionContext | null>>();
+const subscribeQuickActionInvokedMock = vi.fn<(listener: (context: QuickActionContext) => void) => () => void>();
+const closeQuickActionWindowMock = vi.fn<() => Promise<void>>();
 
 vi.mock('../../src/i18n', () => ({
   default: {
@@ -104,6 +109,12 @@ vi.mock('../../src/lib/api-client', () => ({
   applyGatewayTransportPreference: vi.fn(),
 }));
 
+vi.mock('../../src/lib/quick-actions', () => ({
+  getQuickActionLastContext: () => getQuickActionLastContextMock(),
+  subscribeQuickActionInvoked: (listener: (context: QuickActionContext) => void) => subscribeQuickActionInvokedMock(listener),
+  closeQuickActionWindow: () => closeQuickActionWindowMock(),
+}));
+
 vi.mock('../../src/lib/settings-modal', () => ({
   isSettingsModalPath: () => false,
 }));
@@ -116,11 +127,36 @@ vi.mock('../../src/lib/update-debug', () => ({
   getDevDebugUpdateScenario: () => null,
 }));
 
+function createContext(overrides?: Partial<QuickActionContext>): QuickActionContext {
+  return {
+    actionId: 'translate',
+    action: {
+      id: 'translate',
+      kind: 'translate',
+      title: 'Translate',
+      shortcut: 'CommandOrControl+Shift+1',
+      enabled: true,
+      outputMode: 'copy',
+    },
+    input: {
+      text: 'cold start clipboard',
+      source: 'clipboard',
+      obtainedAt: 1,
+    },
+    invokedAt: 2,
+    source: 'shortcut',
+    ...overrides,
+  };
+}
+
 describe('Quick action page', () => {
   beforeEach(() => {
     settingsState.init.mockReset().mockResolvedValue(undefined);
     updateState.init.mockReset().mockResolvedValue(undefined);
     bootstrapState.init.mockReset().mockResolvedValue(undefined);
+    getQuickActionLastContextMock.mockReset().mockResolvedValue(createContext());
+    closeQuickActionWindowMock.mockReset().mockResolvedValue(undefined);
+    subscribeQuickActionInvokedMock.mockReset().mockImplementation(() => vi.fn());
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -133,38 +169,12 @@ describe('Quick action page', () => {
         removeListener: vi.fn(),
       })),
     });
-
-    vi.mocked(window.electron.ipcRenderer.invoke).mockReset().mockImplementation(async (channel: string) => {
-      if (channel === 'quickAction:getLastContext') {
-        return {
-          actionId: 'translate',
-          action: {
-            id: 'translate',
-            kind: 'translate',
-            title: 'Translate',
-            shortcut: 'CommandOrControl+Shift+1',
-            enabled: true,
-            outputMode: 'copy',
-          },
-          input: {
-            text: 'cold start clipboard',
-            source: 'clipboard',
-            obtainedAt: 1,
-          },
-          invokedAt: 2,
-          source: 'shortcut',
-        };
-      }
-
-      return null;
-    });
-    vi.mocked(window.electron.ipcRenderer.on).mockReset().mockImplementation(() => vi.fn());
   });
 
-  it('hydrates from the last context on the dedicated quick-action route', async () => {
-    const subscriptions = new Map<string, (...args: unknown[]) => void>();
-    vi.mocked(window.electron.ipcRenderer.on).mockImplementation((channel, callback) => {
-      subscriptions.set(channel, callback);
+  it('hydrates from the last context via the quick-action renderer api and updates on invocation events', async () => {
+    let listener: ((context: QuickActionContext) => void) | null = null;
+    subscribeQuickActionInvokedMock.mockImplementation((nextListener) => {
+      listener = nextListener;
       return vi.fn();
     });
 
@@ -179,9 +189,10 @@ describe('Quick action page', () => {
     expect(await screen.findByText('Translate')).toBeInTheDocument();
     expect(screen.getByText('cold start clipboard')).toBeInTheDocument();
     expect(screen.queryByTestId('main-layout')).not.toBeInTheDocument();
+    expect(getQuickActionLastContextMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      subscriptions.get('quickAction:invoked')?.({
+      listener?.(createContext({
         actionId: 'reply',
         action: {
           id: 'reply',
@@ -198,12 +209,34 @@ describe('Quick action page', () => {
         },
         invokedAt: 4,
         source: 'ipc',
-      });
+      }));
     });
 
     await waitFor(() => {
       expect(screen.getByText('Reply')).toBeInTheDocument();
       expect(screen.getByText('live update text')).toBeInTheDocument();
     });
+  });
+
+  it('closes the floating window from the close button and Escape', async () => {
+    const { default: App } = await import('@/App');
+
+    render(
+      <MemoryRouter initialEntries={['/quick-action']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Translate')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close quick action window' }));
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+
+    expect(closeQuickActionWindowMock).toHaveBeenCalledTimes(2);
   });
 });
