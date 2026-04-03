@@ -1,0 +1,82 @@
+[
+  {
+    "agentId": "delivery-execution",
+    "name": "交付执行官",
+    "description": "覆盖 sprint 计划、需求拆解、会议纪要、测试场景与发布说明，适合把规划推进成实际交付。",
+    "emoji": "🛠️",
+    "category": "PM",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/delivery-execution/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000001"
+  },
+  {
+    "agentId": "discovery-research",
+    "name": "用户研究官",
+    "description": "覆盖产品发现、用户研究、需求归因与竞品洞察，适合从机会识别一路推进到验证计划。",
+    "emoji": "🔍",
+    "category": "PM",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/discovery-research/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000002"
+  },
+  {
+    "agentId": "growth-optimization",
+    "name": "增长优化官",
+    "description": "覆盖指标体系、SQL、cohort、A/B test、GTM 与营销工作流，适合把产品推向增长与验证闭环。",
+    "emoji": "📈",
+    "category": "PM",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/growth-optimization/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000003"
+  },
+  {
+    "agentId": "hotspot-intel-assistant",
+    "name": "热点情报助手",
+    "description": "跨平台追踪热榜、热点、问答、社区讨论与科技资讯，适合快速判断一个话题正在被哪些中文平台放大。",
+    "emoji": "🔥",
+    "category": "资讯热点",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000004"
+  },
+  {
+    "agentId": "marketing-growth-assistant",
+    "name": "营销增长助手",
+    "description": "覆盖 SEO 机会、内容打磨、增长实验、EDM与线索转化，擅长营销增长工作",
+    "emoji": "🚀",
+    "category": "Marketing",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/marketing-growth-assistant/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000005"
+  },
+  {
+    "agentId": "strategy-planning",
+    "name": "战略规划官",
+    "description": "覆盖产品战略、商业模式、PRD、OKR 与路线规划，适合把研究结论收敛成可执行方向。",
+    "emoji": "🧭",
+    "category": "PM",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/strategy-planning/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000006"
+  },
+  {
+    "agentId": "wechat-creator-assistant",
+    "name": "公众号创作助手",
+    "description": "帮助公众号作者完成选题发现、爆文拆解、文章成稿、排版预览和草稿箱交付，适合持续更新与内容复盘。",
+    "emoji": "📝",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/wechat-creator-assistant/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000007"
+  },
+  {
+    "agentId": "xhs-creator-assistant",
+    "name": "小红书创作助手",
+    "description": "聚焦小红书的选题搜索、评论观察、内容采集、笔记发布与创作者后台数据，适合做单平台深度运营。",
+    "emoji": "📕",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/xhs-creator-assistant/1.0.0.zip",
+    "checksum": "sha256-0000000000000000000000000000000000000000000000000000000000000008"
+  }
+]
