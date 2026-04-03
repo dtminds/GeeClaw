@@ -15,6 +15,7 @@ import { ProviderContent } from '@/pages/Setup';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
 import { useSessionStore } from '@/stores/session';
+import { cn } from '@/lib/utils';
 import geeclawIcon from '@/assets/logo.svg';
 
 const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
@@ -352,7 +353,15 @@ export function Startup() {
         <div className="absolute bottom-[-14%] left-1/2 h-[22rem] w-[34rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,229,210,0.28)_0%,rgba(255,229,210,0.1)_42%,rgba(255,229,210,0)_76%)] blur-3xl" />
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-10 md:px-10">
+      <div
+        data-testid="startup-content-scroll-container"
+        className={cn(
+          'relative flex min-h-0 flex-1 flex-col px-6 pb-16 pt-10 md:px-10',
+          phase === 'needs_provider'
+            ? 'items-stretch overflow-y-auto overflow-x-hidden'
+            : 'items-center justify-center',
+        )}
+      >
         {renderCenterPanel()}
       </div>
     </div>
