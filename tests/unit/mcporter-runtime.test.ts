@@ -25,6 +25,10 @@ function setPlatform(platform: string) {
   Object.defineProperty(process, 'platform', { value: platform, writable: true });
 }
 
+function normalizeWindowsTestPath(value: string | null): string | null {
+  return value?.replace(/\//g, '\\') ?? null;
+}
+
 function createMockChild(output: string) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
@@ -127,5 +131,41 @@ describe('mcporter runtime', () => {
     expect(status.binaryPath).toBe(managedMcporterPath);
     expect(status.version).toBe('0.4.0');
     expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefers the Windows cmd shim when where.exe also returns a non-executable mcporter file', async () => {
+    setPlatform('win32');
+    process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming';
+    process.env.USERPROFILE = 'C:\\Users\\test';
+    process.env.PATH = 'C:\\Windows\\System32';
+    delete process.env.Path;
+
+    const mcporterShimPath = 'C:\\Users\\test\\AppData\\Roaming\\GeeClaw\\npm-global\\mcporter';
+    const mcporterCmdPath = 'C:\\Users\\test\\AppData\\Roaming\\GeeClaw\\npm-global\\mcporter.cmd';
+
+    mockExistsSync.mockImplementation((value: string) => {
+      const normalized = normalizeWindowsTestPath(value)?.toLowerCase();
+      return normalized === mcporterShimPath.toLowerCase() || normalized === mcporterCmdPath.toLowerCase();
+    });
+    mockRealpathSync.mockImplementation((value: string) => value);
+    mockExecFile.mockImplementation((command: string, args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+      if (command === 'where.exe' && args[0] === 'mcporter') {
+        callback(null, `${mcporterShimPath}\r\n${mcporterCmdPath}\r\n`, '');
+        return;
+      }
+
+      callback(new Error(`Unexpected execFile call: ${command} ${args.join(' ')}`), '', '');
+    });
+    mockSpawn.mockImplementation((command: string, args: string[]) => {
+      expect(normalizeWindowsTestPath(command)).toBe(mcporterCmdPath);
+      expect(args).toEqual(['--version']);
+      return createMockChild('mcporter 0.4.0');
+    });
+
+    const { getMcporterStatus } = await import('@electron/utils/mcporter-runtime');
+    const status = await getMcporterStatus();
+
+    expect(normalizeWindowsTestPath(status.binaryPath)).toBe(mcporterCmdPath);
+    expect(status.version).toBe('0.4.0');
   });
 });

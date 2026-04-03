@@ -27,6 +27,15 @@ function isMainGatewaySessionKey(sessionKey: string): boolean {
   return sessionKey.endsWith(':main');
 }
 
+function getAgentIdFromGatewaySessionKey(sessionKey: string): string | null {
+  if (!sessionKey.startsWith('agent:')) {
+    return null;
+  }
+
+  const parts = sessionKey.split(':');
+  return parts[1] || null;
+}
+
 function shouldReplaceSession(current: DesktopSessionSummary, candidate: DesktopSessionSummary): boolean {
   return candidate.updatedAt > current.updatedAt
     || (candidate.updatedAt === current.updatedAt && candidate.createdAt > current.createdAt);
@@ -183,4 +192,16 @@ export async function deleteDesktopSession(id: string): Promise<DesktopSessionSu
 
   await writeSessions(sessions.filter((entry) => entry.id !== id));
   return session;
+}
+
+export async function deleteDesktopSessionsForAgent(agentId: string): Promise<DesktopSessionSummary[]> {
+  const sessions = await readSessions();
+  const deleted = sessions.filter((session) => getAgentIdFromGatewaySessionKey(session.gatewaySessionKey) === agentId);
+
+  if (deleted.length === 0) {
+    return [];
+  }
+
+  await writeSessions(sessions.filter((session) => getAgentIdFromGatewaySessionKey(session.gatewaySessionKey) !== agentId));
+  return deleted;
 }

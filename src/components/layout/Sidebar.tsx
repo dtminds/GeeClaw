@@ -271,8 +271,10 @@ export function Sidebar() {
                     key={agent.id}
                     type="button"
                     onClick={() => {
-                      void openAgentMainSession(agent.id);
-                      navigate('/chat');
+                      void (async () => {
+                        await openAgentMainSession(agent.id);
+                        navigate('/chat');
+                      })();
                     }}
                     className={cn(
                       'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
@@ -292,8 +294,10 @@ export function Sidebar() {
                   key={agent.id}
                   type="button"
                   onClick={() => {
-                    void openAgentMainSession(agent.id);
-                    navigate('/chat');
+                    void (async () => {
+                      await openAgentMainSession(agent.id);
+                      navigate('/chat');
+                    })();
                   }}
                   className={cn(
                     'w-full rounded-xl px-3 py-2 text-left transition-colors duration-200',

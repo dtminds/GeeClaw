@@ -1,7 +1,8 @@
-import { app, utilityProcess } from 'electron';
+import { app } from 'electron';
 import path from 'path';
 import { existsSync, rmSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { getAllSettings } from '../utils/store';
 import { resolveGeeClawAppEnvironment } from '../utils/app-env';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
@@ -32,7 +33,6 @@ import { syncAllChannelConfigToOpenClaw } from '../services/channels/channel-run
 import {
   buildManagedOpenClawArgs,
   getManagedOpenClawConfigPath,
-  MANAGED_OPENCLAW_PROFILE,
 } from '../utils/openclaw-managed-profile';
 import {
   getManagedAgentWorkspacePath,
@@ -41,8 +41,11 @@ import {
 import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
+import { getBundledNodePath } from '../utils/managed-bin';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
+const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
+const OPENCLAW_SETUP_ARTIFACT_POLL_MS = 250;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
 const BUILTIN_CHANNEL_EXTENSIONS = ['discord', 'telegram'];
@@ -161,7 +164,29 @@ async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPo
   await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
 }
 
-async function ensureManagedProfileSetup(options: {
+function resolveOpenClawSetupCommand(entryScript: string): {
+  command: string;
+  args: string[];
+  envPatch?: Record<string, string>;
+} {
+  const bundledNodePath = getBundledNodePath();
+  if (bundledNodePath) {
+    return {
+      command: bundledNodePath,
+      args: [entryScript],
+    };
+  }
+
+  return {
+    command: process.execPath,
+    args: [entryScript],
+    envPatch: {
+      ELECTRON_RUN_AS_NODE: '1',
+    },
+  };
+}
+
+async function runManagedProfileSetupOnce(options: {
   openclawConfigDir: string;
   openclawDir: string;
   entryScript: string;
@@ -173,12 +198,6 @@ async function ensureManagedProfileSetup(options: {
 }): Promise<void> {
   const workspaceDir = getManagedWorkspaceDir();
   const sessionsDir = getManagedSessionsDir(options.openclawConfigDir);
-  if (existsSync(workspaceDir)) {
-    return;
-  }
-
-  await ensureManagedWorkspaceConfig(options.openclawConfigDir, options.gatewayPort);
-
   const setupArgs = buildManagedOpenClawArgs('setup');
   const setupEnv = buildGatewayForkEnv({
     baseEnv: process.env,
@@ -187,34 +206,75 @@ async function ensureManagedProfileSetup(options: {
       ...options.managedAppEnv,
       ...options.uvEnv,
       ...options.proxyEnv,
+      ELECTRON_RUN_AS_NODE: '1',
+      OPENCLAW_EMBEDDED_IN: 'GeeClaw',
+      GIT_TERMINAL_PROMPT: '0',
+      GCM_INTERACTIVE: 'never',
+      GIT_ASKPASS: 'echo',
+      SSH_ASKPASS: 'echo',
     },
     openclawConfigDir: options.openclawConfigDir,
     gatewayPort: options.gatewayPort,
   });
-
-  logger.info(
-    `Managed OpenClaw workspace is missing; rewriting config and running setup for ${options.openclawConfigDir}`,
-  );
+  const setupCommand = resolveOpenClawSetupCommand(options.entryScript);
 
   await new Promise<void>((resolve, reject) => {
-    const child = utilityProcess.fork(options.entryScript, setupArgs, {
-      cwd: options.openclawDir,
-      stdio: 'pipe',
-      env: setupEnv as NodeJS.ProcessEnv,
-      serviceName: 'OpenClaw Setup',
-    });
+    const child: ChildProcess = spawn(
+      setupCommand.command,
+      [...setupCommand.args, ...setupArgs],
+      {
+        cwd: options.openclawDir,
+        env: {
+          ...setupEnv,
+          ...setupCommand.envPatch,
+        } as NodeJS.ProcessEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      },
+    );
+
+    logger.info(
+      `OpenClaw setup spawned (pid=${child.pid ?? 'unknown'}, command="${setupCommand.command}", cwd="${options.openclawDir}")`,
+    );
 
     const stderrLines: string[] = [];
     let settled = false;
     let childExited = false;
+    let silenceWarningTimer: NodeJS.Timeout | null = null;
+    const clearSilenceWarningTimer = () => {
+      if (!silenceWarningTimer) {
+        return;
+      }
+      clearTimeout(silenceWarningTimer);
+      silenceWarningTimer = null;
+    };
+    const resolveDiagnostics = () => ({
+      workspaceExists: existsSync(workspaceDir),
+      sessionsExists: existsSync(sessionsDir),
+    });
+    const armSilenceWarningTimer = () => {
+      clearSilenceWarningTimer();
+      silenceWarningTimer = setTimeout(() => {
+        const diagnostics = resolveDiagnostics();
+        logger.warn(
+          `OpenClaw setup has produced no output for ${OPENCLAW_SETUP_SILENCE_WARNING_MS}ms; still waiting (workspaceExists=${diagnostics.workspaceExists}, sessionsExists=${diagnostics.sessionsExists})`,
+        );
+      }, OPENCLAW_SETUP_SILENCE_WARNING_MS);
+    };
     const resolveOnce = () => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
+      clearInterval(artifactPoll);
+      clearSilenceWarningTimer();
       resolve();
     };
     const rejectOnce = (error: Error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
+      clearInterval(artifactPoll);
+      clearSilenceWarningTimer();
       reject(error);
     };
     const maybeResolveFromReadyArtifacts = (reason: string) => {
@@ -222,7 +282,7 @@ async function ensureManagedProfileSetup(options: {
         return;
       }
 
-      logger.info(`Managed OpenClaw profile "${MANAGED_OPENCLAW_PROFILE}" initialized (${reason})`);
+      logger.info(`Managed OpenClaw profile initialized (${reason})`);
       resolveOnce();
 
       setTimeout(() => {
@@ -238,15 +298,24 @@ async function ensureManagedProfileSetup(options: {
       }, 2000);
     };
     const timeout = setTimeout(() => {
+      const diagnostics = resolveDiagnostics();
       try {
         child.kill();
       } catch {
         // ignore
       }
-      rejectOnce(new Error(`OpenClaw setup timed out after ${OPENCLAW_SETUP_TIMEOUT_MS}ms`));
+      rejectOnce(new Error(
+        `OpenClaw setup timed out after ${OPENCLAW_SETUP_TIMEOUT_MS}ms (workspaceExists=${diagnostics.workspaceExists}, sessionsExists=${diagnostics.sessionsExists})`,
+      ));
     }, OPENCLAW_SETUP_TIMEOUT_MS);
+    const artifactPoll = setInterval(() => {
+      maybeResolveFromReadyArtifacts('poll');
+    }, OPENCLAW_SETUP_ARTIFACT_POLL_MS);
+
+    armSilenceWarningTimer();
 
     child.stdout?.on('data', (data) => {
+      armSilenceWarningTimer();
       const raw = data.toString();
       for (const line of raw.split(/\r?\n/)) {
         const normalized = line.trim();
@@ -257,6 +326,7 @@ async function ensureManagedProfileSetup(options: {
     });
 
     child.stderr?.on('data', (data) => {
+      armSilenceWarningTimer();
       const raw = data.toString();
       for (const line of raw.split(/\r?\n/)) {
         const normalized = line.trim();
@@ -268,18 +338,16 @@ async function ensureManagedProfileSetup(options: {
 
     child.on('error', (error) => {
       childExited = true;
-      clearTimeout(timeout);
       rejectOnce(error);
     });
 
     child.on('exit', (code) => {
       childExited = true;
-      clearTimeout(timeout);
       if (settled) {
         return;
       }
       if (code === 0 && existsSync(workspaceDir) && existsSync(sessionsDir)) {
-        logger.info(`Managed OpenClaw profile "${MANAGED_OPENCLAW_PROFILE}" initialized (exit)`);
+        logger.info('Managed OpenClaw profile initialized (exit)');
         resolveOnce();
         return;
       }
@@ -289,7 +357,33 @@ async function ensureManagedProfileSetup(options: {
         : '';
       rejectOnce(new Error(`OpenClaw setup exited with code ${code ?? 'unknown'}.${detail}`));
     });
+
+    maybeResolveFromReadyArtifacts('initial');
   });
+}
+
+async function ensureManagedProfileSetup(options: {
+  openclawConfigDir: string;
+  openclawDir: string;
+  entryScript: string;
+  finalPath: string;
+  managedAppEnv: Record<string, string | undefined>;
+  uvEnv: Record<string, string | undefined>;
+  proxyEnv: Record<string, string | undefined>;
+  gatewayPort: number;
+}): Promise<void> {
+  const workspaceDir = getManagedWorkspaceDir();
+  const sessionsDir = getManagedSessionsDir(options.openclawConfigDir);
+  if (existsSync(workspaceDir) && existsSync(sessionsDir)) {
+    return;
+  }
+
+  await ensureManagedWorkspaceConfig(options.openclawConfigDir, options.gatewayPort);
+
+  logger.info(
+    `Managed OpenClaw workspace is missing; rewriting config and running setup for ${options.openclawConfigDir}`,
+  );
+  await runManagedProfileSetupOnce(options);
 }
 
 export async function syncGatewayConfigBeforeLaunch(

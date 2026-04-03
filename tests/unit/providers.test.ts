@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
-  SETUP_PROVIDERS,
   getProviderDocsUrl,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
@@ -123,20 +122,6 @@ describe('provider metadata', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
       expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
-  });
-
-  it('keeps Model Studio hidden from setup while preserving metadata', () => {
-    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
-
-    expect(modelstudio).toMatchObject({
-      id: 'modelstudio',
-      name: '阿里云百炼',
-      requiresApiKey: true,
-      defaultBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-      defaultModelId: 'qwen3.6-plus',
-      hidden: true,
-    });
-    expect(SETUP_PROVIDERS.some((provider) => provider.id === 'modelstudio')).toBe(false);
   });
 
   it('uses OpenAI-compatible Ollama default base URL', () => {

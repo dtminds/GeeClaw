@@ -3,7 +3,7 @@
     "gatewayRequired": "OpenClaw 需要运行才能使用聊天，您可以从设置中启动",
     "welcome": {
         "title": "GeeClaw",
-        "subtitle": "您的 AI 龙虾助手已就绪，在下方开始对话。",
+        "subtitle": "您的 AI 智能体已就绪，在下方开始对话。",
         "channelPrompt": "或连接以下聊天工具发起会话",
         "channelAriaLabel": "从 {{channel}} 发起会话",
         "askQuestions": "提问",

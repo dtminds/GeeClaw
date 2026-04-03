@@ -95,14 +95,14 @@ function AgentFallbackDialog(props: {
           </div>
 
           {/* Available models — click to add */}
-          <div className="modal-section-surface space-y-3 rounded-2xl border p-4">
+          <div className="modal-section-surface space-y-3 rounded-2xl">
             <div>
               <p className="text-[14px] font-bold text-foreground/80">{t('agentModels.dialog.available')}</p>
               <p className="mt-1 text-[12px] text-muted-foreground">{t('agentModels.dialog.availableHelp')}</p>
             </div>
             <div className="space-y-3">
               {props.snapshot.availableModels.map((provider) => (
-                <div key={provider.providerId} className="modal-field-surface rounded-xl border p-3 shadow-sm">
+                <div key={provider.providerId} className="modal-field-surface rounded-xl border p-3">
                   <p className="text-[13px] font-semibold text-foreground">{provider.providerName}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {provider.modelRefs.map((modelRef) => {
@@ -113,7 +113,7 @@ function AgentFallbackDialog(props: {
                           type="button"
                           onClick={() => toggleModel(modelRef)}
                           className={[
-                            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[12px] transition-colors',
+                            'inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[12px] transition-colors',
                             selected
                               ? 'bg-black/90 text-white dark:bg-white dark:text-black'
                               : 'surface-muted text-foreground hover:bg-black/10 dark:hover:bg-white/10',

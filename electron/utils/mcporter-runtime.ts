@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import { sortCommandCandidatesForExecution } from './command-candidates';
 import { logger } from './logger';
 import { prepareWinSpawn } from './paths';
 import { getGeeClawCommandSearchDirs, getGeeClawRuntimeEnv } from './runtime-path';
@@ -92,7 +93,7 @@ async function listCommandCandidates(command: string): Promise<string[]> {
   }
 
   const seen = new Set<string>();
-  return candidates.filter((candidate) => {
+  return sortCommandCandidatesForExecution(candidates).filter((candidate) => {
     if (!candidate || !existsSync(candidate)) {
       return false;
     }

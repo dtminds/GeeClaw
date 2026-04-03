@@ -130,6 +130,10 @@ async function setupManagedPresetFixture(options?: {
     })),
   }));
 
+  vi.doMock('@electron/utils/desktop-sessions', () => ({
+    deleteDesktopSessionsForAgent: vi.fn(async () => []),
+  }));
+
   vi.doMock('@electron/utils/app-env', () => ({
     resolveGeeClawAppEnvironment: vi.fn(async (baseEnv?: Record<string, string | undefined>) => ({
       ...(baseEnv ?? process.env),
@@ -209,6 +213,7 @@ afterEach(() => {
   vi.unmock('@electron/utils/paths');
   vi.unmock('fs/promises');
   vi.unmock('@electron/services/agents/store-instance');
+  vi.unmock('@electron/utils/desktop-sessions');
   vi.unmock('@electron/utils/agent-presets');
   vi.unmock('@electron/utils/app-env');
   while (tempDirs.length > 0) {
@@ -654,13 +659,13 @@ describe('managed agent config domain', () => {
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(false);
   });
 
-  it('uses %USERPROFILE%-based workspace defaults on Windows', async () => {
+  it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {
     setPlatform('win32');
     const { agentConfig } = await setupManagedPresetFixture();
 
     const created = await agentConfig.createAgent('Windows Helper', 'windows-helper');
     expect(created.agents.find((agent) => agent.id === 'windows-helper')).toMatchObject({
-      workspace: '%USERPROFILE%\\geeclaw\\workspace-windows-helper',
+      workspace: '~\\geeclaw\\workspace-windows-helper',
       agentDir: '~/.openclaw-geeclaw/agents/windows-helper/agent',
     });
   });
