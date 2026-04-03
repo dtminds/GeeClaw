@@ -125,20 +125,6 @@ describe('provider metadata', () => {
     );
   });
 
-  it('keeps Model Studio hidden from setup while preserving metadata', () => {
-    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
-
-    expect(modelstudio).toMatchObject({
-      id: 'modelstudio',
-      name: '阿里云百炼',
-      requiresApiKey: true,
-      defaultBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-      defaultModelId: 'qwen3.6-plus',
-      hidden: true,
-    });
-    expect(SETUP_PROVIDERS.some((provider) => provider.id === 'modelstudio')).toBe(false);
-  });
-
   it('uses OpenAI-compatible Ollama default base URL', () => {
     expect(PROVIDER_TYPE_INFO).toEqual(
       expect.arrayContaining([

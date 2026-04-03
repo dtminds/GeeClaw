@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeIpcMock = vi.fn(async () => undefined);
+const navigateMock = vi.fn();
 
 const settingsState = {
   sidebarCollapsed: false,
@@ -79,6 +80,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
 vi.mock('@/lib/api-client', () => ({
   invokeIpc: invokeIpcMock,
 }));
@@ -120,6 +129,7 @@ describe('Sidebar settings menu trigger', () => {
     channelsState.fetchChannels.mockReset().mockResolvedValue(undefined);
     bootstrapState.logoutToLogin.mockReset().mockResolvedValue(undefined);
     invokeIpcMock.mockReset().mockResolvedValue(undefined);
+    navigateMock.mockReset();
 
     if (!window.PointerEvent) {
       Object.defineProperty(window, 'PointerEvent', {
@@ -207,5 +217,41 @@ describe('Sidebar settings menu trigger', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
     expect(await screen.findByRole('dialog', { name: 'Add Agent' })).toBeInTheDocument();
+  });
+
+  it('waits for the agent main session before navigating to chat', async () => {
+    let resolveOpenAgentMainSession: (() => void) | null = null;
+    chatState.openAgentMainSession.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resolveOpenAgentMainSession = resolve;
+    }));
+    agentsState.agents = [
+      {
+        id: 'agent-1',
+        name: 'Alpha',
+        isDefault: false,
+      },
+    ];
+
+    try {
+      const { Sidebar } = await import('@/components/layout/Sidebar');
+
+      render(
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <Sidebar />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Alpha/ }));
+      expect(chatState.openAgentMainSession).toHaveBeenCalledWith('agent-1');
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      resolveOpenAgentMainSession?.();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(navigateMock).toHaveBeenCalledWith('/chat');
+    } finally {
+      agentsState.agents = [];
+    }
   });
 });

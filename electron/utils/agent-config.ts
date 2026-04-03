@@ -24,6 +24,7 @@ import {
   isPresetSupportedOnPlatform,
   type AgentPresetPlatform,
 } from './agent-preset-platforms';
+import { deleteDesktopSessionsForAgent } from './desktop-sessions';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -1416,6 +1417,7 @@ export async function deleteAgentConfig(agentId: string): Promise<AgentsSnapshot
     delete management[agentId];
     await writeAgentManagementMap(management);
   }
+  await deleteDesktopSessionsForAgent(agentId);
   await removeAgentRuntimeDirectory(agentId);
   await removeAgentWorkspaceDirectory(removedEntry);
   logger.info('Deleted agent config entry', { agentId });
