@@ -39,11 +39,12 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
   await new Promise<void>((resolve) => {
     let exited = false;
 
-    child.once('exit', () => {
+    const exitListener = () => {
       exited = true;
       clearTimeout(timeout);
       resolve();
-    });
+    };
+    child.once('exit', exitListener);
 
     const pid = child.pid;
     logger.info(`Sending kill to Gateway process (pid=${pid ?? 'unknown'})`);
@@ -77,6 +78,7 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
           }
         }
       }
+      child.off('exit', exitListener);
       resolve();
     }, 5000);
   });
@@ -87,13 +89,18 @@ export async function unloadLaunchctlGatewayService(): Promise<void> {
   logger.info('Skipping launchctl service unload; GeeClaw no longer modifies system-wide ai.openclaw.gateway launch agents');
 }
 
-export async function waitForPortFree(port: number, timeoutMs = 30000): Promise<void> {
+export async function waitForPortFree(port: number, timeoutMs = 30000, signal?: AbortSignal): Promise<void> {
   const net = await import('net');
   const start = Date.now();
   const pollInterval = 500;
   let logged = false;
 
   while (Date.now() - start < timeoutMs) {
+    if (signal?.aborted) {
+      logger.debug(`waitForPortFree: aborted while waiting for port ${port}`);
+      return;
+    }
+
     const available = await new Promise<boolean>((resolve) => {
       const server = net.createServer();
       server.once('error', () => resolve(false));

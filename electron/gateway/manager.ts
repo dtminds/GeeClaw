@@ -100,6 +100,7 @@ export class GatewayManager extends EventEmitter {
   private static readonly HEARTBEAT_INTERVAL_MS = 30_000;
   private static readonly HEARTBEAT_TIMEOUT_MS = 12_000;
   private static readonly HEARTBEAT_MAX_MISSES = 3;
+  private isAutoReconnectStart = false;
 
   constructor(config?: Partial<ReconnectConfig>) {
     super();
@@ -234,8 +235,11 @@ export class GatewayManager extends EventEmitter {
       logger.debug('Cleared pending reconnect timer because start was requested manually');
     }
 
-    this.reconnectAttempts = 0;
-    this.setStatus({ state: 'starting', reconnectAttempts: 0 });
+    if (!this.isAutoReconnectStart) {
+      this.reconnectAttempts = 0;
+    }
+    this.isAutoReconnectStart = false;
+    this.setStatus({ state: 'starting', reconnectAttempts: this.reconnectAttempts });
 
     // Check if Python environment is ready (self-healing) asynchronously.
     // Fire-and-forget: only needs to run once, not on every retry.
@@ -272,8 +276,8 @@ export class GatewayManager extends EventEmitter {
           }
           this.startHealthCheck();
         },
-        waitForPortFree: async (port) => {
-          await waitForPortFree(port);
+        waitForPortFree: async (port, signal) => {
+          await waitForPortFree(port, 30000, signal);
         },
         startProcess: async () => {
           await this.startProcess();
@@ -294,6 +298,23 @@ export class GatewayManager extends EventEmitter {
         },
         delay: async (ms) => {
           await new Promise((resolve) => setTimeout(resolve, ms));
+        },
+        terminateOwnedProcess: async () => {
+          if (this.process && this.ownsProcess) {
+            logger.info('Terminating owned Gateway process before retry...');
+            const proc = this.process;
+            const pid = proc.pid;
+            await terminateOwnedGatewayProcess(proc).catch(() => {});
+            if (pid != null) {
+              try {
+                process.kill(pid, 0);
+              } catch {
+                this.process = null;
+              }
+            } else {
+              this.process = null;
+            }
+          }
         },
       });
     } catch (error) {
@@ -409,6 +430,7 @@ export class GatewayManager extends EventEmitter {
     clearPendingGatewayRequests(this.pendingRequests, new Error('Gateway stopped'));
 
     this.restartController.resetDeferredRestart();
+    this.isAutoReconnectStart = false;
     this.setStatus({ state: 'stopped', error: undefined, pid: undefined, connectedAt: undefined, uptime: undefined });
   }
 
@@ -836,13 +858,10 @@ export class GatewayManager extends EventEmitter {
         }
 
         logger.warn(
-          `Gateway heartbeat timed out after ${consecutiveMisses} consecutive misses (timeout=${timeoutMs}ms); terminating stale socket`,
+          `Gateway heartbeat: ${consecutiveMisses} consecutive pong misses ` +
+            `(timeout=${timeoutMs}ms, pid=${this.process?.pid ?? 'unknown'}, state=${this.status.state}). ` +
+            'No action taken; relying on process exit and socket close events.',
         );
-        try {
-          ws.terminate();
-        } catch (error) {
-          logger.warn('Failed to terminate stale Gateway socket after heartbeat timeout:', error);
-        }
       },
     });
   }
@@ -903,6 +922,7 @@ export class GatewayManager extends EventEmitter {
       try {
         // Use the guarded start() flow so reconnect attempts cannot bypass
         // lifecycle locking and accidentally start duplicate Gateway processes.
+        this.isAutoReconnectStart = true;
         await this.start();
         this.reconnectAttempts = 0;
       } catch (error) {

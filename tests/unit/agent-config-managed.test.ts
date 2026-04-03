@@ -61,6 +61,7 @@ async function setupManagedPresetFixture(options?: {
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
   tempDirs.push(homeDir);
+  const deleteDesktopSessionsForAgent = vi.fn(async () => []);
 
   vi.doMock('electron', () => ({
     app: {
@@ -94,18 +95,34 @@ async function setupManagedPresetFixture(options?: {
       }),
     };
   });
-  vi.doMock('@electron/utils/paths', async () => {
-    const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
-    return {
-      ...actual,
-      getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
-      expandPath: (value: string) => value.startsWith('~')
-        ? value.replace('~', homeDir)
-        : value.startsWith('%USERPROFILE%')
-          ? value.replace('%USERPROFILE%', homeDir)
-        : value,
-    };
-  });
+  vi.doMock('@electron/utils/paths', () => ({
+    getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+    getOpenClawResolvedDir: () => '/tmp/openclaw',
+    getOpenClawSkillsDir: () => join(homeDir, '.openclaw-geeclaw', 'skills'),
+    getGeeClawConfigDir: () => join(homeDir, '.geeclaw'),
+    getLogsDir: () => join(homeDir, '.geeclaw', 'logs'),
+    getDataDir: () => join(homeDir, '.geeclaw'),
+    getResourcesDir: () => '/tmp/geeclaw-test-app/resources',
+    getAgentPresetsDir: () => '/tmp/geeclaw-test-app/resources/agent-presets',
+    getOpenClawDir: () => '/tmp/openclaw',
+    getOpenClawEntryPath: () => '/tmp/openclaw/openclaw.mjs',
+    getClawHubCliEntryPath: () => '/tmp/geeclaw-test-app/node_modules/clawhub/bin/clawdhub.js',
+    getClawHubCliBinPath: () => '/tmp/geeclaw-test-app/node_modules/.bin/clawhub',
+    isOpenClawPresent: () => true,
+    isOpenClawBuilt: () => true,
+    getOpenClawStatus: () => ({
+      packageExists: true,
+      isBuilt: true,
+      entryPath: '/tmp/openclaw/openclaw.mjs',
+      dir: '/tmp/openclaw',
+    }),
+    ensureDir: vi.fn(),
+    expandPath: (value: string) => value.startsWith('~')
+      ? value.replace('~', homeDir)
+      : value.startsWith('%USERPROFILE%')
+        ? value.replace('%USERPROFILE%', homeDir)
+      : value,
+  }));
   const configDir = join(homeDir, '.openclaw-geeclaw');
   const mainWorkspaceDir = getExpectedWorkspacePath(homeDir, 'main');
   mkdirSync(configDir, { recursive: true });
@@ -131,7 +148,7 @@ async function setupManagedPresetFixture(options?: {
   }));
 
   vi.doMock('@electron/utils/desktop-sessions', () => ({
-    deleteDesktopSessionsForAgent: vi.fn(async () => []),
+    deleteDesktopSessionsForAgent,
   }));
 
   vi.doMock('@electron/utils/app-env', () => ({
@@ -196,7 +213,7 @@ async function setupManagedPresetFixture(options?: {
   }));
 
   const agentConfig = await import('@electron/utils/agent-config');
-  return { homeDir, configDir, storeState, agentConfig };
+  return { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent };
 }
 
 afterEach(() => {
@@ -636,7 +653,7 @@ describe('managed agent config domain', () => {
   });
 
   it('creates and deletes custom agents under the managed geeclaw workspace root', async () => {
-    const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
+    const { homeDir, configDir, agentConfig, deleteDesktopSessionsForAgent } = await setupManagedPresetFixture();
 
     const created = await agentConfig.createAgent('Research Helper', 'research-helper');
     expect(created.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
@@ -657,6 +674,7 @@ describe('managed agent config domain', () => {
 
     await agentConfig.deleteAgentConfig('research-helper');
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(false);
+    expect(deleteDesktopSessionsForAgent).toHaveBeenCalledWith('research-helper');
   });
 
   it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {
