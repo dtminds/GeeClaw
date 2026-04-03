@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { ProviderContent } from '@/pages/Setup';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
-import { useSessionStore } from '@/stores/session';
 import { cn } from '@/lib/utils';
 import geeclawIcon from '@/assets/logo.svg';
 
