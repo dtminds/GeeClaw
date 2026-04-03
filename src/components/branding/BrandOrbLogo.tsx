@@ -730,7 +730,7 @@ export function BrandOrbLogo({
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-[-10%] rounded-full blur-2xl"
+        className="pointer-events-none absolute rounded-full blur-2xl"
         style={{ background: surfaceStyle.outerGlow }}
       />
       <canvas
