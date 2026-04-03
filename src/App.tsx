@@ -19,6 +19,7 @@ import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { Startup } from './pages/Startup';
 import { GatewaySessions } from './pages/GatewaySessions';
+import { QuickActionPage } from './pages/QuickAction';
 import { GatewayRecoveryOverlay } from '@/components/gateway/GatewayRecoveryOverlay';
 import { useSettingsStore } from './stores/settings';
 import { useUpdateStore } from './stores/update';
@@ -224,6 +225,7 @@ function App() {
         <Routes location={backgroundLocation || location}>
           {/* Setup wizard (shown on first launch) */}
           <Route path="/setup/*" element={<Setup />} />
+          <Route path="/quick-action" element={<QuickActionPage />} />
 
           {/* Main application routes */}
           <Route element={<MainLayout />}>

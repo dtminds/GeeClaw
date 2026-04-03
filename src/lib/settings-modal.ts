@@ -5,6 +5,7 @@ export type SettingsModalSection =
   | 'models'
   | 'safety'
   | 'gateway'
+  | 'quickActions'
   | 'cliMarketplace'
   | 'opencli'
   | 'mcp'
@@ -16,6 +17,7 @@ const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
   models: 'models',
   safety: 'safety',
   gateway: 'gateway',
+  quickActions: 'quick-actions',
   cliMarketplace: 'cli-marketplace',
   opencli: 'opencli',
   mcp: 'mcp',
@@ -46,6 +48,7 @@ export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/appearance')) return 'appearance';
   if (pathname.startsWith('/settings/safety')) return 'safety';
   if (pathname.startsWith('/settings/gateway')) return 'gateway';
+  if (pathname.startsWith('/settings/quick-actions')) return 'quickActions';
   if (pathname.startsWith('/settings/cli-marketplace')) return 'cliMarketplace';
   if (pathname.startsWith('/settings/opencli')) return 'opencli';
   if (pathname.startsWith('/settings/mcp')) return 'mcp';

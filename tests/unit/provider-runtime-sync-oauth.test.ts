@@ -56,7 +56,7 @@ vi.mock('@electron/utils/logger', () => ({
   },
 }));
 
-import type { ProviderAccount } from '@electron/shared/providers/types';
+import type { ProviderAccount } from '@shared/providers/types';
 import { getProviderAccount } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {

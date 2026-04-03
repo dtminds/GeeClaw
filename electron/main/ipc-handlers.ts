@@ -2,7 +2,7 @@
  * IPC Handlers
  * Registers all IPC handlers for main-renderer communication
  */
-import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
+import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage, clipboard } from 'electron';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename, dirname, isAbsolute, resolve } from 'node:path';
@@ -49,6 +49,7 @@ import { deviceOAuthManager, OAuthProviderType } from '../utils/device-oauth';
 import { browserOAuthManager, type BrowserOAuthProviderType } from '../utils/browser-oauth';
 import { applyProxySettings } from './proxy';
 import { getRecentTokenUsageHistory } from '../utils/token-usage';
+import { getQuickActionHotkeyStatus, registerQuickActionShortcuts, triggerQuickAction } from './global-shortcuts';
 import { getProviderService } from '../services/providers/provider-service';
 import {
   getOpenClawProviderKey,
@@ -67,6 +68,9 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
+import type { QuickActionService } from '../services/quick-actions/service';
+import type { QuickActionExecutor } from '../services/quick-actions/executor';
+import type { QuickActionInput } from '@shared/quick-actions';
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -83,7 +87,9 @@ function getManagedChannelPluginInstallError(channelType: string): string | null
 export function registerIpcHandlers(
   gatewayManager: GatewayManager,
   clawHubService: ClawHubService,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  quickActionService: QuickActionService,
+  quickActionExecutor: QuickActionExecutor,
 ): void {
   // Unified request protocol (non-breaking: legacy channels remain available)
   registerUnifiedRequestHandlers(gatewayManager);
@@ -124,6 +130,9 @@ export function registerIpcHandlers(
 
   // Usage handlers
   registerUsageHandlers();
+
+  // Quick action hotkey handlers
+  registerQuickActionHandlers(quickActionService, quickActionExecutor);
 
   // Skill config handlers (direct file access, no Gateway RPC)
   registerSkillConfigHandlers();
@@ -2055,6 +2064,42 @@ function registerAppHandlers(): void {
   });
 }
 
+function registerQuickActionHandlers(
+  quickActionService: QuickActionService,
+  quickActionExecutor: QuickActionExecutor,
+): void {
+  ipcMain.handle('quickAction:getHotkeyStatus', () => {
+    return getQuickActionHotkeyStatus();
+  });
+
+  ipcMain.handle('quickAction:list', async () => {
+    return await quickActionService.list();
+  });
+
+  ipcMain.handle('quickAction:getLastContext', () => {
+    return quickActionService.getLastContext();
+  });
+
+  ipcMain.handle('quickAction:trigger', async (_, actionId: string) => {
+    const result = await triggerQuickAction(actionId);
+    return result ?? { success: false, reason: 'action-not-found' as const };
+  });
+
+  ipcMain.handle('quickAction:run', async (_, actionId: string, input: QuickActionInput) => {
+    return await quickActionExecutor.run(actionId, input);
+  });
+
+  ipcMain.handle('quickAction:copyResult', async (_, value: string) => {
+    clipboard.writeText(value);
+    return { success: true as const };
+  });
+
+  ipcMain.handle('quickAction:pasteResult', async (_, value: string) => {
+    clipboard.writeText(value);
+    return { success: true as const, pasted: false };
+  });
+}
+
 function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   const handleProxySettingsChange = async () => {
     const settings = await getAllSettings();
@@ -2082,6 +2127,10 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('settings:set', async (_, key: keyof AppSettings, value: AppSettings[keyof AppSettings]) => {
     await setSetting(key, value as never);
 
+    if (key === 'quickActions') {
+      registerQuickActionShortcuts((value as AppSettings['quickActions']).actions);
+    }
+
     if (isSafetyKey(key)) {
       await handleSafetySettingsChange();
     }
@@ -2099,6 +2148,11 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
       await setSetting(key, value as never);
     }
 
+    const quickActionsEntry = entries.find(([key]) => key === 'quickActions');
+    if (quickActionsEntry) {
+      registerQuickActionShortcuts((quickActionsEntry[1] as AppSettings['quickActions']).actions);
+    }
+
     if (entries.some(([key]) => isSafetyKey(key))) {
       await handleSafetySettingsChange();
     }
@@ -2113,6 +2167,7 @@ function registerSettingsHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('settings:reset', async () => {
     await resetSettings();
     const settings = await getAllSettings();
+    registerQuickActionShortcuts(settings.quickActions.actions);
     await handleSafetySettingsChange();
     await handleProxySettingsChange();
     return { success: true, settings };
@@ -2137,24 +2192,28 @@ function registerUsageHandlers(): void {
 function registerWindowHandlers(mainWindow: BrowserWindow): void {
   const trafficLightPosition = { x: 16, y: 16 };
 
-  ipcMain.handle('window:minimize', () => {
-    mainWindow.minimize();
+  ipcMain.handle('window:minimize', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    targetWindow.minimize();
   });
 
-  ipcMain.handle('window:maximize', () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
+  ipcMain.handle('window:maximize', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (targetWindow.isMaximized()) {
+      targetWindow.unmaximize();
     } else {
-      mainWindow.maximize();
+      targetWindow.maximize();
     }
   });
 
-  ipcMain.handle('window:close', () => {
-    mainWindow.close();
+  ipcMain.handle('window:close', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    targetWindow.close();
   });
 
-  ipcMain.handle('window:isMaximized', () => {
-    return mainWindow.isMaximized();
+  ipcMain.handle('window:isMaximized', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    return targetWindow.isMaximized();
   });
 
   ipcMain.handle('window:setButtonsVisible', (_event, visible?: boolean) => {

@@ -1,5 +1,5 @@
 import type { GatewayManager } from '../../gateway/manager';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import { getConfiguredProviderModels } from '@shared/providers/config-models';
 import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from './provider-store';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';

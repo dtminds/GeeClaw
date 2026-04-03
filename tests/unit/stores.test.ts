@@ -2,6 +2,7 @@
  * Zustand Stores Tests
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { DEFAULT_QUICK_ACTIONS } from '@shared/quick-actions';
 
 const hostApiFetchMock = vi.fn();
 
@@ -25,6 +26,7 @@ describe('Settings Store', () => {
       sidebarCollapsed: false,
       sidebarWidth: 224,
       devModeUnlocked: false,
+      quickActions: structuredClone(DEFAULT_QUICK_ACTIONS),
       gatewayAutoStart: true,
       gatewayPort: 28788,
       autoCheckUpdate: true,
@@ -79,6 +81,7 @@ describe('Settings Store', () => {
       sidebarCollapsed: false,
       sidebarWidth: 280,
       devModeUnlocked: false,
+      quickActions: structuredClone(DEFAULT_QUICK_ACTIONS),
       gatewayAutoStart: true,
       gatewayPort: 28788,
       autoCheckUpdate: true,
@@ -120,6 +123,22 @@ describe('Settings Store', () => {
     const { setDevModeUnlocked } = useSettingsStore.getState();
     setDevModeUnlocked(true);
     expect(useSettingsStore.getState().devModeUnlocked).toBe(true);
+  });
+
+  it('should update and persist quick actions', () => {
+    const { setQuickActions } = useSettingsStore.getState();
+    const nextQuickActions = {
+      ...structuredClone(DEFAULT_QUICK_ACTIONS),
+      closeOnCopy: false,
+    };
+
+    setQuickActions(nextQuickActions);
+
+    expect(useSettingsStore.getState().quickActions).toEqual(nextQuickActions);
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/quickActions', {
+      method: 'PUT',
+      body: JSON.stringify({ value: nextQuickActions }),
+    });
   });
 });
 

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
-import { USER_STATUS_ACTIVE, type UserStatus } from '../../shared/auth/user-status';
+import { USER_STATUS_ACTIVE, type UserStatus } from '@shared/auth/user-status';
 
 export type SessionStatus = 'checking' | 'authenticated' | 'unauthenticated';
 

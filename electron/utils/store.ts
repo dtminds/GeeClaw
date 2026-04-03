@@ -4,6 +4,7 @@
  */
 
 import { randomBytes } from 'crypto';
+import { DEFAULT_QUICK_ACTIONS, type QuickActionSettings } from '@shared/quick-actions';
 
 // Lazy-load electron-store (ESM module)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,9 +17,13 @@ function generateToken(): string {
   return `geeclaw-${randomBytes(16).toString('hex')}`;
 }
 
-/**
- * Application settings schema
- */
+export type {
+  QuickActionKind,
+  QuickActionOutputMode,
+  QuickActionDefinition,
+  QuickActionSettings,
+} from '@shared/quick-actions';
+
 export interface AppSettings {
   // General
   theme: 'light' | 'dark' | 'system';
@@ -51,6 +56,9 @@ export interface AppSettings {
   // UI State
   sidebarCollapsed: boolean;
   devModeUnlocked: boolean;
+
+  // Quick Actions
+  quickActions: QuickActionSettings;
   
   // Presets
   selectedBundles: string[];
@@ -93,6 +101,9 @@ const defaults: AppSettings = {
   // UI State
   sidebarCollapsed: false,
   devModeUnlocked: false,
+
+  // Quick Actions
+  quickActions: DEFAULT_QUICK_ACTIONS,
   
   // Presets
   selectedBundles: ['productivity', 'developer'],

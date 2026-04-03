@@ -1,12 +1,12 @@
 import {
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
-} from '../../shared/providers/registry';
+} from '@shared/providers/registry';
 import type {
   ProviderAccount,
   ProviderConfig,
   ProviderDefinition,
-} from '../../shared/providers/types';
+} from '@shared/providers/types';
 import { ensureProviderStoreMigrated } from './provider-migration';
 import {
   getDefaultProviderAccountId,
@@ -26,7 +26,7 @@ import {
   setDefaultProvider,
   storeApiKey,
 } from '../../utils/secure-storage';
-import type { ProviderWithKeyInfo } from '../../shared/providers/types';
+import type { ProviderWithKeyInfo } from '@shared/providers/types';
 import { logger } from '../../utils/logger';
 
 function maskApiKey(apiKey: string | null): string | null {

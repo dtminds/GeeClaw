@@ -20,7 +20,7 @@ import {
 import { validateApiKeyWithProvider } from '../../services/providers/provider-validation';
 import { getProviderService } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
-import type { ProviderAccount } from '../../shared/providers/types';
+import type { ProviderAccount } from '@shared/providers/types';
 import { logger } from '../../utils/logger';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { DEFAULT_QUICK_ACTIONS } from '@shared/quick-actions';
 
 const applyProxySettingsMock = vi.fn();
 const getAllSettingsMock = vi.fn();
@@ -184,6 +185,71 @@ describe('handleSettingsRoutes', () => {
       res,
       200,
       expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('round-trips quickActions through the generic settings route', async () => {
+    const currentSettings = {
+      quickActions: structuredClone(DEFAULT_QUICK_ACTIONS),
+    };
+    getSettingMock.mockImplementation(async (key: keyof typeof currentSettings) => currentSettings[key]);
+    setSettingMock.mockImplementation(async (key: keyof typeof currentSettings, value: typeof currentSettings.quickActions) => {
+      currentSettings[key] = structuredClone(value);
+    });
+    parseJsonBodyMock.mockResolvedValueOnce({
+      value: {
+        ...DEFAULT_QUICK_ACTIONS,
+        actions: DEFAULT_QUICK_ACTIONS.actions.map((action) => (
+          action.id === 'lookup'
+            ? { ...action, outputMode: 'paste' as const }
+            : action
+        )),
+        closeOnCopy: false,
+        preferClipboardFallback: false,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const res = {} as ServerResponse;
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:13210/api/settings/quickActions'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:13210/api/settings/quickActions'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(sendJsonMock).toHaveBeenLastCalledWith(
+      res,
+      200,
+      {
+        value: expect.objectContaining({
+          actions: expect.arrayContaining([
+            expect.objectContaining({ id: 'lookup', outputMode: 'paste' }),
+          ]),
+          closeOnCopy: false,
+          preferClipboardFallback: false,
+        }),
+      },
     );
   });
 });

@@ -8,7 +8,7 @@ import {
   getManagedAgentWorkspacePath,
   resolveManagedAgentWorkspacePath,
 } from './managed-agent-workspace';
-import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
+import { getConfiguredProviderModels, normalizeProviderModelList } from '@shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';

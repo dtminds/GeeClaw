@@ -20,7 +20,7 @@ import { logger } from './logger';
 import { openSafeExternalUrl } from './external-links';
 import { getProviderDefaultModel } from './provider-registry';
 import { getProviderService } from '../services/providers/provider-service';
-import type { ProviderAccount } from '../shared/providers/types';
+import type { ProviderAccount } from '@shared/providers/types';
 import {
     loginMiniMaxPortalOAuth,
     type MiniMaxOAuthToken,

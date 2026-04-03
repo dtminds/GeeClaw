@@ -30,6 +30,7 @@ import {
   ensureBuiltinSkillsInstalled,
   ensureSkillEntriesDefaultDisabled,
 } from '../utils/skill-config';
+import { getAllSettings } from '../utils/store';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
 import { deviceOAuthManager } from '../utils/device-oauth';
@@ -42,6 +43,15 @@ import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
+import {
+  clearQuickActionDispatchTarget,
+  registerQuickActionShortcuts,
+  setQuickActionDispatchHandler,
+} from './global-shortcuts';
+import { createQuickActionWindowController } from './quick-action-window';
+import { getQuickActionInput } from '../services/quick-actions/selection-provider';
+import { createQuickActionExecutor } from '../services/quick-actions/executor';
+import { createQuickActionService } from '../services/quick-actions/service';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -108,6 +118,28 @@ let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
+const quickActionWindowController = createQuickActionWindowController();
+const quickActionService = createQuickActionService({
+  listActions: async () => (await getSetting('quickActions')).actions,
+  getActionById: async (actionId) => {
+    const quickActions = await getSetting('quickActions');
+    return quickActions.actions.find((action) => action.id === actionId) ?? null;
+  },
+  getQuickActionInput: async () => {
+    const quickActions = await getSetting('quickActions');
+    return await getQuickActionInput({
+      allowClipboardFallback: quickActions.preferClipboardFallback,
+    });
+  },
+  showWindow: (context) => quickActionWindowController.show(context),
+});
+const quickActionExecutor = createQuickActionExecutor({
+  getActionById: async (actionId) => {
+    const quickActions = await getSetting('quickActions');
+    return quickActions.actions.find((action) => action.id === actionId) ?? null;
+  },
+  runPrompt: async (prompt) => await gatewayManager.rpc('chat.send', { content: prompt }, 120000),
+});
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
   try {
@@ -266,7 +298,11 @@ async function initialize(): Promise<void> {
   );
 
   // Register IPC handlers
-  registerIpcHandlers(gatewayManager, clawHubService, mainWindow);
+  registerIpcHandlers(gatewayManager, clawHubService, mainWindow, quickActionService, quickActionExecutor);
+
+  const settings = await getAllSettings();
+  registerQuickActionShortcuts(settings.quickActions.actions);
+  setQuickActionDispatchHandler((event) => quickActionService.handleInvocation(event));
 
   hostApiServer = startHostApiServer({
     gatewayManager,
@@ -291,6 +327,7 @@ async function initialize(): Promise<void> {
   });
 
   mainWindow.on('closed', () => {
+    clearQuickActionDispatchTarget();
     mainWindow = null;
   });
 

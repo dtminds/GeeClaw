@@ -7,6 +7,7 @@ import { persist } from 'zustand/middleware';
 import i18n from '@/i18n';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
+import { DEFAULT_QUICK_ACTIONS, type QuickActionSettings } from '@shared/quick-actions';
 import { DEFAULT_COLOR_THEME_ID, type ColorTheme } from '@/theme/color-themes';
 import { useGatewayStore } from './gateway';
 
@@ -47,6 +48,7 @@ interface SettingsState {
   sidebarWidth: number;
   chatSessionsPanelCollapsed: boolean;
   devModeUnlocked: boolean;
+  quickActions: QuickActionSettings;
 
   // Setup
   setupComplete: boolean;
@@ -75,6 +77,7 @@ interface SettingsState {
   setSidebarWidth: (value: number) => void;
   setChatSessionsPanelCollapsed: (value: boolean) => void;
   setDevModeUnlocked: (value: boolean) => void;
+  setQuickActions: (value: QuickActionSettings) => void;
   markSetupComplete: () => void;
   resetSettings: () => void;
 }
@@ -102,6 +105,7 @@ const defaultSettings = {
   sidebarWidth: 224,
   chatSessionsPanelCollapsed: false,
   devModeUnlocked: false,
+  quickActions: DEFAULT_QUICK_ACTIONS,
   setupComplete: false,
 };
 
@@ -256,6 +260,10 @@ export const useSettingsStore = create<SettingsState>()(
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setChatSessionsPanelCollapsed: (chatSessionsPanelCollapsed) => set({ chatSessionsPanelCollapsed }),
       setDevModeUnlocked: (devModeUnlocked) => set({ devModeUnlocked }),
+      setQuickActions: (quickActions) => {
+        set({ quickActions });
+        persistSettingValue('quickActions', quickActions);
+      },
       markSetupComplete: () => set({ setupComplete: true }),
       resetSettings: () => set(defaultSettings),
     }),

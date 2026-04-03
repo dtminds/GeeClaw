@@ -194,6 +194,16 @@ Open **Settings → Environment** to manage app-level environment variables for 
 - Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
 - Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
 
+### Quick Actions
+
+Open **Settings → Quick Actions** to configure floating shortcut actions for selected text.
+
+- Each quick action can have its own global shortcut and default mode.
+- The floating window opens near the mouse cursor and lets you switch between translate, reply, lookup, and custom prompt modes without re-triggering a shortcut.
+- GeeClaw prefers native selection capture when available and can fall back to clipboard text.
+- On macOS, direct selection capture requires Accessibility permission. On Windows, support depends on the foreground app's UI Automation support.
+- Current paste behavior is clipboard-backed best effort. It does not yet guarantee true simulated paste or in-place replacement in every app.
+
 ### CLI Market
 
 Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect, install, reinstall, and uninstall.

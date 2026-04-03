@@ -1,6 +1,6 @@
-import type { ProviderAccount, ProviderConfig, ProviderType } from '../../shared/providers/types';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
-import { getProviderDefinition } from '../../shared/providers/registry';
+import type { ProviderAccount, ProviderConfig, ProviderType } from '@shared/providers/types';
+import { getConfiguredProviderModels } from '@shared/providers/config-models';
+import { getProviderDefinition } from '@shared/providers/registry';
 import { getGeeClawProviderStore } from './store-instance';
 
 const PROVIDER_STORE_SCHEMA_VERSION = 2;
