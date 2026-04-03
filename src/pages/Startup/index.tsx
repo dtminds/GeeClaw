@@ -276,14 +276,6 @@ export function Startup() {
                 <p className="text-sm font-medium uppercase tracking-[0.18em] text-emerald-600/70">
                   {t('startup.authenticated.eyebrow')}
                 </p>
-                <h2 className="mt-2 text-[clamp(1.8rem,3.4vw,2.8rem)] font-semibold tracking-[-0.045em] text-foreground dark:text-white/95">
-                  {t('startup.needsProvider.title')}
-                </h2>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground dark:text-white/78">
-                  {account?.displayName
-                    ? t('startup.authenticated.bodyNamed', { name: account.displayName })
-                    : t('startup.needsProvider.body')}
-                </p>
                 <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-white/65">
                   {statusMessage}
                 </p>
