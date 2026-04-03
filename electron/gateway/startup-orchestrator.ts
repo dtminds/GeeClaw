@@ -18,13 +18,14 @@ type StartupHooks = {
   findExistingGateway: (port: number) => Promise<ExistingGatewayInfo | null>;
   connect: (port: number, externalToken?: string) => Promise<void>;
   onConnectedToExistingGateway: () => void;
-  waitForPortFree: (port: number) => Promise<void>;
+  waitForPortFree: (port: number, signal?: AbortSignal) => Promise<void>;
   startProcess: () => Promise<void>;
   waitForReady: (port: number) => Promise<void>;
   onConnectedToManagedGateway: () => void;
   runDoctorRepair: () => Promise<boolean>;
   onDoctorRepairSuccess: () => void;
   delay: (ms: number) => Promise<void>;
+  terminateOwnedProcess?: () => Promise<void>;
 };
 
 export async function runGatewayStartupSequence(hooks: StartupHooks): Promise<void> {
@@ -97,6 +98,28 @@ export async function runGatewayStartupSequence(hooks: StartupHooks): Promise<vo
       if (recoveryAction === 'retry') {
         logger.warn(`Transient start error: ${String(error)}. Retrying... (${startAttempts}/${maxStartAttempts})`);
         await hooks.delay(1000);
+        if (hooks.terminateOwnedProcess) {
+          await hooks.terminateOwnedProcess().catch((terminateError) => {
+            logger.warn('Failed to terminate owned process before retry:', terminateError);
+          });
+        }
+        hooks.assertLifecycle('start/retry-pre-port-wait');
+        if (hooks.shouldWaitForPortFree) {
+          const abortController = new AbortController();
+          const lifecyclePollInterval = setInterval(() => {
+            try {
+              hooks.assertLifecycle('start/retry-port-wait-poll');
+            } catch {
+              abortController.abort();
+            }
+          }, 500);
+          try {
+            await hooks.waitForPortFree(hooks.port, abortController.signal);
+          } finally {
+            clearInterval(lifecyclePollInterval);
+          }
+        }
+        hooks.assertLifecycle('start/retry-post-port-wait');
         continue;
       }
 

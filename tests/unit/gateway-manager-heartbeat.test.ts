@@ -16,7 +16,7 @@ describe('GatewayManager heartbeat recovery', () => {
     vi.setSystemTime(new Date('2026-03-19T00:00:00.000Z'));
   });
 
-  it('terminates stale socket only after 3 consecutive heartbeat misses', async () => {
+  it('logs warning but does not terminate the socket after consecutive heartbeat misses', async () => {
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 
@@ -31,7 +31,7 @@ describe('GatewayManager heartbeat recovery', () => {
     (manager as unknown as { shouldReconnect: boolean }).shouldReconnect = true;
     (manager as unknown as { status: { state: string; port: number } }).status = {
       state: 'running',
-      port: 18789,
+      port: 28788,
     };
 
     (manager as unknown as { startPing: () => void }).startPing();
@@ -39,7 +39,7 @@ describe('GatewayManager heartbeat recovery', () => {
     vi.advanceTimersByTime(120_000);
 
     expect(ws.ping).toHaveBeenCalledTimes(3);
-    expect(ws.terminate).toHaveBeenCalledTimes(1);
+    expect(ws.terminate).not.toHaveBeenCalled();
 
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
@@ -59,7 +59,7 @@ describe('GatewayManager heartbeat recovery', () => {
     (manager as unknown as { shouldReconnect: boolean }).shouldReconnect = true;
     (manager as unknown as { status: { state: string; port: number } }).status = {
       state: 'running',
-      port: 18789,
+      port: 28788,
     };
 
     (manager as unknown as { startPing: () => void }).startPing();
