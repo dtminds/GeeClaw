@@ -9,6 +9,9 @@ import { useGatewayStore } from '@/stores/gateway';
 import type { AgentMarketplaceCompletion, AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
+const navigateMock = vi.hoisted(() => vi.fn());
+const openAgentMainSessionMock = vi.hoisted(() => vi.fn(async () => undefined));
+const queueComposerSeedMock = vi.hoisted(() => vi.fn());
 
 const translations: Record<string, string> = {
   'presetPlaza.title': '智能体广场',
@@ -22,6 +25,18 @@ const translations: Record<string, string> = {
   'presetPlaza.platformsTitle': '支持平台',
   'marketplace.install': '一键雇佣',
   'marketplace.update': '更新',
+  'marketplace.goSend': '去发送',
+  'marketplace.goChat': '去聊聊',
+  'marketplace.dismiss': '稍后',
+  'marketplace.postInstallTitle': '安装成功',
+  'marketplace.postUpdateTitle': '更新成功',
+  'marketplace.postInstallDescription': '这个官方 Agent 已准备好。',
+  'marketplace.postUpdateDescription': '这个官方 Agent 已更新到最新版本。',
+  'marketplace.postInstallPromptLabel': '发送以下消息给 Agent',
+  'marketplace.updateConfirmTitle': '确认更新',
+  'marketplace.updateConfirmMessage': '更新会覆盖该官方 Agent 的受管 files 和 skills，不会重新初始化 workspace，也不会影响聊天记录。',
+  'marketplace.updateConfirmConfirm': '确认更新',
+  'marketplace.updateConfirmCancel': '取消',
   'marketplace.installed': '已添加',
   'marketplace.unavailable': '当前不可用',
   'marketplace.requirementsMissing': '缺少依赖',
@@ -210,20 +225,18 @@ async function finishMarketplaceInstall(
     await flushPromises();
   });
 
-  await act(async () => {
-    vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-    await flushPromises();
-  });
-
-  await act(async () => {
-    vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-    await flushPromises();
-  });
-
-  await act(async () => {
-    vi.advanceTimersByTime(PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS);
-    await flushPromises();
-  });
+  for (const step of [
+    PRESET_INSTALL_STAGE_VISIBLE_MS,
+    PRESET_INSTALL_STAGE_VISIBLE_MS,
+    PRESET_INSTALL_STAGE_VISIBLE_MS,
+    PRESET_INSTALL_STAGE_VISIBLE_MS,
+    PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+  ]) {
+    await act(async () => {
+      vi.advanceTimersByTime(step);
+      await flushPromises();
+    });
+  }
 }
 
 async function flushPromises() {
@@ -264,6 +277,20 @@ function resetGatewayStore() {
 
 vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
+}));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+}));
+
+vi.mock('@/stores/chat', () => ({
+  useChatStore: (selector?: (state: unknown) => unknown) => {
+    const state = {
+      openAgentMainSession: openAgentMainSessionMock,
+      queueComposerSeed: queueComposerSeedMock,
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -352,6 +379,9 @@ describe('PresetAgentsPlazaSection', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    navigateMock.mockReset();
+    openAgentMainSessionMock.mockReset().mockResolvedValue(undefined);
+    queueComposerSeedMock.mockReset();
     resetAgentsStore();
     resetGatewayStore();
 
@@ -533,12 +563,13 @@ describe('PresetAgentsPlazaSection', () => {
     );
 
     expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
-    expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
     expect(useAgentsStore.getState().marketplaceCompletion).toEqual({
       operation: 'install',
       agentId: 'alpha-researcher',
       promptText: 'Please review the installed workspace.',
     });
+    expect(screen.getByText('安装成功')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '去发送' })).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(700);
@@ -638,7 +669,8 @@ describe('PresetAgentsPlazaSection', () => {
     expect(useAgentsStore.getState().installStage).toBe('completed');
     expect(useAgentsStore.getState().installProgress).toBe(100);
     expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
-    expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
+    expect(screen.getByText('安装成功')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '去聊聊' })).toBeInTheDocument();
   });
 
   it('allows installed marketplace agents with updates to trigger the update flow', async () => {
@@ -685,6 +717,13 @@ describe('PresetAgentsPlazaSection', () => {
       await flushPromises();
     });
 
+    const confirmDialog = screen.getByRole('dialog', { name: '确认更新' });
+
+    await act(async () => {
+      fireEvent.click(within(confirmDialog).getByRole('button', { name: '确认更新' }));
+      await flushPromises();
+    });
+
     for (const step of [
       PRESET_INSTALL_STAGE_VISIBLE_MS,
       PRESET_INSTALL_STAGE_VISIBLE_MS,
@@ -707,11 +746,151 @@ describe('PresetAgentsPlazaSection', () => {
       agentId: 'trendfinder',
       promptText: 'Summarize the marketplace changes.',
     });
+    expect(screen.getByText('更新成功')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '去发送' })).toBeInTheDocument();
     expect(useAgentsStore.getState().presets.find((preset) => preset.agentId === 'trendfinder')).toMatchObject({
       installed: true,
       installedVersion: '1.1.0',
       hasUpdate: false,
     });
+  });
+
+  it('prefills chat and navigates when the success dialog sends the follow-up prompt', async () => {
+    const deferredInstall = createDeferred<AgentsSnapshot & { completion: AgentMarketplaceCompletion }>();
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/install' && init?.method === 'POST') {
+        return deferredInstall.promise;
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Alpha Researcher'));
+    });
+
+    const detailDialog = screen.getByRole('dialog');
+    await act(async () => {
+      fireEvent.click(within(detailDialog).getByRole('button', { name: '一键雇佣' }));
+      await flushPromises();
+    });
+
+    await finishMarketplaceInstall(
+      deferredInstall,
+      buildInstalledSnapshot('alpha-researcher'),
+      {
+        operation: 'install',
+        agentId: 'alpha-researcher',
+        promptText: 'Please review the installed workspace.',
+      },
+    );
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(useAgentsStore.getState().marketplaceCompletion).toEqual({
+      operation: 'install',
+      agentId: 'alpha-researcher',
+      promptText: 'Please review the installed workspace.',
+    });
+    expect(screen.getByText('安装成功')).toBeInTheDocument();
+    expect(screen.getByText('Please review the installed workspace.')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '去发送' }));
+      await flushPromises();
+    });
+
+    expect(openAgentMainSessionMock).toHaveBeenCalledWith('alpha-researcher');
+    expect(queueComposerSeedMock).toHaveBeenCalledWith('Please review the installed workspace.');
+    expect(navigateMock).toHaveBeenCalledWith('/chat');
+    expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
+  });
+
+  it('falls back to go-chat when the success dialog has no prompt text', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/update' && init?.method === 'POST') {
+        return {
+          ...baseSnapshot,
+          agents: [{
+            ...installedTrendFinderAgent,
+            packageVersion: '1.1.0',
+          }],
+          completion: {
+            operation: 'update',
+            agentId: 'trendfinder',
+          },
+        };
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('趋势助手'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '更新' }));
+      await flushPromises();
+    });
+
+    const confirmDialog = screen.getByRole('dialog', { name: '确认更新' });
+    await act(async () => {
+      fireEvent.click(within(confirmDialog).getByRole('button', { name: '确认更新' }));
+      await flushPromises();
+    });
+
+    for (const step of [
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+    ]) {
+      await act(async () => {
+        vi.advanceTimersByTime(step);
+        await flushPromises();
+      });
+    }
+
+    expect(screen.getByText('更新成功')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '去聊聊' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '去聊聊' }));
+      await flushPromises();
+    });
+
+    expect(openAgentMainSessionMock).toHaveBeenCalledWith('trendfinder');
+    expect(queueComposerSeedMock).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/chat');
+    expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
   });
 
   it('shows install CTA when catalog-backed summaries omit requirements and preset skills', async () => {
