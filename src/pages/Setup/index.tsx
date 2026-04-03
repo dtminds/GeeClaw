@@ -23,6 +23,7 @@ import {
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,8 @@ interface SetupStep {
   title: string;
   description: string;
 }
+
+type SegmentedProtocol = NonNullable<ProviderAccount['apiProtocol']>;
 
 const STEP = {
   WELCOME: 0,
@@ -98,7 +101,9 @@ import {
   type ProviderType,
   type ProviderTypeInfo,
   getProviderDocsUrl,
+  getProviderCodePlanPreset,
   getProviderIconUrl,
+  isProviderCodePlanMode,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
   shouldInvertInDark,
@@ -122,22 +127,6 @@ function getProtocolBaseUrlPlaceholder(
     return 'https://api.example.com/anthropic';
   }
   return 'https://api.example.com/v1';
-}
-
-function isArkCodePlanMode(
-  providerId: string | null | undefined,
-  baseUrl: string | undefined,
-  modelId: string | undefined,
-  codePlanPresetBaseUrl?: string,
-  codePlanPresetModelId?: string,
-): boolean {
-  return (
-    providerId === 'ark'
-    && Boolean(codePlanPresetBaseUrl)
-    && Boolean(codePlanPresetModelId)
-    && (baseUrl || '').trim() === codePlanPresetBaseUrl
-    && (modelId || '').trim() === codePlanPresetModelId
-  );
 }
 
 // NOTE: Channel types moved to Settings > Channels page
@@ -950,8 +939,7 @@ export function ProviderContent({
           setApiProtocol(savedProvider?.apiProtocol || 'openai-completions');
           setModelId(nextModelId);
           setArkMode(
-            isArkCodePlanMode(
-              selectedProvider,
+            isProviderCodePlanMode(
               nextBaseUrl,
               nextModelId,
               info?.codePlanPresetBaseUrl,
@@ -993,7 +981,8 @@ export function ProviderContent({
 
   const selectedProviderData = providerOptions.find((p) => p.id === selectedProvider);
   const providerDocsUrl = getProviderDocsUrl(selectedProviderData, i18n.language);
-  const effectiveProviderDocsUrl = selectedProvider === 'ark' && arkMode === 'codeplan'
+  const codePlanPreset = getProviderCodePlanPreset(selectedProviderData);
+  const effectiveProviderDocsUrl = codePlanPreset && arkMode === 'codeplan'
     ? (selectedProviderData?.codePlanDocsUrl || providerDocsUrl)
     : providerDocsUrl;
   const selectedProviderIconUrl = selectedProviderData
@@ -1001,12 +990,6 @@ export function ProviderContent({
     : undefined;
   const showBaseUrlField = selectedProviderData?.showBaseUrl ?? false;
   const showModelIdField = shouldShowProviderModelId(selectedProviderData, devModeUnlocked);
-  const codePlanPreset = selectedProviderData?.codePlanPresetBaseUrl && selectedProviderData?.codePlanPresetModelId
-    ? {
-        baseUrl: selectedProviderData.codePlanPresetBaseUrl,
-        modelId: selectedProviderData.codePlanPresetModelId,
-      }
-    : null;
   const requiresKey = selectedProviderData?.requiresApiKey ?? false;
   const isOAuth = selectedProviderData?.isOAuth ?? false;
   const supportsApiKey = selectedProviderData?.supportsApiKey ?? false;
@@ -1282,47 +1265,37 @@ export function ProviderContent({
                   </a>
                 )}
               </div>
-              <div className="flex gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={() => {
+              <SegmentedControl
+                ariaLabel={t('provider.codePlanPreset')}
+                value={arkMode}
+                onValueChange={(nextMode) => {
+                  if (nextMode === 'apikey') {
                     setArkMode('apikey');
                     setBaseUrl(selectedProviderData?.defaultBaseUrl || '');
                     if (modelId.trim() === codePlanPreset.modelId) {
                       setModelId(selectedProviderData?.defaultModelId || '');
                     }
                     onConfiguredChange(false);
-                  }}
-                  className={cn(
-                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
-                    arkMode === 'apikey'
-                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
-                      : 'surface-hover border-transparent text-muted-foreground'
-                  )}
-                >
-                  {t('settings:aiProviders.authModes.apiKey')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setArkMode('codeplan');
-                    setBaseUrl(codePlanPreset.baseUrl);
-                    setModelId(codePlanPreset.modelId);
-                    onConfiguredChange(false);
-                  }}
-                  className={cn(
-                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
-                    arkMode === 'codeplan'
-                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
-                      : 'surface-hover border-transparent text-muted-foreground'
-                  )}
-                >
-                  {t('provider.codePlanMode')}
-                </button>
-              </div>
+                    return;
+                  }
+
+                  setArkMode('codeplan');
+                  setBaseUrl(codePlanPreset.baseUrl);
+                  setModelId(codePlanPreset.modelId);
+                  onConfiguredChange(false);
+                }}
+                options={[
+                  { value: 'apikey', label: t('settings:aiProviders.authModes.apiKey') },
+                  { value: 'codeplan', label: t('provider.codePlanMode') },
+                ]}
+                fullWidth
+              />
               {arkMode === 'codeplan' && (
                 <p className="text-xs text-muted-foreground">
-                  {t('provider.codePlanPresetDesc')}
+                  {t('provider.codePlanPresetDesc', {
+                    baseUrl: codePlanPreset.baseUrl,
+                    modelId: codePlanPreset.modelId,
+                  })}
                 </p>
               )}
             </div>
@@ -1372,78 +1345,36 @@ export function ProviderContent({
           {selectedProvider === 'custom' && (
             <div className="space-y-2">
               <Label>{t('provider.protocol')}</Label>
-              <div className="flex gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setApiProtocol('openai-completions');
-                    onConfiguredChange(false);
-                  }}
-                  className={cn(
-                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
-                    apiProtocol === 'openai-completions'
-                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
-                      : 'surface-hover border-transparent text-muted-foreground'
-                  )}
-                >
-                  {t('provider.protocols.openaiCompletions')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setApiProtocol('openai-responses');
-                    onConfiguredChange(false);
-                  }}
-                  className={cn(
-                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
-                    apiProtocol === 'openai-responses'
-                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
-                      : 'surface-hover border-transparent text-muted-foreground'
-                  )}
-                >
-                  {t('provider.protocols.openaiResponses')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setApiProtocol('anthropic-messages');
-                    onConfiguredChange(false);
-                  }}
-                  className={cn(
-                    'flex-1 rounded-lg border px-3 py-2 transition-colors',
-                    apiProtocol === 'anthropic-messages'
-                      ? 'surface-muted-strong border-black/10 font-medium text-foreground shadow-sm dark:border-white/10'
-                      : 'surface-hover border-transparent text-muted-foreground'
-                  )}
-                >
-                  {t('provider.protocols.anthropic')}
-                </button>
-              </div>
+              <SegmentedControl<SegmentedProtocol>
+                ariaLabel={t('provider.protocol')}
+                value={apiProtocol || 'openai-completions'}
+                onValueChange={(nextProtocol) => {
+                  setApiProtocol(nextProtocol);
+                  onConfiguredChange(false);
+                }}
+                options={[
+                  { value: 'openai-completions', label: t('provider.protocols.openaiCompletions') },
+                  { value: 'openai-responses', label: t('provider.protocols.openaiResponses') },
+                  { value: 'anthropic-messages', label: t('provider.protocols.anthropic') },
+                ]}
+                fullWidth
+              />
             </div>
           )}
 
           {/* Auth mode toggle for providers supporting both */}
           {isOAuth && supportsApiKey && (
-            <div className="modal-field-surface flex gap-1 rounded-xl border p-1 text-sm shadow-sm">
-              <button
-                onClick={() => setAuthMode('oauth')}
-                className={cn(
-                  'flex-1 rounded-lg py-2 px-3 transition-colors',
-                  authMode === 'oauth' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
-                )}
-              >
-                {t('settings:aiProviders.oauth.loginMode')}
-              </button>
-              <button
-                onClick={() => setAuthMode('apikey')}
-                className={cn(
-                  'flex-1 rounded-lg py-2 px-3 transition-colors',
-                  authMode === 'apikey' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
-                )}
-              >
-                {t('settings:aiProviders.oauth.apikeyMode')}
-              </button>
-            </div>
+            <SegmentedControl
+              ariaLabel={t('settings:aiProviders.dialog.authMode')}
+              value={authMode}
+              onValueChange={setAuthMode}
+              options={[
+                { value: 'oauth', label: t('settings:aiProviders.oauth.loginMode') },
+                { value: 'apikey', label: t('settings:aiProviders.oauth.apikeyMode') },
+              ]}
+              fullWidth
+              className="modal-field-surface shadow-sm"
+            />
           )}
 
           {/* API Key field (hidden for ollama) */}

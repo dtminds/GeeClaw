@@ -3,6 +3,8 @@ import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
   getProviderDocsUrl,
+  getProviderCodePlanPreset,
+  isProviderCodePlanMode,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
   shouldShowProviderModelId,
@@ -58,6 +60,23 @@ describe('provider metadata', () => {
       baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       api: 'openai-completions',
       apiKeyEnv: 'ARK_API_KEY',
+    });
+  });
+
+  it('keeps modelstudio normal and code-plan endpoints distinct across registries', () => {
+    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
+
+    expect(modelstudio).toMatchObject({
+      id: 'modelstudio',
+      defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      codePlanPresetBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+      codePlanPresetModelId: 'qwen3.5-plus',
+    });
+
+    expect(getProviderConfig('modelstudio')).toEqual({
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      api: 'openai-completions',
+      apiKeyEnv: 'MODELSTUDIO_API_KEY',
     });
   });
 
@@ -237,5 +256,35 @@ describe('provider metadata', () => {
     expect(resolveProviderApiKeyForSave('ollama', 'real-key')).toBe('real-key');
     expect(resolveProviderApiKeyForSave('openai', '')).toBeUndefined();
     expect(resolveProviderApiKeyForSave('openai', ' sk-test ')).toBe('sk-test');
+  });
+
+  it('detects code-plan preset matches for providers beyond ark', () => {
+    const ark = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'ark');
+    const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
+    const arkCodePlanPreset = getProviderCodePlanPreset(ark);
+    const modelstudioCodePlanPreset = getProviderCodePlanPreset(modelstudio);
+
+    expect(arkCodePlanPreset).toEqual({
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+      modelId: 'ark-code-latest',
+    });
+    expect(modelstudioCodePlanPreset).toEqual({
+      baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+      modelId: 'qwen3.5-plus',
+    });
+
+    expect(isProviderCodePlanMode(
+      modelstudioCodePlanPreset?.baseUrl,
+      modelstudioCodePlanPreset?.modelId,
+      modelstudio?.codePlanPresetBaseUrl,
+      modelstudio?.codePlanPresetModelId,
+    )).toBe(true);
+
+    expect(isProviderCodePlanMode(
+      modelstudio?.defaultBaseUrl,
+      modelstudioCodePlanPreset?.modelId,
+      modelstudio?.codePlanPresetBaseUrl,
+      modelstudio?.codePlanPresetModelId,
+    )).toBe(false);
   });
 });

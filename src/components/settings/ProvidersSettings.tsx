@@ -18,7 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   useProviderStore,
@@ -28,6 +29,8 @@ import {
 import {
   PROVIDER_TYPE_INFO,
   getProviderDocsUrl,
+  getProviderCodePlanPreset,
+  isProviderCodePlanMode,
   type ProviderType,
   type ProviderTypeInfo,
   getProviderIconUrl,
@@ -69,26 +72,7 @@ function providerModelsEqual(a?: string[], b?: string[]): boolean {
   return left.length === right.length && left.every((model, index) => model === right[index]);
 }
 
-type ArkMode = 'apikey' | 'codeplan';
-
-function isArkCodePlanMode(
-  vendorId: string,
-  baseUrl: string | undefined,
-  models: string[] | undefined,
-  codePlanPresetBaseUrl?: string,
-  codePlanPresetModelId?: string,
-): boolean {
-  if (vendorId !== 'ark' || !codePlanPresetBaseUrl || !codePlanPresetModelId) {
-    return false;
-  }
-
-  const normalizedModels = normalizeProviderModelList(models);
-  return (
-    (baseUrl || '').trim() === codePlanPresetBaseUrl
-    && normalizedModels.length === 1
-    && normalizedModels[0] === codePlanPresetModelId
-  );
-}
+type CodePlanMode = 'apikey' | 'codeplan';
 
 function getProviderDraftState(
   account: ProviderAccount,
@@ -98,14 +82,13 @@ function getProviderDraftState(
   baseUrl: string;
   apiProtocol: ProviderAccount['apiProtocol'];
   modelsText: string;
-  arkMode: ArkMode;
+  arkMode: CodePlanMode;
 } {
   return {
     baseUrl: account.baseUrl || '',
     apiProtocol: account.apiProtocol || 'openai-completions',
     modelsText: configuredModels.join('\n'),
-    arkMode: isArkCodePlanMode(
-      account.vendorId,
+    arkMode: isProviderCodePlanMode(
       account.baseUrl,
       configuredModels,
       typeInfo?.codePlanPresetBaseUrl,
@@ -717,12 +700,7 @@ function ProviderCard({
   const typeInfo = PROVIDER_TYPE_INFO.find((provider) => provider.id === account.vendorId);
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
-  const codePlanPreset = typeInfo?.codePlanPresetBaseUrl && typeInfo?.codePlanPresetModelId
-    ? {
-        baseUrl: typeInfo.codePlanPresetBaseUrl,
-        modelId: typeInfo.codePlanPresetModelId,
-      }
-    : null;
+  const codePlanPreset = getProviderCodePlanPreset(typeInfo);
   const draftState = getProviderDraftState(account, configuredModels, typeInfo);
   const [newKey, setNewKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(draftState.baseUrl);
@@ -731,13 +709,13 @@ function ProviderCard({
   const [showKey, setShowKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [arkMode, setArkMode] = useState<ArkMode>(draftState.arkMode);
+  const [arkMode, setArkMode] = useState<CodePlanMode>(draftState.arkMode);
   const [oauthFlowing, setOauthFlowing] = useState(false);
   const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
   const [manualCodeInput, setManualCodeInput] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
 
-  const effectiveDocsUrl = account.vendorId === 'ark' && arkMode === 'codeplan'
+  const effectiveDocsUrl = codePlanPreset && arkMode === 'codeplan'
     ? (typeInfo?.codePlanDocsUrl || providerDocsUrl)
     : providerDocsUrl;
   const canEditProtocol = account.vendorId === 'custom';
@@ -778,10 +756,6 @@ function ProviderCard({
   const pendingOAuthRef = React.useRef<{ accountId: string } | null>(null);
   const sectionClassName = 'border-t border-black/6 pt-5 dark:border-white/10';
   const subtlePanelClassName = 'rounded-2xl border border-black/8 bg-black/[0.025] dark:border-white/10 dark:bg-white/[0.03]';
-  const segmentedControlClassName = 'inline-flex w-full rounded-2xl border border-black/8 bg-black/[0.025] p-1 text-[13px] font-medium dark:border-white/10 dark:bg-white/[0.03]';
-  const segmentedButtonClassName = 'flex-1 rounded-xl px-4 py-2.5 transition-colors';
-  const segmentedButtonActiveClassName = 'bg-black/[0.06] text-foreground dark:bg-white/[0.09]';
-  const segmentedButtonInactiveClassName = 'text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05]';
   const inputClassName = 'field-focus-ring h-[40px] rounded-xl border border-black/8 bg-black/[0.025] font-mono text-[13px] shadow-none dark:border-white/10 dark:bg-white/[0.03]';
   const textAreaClassName = 'field-focus-ring min-h-24 w-full rounded-xl border border-black/8 bg-black/[0.025] px-3 py-2 text-[13px] font-mono outline-none shadow-none dark:border-white/10 dark:bg-white/[0.03]';
 
@@ -1069,32 +1043,16 @@ function ProviderCard({
 
           {supportsModeToggle ? (
             <div className="max-w-[340px]">
-              <div className={segmentedControlClassName}>
-                <button
-                  type="button"
-                  onClick={() => setAuthModeSelection('oauth')}
-                  className={cn(
-                    segmentedButtonClassName,
-                    authModeSelection === 'oauth'
-                      ? segmentedButtonActiveClassName
-                      : segmentedButtonInactiveClassName,
-                  )}
-                >
-                  {t('aiProviders.oauth.loginMode')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthModeSelection('apikey')}
-                  className={cn(
-                    segmentedButtonClassName,
-                    authModeSelection === 'apikey'
-                      ? segmentedButtonActiveClassName
-                      : segmentedButtonInactiveClassName,
-                  )}
-                >
-                  {t('aiProviders.oauth.apikeyMode')}
-                </button>
-              </div>
+              <SegmentedControl
+                ariaLabel={t('aiProviders.dialog.authMode')}
+                value={authModeSelection}
+                onValueChange={setAuthModeSelection}
+                options={[
+                  { value: 'oauth', label: t('aiProviders.oauth.loginMode') },
+                  { value: 'apikey', label: t('aiProviders.oauth.apikeyMode') },
+                ]}
+                fullWidth
+              />
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
@@ -1260,18 +1218,7 @@ function ProviderCard({
           <section className={sectionClassName}>
             <div className="space-y-3">
               <p className="text-[14px] font-bold text-foreground/80">{t('aiProviders.sections.model')}</p>
-              {typeInfo?.showBaseUrl && (
-                <div className="space-y-1.5">
-                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.baseUrl')}</Label>
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
-                    className={inputClassName}
-                  />
-                </div>
-              )}
-              {account.vendorId === 'ark' && codePlanPreset && (
+              {codePlanPreset && (
                 <div className="space-y-1.5 pt-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.codePlanPreset')}</Label>
@@ -1287,47 +1234,48 @@ function ProviderCard({
                       </a>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2 text-[13px]">
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <SegmentedControl
+                    ariaLabel={t('aiProviders.dialog.codePlanPreset')}
+                    value={arkMode}
+                    onValueChange={(nextMode) => {
+                      if (nextMode === 'apikey') {
                         setArkMode('apikey');
                         setBaseUrl(typeInfo?.defaultBaseUrl || '');
                         if (normalizedDraftModels.length === 1 && normalizedDraftModels[0] === codePlanPreset.modelId) {
                           setModelsText(typeInfo?.defaultModelId || '');
                         }
-                      }}
-                      className={cn(
-                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
-                        arkMode === 'apikey'
-                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
-                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      {t('aiProviders.authModes.apiKey')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setArkMode('codeplan');
-                        setBaseUrl(codePlanPreset.baseUrl);
-                        setModelsText(codePlanPreset.modelId);
-                      }}
-                      className={cn(
-                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
-                        arkMode === 'codeplan'
-                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
-                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      {t('aiProviders.dialog.codePlanMode')}
-                    </button>
-                  </div>
+                        return;
+                      }
+
+                      setArkMode('codeplan');
+                      setBaseUrl(codePlanPreset.baseUrl);
+                      setModelsText(codePlanPreset.modelId);
+                    }}
+                    options={[
+                      { value: 'apikey', label: t('aiProviders.authModes.apiKey') },
+                      { value: 'codeplan', label: t('aiProviders.dialog.codePlanMode') },
+                    ]}
+                    fullWidth
+                  />
                   {arkMode === 'codeplan' && (
                     <p className="text-[12px] text-muted-foreground">
-                      {t('aiProviders.dialog.codePlanPresetDesc')}
+                      {t('aiProviders.dialog.codePlanPresetDesc', {
+                        baseUrl: codePlanPreset.baseUrl,
+                        modelId: codePlanPreset.modelId,
+                      })}
                     </p>
                   )}
+                </div>
+              )}
+              {typeInfo?.showBaseUrl && (
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.baseUrl')}</Label>
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
+                    className={inputClassName}
+                  />
                 </div>
               )}
               {canEditProtocol && (
@@ -1498,6 +1446,8 @@ interface AddProviderDialogProps {
   devModeUnlocked: boolean;
 }
 
+type SegmentedProtocol = NonNullable<ProviderAccount['apiProtocol']>;
+
 function AddProviderDialog({
   initialType = null,
   existingVendorIds,
@@ -1514,7 +1464,7 @@ function AddProviderDialog({
   const [baseUrl, setBaseUrl] = useState('');
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>('openai-completions');
   const [modelsText, setModelsText] = useState('');
-  const [arkMode, setArkMode] = useState<ArkMode>('apikey');
+  const [arkMode, setArkMode] = useState<CodePlanMode>('apikey');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -1531,13 +1481,8 @@ function AddProviderDialog({
   const typeInfo = PROVIDER_TYPE_INFO.find((t) => t.id === selectedType);
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
-  const codePlanPreset = typeInfo?.codePlanPresetBaseUrl && typeInfo?.codePlanPresetModelId
-    ? {
-        baseUrl: typeInfo.codePlanPresetBaseUrl,
-        modelId: typeInfo.codePlanPresetModelId,
-      }
-    : null;
-  const effectiveDocsUrl = selectedType === 'ark' && arkMode === 'codeplan'
+  const codePlanPreset = getProviderCodePlanPreset(typeInfo);
+  const effectiveDocsUrl = codePlanPreset && arkMode === 'codeplan'
     ? (typeInfo?.codePlanDocsUrl || providerDocsUrl)
     : providerDocsUrl;
   const isOAuth = typeInfo?.isOAuth ?? false;
@@ -1576,10 +1521,10 @@ function AddProviderDialog({
   }, [selectedVendor, isOAuth, supportsApiKey]);
 
   useEffect(() => {
-    if (selectedType !== 'ark') {
+    if (!codePlanPreset) {
       setArkMode('apikey');
     }
-  }, [selectedType]);
+  }, [codePlanPreset]);
 
   // Keep refs to the latest values so event handlers see the current dialog state.
   const latestRef = React.useRef({ selectedType, typeInfo, onAdd, onClose, t });
@@ -1792,9 +1737,6 @@ function AddProviderDialog({
       <Card className="modal-card-surface w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden">
         <CardHeader className="relative pb-2 shrink-0">
           <CardTitle className="modal-title">{t('aiProviders.dialog.title')}</CardTitle>
-          <CardDescription className="modal-description">
-            {t('aiProviders.dialog.desc')}
-          </CardDescription>
           <Button
             variant="ghost"
             size="icon"
@@ -1833,7 +1775,7 @@ function AddProviderDialog({
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="modal-field-surface flex items-center gap-3 p-4 rounded-2xl border shadow-sm">
+              <div className="modal-field-surface flex items-center gap-3 p-4 rounded-2xl border">
                 <div className="surface-muted h-10 w-10 shrink-0 flex items-center justify-center rounded-xl">
                   {getProviderIconUrl(selectedType!) ? (
                     <img src={getProviderIconUrl(selectedType!)} alt={typeInfo?.name} className={cn('h-6 w-6', shouldInvertInDark(selectedType!) && 'dark:invert')} />
@@ -1875,7 +1817,7 @@ function AddProviderDialog({
                 </div>
               </div>
 
-              <div className="modal-section-surface space-y-4 p-5 rounded-2xl border shadow-sm">
+              <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.displayName')}</Label>
                   <Input
@@ -1883,31 +1825,106 @@ function AddProviderDialog({
                     placeholder={typeInfo?.id === 'custom' ? t('aiProviders.custom') : typeInfo?.name}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm"
+                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
                   />
                 </div>
 
                 {/* Auth mode toggle for providers supporting both */}
                 {isOAuth && supportsApiKey && (
-                  <div className="modal-field-surface flex rounded-xl border overflow-hidden text-[13px] font-medium shadow-sm p-1 gap-1">
-                    <button
-                      onClick={() => setAuthMode('oauth')}
-                      className={cn(
-                        'flex-1 py-2 px-3 rounded-lg transition-colors',
-                        authMode === 'oauth' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
+                  <SegmentedControl
+                    ariaLabel={t('aiProviders.dialog.authMode')}
+                    value={authMode}
+                    onValueChange={setAuthMode}
+                    options={[
+                      { value: 'oauth', label: t('aiProviders.oauth.loginMode') },
+                      { value: 'apikey', label: t('aiProviders.oauth.apikeyMode') },
+                    ]}
+                    fullWidth
+                    className="modal-field-surface"
+                  />
+                )}
+
+                {codePlanPreset && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.codePlanPreset')}</Label>
+                      {typeInfo?.codePlanDocsUrl && (
+                        <a
+                          href={typeInfo.codePlanDocsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-info inline-flex items-center gap-1 text-[13px] font-medium hover:opacity-80"
+                          tabIndex={-1}
+                        >
+                          {t('aiProviders.dialog.codePlanDoc')}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
                       )}
-                    >
-                      {t('aiProviders.oauth.loginMode')}
-                    </button>
-                    <button
-                      onClick={() => setAuthMode('apikey')}
-                      className={cn(
-                        'flex-1 py-2 px-3 rounded-lg transition-colors',
-                        authMode === 'apikey' ? 'surface-muted-strong text-foreground' : 'surface-hover text-muted-foreground'
-                      )}
-                    >
-                      {t('aiProviders.oauth.apikeyMode')}
-                    </button>
+                    </div>
+                    <SegmentedControl
+                      ariaLabel={t('aiProviders.dialog.codePlanPreset')}
+                      value={arkMode}
+                      onValueChange={(nextMode) => {
+                        if (nextMode === 'apikey') {
+                          setArkMode('apikey');
+                          setBaseUrl(typeInfo?.defaultBaseUrl || '');
+                          const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
+                          if (normalizedModels.length === 1 && normalizedModels[0] === codePlanPreset.modelId) {
+                            setModelsText(typeInfo?.defaultModelId || '');
+                          }
+                          setValidationError(null);
+                          return;
+                        }
+
+                        setArkMode('codeplan');
+                        setBaseUrl(codePlanPreset.baseUrl);
+                        setModelsText(codePlanPreset.modelId);
+                        setValidationError(null);
+                      }}
+                      options={[
+                        { value: 'apikey', label: t('aiProviders.authModes.apiKey') },
+                        { value: 'codeplan', label: t('aiProviders.dialog.codePlanMode') },
+                      ]}
+                      fullWidth
+                    />
+                    {arkMode === 'codeplan' && (
+                      <p className="text-[12px] text-muted-foreground">
+                        {t('aiProviders.dialog.codePlanPresetDesc', {
+                          baseUrl: codePlanPreset.baseUrl,
+                          modelId: codePlanPreset.modelId,
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {selectedType === 'custom' && (
+                  <div className="space-y-2.5">
+                    <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.protocol', 'Protocol')}</Label>
+                    <SegmentedControl<SegmentedProtocol>
+                      ariaLabel={t('aiProviders.dialog.protocol', 'Protocol')}
+                      value={apiProtocol || 'openai-completions'}
+                      onValueChange={(nextProtocol) => setApiProtocol(nextProtocol)}
+                      options={[
+                        { value: 'openai-completions', label: t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions') },
+                        { value: 'openai-responses', label: t('aiProviders.protocols.openaiResponses', 'OpenAI Responses') },
+                        { value: 'anthropic-messages', label: t('aiProviders.protocols.anthropic', 'Anthropic') },
+                      ]}
+                      fullWidth
+                    />
+                  </div>
+                )}
+
+                {typeInfo?.showBaseUrl && (
+                  <div className="space-y-2">
+                    <Label htmlFor="baseUrl" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.baseUrl')}</Label>
+                    <Input
+                      id="baseUrl"
+                      placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+                    />
                   </div>
                 )}
 
@@ -1938,7 +1955,7 @@ function AddProviderDialog({
                           setApiKey(e.target.value);
                           setValidationError(null);
                         }}
-                        className="modal-field-surface field-focus-ring pr-10 h-[44px] rounded-xl font-mono text-[13px] shadow-sm"
+                        className="modal-field-surface field-focus-ring pr-10 h-[44px] rounded-xl font-mono text-[13px]"
                       />
                       <button
                         type="button"
@@ -1957,102 +1974,6 @@ function AddProviderDialog({
                   </div>
                 )}
 
-                {typeInfo?.showBaseUrl && (
-                  <div className="space-y-2">
-                    <Label htmlFor="baseUrl" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.baseUrl')}</Label>
-                    <Input
-                      id="baseUrl"
-                      placeholder={getProtocolBaseUrlPlaceholder(apiProtocol)}
-                      value={baseUrl}
-                      onChange={(e) => setBaseUrl(e.target.value)}
-                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm"
-                    />
-                  </div>
-                )}
-
-                {selectedType === 'ark' && codePlanPreset && (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.codePlanPreset')}</Label>
-                      {typeInfo?.codePlanDocsUrl && (
-                        <a
-                          href={typeInfo.codePlanDocsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-info inline-flex items-center gap-1 text-[13px] font-medium hover:opacity-80"
-                          tabIndex={-1}
-                        >
-                          {t('aiProviders.dialog.codePlanDoc')}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                    <div className="flex gap-2 text-[13px]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setArkMode('apikey');
-                          setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                          const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
-                          if (normalizedModels.length === 1 && normalizedModels[0] === codePlanPreset.modelId) {
-                            setModelsText(typeInfo?.defaultModelId || '');
-                          }
-                          setValidationError(null);
-                        }}
-                        className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", arkMode === 'apikey' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                      >
-                        {t('aiProviders.authModes.apiKey')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setArkMode('codeplan');
-                          setBaseUrl(codePlanPreset.baseUrl);
-                          setModelsText(codePlanPreset.modelId);
-                          setValidationError(null);
-                        }}
-                        className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", arkMode === 'codeplan' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                      >
-                        {t('aiProviders.dialog.codePlanMode')}
-                      </button>
-                    </div>
-                    {arkMode === 'codeplan' && (
-                      <p className="text-[12px] text-muted-foreground">
-                        {t('aiProviders.dialog.codePlanPresetDesc')}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {selectedType === 'custom' && (
-                  <div className="space-y-2.5">
-                    <Label className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.protocol', 'Protocol')}</Label>
-                    <div className="flex gap-2 text-[13px]">
-                      <button
-                        type="button"
-                        onClick={() => setApiProtocol('openai-completions')}
-                        className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'openai-completions' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                      >
-                        {t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setApiProtocol('openai-responses')}
-                        className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'openai-responses' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                      >
-                        {t('aiProviders.protocols.openaiResponses', 'OpenAI Responses')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setApiProtocol('anthropic-messages')}
-                        className={cn("flex-1 rounded-lg border px-3 py-1.5 transition-colors", apiProtocol === 'anthropic-messages' ? "bg-white dark:bg-card border-black/20 dark:border-white/20 shadow-sm font-medium" : "surface-hover-strong border-transparent text-muted-foreground")}
-                      >
-                        {t('aiProviders.protocols.anthropic', 'Anthropic')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {showModelIdField && (
                   <div className="space-y-2">
                     <Label htmlFor="modelIds" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.modelIds')}</Label>
@@ -2064,7 +1985,7 @@ function AddProviderDialog({
                         setModelsText(e.target.value);
                         setValidationError(null);
                       }}
-                      className="modal-field-surface field-focus-ring min-h-28 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none shadow-sm"
+                      className="modal-field-surface field-focus-ring min-h-28 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none"
                     />
                     <p className="text-[12px] text-muted-foreground">
                       {t('aiProviders.dialog.modelIdsHelp')}

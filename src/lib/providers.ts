@@ -93,6 +93,11 @@ export interface ProviderTypeInfo {
   hidden?: boolean;
 }
 
+export interface ProviderCodePlanPreset {
+  baseUrl: string;
+  modelId: string;
+}
+
 export type ProviderAuthMode =
   | 'api_key'
   | 'oauth_device'
@@ -188,7 +193,25 @@ export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = [
   { id: 'moonshot', name: 'Moonshot', icon: '🌙', placeholder: 'sk-...', model: 'Kimi', requiresApiKey: true, defaultBaseUrl: 'https://api.moonshot.cn/v1', defaultModelId: 'kimi-k2.5', docsUrl: 'https://platform.moonshot.cn/' },
   { id: 'siliconflow', name: 'SiliconFlow', icon: '🌊', invertIconInDark: false, placeholder: 'sk-...', model: 'Multi-Model', requiresApiKey: true, defaultBaseUrl: 'https://api.siliconflow.cn/v1', showModelId: true, showModelIdInDevModeOnly: true, modelIdPlaceholder: 'deepseek-ai/DeepSeek-V3', defaultModelId: 'deepseek-ai/DeepSeek-V3', docsUrl: 'https://docs.siliconflow.cn/cn/userguide/introduction' },
   { id: 'minimax-portal', name: 'MiniMax (Global)', icon: '☁️', invertIconInDark: false, placeholder: 'sk-...', model: 'MiniMax', requiresApiKey: false, isOAuth: true, supportsApiKey: true, defaultModelId: 'MiniMax-M2.7', apiKeyUrl: 'https://platform.minimax.io' },
-  { id: 'modelstudio', name: '阿里云百炼', icon: '☁️', invertIconInDark: false, placeholder: 'sk-...', model: 'Qwen', requiresApiKey: true, defaultBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1', showBaseUrl: true, defaultModelId: 'qwen3.6-plus', showModelId: true, modelIdPlaceholder: 'qwen3.6-plus', apiKeyUrl: 'https://bailian.console.aliyun.com/' },
+  {
+    id: 'modelstudio',
+    name: '阿里云百炼',
+    icon: '☁️',
+    invertIconInDark: false,
+    placeholder: 'sk-...',
+    model: 'Qwen',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    showBaseUrl: true,
+    defaultModelId: 'qwen3.6-plus',
+    showModelId: true,
+    modelIdPlaceholder: 'qwen3.6-plus',
+    apiKeyUrl: 'https://bailian.console.aliyun.com/',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope',
+    codePlanPresetBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+    codePlanPresetModelId: 'qwen3.5-plus',
+    codePlanDocsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan',
+  },
   { id: 'ark', name: '火山方舟', icon: 'A', invertIconInDark: false, placeholder: 'your-ark-api-key', model: 'Doubao', requiresApiKey: true, defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'ep-20260228000000-xxxxx', docsUrl: 'https://www.volcengine.com/', codePlanPresetBaseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3', codePlanPresetModelId: 'ark-code-latest', codePlanDocsUrl: 'https://www.volcengine.com/docs/82379/1928261?lang=zh' },
   { id: 'geekai', name: 'GeekAI', icon: '🦞', placeholder: 'sk-...', model: 'Multi-Model', requiresApiKey: true, showModelId: true, defaultModelId: 'qwen3.5-flash', hidden: true},
   { id: 'ollama', name: 'Ollama', icon: '🦙', placeholder: 'Not required', requiresApiKey: false, defaultBaseUrl: 'http://localhost:11434/v1', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'qwen3:latest' },
@@ -260,6 +283,40 @@ export function resolveProviderModelForSave(
 
   const trimmedModelId = modelId.trim();
   return trimmedModelId || provider?.defaultModelId || undefined;
+}
+
+export function getProviderCodePlanPreset(
+  provider: Pick<ProviderTypeInfo, 'codePlanPresetBaseUrl' | 'codePlanPresetModelId'> | undefined,
+): ProviderCodePlanPreset | null {
+  if (!provider?.codePlanPresetBaseUrl || !provider.codePlanPresetModelId) {
+    return null;
+  }
+
+  return {
+    baseUrl: provider.codePlanPresetBaseUrl,
+    modelId: provider.codePlanPresetModelId,
+  };
+}
+
+export function isProviderCodePlanMode(
+  baseUrl: string | undefined,
+  models: Iterable<string | null | undefined> | string | undefined,
+  codePlanPresetBaseUrl?: string,
+  codePlanPresetModelId?: string,
+): boolean {
+  if (!codePlanPresetBaseUrl || !codePlanPresetModelId) {
+    return false;
+  }
+
+  const normalizedModels = typeof models === 'string'
+    ? normalizeProviderModelList([models])
+    : normalizeProviderModelList(models);
+
+  return (
+    (baseUrl || '').trim() === codePlanPresetBaseUrl
+    && normalizedModels.length === 1
+    && normalizedModels[0] === codePlanPresetModelId
+  );
 }
 
 /** Normalize provider API key before saving; Ollama uses a local placeholder when blank. */
