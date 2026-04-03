@@ -206,7 +206,10 @@ export function Setup() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <TitleBar />
-      <div className="flex-1 overflow-auto">
+      <div
+        data-testid="setup-scroll-container"
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+      >
         {/* Progress Indicator */}
         <div className="flex justify-center pt-8">
           <div className="flex items-center gap-2">

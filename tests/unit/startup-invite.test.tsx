@@ -150,4 +150,16 @@ describe('Startup invite code gate', () => {
       expect(bootstrapState.skipInviteCodeAndContinue).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('uses a vertical scroll container for the provider setup phase', async () => {
+    bootstrapState.phase = 'needs_provider';
+
+    const { Startup } = await import('@/pages/Startup');
+    render(<Startup />);
+
+    const scrollContainer = screen.getByTestId('startup-content-scroll-container');
+    expect(scrollContainer).toHaveClass('min-h-0');
+    expect(scrollContainer).toHaveClass('overflow-y-auto');
+    expect(scrollContainer).not.toHaveClass('justify-center');
+  });
 });

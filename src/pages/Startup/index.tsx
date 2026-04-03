@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ProviderContent } from '@/pages/Setup';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
-import { useSessionStore } from '@/stores/session';
+import { cn } from '@/lib/utils';
 import geeclawIcon from '@/assets/logo.svg';
 
 const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
@@ -36,7 +36,7 @@ export function Startup() {
   const continueAfterProvider = useBootstrapStore((state) => state.continueAfterProvider);
   const logoutToLogin = useBootstrapStore((state) => state.logoutToLogin);
   const retry = useBootstrapStore((state) => state.retry);
-  const account = useSessionStore((state) => state.account);
+  // const account = useSessionStore((state) => state.account);
   const setupComplete = useSettingsStore((state) => state.setupComplete);
 
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -275,14 +275,6 @@ export function Startup() {
                 <p className="text-sm font-medium uppercase tracking-[0.18em] text-emerald-600/70">
                   {t('startup.authenticated.eyebrow')}
                 </p>
-                <h2 className="mt-2 text-[clamp(1.8rem,3.4vw,2.8rem)] font-semibold tracking-[-0.045em] text-foreground dark:text-white/95">
-                  {t('startup.needsProvider.title')}
-                </h2>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground dark:text-white/78">
-                  {account?.displayName
-                    ? t('startup.authenticated.bodyNamed', { name: account.displayName })
-                    : t('startup.needsProvider.body')}
-                </p>
                 <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-white/65">
                   {statusMessage}
                 </p>
@@ -352,7 +344,15 @@ export function Startup() {
         <div className="absolute bottom-[-14%] left-1/2 h-[22rem] w-[34rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,229,210,0.28)_0%,rgba(255,229,210,0.1)_42%,rgba(255,229,210,0)_76%)] blur-3xl" />
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-10 md:px-10">
+      <div
+        data-testid="startup-content-scroll-container"
+        className={cn(
+          'relative flex min-h-0 flex-1 flex-col px-6 pb-16 pt-10 md:px-10',
+          phase === 'needs_provider'
+            ? 'items-stretch overflow-y-auto overflow-x-hidden'
+            : 'items-center justify-center',
+        )}
+      >
         {renderCenterPanel()}
       </div>
     </div>
