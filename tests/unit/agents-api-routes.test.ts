@@ -10,10 +10,11 @@ const {
   deleteAgentConfig,
   getAgentPersona,
   getDefaultAgentModelConfig,
-  installPresetAgent,
+  installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
   unmanageAgent,
+  updateMarketplaceAgent,
   updateAgentName,
   updateAgentPersona,
   updateAgentSettings,
@@ -25,7 +26,12 @@ const {
   deleteAgentConfig: vi.fn(),
   getAgentPersona: vi.fn(),
   getDefaultAgentModelConfig: vi.fn(),
-  installPresetAgent: vi.fn(async () => ({
+  installMarketplaceAgent: vi.fn(async () => ({
+    completion: {
+      operation: 'install',
+      agentId: 'stockexpert',
+      promptText: 'Please review the installed workspace.',
+    },
     agents: [{ id: 'stockexpert', managed: true }],
     defaultAgentId: 'main',
     configuredChannelTypes: [],
@@ -56,6 +62,19 @@ const {
     channelAccountOwners: {},
     explicitChannelAccountBindings: {},
   })),
+  updateMarketplaceAgent: vi.fn(async () => ({
+    completion: {
+      operation: 'update',
+      agentId: 'stockexpert',
+      promptText: 'Please summarize what changed.',
+    },
+    agents: [{ id: 'stockexpert', managed: true }],
+    defaultAgentId: 'main',
+    configuredChannelTypes: [],
+    channelOwners: {},
+    channelAccountOwners: {},
+    explicitChannelAccountBindings: {},
+  })),
   updateAgentName: vi.fn(),
   updateAgentPersona: vi.fn(),
   updateAgentSettings: vi.fn(async () => ({
@@ -76,10 +95,11 @@ vi.mock('@electron/utils/agent-config', () => ({
   deleteAgentConfig,
   getAgentPersona,
   getDefaultAgentModelConfig,
-  installPresetAgent,
+  installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
   unmanageAgent,
+  updateMarketplaceAgent,
   updateAgentName,
   updateAgentPersona,
   updateAgentSettings,
@@ -100,11 +120,10 @@ describe('agent API routes', () => {
     vi.resetAllMocks();
   });
 
-  it('serves bundled presets and installs them', async () => {
+  it('serves bundled presets but does not expose preset install POST route', async () => {
     const { handleAgentRoutes } = await import('@electron/api/routes/agents');
 
     const listReq = { method: 'GET' } as never;
-    const installReq = { method: 'POST' } as never;
     const res = {} as never;
     const ctx = {
       gatewayManager: {
@@ -126,12 +145,53 @@ describe('agent API routes', () => {
       }],
     }));
 
-    parseJsonBody.mockResolvedValueOnce({ presetId: 'stock-expert' });
-    await handleAgentRoutes(installReq, res, new URL('http://127.0.0.1/api/agents/presets/install'), ctx);
+    await expect(handleAgentRoutes(
+      { method: 'POST' } as never,
+      res,
+      new URL('http://127.0.0.1/api/agents/presets/install'),
+      ctx,
+    )).resolves.toBe(false);
+    expect(parseJsonBody).not.toHaveBeenCalled();
+    expect(sendJson).toHaveBeenCalledTimes(1);
+  });
 
-    expect(installPresetAgent).toHaveBeenCalledWith('stock-expert');
+  it('installs and updates marketplace agents with completion payloads', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    const req = { method: 'POST' } as never;
+    const res = {} as never;
+    const ctx = {
+      gatewayManager: {
+        getStatus: () => ({ state: 'running' }),
+        debouncedReload: vi.fn(),
+      },
+    } as never;
+
+    parseJsonBody.mockResolvedValueOnce({ agentId: 'stockexpert' });
+    await handleAgentRoutes(req, res, new URL('http://127.0.0.1/api/agents/marketplace/install'), ctx);
+
+    expect(installMarketplaceAgent).toHaveBeenCalledWith('stockexpert');
+    expect(sendJson).toHaveBeenNthCalledWith(1, res, 200, expect.objectContaining({
+      success: true,
+      completion: {
+        operation: 'install',
+        agentId: 'stockexpert',
+        promptText: 'Please review the installed workspace.',
+      },
+      agents: [{ id: 'stockexpert', managed: true }],
+    }));
+
+    parseJsonBody.mockResolvedValueOnce({ agentId: 'stockexpert' });
+    await handleAgentRoutes(req, res, new URL('http://127.0.0.1/api/agents/marketplace/update'), ctx);
+
+    expect(updateMarketplaceAgent).toHaveBeenCalledWith('stockexpert');
     expect(sendJson).toHaveBeenNthCalledWith(2, res, 200, expect.objectContaining({
       success: true,
+      completion: {
+        operation: 'update',
+        agentId: 'stockexpert',
+        promptText: 'Please summarize what changed.',
+      },
       agents: [{ id: 'stockexpert', managed: true }],
     }));
   });
