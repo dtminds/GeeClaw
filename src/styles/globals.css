@@ -473,12 +473,12 @@
     background: color-mix(in srgb, var(--accent) 88%, transparent);
   }
 
-  .surface-hover-strong:hover {
+  .surface-hover-strong {
     background: color-mix(in srgb, var(--accent) 92%, transparent);
     color: var(--foreground);
   }
 
-  .dark .surface-hover-strong:hover {
+  .dark .surface-hover-strong {
     background: color-mix(in srgb, var(--accent) 96%, transparent);
   }
 

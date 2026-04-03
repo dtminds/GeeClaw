@@ -71,7 +71,7 @@ describe('provider-model-sync', () => {
     ).toEqual({
       providerKey: 'modelstudio',
       entry: {
-        baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         api: 'openai-completions',
         apiKey: 'MODELSTUDIO_API_KEY',
         models: [{ id: 'qwen3.6-plus', name: 'qwen3.6-plus', reasoning: false }],
