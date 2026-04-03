@@ -1457,7 +1457,13 @@ export function Settings({ embedded = false }: SettingsProps) {
 
   return (
     <Dialog modal={false} open onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent hideCloseButton className="p-0">
+      <DialogContent
+        hideCloseButton
+        onInteractOutside={(event) => {
+          event.preventDefault();
+        }}
+        className="p-0"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>{activeGroup.title}</DialogTitle>
           <DialogDescription>{activeGroup.title}</DialogDescription>

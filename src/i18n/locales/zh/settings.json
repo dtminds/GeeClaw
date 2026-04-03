@@ -291,7 +291,7 @@
       "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeeclaw/kimi-k2.5",
       "fallbacksHelp": "每行一个完整 model ref，例如 provider/model-id。",
       "available": "当前可用模型",
-      "availableHelp": "这些是当前已经定义在各个 provider 下、允许作为 fallback 使用的模型引用",
+      "availableHelp": "这些是当前已经定义的模型，点击可设置为备用模型",
       "save": "保存 Fallback"
     },
     "toast": {
