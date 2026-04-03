@@ -294,7 +294,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
         },
       ],
     },
-  }
+  },
 ];
 
 const PROVIDER_DEFINITION_MAP = new Map(

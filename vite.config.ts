@@ -5,6 +5,12 @@ import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import { resolve } from 'path';
 
+const sharedAliases = [
+  { find: '@shared', replacement: resolve(__dirname, 'shared') },
+  { find: '@electron', replacement: resolve(__dirname, 'electron') },
+  { find: '@', replacement: resolve(__dirname, 'src') },
+];
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -18,6 +24,9 @@ export default defineConfig({
           options.startup();
         },
         vite: {
+          resolve: {
+            alias: sharedAliases,
+          },
           build: {
             outDir: 'dist-electron/main',
             rollupOptions: {
@@ -33,6 +42,9 @@ export default defineConfig({
           options.reload();
         },
         vite: {
+          resolve: {
+            alias: sharedAliases,
+          },
           build: {
             outDir: 'dist-electron/preload',
             rollupOptions: {
@@ -45,11 +57,7 @@ export default defineConfig({
     renderer(),
   ],
   resolve: {
-    alias: [
-      { find: '@shared', replacement: resolve(__dirname, 'shared') },
-      { find: '@electron', replacement: resolve(__dirname, 'electron') },
-      { find: '@', replacement: resolve(__dirname, 'src') },
-    ],
+    alias: sharedAliases,
   },
   server: {
     port: 5173,
