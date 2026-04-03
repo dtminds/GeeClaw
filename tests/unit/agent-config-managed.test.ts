@@ -130,6 +130,10 @@ async function setupManagedPresetFixture(options?: {
     })),
   }));
 
+  vi.doMock('@electron/utils/desktop-sessions', () => ({
+    deleteDesktopSessionsForAgent: vi.fn(async () => []),
+  }));
+
   vi.doMock('@electron/utils/app-env', () => ({
     resolveGeeClawAppEnvironment: vi.fn(async (baseEnv?: Record<string, string | undefined>) => ({
       ...(baseEnv ?? process.env),
@@ -209,6 +213,7 @@ afterEach(() => {
   vi.unmock('@electron/utils/paths');
   vi.unmock('fs/promises');
   vi.unmock('@electron/services/agents/store-instance');
+  vi.unmock('@electron/utils/desktop-sessions');
   vi.unmock('@electron/utils/agent-presets');
   vi.unmock('@electron/utils/app-env');
   while (tempDirs.length > 0) {
