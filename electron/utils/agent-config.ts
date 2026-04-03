@@ -17,7 +17,7 @@ import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
-import { getAgentPreset, listAgentPresets } from './agent-presets';
+import { getAgentPreset } from './agent-presets';
 import { resolveGeeClawAppEnvironment } from './app-env';
 import { getGeeClawCommandSearchDirs } from './runtime-path';
 import {
@@ -30,6 +30,7 @@ import {
   getAgentMarketplaceCatalogEntry,
   prepareAgentMarketplacePackage,
 } from './agent-marketplace-installer';
+import { loadAgentMarketplaceCatalog } from './agent-marketplace-catalog';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -106,12 +107,13 @@ interface AgentConfigDocument extends Record<string, unknown> {
 
 type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
+type ManagedAgentSource = 'preset' | 'marketplace';
 const LOCKED_MANAGED_PERSONA_FILES: PersonaFieldKey[] = ['identity'];
 const LOCKED_MANAGED_PERSONA_FILE_SET = new Set<PersonaFieldKey>(LOCKED_MANAGED_PERSONA_FILES);
 
 interface ManagedAgentMetadata {
   agentId: string;
-  source: 'preset' | 'marketplace';
+  source: ManagedAgentSource;
   presetId?: string;
   managed: boolean;
   lockedFields: ManagedLockedField[];
@@ -149,8 +151,10 @@ export interface AgentSummary {
   channelTypes: string[];
   channelAccounts: Array<{ channelType: string; accountId: string }>;
   source: 'custom' | 'preset';
+  managementSource?: ManagedAgentSource;
   managed: boolean;
   presetId?: string;
+  packageVersion?: string;
   lockedFields: ManagedLockedField[];
   canUnmanage: boolean;
   managedFiles: string[];
@@ -172,6 +176,29 @@ export interface AgentMarketplaceCompletion {
   operation: 'install' | 'update';
   agentId: string;
   promptText?: string;
+}
+
+export interface AgentMarketplaceSummary {
+  source: ManagedAgentSource;
+  name: string;
+  description: string;
+  emoji: string;
+  category: string;
+  managed: boolean;
+  platforms?: AgentPresetPlatform[];
+  minAppVersion?: string;
+  latestVersion?: string;
+  installed: boolean;
+  installedVersion?: string;
+  hasUpdate: boolean;
+  installable: boolean;
+  missingRequirements?: AgentPresetMissingRequirements;
+  supportedOnCurrentPlatform: boolean;
+  supportedOnCurrentAppVersion: boolean;
+  agentId: string;
+  skillScope: AgentSkillScope;
+  presetSkills: string[];
+  managedFiles: string[];
 }
 
 export interface AgentMarketplaceMutationResult extends AgentsSnapshot {
@@ -1032,8 +1059,10 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       channelTypes: configuredChannels.filter((ct) => ownedChannels.has(ct)),
       channelAccounts: ownedChannelAccounts,
       source: managedMetadata?.managed ? 'preset' : 'custom',
+      managementSource: managedMetadata?.managed ? managedMetadata.source : undefined,
       managed: managedMetadata?.managed === true,
       presetId: managedMetadata?.presetId,
+      packageVersion: managedMetadata?.source === 'marketplace' ? managedMetadata.packageVersion : undefined,
       lockedFields: managedMetadata?.managed ? [...managedMetadata.lockedFields] : [],
       canUnmanage: managedMetadata?.managed ? managedMetadata.canUnmanage !== false : false,
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
@@ -1212,45 +1241,44 @@ export async function updateDefaultAgentFallbacks(
   };
 }
 
-export async function listAgentPresetSummaries(): Promise<Array<{
-  presetId: string;
-  name: string;
-  description: string;
-  emoji: string;
-  category: string;
-  managed: boolean;
-  platforms?: AgentPresetPlatform[];
-  installable: boolean;
-  missingRequirements?: AgentPresetMissingRequirements;
-  supportedOnCurrentPlatform: boolean;
-  agentId: string;
-  skillScope: AgentSkillScope;
-  presetSkills: string[];
-  managedFiles: string[];
-}>> {
-  const presets = await listAgentPresets();
-  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
-  return presets.map((preset) => {
-    const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(preset.meta.platforms, process.platform);
-    const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
+export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummary[]> {
+  const [catalog, management] = await Promise.all([
+    loadAgentMarketplaceCatalog(),
+    readAgentManagementMap(),
+  ]);
+
+  return catalog.map((entry) => {
+    const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(entry.platforms, process.platform);
+    const supportedOnCurrentAppVersion = isMarketplaceEntrySupportedOnCurrentAppVersion(entry);
+    const installedMetadata = management[entry.agentId];
+    const installed = installedMetadata?.managed === true;
+    const installedVersion = installedMetadata?.source === 'marketplace'
+      ? installedMetadata.packageVersion
+      : undefined;
+    const hasUpdate = installedMetadata?.source === 'marketplace'
+      && typeof installedMetadata.packageVersion === 'string'
+      && compareVersionStrings(entry.version, installedMetadata.packageVersion) > 0;
 
     return {
-      presetId: preset.meta.presetId,
-      name: preset.meta.name,
-      description: preset.meta.description,
-      emoji: preset.meta.emoji,
-      category: preset.meta.category,
+      source: 'marketplace',
+      name: entry.name,
+      description: entry.description,
+      emoji: entry.emoji,
+      category: entry.category,
       managed: true,
-      platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
-      installable: supportedOnCurrentPlatform && !missingRequirements,
-      missingRequirements,
+      platforms: entry.platforms ? [...entry.platforms] : undefined,
+      minAppVersion: entry.minAppVersion,
+      latestVersion: entry.version,
+      installed,
+      installedVersion,
+      hasUpdate: Boolean(hasUpdate),
+      installable: supportedOnCurrentPlatform && supportedOnCurrentAppVersion,
       supportedOnCurrentPlatform,
-      agentId: preset.meta.agent.id,
-      skillScope: preset.meta.agent.skillScope,
-      presetSkills: preset.meta.agent.skillScope.mode === 'specified'
-        ? [...preset.meta.agent.skillScope.skills]
-        : [],
-      managedFiles: Object.keys(preset.files),
+      supportedOnCurrentAppVersion,
+      agentId: entry.agentId,
+      skillScope: { mode: 'default' },
+      presetSkills: [],
+      managedFiles: [],
     };
   });
 }
@@ -1300,6 +1328,16 @@ function assertMarketplaceEntrySupportedOnCurrentAppVersion(entry: {
   throw new Error(
     `Marketplace agent "${entry.agentId}" requires GeeClaw ${entry.minAppVersion} or newer (current: ${currentVersion})`,
   );
+}
+
+function isMarketplaceEntrySupportedOnCurrentAppVersion(entry: {
+  minAppVersion?: string;
+}): boolean {
+  if (!entry.minAppVersion) {
+    return true;
+  }
+
+  return compareVersionStrings(app.getVersion(), entry.minAppVersion) >= 0;
 }
 
 function buildMarketplaceCompletion(

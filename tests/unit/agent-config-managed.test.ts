@@ -68,6 +68,7 @@ async function setupManagedPresetFixture(options?: {
       version?: string;
       downloadUrl?: string;
       checksum?: string;
+      platforms?: Array<'darwin' | 'win32' | 'linux'>;
     };
     meta?: {
       name?: string;
@@ -324,6 +325,11 @@ async function setupManagedPresetFixture(options?: {
       };
     }),
   }));
+  vi.doMock('@electron/utils/agent-marketplace-catalog', () => ({
+    loadAgentMarketplaceCatalog: vi.fn(async () => [
+      marketplaceState.preparedPackage.catalogEntry,
+    ]),
+  }));
 
   const agentConfig = await import('@electron/utils/agent-config');
   return { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent, marketplaceState };
@@ -356,6 +362,11 @@ afterEach(() => {
 describe('managed agent config domain', () => {
   it('reports preset summary platforms and current platform support', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
+      marketplacePackage: {
+        catalogEntry: {
+          platforms: ['darwin'],
+        },
+      },
       presetMeta: {
         platforms: ['darwin'],
       },
@@ -364,27 +375,38 @@ describe('managed agent config domain', () => {
     setPlatform('darwin');
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
+        source: 'marketplace',
+        agentId: 'stockexpert',
         emoji: '📈',
+        latestVersion: '1.2.3',
+        installed: false,
+        installedVersion: undefined,
+        hasUpdate: false,
         platforms: ['darwin'],
         installable: true,
         supportedOnCurrentPlatform: true,
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
 
     setPlatform('win32');
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
+        source: 'marketplace',
+        agentId: 'stockexpert',
         emoji: '📈',
+        latestVersion: '1.2.3',
+        installed: false,
+        hasUpdate: false,
         platforms: ['darwin'],
         installable: false,
         supportedOnCurrentPlatform: false,
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
   });
 
-  it('reports missing preset requirements in preset summaries', async () => {
+  it('does not derive marketplace summary requirements from bundled preset metadata', async () => {
     delete process.env.NOTION_API_KEY;
     process.env.PATH = '/tmp/geeclaw-empty-bin';
 
@@ -400,34 +422,33 @@ describe('managed agent config domain', () => {
 
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
-        installable: false,
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        installable: true,
         supportedOnCurrentPlatform: true,
-        missingRequirements: {
-          bins: ['preset-required-bin'],
-          anyBins: ['missing-python3', 'missing-python'],
-          env: ['NOTION_API_KEY'],
-        },
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
   });
 
-  it('treats anyBins as satisfied when at least one command exists', async () => {
-    process.env.PATH = '/usr/bin:/bin';
+  it('reports installed marketplace versions and update availability from management state', async () => {
+    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
 
-    const { agentConfig } = await setupManagedPresetFixture({
-      presetMeta: {
-        requires: {
-          anyBins: ['definitely-missing-command', 'sh'],
-        },
-      },
-    });
+    await agentConfig.installMarketplaceAgent('stockexpert');
+    marketplaceState.preparedPackage.catalogEntry = {
+      ...marketplaceState.preparedPackage.catalogEntry,
+      version: '1.2.4',
+      downloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+    };
 
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
-        installable: true,
-        missingRequirements: undefined,
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        latestVersion: '1.2.4',
+        installed: true,
+        installedVersion: '1.2.3',
+        hasUpdate: true,
       }),
     ]);
   });

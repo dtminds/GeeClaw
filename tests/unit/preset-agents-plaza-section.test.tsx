@@ -6,7 +6,7 @@ import {
   useAgentsStore,
 } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
-import type { AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
+import type { AgentMarketplaceCompletion, AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -21,6 +21,7 @@ const translations: Record<string, string> = {
   'presetPlaza.skillsTitle': '预置技能',
   'presetPlaza.platformsTitle': '支持平台',
   'marketplace.install': '一键雇佣',
+  'marketplace.update': '更新',
   'marketplace.installed': '已添加',
   'marketplace.unavailable': '当前不可用',
   'marketplace.requirementsMissing': '缺少依赖',
@@ -57,8 +58,9 @@ const installedTrendFinderAgent: AgentSummary = {
   channelTypes: [],
   channelAccounts: [],
   source: 'preset',
+  managementSource: 'marketplace',
   managed: true,
-  presetId: 'trend-finder',
+  packageVersion: '1.0.0',
   lockedFields: ['id', 'workspace', 'persona'],
   canUnmanage: true,
   managedFiles: ['AGENTS.md'],
@@ -69,66 +71,78 @@ const installedTrendFinderAgent: AgentSummary = {
 
 const marketplacePresets: AgentPresetSummary[] = [
   {
-    presetId: 'stock-expert',
+    source: 'marketplace',
     name: '股票助手',
     description: '追踪个股、公告和财报',
     emoji: '📈',
     category: 'finance',
     managed: true,
     agentId: 'stockexpert',
+    latestVersion: '1.2.3',
+    installed: false,
+    hasUpdate: false,
     skillScope: { mode: 'specified', skills: ['stock-analyzer', 'stock-announcements'] },
     presetSkills: ['stock-analyzer', 'stock-announcements'],
     managedFiles: ['AGENTS.md', 'SOUL.md'],
     platforms: ['darwin'],
     installable: false,
     supportedOnCurrentPlatform: false,
+    supportedOnCurrentAppVersion: true,
   },
   {
-    presetId: 'trend-finder',
+    source: 'marketplace',
     name: '趋势助手',
     description: '捕捉热点和市场趋势',
     emoji: '📊',
     category: 'research',
     managed: true,
     agentId: 'trendfinder',
+    latestVersion: '1.1.0',
+    installed: true,
+    installedVersion: '1.0.0',
+    hasUpdate: true,
     skillScope: { mode: 'specified', skills: ['web-search'] },
-    presetSkills: ['web-search'],
-    managedFiles: ['AGENTS.md'],
+    presetSkills: [],
+    managedFiles: [],
     installable: true,
     supportedOnCurrentPlatform: true,
+    supportedOnCurrentAppVersion: true,
   },
   {
-    presetId: 'alpha-researcher',
+    source: 'marketplace',
     name: 'Alpha Researcher',
     description: '套利信号与候选池',
     emoji: '🧪',
     category: 'research',
     managed: true,
     agentId: 'alpha-researcher',
+    latestVersion: '2.4.0',
+    installed: false,
+    hasUpdate: false,
     skillScope: { mode: 'specified', skills: ['web-search', 'stock-analyzer'] },
     presetSkills: ['web-search', 'stock-analyzer'],
     managedFiles: ['AGENTS.md', 'USER.md'],
     installable: true,
     supportedOnCurrentPlatform: true,
+    supportedOnCurrentAppVersion: true,
   },
   {
-    presetId: 'notion-ops',
+    source: 'marketplace',
     name: 'Notion Ops',
     description: '依赖外部命令和 API Key 的工作流 Agent',
     emoji: '🗂️',
     category: 'research',
     managed: true,
     agentId: 'notion-ops',
-    skillScope: { mode: 'specified', skills: ['web-search'] },
-    presetSkills: ['web-search'],
-    managedFiles: ['AGENTS.md'],
-    installable: false,
-    missingRequirements: {
-      bins: ['opencli'],
-      anyBins: ['python3', 'python'],
-      env: ['NOTION_API_KEY'],
-    },
+    latestVersion: '0.8.1',
+    installed: false,
+    hasUpdate: false,
+    skillScope: { mode: 'default' },
+    presetSkills: [],
+    managedFiles: [],
+    installable: true,
     supportedOnCurrentPlatform: true,
+    supportedOnCurrentAppVersion: true,
   },
 ];
 
@@ -141,10 +155,10 @@ const baseSnapshot: AgentsSnapshot = {
   explicitChannelAccountBindings: {},
 };
 
-function buildInstalledSnapshot(presetId: 'alpha-researcher'): AgentsSnapshot {
-  const preset = marketplacePresets.find((entry) => entry.presetId === presetId);
+function buildInstalledSnapshot(agentId: 'alpha-researcher'): AgentsSnapshot {
+  const preset = marketplacePresets.find((entry) => entry.agentId === agentId);
   if (!preset) {
-    throw new Error(`Unknown preset ${presetId}`);
+    throw new Error(`Unknown preset ${agentId}`);
   }
 
   const installedAgent: AgentSummary = {
@@ -159,8 +173,9 @@ function buildInstalledSnapshot(presetId: 'alpha-researcher'): AgentsSnapshot {
     channelTypes: [],
     channelAccounts: [],
     source: 'preset',
+    managementSource: 'marketplace',
     managed: true,
-    presetId: preset.presetId,
+    packageVersion: preset.latestVersion,
     lockedFields: ['id', 'workspace', 'persona'],
     canUnmanage: true,
     managedFiles: preset.managedFiles,
@@ -185,6 +200,32 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+async function finishMarketplaceInstall(
+  deferredInstall: { resolve: (value: AgentsSnapshot & { completion: AgentMarketplaceCompletion }) => void },
+  snapshot: AgentsSnapshot,
+  completion: AgentMarketplaceCompletion,
+) {
+  await act(async () => {
+    deferredInstall.resolve({ ...snapshot, completion });
+    await flushPromises();
+  });
+
+  await act(async () => {
+    vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+    await flushPromises();
+  });
+
+  await act(async () => {
+    vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
+    await flushPromises();
+  });
+
+  await act(async () => {
+    vi.advanceTimersByTime(PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS);
+    await flushPromises();
+  });
+}
+
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
@@ -202,6 +243,7 @@ function resetAgentsStore() {
     installingPresetId: null,
     installStage: 'idle',
     installProgress: 0,
+    marketplaceCompletion: null,
     loading: false,
     error: null,
   });
@@ -320,12 +362,19 @@ describe('PresetAgentsPlazaSection', () => {
       if (path === '/api/agents/presets') {
         return { success: true, presets: marketplacePresets };
       }
-      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
-        const body = JSON.parse(String(init.body ?? '{}')) as { presetId?: 'alpha-researcher' };
-        if (!body.presetId) {
-          throw new Error('missing presetId');
+      if (path === '/api/agents/marketplace/install' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as { agentId?: 'alpha-researcher' };
+        if (!body.agentId) {
+          throw new Error('missing agentId');
         }
-        return buildInstalledSnapshot(body.presetId);
+        return {
+          ...buildInstalledSnapshot(body.agentId),
+          completion: {
+            operation: 'install',
+            agentId: body.agentId,
+            promptText: 'Please review the installed workspace.',
+          },
+        };
       }
       throw new Error(`Unhandled hostApiFetch call: ${path}`);
     });
@@ -377,8 +426,33 @@ describe('PresetAgentsPlazaSection', () => {
     expect(screen.getByText('Alpha Researcher')).toBeInTheDocument();
   });
 
+  it('stores marketplace-backed preset summaries for the plaza', async () => {
+    await act(async () => {
+      await useAgentsStore.getState().fetchPresets();
+    });
+
+    expect(useAgentsStore.getState().presets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'trendfinder',
+        installed: true,
+        installedVersion: '1.0.0',
+        latestVersion: '1.1.0',
+        hasUpdate: true,
+        supportedOnCurrentAppVersion: true,
+      }),
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'alpha-researcher',
+        installed: false,
+        latestVersion: '2.4.0',
+        hasUpdate: false,
+      }),
+    ]));
+  });
+
   it('opens the preset detail dialog with aligned summary content and install progress', async () => {
-    const deferredInstall = createDeferred<AgentsSnapshot>();
+    const deferredInstall = createDeferred<AgentsSnapshot & { completion: AgentMarketplaceCompletion }>();
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/agents') {
         return baseSnapshot;
@@ -386,7 +460,7 @@ describe('PresetAgentsPlazaSection', () => {
       if (path === '/api/agents/presets') {
         return { success: true, presets: marketplacePresets };
       }
-      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
+      if (path === '/api/agents/marketplace/install' && init?.method === 'POST') {
         return deferredInstall.promise;
       }
       throw new Error(`Unhandled hostApiFetch call: ${path}`);
@@ -422,6 +496,11 @@ describe('PresetAgentsPlazaSection', () => {
       await flushPromises();
     });
 
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/marketplace/install', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ agentId: 'alpha-researcher' }),
+    }));
+
     const progressBlock = dialog.querySelector('.preset-install-progress');
     expect(progressBlock?.className).toContain('w-full');
     expect(within(dialog).getByRole('button', { name: '准备预设' })).toBeDisabled();
@@ -443,34 +522,23 @@ describe('PresetAgentsPlazaSection', () => {
     expect(within(dialog).getByRole('button', { name: '安装技能' })).toBeDisabled();
     expect(within(dialog).getByText(/70%/)).toBeInTheDocument();
 
-    await act(async () => {
-      deferredInstall.resolve(buildInstalledSnapshot('alpha-researcher'));
-      await flushPromises();
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await flushPromises();
-    });
-
-    expect(within(dialog).getByRole('button', { name: '完成配置' })).toBeDisabled();
-    expect(within(dialog).getByText(/90%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      await flushPromises();
-    });
-
-    expect(within(dialog).getByRole('button', { name: '完成配置' })).toBeDisabled();
-    expect(within(dialog).getByText(/90%/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS);
-      await flushPromises();
-    });
+    await finishMarketplaceInstall(
+      deferredInstall,
+      buildInstalledSnapshot('alpha-researcher'),
+      {
+        operation: 'install',
+        agentId: 'alpha-researcher',
+        promptText: 'Please review the installed workspace.',
+      },
+    );
 
     expect(within(dialog).getByRole('button', { name: '已添加' })).toBeDisabled();
     expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
+    expect(useAgentsStore.getState().marketplaceCompletion).toEqual({
+      operation: 'install',
+      agentId: 'alpha-researcher',
+      promptText: 'Please review the installed workspace.',
+    });
 
     await act(async () => {
       vi.advanceTimersByTime(700);
@@ -479,7 +547,7 @@ describe('PresetAgentsPlazaSection', () => {
   });
 
   it('keeps the preset in finalizing state until the gateway finishes reloading', async () => {
-    const deferredInstall = createDeferred<AgentsSnapshot>();
+    const deferredInstall = createDeferred<AgentsSnapshot & { completion: AgentMarketplaceCompletion }>();
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/agents') {
         return baseSnapshot;
@@ -487,7 +555,7 @@ describe('PresetAgentsPlazaSection', () => {
       if (path === '/api/agents/presets') {
         return { success: true, presets: marketplacePresets };
       }
-      if (path === '/api/agents/presets/install' && init?.method === 'POST') {
+      if (path === '/api/agents/marketplace/install' && init?.method === 'POST') {
         return deferredInstall.promise;
       }
       throw new Error(`Unhandled hostApiFetch call: ${path}`);
@@ -518,7 +586,13 @@ describe('PresetAgentsPlazaSection', () => {
 
     await act(async () => {
       vi.advanceTimersByTime(PRESET_INSTALL_STAGE_VISIBLE_MS);
-      deferredInstall.resolve(buildInstalledSnapshot('alpha-researcher'));
+      deferredInstall.resolve({
+        ...buildInstalledSnapshot('alpha-researcher'),
+        completion: {
+          operation: 'install',
+          agentId: 'alpha-researcher',
+        },
+      });
       await flushPromises();
     });
 
@@ -567,7 +641,80 @@ describe('PresetAgentsPlazaSection', () => {
     expect(within(dialog).getByText(/100%/)).toBeInTheDocument();
   });
 
-  it('disables install when preset requirements are missing and shows the missing items', async () => {
+  it('allows installed marketplace agents with updates to trigger the update flow', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/update' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as { agentId?: string };
+        return {
+          ...baseSnapshot,
+          agents: [{
+            ...installedTrendFinderAgent,
+            packageVersion: '1.1.0',
+          }],
+          completion: {
+            operation: 'update',
+            agentId: body.agentId ?? 'trendfinder',
+            promptText: 'Summarize the marketplace changes.',
+          },
+        };
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    await act(async () => {
+      const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+      render(<PresetAgentsPlazaSection />);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('趋势助手'));
+    });
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: '更新' })).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: '更新' }));
+      await flushPromises();
+    });
+
+    for (const step of [
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+    ]) {
+      await act(async () => {
+        vi.advanceTimersByTime(step);
+        await flushPromises();
+      });
+    }
+
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/marketplace/update', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ agentId: 'trendfinder' }),
+    }));
+    expect(useAgentsStore.getState().marketplaceCompletion).toEqual({
+      operation: 'update',
+      agentId: 'trendfinder',
+      promptText: 'Summarize the marketplace changes.',
+    });
+    expect(useAgentsStore.getState().presets.find((preset) => preset.agentId === 'trendfinder')).toMatchObject({
+      installed: true,
+      installedVersion: '1.1.0',
+      hasUpdate: false,
+    });
+  });
+
+  it('shows install CTA when catalog-backed summaries omit requirements and preset skills', async () => {
     const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
     render(<PresetAgentsPlazaSection />);
 
@@ -580,10 +727,8 @@ describe('PresetAgentsPlazaSection', () => {
     });
 
     const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText('预置技能')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('安装前依赖')).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/缺少依赖：opencli/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/需要以下依赖之一：python3/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/缺少环境变量：NOTION_API_KEY/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '缺少依赖' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '一键雇佣' })).toBeEnabled();
   });
 });

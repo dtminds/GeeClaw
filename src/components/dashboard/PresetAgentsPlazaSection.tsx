@@ -21,11 +21,12 @@ export function PresetAgentsPlazaSection() {
     error,
     fetchAgents,
     fetchPresets,
-    installPreset,
+    installMarketplaceAgent,
+    updateMarketplaceAgent,
   } = useAgentsStore();
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchPresets()]);
@@ -36,11 +37,11 @@ export function PresetAgentsPlazaSection() {
     [presets],
   );
 
-  const installedPresetIds = useMemo(
+  const installedAgentIds = useMemo(
     () => new Set(
       agents
-        .filter((agent) => agent.source === 'preset' && agent.presetId)
-        .map((agent) => agent.presetId as string),
+        .filter((agent) => agent.source === 'preset' && agent.managementSource === 'marketplace')
+        .map((agent) => agent.id),
     ),
     [agents],
   );
@@ -53,8 +54,8 @@ export function PresetAgentsPlazaSection() {
   );
 
   const activePreset = useMemo(
-    () => presets.find((preset) => preset.presetId === activePresetId) ?? null,
-    [activePresetId, presets],
+    () => presets.find((preset) => preset.agentId === activeAgentId) ?? null,
+    [activeAgentId, presets],
   );
 
   const getCategoryLabel = (category: string) => {
@@ -112,9 +113,9 @@ export function PresetAgentsPlazaSection() {
           {filteredPresets.map((preset) => {
             return (
               <button
-                key={preset.presetId}
+                key={preset.agentId}
                 type="button"
-                onClick={() => setActivePresetId(preset.presetId)}
+                onClick={() => setActiveAgentId(preset.agentId)}
                 className={cn(
                   'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
                   'bg-muted/20 p-5 shadow-none transition-all duration-200',
@@ -148,13 +149,15 @@ export function PresetAgentsPlazaSection() {
       <MarketplacePresetDetailDialog
         preset={activePreset}
         open={!!activePreset}
-        installed={activePreset ? installedPresetIds.has(activePreset.presetId) : false}
-        isInstalling={activePreset ? installingPresetId === activePreset.presetId : false}
+        installed={activePreset ? activePreset.installed || installedAgentIds.has(activePreset.agentId) : false}
+        hasUpdate={activePreset?.hasUpdate ?? false}
+        isInstalling={activePreset ? installingPresetId === activePreset.agentId : false}
         installStage={installStage}
         installProgress={installProgress}
         disableInstall={!!installingPresetId}
-        onClose={() => setActivePresetId(null)}
-        onInstall={(presetId) => void installPreset(presetId)}
+        onClose={() => setActiveAgentId(null)}
+        onInstall={(agentId) => void installMarketplaceAgent(agentId)}
+        onUpdate={(agentId) => void updateMarketplaceAgent(agentId)}
         availabilityTitle={t('presetPlaza.platformsTitle')}
         skillsTitle={t('presetPlaza.skillsTitle')}
         closeLabel={t('presetPlaza.close')}

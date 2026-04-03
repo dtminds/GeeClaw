@@ -3,7 +3,13 @@ import { hostApiFetch } from '@/lib/host-api';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { useGatewayStore } from '@/stores/gateway';
 import type { ChannelType } from '@/types/channel';
-import type { AgentPresetSummary, AgentSkillScope, AgentSummary, AgentsSnapshot } from '@/types/agent';
+import type {
+  AgentMarketplaceCompletion,
+  AgentPresetSummary,
+  AgentSkillScope,
+  AgentSummary,
+  AgentsSnapshot,
+} from '@/types/agent';
 import type { GatewayStatus } from '@/types/gateway';
 
 export const PRESET_INSTALL_STAGE_VISIBLE_MS = 120;
@@ -30,6 +36,7 @@ interface AgentsState {
   installingPresetId: string | null;
   installStage: PresetInstallStage;
   installProgress: number;
+  marketplaceCompletion: AgentMarketplaceCompletion | null;
   loading: boolean;
   error: string | null;
   fetchAgents: () => Promise<void>;
@@ -38,11 +45,13 @@ interface AgentsState {
   updateAgent: (agentId: string, name: string) => Promise<void>;
   updateAgentSettings: (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope }) => Promise<void>;
   deleteAgent: (agentId: string) => Promise<void>;
-  installPreset: (presetId: string) => Promise<void>;
+  installMarketplaceAgent: (agentId: string) => Promise<void>;
+  updateMarketplaceAgent: (agentId: string) => Promise<void>;
   unmanageAgent: (agentId: string) => Promise<void>;
   assignChannel: (agentId: string, channelType: ChannelType) => Promise<void>;
   removeChannel: (agentId: string, channelType: ChannelType) => Promise<void>;
   clearError: () => void;
+  clearMarketplaceCompletion: () => void;
 }
 
 function applySnapshot(snapshot: AgentsSnapshot | undefined) {
@@ -54,6 +63,28 @@ function applySnapshot(snapshot: AgentsSnapshot | undefined) {
     channelAccountOwners: snapshot.channelAccountOwners,
     explicitChannelAccountBindings: snapshot.explicitChannelAccountBindings,
   } : {};
+}
+
+function applyMarketplacePresetMutation(
+  presets: AgentPresetSummary[],
+  snapshot: AgentsSnapshot | undefined,
+  agentId: string,
+) {
+  const installedAgent = snapshot?.agents.find((agent) => agent.id === agentId);
+  const installedVersion = installedAgent?.packageVersion;
+
+  return presets.map((preset) => {
+    if (preset.agentId !== agentId) {
+      return preset;
+    }
+
+    return {
+      ...preset,
+      installed: true,
+      installedVersion: installedVersion ?? preset.latestVersion ?? preset.installedVersion,
+      hasUpdate: false,
+    };
+  });
 }
 
 function wait(ms: number) {
@@ -154,6 +185,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   installingPresetId: null,
   installStage: 'idle',
   installProgress: 0,
+  marketplaceCompletion: null,
   loading: false,
   error: null,
 
@@ -217,25 +249,30 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     }
   },
 
-  installPreset: async (presetId: string) => {
+  installMarketplaceAgent: async (agentId: string) => {
+    const installTargetId = agentId;
     set({
       error: null,
-      installingPresetId: presetId,
+      marketplaceCompletion: null,
+      installingPresetId: installTargetId,
       installStage: 'preparing',
       installProgress: 10,
     });
     const advanceStage = (stage: PresetInstallStage, progress: number) => {
-      if (get().installingPresetId !== presetId) {
+      if (get().installingPresetId !== installTargetId) {
         return;
       }
       set({ installStage: stage, installProgress: progress });
     };
     try {
-      const installRequest = hostApiFetch<AgentsSnapshot & { success?: boolean }>(
-        '/api/agents/presets/install',
+      const installRequest = hostApiFetch<AgentsSnapshot & {
+        success?: boolean;
+        completion?: AgentMarketplaceCompletion;
+      }>(
+        '/api/agents/marketplace/install',
         {
           method: 'POST',
-          body: JSON.stringify({ presetId }),
+          body: JSON.stringify({ agentId }),
         }
       );
       await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
@@ -249,18 +286,25 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       advanceStage('finalizing', 90);
       await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
       await waitForPresetInstallGatewayRecovery();
-      if (get().installingPresetId === presetId) {
+      const nextPresets = applyMarketplacePresetMutation(get().presets, snapshot, agentId);
+      if (get().installingPresetId === installTargetId) {
         set({
           ...applySnapshot(snapshot),
+          presets: nextPresets,
+          marketplaceCompletion: snapshot.completion ?? null,
           installStage: 'completed',
           installProgress: 100,
         });
       } else {
-        set(applySnapshot(snapshot));
+        set({
+          ...applySnapshot(snapshot),
+          presets: nextPresets,
+          marketplaceCompletion: snapshot.completion ?? null,
+        });
       }
       invalidatePresetAgentSkillsCache();
     } catch (error) {
-      if (get().installingPresetId === presetId) {
+      if (get().installingPresetId === installTargetId) {
         set({ installStage: 'failed', error: String(error) });
       } else {
         set({ error: String(error) });
@@ -268,7 +312,82 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       throw error;
     } finally {
       globalThis.setTimeout(() => {
-        if (get().installingPresetId === presetId) {
+        if (get().installingPresetId === installTargetId) {
+          set({
+            installingPresetId: null,
+            installStage: 'idle',
+            installProgress: 0,
+          });
+        }
+      }, 600);
+    }
+  },
+
+  updateMarketplaceAgent: async (agentId: string) => {
+    const installTargetId = agentId;
+    set({
+      error: null,
+      marketplaceCompletion: null,
+      installingPresetId: installTargetId,
+      installStage: 'preparing',
+      installProgress: 10,
+    });
+    const advanceStage = (stage: PresetInstallStage, progress: number) => {
+      if (get().installingPresetId !== installTargetId) {
+        return;
+      }
+      set({ installStage: stage, installProgress: progress });
+    };
+
+    try {
+      const updateRequest = hostApiFetch<AgentsSnapshot & {
+        success?: boolean;
+        completion?: AgentMarketplaceCompletion;
+      }>(
+        '/api/agents/marketplace/update',
+        {
+          method: 'POST',
+          body: JSON.stringify({ agentId }),
+        }
+      );
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      advanceStage('installing_files', 35);
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      advanceStage('installing_skills', 70);
+      const [snapshot] = await Promise.all([
+        updateRequest,
+        wait(PRESET_INSTALL_STAGE_VISIBLE_MS),
+      ]);
+      advanceStage('finalizing', 90);
+      await wait(PRESET_INSTALL_STAGE_VISIBLE_MS);
+      await waitForPresetInstallGatewayRecovery();
+      const nextPresets = applyMarketplacePresetMutation(get().presets, snapshot, agentId);
+      if (get().installingPresetId === installTargetId) {
+        set({
+          ...applySnapshot(snapshot),
+          presets: nextPresets,
+          marketplaceCompletion: snapshot.completion ?? null,
+          installStage: 'completed',
+          installProgress: 100,
+        });
+      } else {
+        set({
+          ...applySnapshot(snapshot),
+          presets: nextPresets,
+          marketplaceCompletion: snapshot.completion ?? null,
+        });
+      }
+      invalidatePresetAgentSkillsCache();
+    } catch (error) {
+      if (get().installingPresetId === installTargetId) {
+        set({ installStage: 'failed', error: String(error) });
+      } else {
+        set({ error: String(error) });
+      }
+      throw error;
+    } finally {
+      globalThis.setTimeout(() => {
+        if (get().installingPresetId === installTargetId) {
           set({
             installingPresetId: null,
             installStage: 'idle',
@@ -346,4 +465,5 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  clearMarketplaceCompletion: () => set({ marketplaceCompletion: null }),
 }));

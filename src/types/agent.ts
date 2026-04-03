@@ -3,6 +3,7 @@ export type AgentSkillScope =
   | { mode: 'specified'; skills: string[] };
 
 export type AgentPresetPlatform = 'darwin' | 'win32' | 'linux';
+export type ManagedAgentSource = 'preset' | 'marketplace';
 
 export interface AgentPresetMissingRequirements {
   bins?: string[];
@@ -10,21 +11,33 @@ export interface AgentPresetMissingRequirements {
   env?: string[];
 }
 
+export interface AgentMarketplaceCompletion {
+  operation: 'install' | 'update';
+  agentId: string;
+  promptText?: string;
+}
+
 export interface AgentPresetSummary {
-  presetId: string;
+  source: ManagedAgentSource;
   name: string;
   description: string;
   emoji: string;
   category: string;
   managed: boolean;
   agentId: string;
+  latestVersion?: string;
+  installed: boolean;
+  installedVersion?: string;
+  hasUpdate: boolean;
   skillScope: AgentSkillScope;
   presetSkills: string[];
   managedFiles: string[];
+  minAppVersion?: string;
   platforms?: AgentPresetPlatform[];
   installable: boolean;
   missingRequirements?: AgentPresetMissingRequirements;
   supportedOnCurrentPlatform: boolean;
+  supportedOnCurrentAppVersion: boolean;
 }
 
 export interface AgentSummary {
@@ -39,8 +52,10 @@ export interface AgentSummary {
   channelTypes: string[];
   channelAccounts: Array<{ channelType: string; accountId: string }>;
   source: 'custom' | 'preset';
+  managementSource?: ManagedAgentSource;
   managed: boolean;
   presetId?: string;
+  packageVersion?: string;
   lockedFields: string[];
   canUnmanage: boolean;
   managedFiles: string[];

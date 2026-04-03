@@ -71,6 +71,7 @@
     },
     "marketplace": {
         "install": "Install",
+        "update": "Update",
         "installed": "Installed",
         "unavailable": "Unavailable",
         "requirementsMissing": "Requirements Missing",

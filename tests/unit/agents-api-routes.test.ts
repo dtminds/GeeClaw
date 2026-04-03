@@ -40,11 +40,23 @@ const {
     explicitChannelAccountBindings: {},
   })),
   listAgentPresetSummaries: vi.fn(async () => [{
-    presetId: 'stock-expert',
+    source: 'marketplace',
+    agentId: 'stockexpert',
     name: '股票助手',
     platforms: ['darwin'],
+    latestVersion: '1.2.3',
+    installed: false,
+    hasUpdate: false,
     installable: true,
     supportedOnCurrentPlatform: true,
+    supportedOnCurrentAppVersion: true,
+    managed: true,
+    description: 'desc',
+    emoji: '📈',
+    category: 'finance',
+    skillScope: { mode: 'default' },
+    presetSkills: [],
+    managedFiles: [],
   }]),
   listAgentsSnapshot: vi.fn(async () => ({
     agents: [],
@@ -120,7 +132,7 @@ describe('agent API routes', () => {
     vi.resetAllMocks();
   });
 
-  it('serves bundled presets but does not expose preset install POST route', async () => {
+  it('serves marketplace summaries but does not expose the removed preset install POST route', async () => {
     const { handleAgentRoutes } = await import('@electron/api/routes/agents');
 
     const listReq = { method: 'GET' } as never;
@@ -137,11 +149,23 @@ describe('agent API routes', () => {
     expect(sendJson).toHaveBeenNthCalledWith(1, res, 200, expect.objectContaining({
       success: true,
       presets: [{
-        presetId: 'stock-expert',
+        source: 'marketplace',
+        agentId: 'stockexpert',
         name: '股票助手',
         platforms: ['darwin'],
+        latestVersion: '1.2.3',
+        installed: false,
+        hasUpdate: false,
         installable: true,
         supportedOnCurrentPlatform: true,
+        supportedOnCurrentAppVersion: true,
+        managed: true,
+        description: 'desc',
+        emoji: '📈',
+        category: 'finance',
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        managedFiles: [],
       }],
     }));
 

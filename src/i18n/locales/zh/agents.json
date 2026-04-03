@@ -71,6 +71,7 @@
     },
     "marketplace": {
         "install": "一键雇佣",
+        "update": "更新",
         "installed": "已添加",
         "unavailable": "当前不可用",
         "requirementsMissing": "缺少依赖",
