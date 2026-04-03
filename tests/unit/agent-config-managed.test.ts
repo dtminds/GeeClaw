@@ -654,13 +654,13 @@ describe('managed agent config domain', () => {
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(false);
   });
 
-  it('uses %USERPROFILE%-based workspace defaults on Windows', async () => {
+  it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {
     setPlatform('win32');
     const { agentConfig } = await setupManagedPresetFixture();
 
     const created = await agentConfig.createAgent('Windows Helper', 'windows-helper');
     expect(created.agents.find((agent) => agent.id === 'windows-helper')).toMatchObject({
-      workspace: '%USERPROFILE%\\geeclaw\\workspace-windows-helper',
+      workspace: '~\\geeclaw\\workspace-windows-helper',
       agentDir: '~/.openclaw-geeclaw/agents/windows-helper/agent',
     });
   });
