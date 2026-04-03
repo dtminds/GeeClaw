@@ -37,7 +37,7 @@ export function Startup() {
   const continueAfterProvider = useBootstrapStore((state) => state.continueAfterProvider);
   const logoutToLogin = useBootstrapStore((state) => state.logoutToLogin);
   const retry = useBootstrapStore((state) => state.retry);
-  const account = useSessionStore((state) => state.account);
+  // const account = useSessionStore((state) => state.account);
   const setupComplete = useSettingsStore((state) => state.setupComplete);
 
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
