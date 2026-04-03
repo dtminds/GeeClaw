@@ -1,13 +1,12 @@
 import { homedir } from 'os';
 import { join, posix, win32 } from 'path';
 
-const WINDOWS_HOME_TOKEN = '%USERPROFILE%';
 const UNIX_HOME_TOKEN = '~';
 const MANAGED_WORKSPACE_ROOT_NAME = 'geeclaw';
 const MAIN_AGENT_ID = 'main';
 
 function getManagedWorkspaceHomeToken(): string {
-  return process.platform === 'win32' ? WINDOWS_HOME_TOKEN : UNIX_HOME_TOKEN;
+  return UNIX_HOME_TOKEN;
 }
 
 function getManagedWorkspaceSeparator(): string {

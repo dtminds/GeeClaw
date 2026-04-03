@@ -25,6 +25,10 @@ function setPlatform(platform: string) {
   Object.defineProperty(process, 'platform', { value: platform, writable: true });
 }
 
+function normalizeWindowsTestPath(value: string | null): string | null {
+  return value?.replace(/\//g, '\\') ?? null;
+}
+
 function createMockChild(output: string) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
@@ -239,6 +243,55 @@ Issues:
 
     expect(status.binaryExists).toBe(true);
     expect(status.binaryPath).toBe(managedOpenCliPath);
+    expect(status.version).toBe('1.5.5');
+    expect(status.doctor?.ok).toBe(true);
+  });
+
+  it('prefers the Windows cmd shim when where.exe also returns a non-executable opencli file', async () => {
+    setPlatform('win32');
+    process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming';
+    process.env.USERPROFILE = 'C:\\Users\\test';
+    process.env.PATH = 'C:\\Windows\\System32';
+    delete process.env.Path;
+
+    const openCliShimPath = 'C:\\Users\\test\\AppData\\Roaming\\GeeClaw\\npm-global\\opencli';
+    const openCliCmdPath = 'C:\\Users\\test\\AppData\\Roaming\\GeeClaw\\npm-global\\opencli.cmd';
+
+    mockExistsSync.mockImplementation((value: string) => {
+      const normalized = normalizeWindowsTestPath(value)?.toLowerCase();
+      return normalized === openCliShimPath.toLowerCase() || normalized === openCliCmdPath.toLowerCase();
+    });
+    mockRealpathSync.mockImplementation((value: string) => value);
+    mockExecFile.mockImplementation((command: string, args: string[], _options: unknown, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+      if (command === 'where.exe' && args[0] === 'opencli') {
+        callback(null, `${openCliShimPath}\r\n${openCliCmdPath}\r\n`, '');
+        return;
+      }
+
+      callback(new Error(`Unexpected execFile call: ${command} ${args.join(' ')}`), '', '');
+    });
+    mockSpawn.mockImplementation((command: string, args: string[]) => {
+      expect(normalizeWindowsTestPath(command)).toBe(openCliCmdPath);
+      if (args[0] === '--version') {
+        return createMockChild('opencli 1.5.5');
+      }
+
+      expect(args).toEqual(['doctor', '--no-live']);
+      return createMockChild([
+        'opencli v1.5.5 doctor',
+        '',
+        '[OK] Daemon: running on port 19825',
+        '[OK] Extension: connected',
+        '[SKIP] Connectivity: skipped (--no-live)',
+        '',
+        'Everything looks good!',
+      ].join('\n'));
+    });
+
+    const { getOpenCliStatus } = await import('@electron/utils/opencli-runtime');
+    const status = await getOpenCliStatus();
+
+    expect(normalizeWindowsTestPath(status.binaryPath)).toBe(openCliCmdPath);
     expect(status.version).toBe('1.5.5');
     expect(status.doctor?.ok).toBe(true);
   });

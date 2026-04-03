@@ -5,6 +5,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { sortCommandCandidatesForExecution } from './command-candidates';
 import { ensureDir, getGeeClawConfigDir, getResourcesDir } from './paths';
 import { getBundledNpmPath, getBundledNpxPath, getBundledPathEntries } from './managed-bin';
 import { prependPathEntries } from './env-path';
@@ -455,7 +456,7 @@ async function listCommandCandidates(command: string): Promise<string[]> {
     }
   }
 
-  return filterExistingUniqueCandidates(candidates);
+  return filterExistingUniqueCandidates(sortCommandCandidatesForExecution(candidates));
 }
 
 function filterExistingUniqueCandidates(candidates: string[]): string[] {

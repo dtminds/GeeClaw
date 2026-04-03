@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 
 const forkMock = vi.fn();
+const spawnMock = vi.fn();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
 
@@ -15,6 +16,18 @@ vi.mock('electron', () => ({
     fork: forkMock,
   },
 }));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: spawnMock,
+    default: {
+      ...actual,
+      spawn: spawnMock,
+    },
+  };
+});
 
 vi.mock('@electron/utils/store', () => ({
   getAllSettings: vi.fn(async () => ({
@@ -229,7 +242,7 @@ describe('prepareGatewayLaunchContext', () => {
       },
     }), 'utf-8');
 
-    forkMock.mockImplementation((_entryScript: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+    spawnMock.mockImplementation((_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
       const child = {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
@@ -268,20 +281,27 @@ describe('prepareGatewayLaunchContext', () => {
       return child;
     });
 
+    vi.resetModules();
     const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
 
     try {
       await prepareGatewayLaunchContext(28788);
 
-      expect(forkMock).toHaveBeenCalledTimes(1);
-      expect(forkMock).toHaveBeenCalledWith(
+      expect(forkMock).not.toHaveBeenCalled();
+      expect(spawnMock).toHaveBeenCalledTimes(1);
+      const [command, args, options] = spawnMock.mock.calls[0] as [string, string[], { cwd: string; stdio: string[]; windowsHide: boolean }];
+      expect(command).toMatch(/node(?:\.exe)?$/);
+      expect(args).toEqual([
         join(process.cwd(), 'node_modules/openclaw/openclaw.mjs'),
-        ['--profile', 'geeclaw', 'setup'],
-        expect.objectContaining({
-          cwd: join(process.cwd(), 'node_modules/openclaw'),
-          serviceName: 'OpenClaw Setup',
-        }),
-      );
+        '--profile',
+        'geeclaw',
+        'setup',
+      ]);
+      expect(options).toEqual(expect.objectContaining({
+        cwd: join(process.cwd(), 'node_modules/openclaw'),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      }));
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
       rmSync(homeDir, { recursive: true, force: true });
@@ -305,7 +325,7 @@ describe('prepareGatewayLaunchContext', () => {
 
     let stdoutHandler: ((data: Buffer) => void) | undefined;
 
-    forkMock.mockImplementation(() => {
+    spawnMock.mockImplementation(() => {
       const child = {
         stdout: {
           on: vi.fn((event: string, cb: (data: Buffer) => void) => {
@@ -343,6 +363,69 @@ describe('prepareGatewayLaunchContext', () => {
         '--allow-unconfigured',
       ]);
     } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('continues once managed workspace artifacts appear even if setup emits no stdout and does not exit yet', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    const configPath = join(openclawConfigDir, 'openclaw.json');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        defaults: {
+          workspace: '/Users/test/.openclaw/workspace-geeclaw',
+        },
+      },
+    }), 'utf-8');
+
+    let exitHandler: ((code: number) => void) | undefined;
+
+    spawnMock.mockImplementation(() => {
+      const child = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        kill: vi.fn(),
+        on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+          if (event === 'exit') {
+            exitHandler = cb as (code: number) => void;
+          }
+          return child;
+        }),
+      };
+      return child;
+    });
+
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    let resolved = false;
+    const launchPromise = prepareGatewayLaunchContext(28788).then((context) => {
+      resolved = true;
+      return context;
+    });
+
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
+
+      mkdirSync(managedWorkspaceDir, { recursive: true });
+      mkdirSync(sessionsDir, { recursive: true });
+
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await Promise.resolve();
+
+      expect(resolved).toBe(true);
+      if (resolved) {
+        const launchContext = await launchPromise;
+        expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
+      }
+    } finally {
+      exitHandler?.(0);
+      await launchPromise.catch(() => undefined);
       rmSync(openclawConfigDir, { recursive: true, force: true });
       rmSync(homeDir, { recursive: true, force: true });
     }
