@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
-  SETUP_PROVIDERS,
   getProviderDocsUrl,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
