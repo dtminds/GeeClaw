@@ -281,6 +281,7 @@ export async function bundleAgentPresetSkills(options = {}) {
     presetsRoot = SOURCE_PRESETS_ROOT,
     outputRoot = OUTPUT_PRESETS_ROOT,
     tempRoot = TMP_ROOT,
+    selectedPresetIds,
     fetchSparseRepoImpl = fetchSparseRepo,
     now = () => new Date(),
     log = (message) => echo`${message}`,
@@ -291,15 +292,30 @@ export async function bundleAgentPresetSkills(options = {}) {
   }
 
   log('Bundling preset-private skills...');
-  rmSync(outputRoot, { recursive: true, force: true });
-  mkdirSync(outputRoot, { recursive: true });
   rmSync(tempRoot, { recursive: true, force: true });
+  mkdirSync(outputRoot, { recursive: true });
   mkdirSync(tempRoot, { recursive: true });
 
   try {
+    const requestedPresetIds = selectedPresetIds
+      ? [...new Set(selectedPresetIds.map((value) => requireNonEmptyString(value, 'selectedPresetIds')))]
+      : null;
+
     const presetDirs = readdirSync(presetsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
+      .filter((entry) => !requestedPresetIds || requestedPresetIds.includes(entry.name))
       .sort((left, right) => left.name.localeCompare(right.name));
+
+    if (!requestedPresetIds) {
+      rmSync(outputRoot, { recursive: true, force: true });
+      mkdirSync(outputRoot, { recursive: true });
+    } else {
+      const discoveredPresetIds = new Set(presetDirs.map((entry) => entry.name));
+      const missingPresetIds = requestedPresetIds.filter((presetId) => !discoveredPresetIds.has(presetId));
+      if (missingPresetIds.length > 0) {
+        throw new Error(`Unknown preset IDs: ${missingPresetIds.join(', ')}`);
+      }
+    }
 
     for (const presetEntry of presetDirs) {
       const sourcePresetDir = join(presetsRoot, presetEntry.name);

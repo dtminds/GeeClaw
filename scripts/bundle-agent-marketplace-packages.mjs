@@ -15,7 +15,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   OUTPUT_PRESETS_ROOT,
@@ -170,30 +170,97 @@ async function validateArchive(archivePath, catalogEntry) {
   }
 }
 
+export function parseCliAgentIds(argv, importMetaUrl = import.meta.url) {
+  const scriptPath = normalize(
+    typeof importMetaUrl === 'string' && importMetaUrl.startsWith('file:')
+      ? fileURLToPath(importMetaUrl)
+      : String(importMetaUrl),
+  );
+  const scriptBaseName = basename(scriptPath);
+  const parsed = [];
+
+  for (let index = 2; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (typeof arg !== 'string' || !arg.trim()) {
+      continue;
+    }
+
+    if (arg === '--agent' || arg === '-a') {
+      const next = argv[index + 1];
+      if (typeof next === 'string' && next.trim()) {
+        parsed.push(next.trim());
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('-')) {
+      continue;
+    }
+
+    const candidatePath = normalize(resolve(arg));
+    if (candidatePath === scriptPath || basename(arg) === scriptBaseName) {
+      continue;
+    }
+
+    parsed.push(arg.trim());
+  }
+
+  return [...new Set(parsed)];
+}
+
 export async function bundleAgentMarketplacePackages(options = {}) {
   const {
     catalogPath = CATALOG_PATH,
     presetOutputRoot = OUTPUT_PRESETS_ROOT,
     outputRoot = OUTPUT_ROOT,
     outputCatalogPath = OUTPUT_CATALOG_PATH,
+    selectedAgentIds,
+    bundleAgentPresetSkillsImpl = bundleAgentPresetSkills,
     log = (message) => echo`${message}`,
   } = options;
-
-  await bundleAgentPresetSkills({ outputRoot: presetOutputRoot, log });
 
   const catalog = await readJson(catalogPath);
   assert(Array.isArray(catalog), 'Agent marketplace catalog must be an array');
 
-  await rm(outputRoot, { recursive: true, force: true });
+  const requestedAgentIds = selectedAgentIds
+    ? [...new Set(selectedAgentIds.map((value) => String(value).trim()).filter(Boolean))]
+    : null;
+  if (requestedAgentIds && requestedAgentIds.length === 0) {
+    throw new Error('selectedAgentIds must contain at least one agent ID');
+  }
+
+  const catalogEntries = requestedAgentIds
+    ? catalog.filter((entry) => requestedAgentIds.includes(entry.agentId))
+    : catalog;
+
+  if (requestedAgentIds) {
+    const discoveredAgentIds = new Set(catalogEntries.map((entry) => entry.agentId));
+    const missingAgentIds = requestedAgentIds.filter((agentId) => !discoveredAgentIds.has(agentId));
+    if (missingAgentIds.length > 0) {
+      throw new Error(`Unknown agent IDs: ${missingAgentIds.join(', ')}`);
+    }
+  }
+
+  await bundleAgentPresetSkillsImpl({
+    outputRoot: presetOutputRoot,
+    selectedPresetIds: requestedAgentIds ?? undefined,
+    log,
+  });
+
   await mkdir(outputRoot, { recursive: true });
 
   const stagingRoot = join(outputRoot, '.staging');
+  if (!requestedAgentIds) {
+    await rm(outputRoot, { recursive: true, force: true });
+    await mkdir(outputRoot, { recursive: true });
+  }
   await mkdir(stagingRoot, { recursive: true });
 
-  const updatedCatalog = [];
-
   try {
-    for (const entry of catalog) {
+    const packageResults = new Map();
+
+    for (const entry of catalogEntries) {
       const sourceDir = join(presetOutputRoot, entry.agentId);
       assert(existsSync(sourceDir), `Missing bundled preset output for "${entry.agentId}"`);
 
@@ -212,7 +279,7 @@ export async function bundleAgentMarketplacePackages(options = {}) {
       const archiveStat = await stat(archivePath);
       const checksum = await sha256File(archivePath);
 
-      updatedCatalog.push({
+      packageResults.set(entry.agentId, {
         ...entry,
         checksum,
         size: archiveStat.size,
@@ -223,6 +290,7 @@ export async function bundleAgentMarketplacePackages(options = {}) {
       log(`  ${checksum}`);
     }
 
+    const updatedCatalog = catalog.map((entry) => packageResults.get(entry.agentId) ?? entry);
     await writeJson(catalogPath, updatedCatalog);
     await writeJson(outputCatalogPath, updatedCatalog);
     log(`Updated catalog: ${catalogPath}`);
@@ -233,7 +301,10 @@ export async function bundleAgentMarketplacePackages(options = {}) {
 }
 
 export async function main() {
-  await bundleAgentMarketplacePackages();
+  const selectedAgentIds = parseCliAgentIds(process.argv);
+  await bundleAgentMarketplacePackages({
+    selectedAgentIds: selectedAgentIds.length > 0 ? selectedAgentIds : undefined,
+  });
 }
 
 const isMainModule = shouldRunAsMainModule(process.argv, import.meta.url);
