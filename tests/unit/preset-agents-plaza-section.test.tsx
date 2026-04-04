@@ -820,6 +820,51 @@ describe('PresetAgentsPlazaSection', () => {
     expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
   });
 
+  it('shows marketplace install failures inside the detail dialog', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/install' && init?.method === 'POST') {
+        throw new Error('zip download failed');
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Alpha Researcher'));
+    });
+
+    const detailDialog = screen.getByRole('dialog');
+    await act(async () => {
+      fireEvent.click(within(detailDialog).getByRole('button', { name: '一键雇佣' }));
+      await flushPromises();
+    });
+
+    for (const step of [
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+    ]) {
+      await act(async () => {
+        vi.advanceTimersByTime(step);
+        await flushPromises();
+      });
+    }
+
+    expect(within(screen.getByRole('dialog')).getByText('Error: zip download failed')).toBeInTheDocument();
+  });
+
   it('falls back to go-chat when the success dialog has no prompt text', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/agents') {

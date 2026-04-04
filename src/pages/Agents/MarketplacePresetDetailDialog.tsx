@@ -27,6 +27,7 @@ type MarketplacePresetDetailDialogProps = {
   skillsTitle?: string;
   closeLabel?: string;
   locale?: string;
+  errorMessage?: string | null;
 };
 
 export function MarketplacePresetDetailDialog({
@@ -45,6 +46,7 @@ export function MarketplacePresetDetailDialog({
   skillsTitle,
   closeLabel,
   locale,
+  errorMessage,
 }: MarketplacePresetDetailDialogProps) {
   const { t } = useTranslation('agents');
 
@@ -163,6 +165,11 @@ export function MarketplacePresetDetailDialog({
                   {installStageLabel} · {t('marketplace.installProgress', { progress: installProgress })}
                 </p>
               </div>
+            )}
+            {errorMessage && (
+              <p className="text-center text-sm leading-6 text-destructive">
+                {errorMessage}
+              </p>
             )}
 
             <Button

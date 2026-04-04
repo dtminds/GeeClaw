@@ -38,6 +38,7 @@ export function PresetAgentsPlazaSection() {
     installMarketplaceAgent,
     updateMarketplaceAgent,
     clearMarketplaceCompletion,
+    clearError,
   } = useAgentsStore();
   const openAgentMainSession = useChatStore((state) => state.openAgentMainSession);
   const queueComposerSeed = useChatStore((state) => state.queueComposerSeed);
@@ -45,6 +46,7 @@ export function PresetAgentsPlazaSection() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [pendingUpdateAgentId, setPendingUpdateAgentId] = useState<string | null>(null);
+  const [activeMarketplaceActionAgentId, setActiveMarketplaceActionAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchPresets()]);
@@ -54,8 +56,10 @@ export function PresetAgentsPlazaSection() {
     if (marketplaceCompletion) {
       setActiveAgentId(null);
       setPendingUpdateAgentId(null);
+      setActiveMarketplaceActionAgentId(null);
+      clearError();
     }
-  }, [marketplaceCompletion]);
+  }, [clearError, marketplaceCompletion]);
 
   const categories = useMemo(
     () => Array.from(new Set(presets.map((preset) => preset.category).filter(Boolean))),
@@ -86,6 +90,9 @@ export function PresetAgentsPlazaSection() {
     () => presets.find((preset) => preset.agentId === marketplaceCompletion?.agentId) ?? null,
     [marketplaceCompletion?.agentId, presets],
   );
+  const activePresetError = activePreset && activeMarketplaceActionAgentId === activePreset.agentId
+    ? error
+    : null;
 
   const getCategoryLabel = (category: string) => {
     if (category === 'all') {
@@ -103,7 +110,26 @@ export function PresetAgentsPlazaSection() {
 
     const targetAgentId = pendingUpdateAgentId;
     setPendingUpdateAgentId(null);
-    await updateMarketplaceAgent(targetAgentId);
+    setActiveMarketplaceActionAgentId(targetAgentId);
+    try {
+      await updateMarketplaceAgent(targetAgentId);
+    } catch {
+      // Store error state drives the dialog copy.
+    }
+  };
+
+  const handleDetailClose = () => {
+    setActiveAgentId(null);
+    setActiveMarketplaceActionAgentId(null);
+    clearError();
+  };
+
+  const openPresetDetail = (agentId: string) => {
+    setActiveAgentId(agentId);
+    if (activeMarketplaceActionAgentId !== agentId) {
+      setActiveMarketplaceActionAgentId(null);
+      clearError();
+    }
   };
 
   const handleSuccessAction = async () => {
@@ -167,7 +193,7 @@ export function PresetAgentsPlazaSection() {
               <button
                 key={preset.agentId}
                 type="button"
-                onClick={() => setActiveAgentId(preset.agentId)}
+                onClick={() => openPresetDetail(preset.agentId)}
                 className={cn(
                   'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
                   'bg-muted/20 p-5 shadow-none transition-all duration-200',
@@ -207,13 +233,17 @@ export function PresetAgentsPlazaSection() {
         installStage={installStage}
         installProgress={installProgress}
         disableInstall={!!installingPresetId}
-        onClose={() => setActiveAgentId(null)}
-        onInstall={(agentId) => void installMarketplaceAgent(agentId)}
+        onClose={handleDetailClose}
+        onInstall={(agentId) => {
+          setActiveMarketplaceActionAgentId(agentId);
+          void installMarketplaceAgent(agentId).catch(() => {});
+        }}
         onUpdate={(agentId) => setPendingUpdateAgentId(agentId)}
         availabilityTitle={t('presetPlaza.platformsTitle')}
         skillsTitle={t('presetPlaza.skillsTitle')}
         closeLabel={t('presetPlaza.close')}
         locale={i18n.resolvedLanguage || i18n.language}
+        errorMessage={activePresetError}
       />
 
       <ConfirmDialog
