@@ -4,9 +4,9 @@
  * via gateway:rpc IPC. Session selector, thinking toggle, and refresh
  * are in the toolbar; messages render with markdown + streaming.
  */
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
@@ -73,6 +73,17 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
 
 export function Chat() {
   const { t } = useTranslation('chat');
+  const skipNextAutoLoadRef = useRef(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const requestedAgentId = (
+    location.state
+    && typeof location.state === 'object'
+    && 'requestedAgentId' in location.state
+    && typeof (location.state as { requestedAgentId?: unknown }).requestedAgentId === 'string'
+  )
+    ? (location.state as { requestedAgentId: string }).requestedAgentId
+    : '';
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
@@ -94,6 +105,7 @@ export function Chat() {
   const selectedCronRun = useChatStore((s) => s.selectedCronRun);
   const loadHistory = useChatStore((s) => s.loadHistory);
   const loadSessions = useChatStore((s) => s.loadSessions);
+  const openAgentMainSession = useChatStore((s) => s.openAgentMainSession);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const abortRun = useChatStore((s) => s.abortRun);
   const clearError = useChatStore((s) => s.clearError);
@@ -148,7 +160,19 @@ export function Chat() {
     let cancelled = false;
     const hasExistingMessages = useChatStore.getState().messages.length > 0;
     (async () => {
+      if (skipNextAutoLoadRef.current && !requestedAgentId) {
+        skipNextAutoLoadRef.current = false;
+        return;
+      }
       await fetchAgents();
+      if (cancelled) return;
+      if (requestedAgentId) {
+        await openAgentMainSession(requestedAgentId);
+        if (cancelled) return;
+        skipNextAutoLoadRef.current = true;
+        navigate(location.pathname, { replace: true });
+        return;
+      }
       await loadSessions();
       if (cancelled) return;
       await loadHistory(hasExistingMessages);
@@ -159,7 +183,17 @@ export function Chat() {
       // empty session so it doesn't linger as a ghost entry in the sidebar.
       cleanupEmptySession();
     };
-  }, [isGatewayRunning, loadHistory, loadSessions, fetchAgents, cleanupEmptySession]);
+  }, [
+    cleanupEmptySession,
+    fetchAgents,
+    isGatewayRunning,
+    loadHistory,
+    loadSessions,
+    location.pathname,
+    navigate,
+    openAgentMainSession,
+    requestedAgentId,
+  ]);
 
   // Gateway not running
   if (!isGatewayRunning) {

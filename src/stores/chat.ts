@@ -127,6 +127,7 @@ interface ChatState {
 
   // Actions
   loadSessions: () => Promise<void>;
+  loadDesktopSessionSummaries: () => Promise<void>;
   openAgentMainSession: (agentId: string) => Promise<void>;
   switchSession: (key: string) => void;
   openCronRun: (run: CronAgentRunSummary) => Promise<void>;
@@ -291,6 +292,85 @@ function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
   return agent?.mainSessionKey ?? `agent:${agentId}:main`;
 }
 
+function reconcilePreferredMainSession(
+  desktopSessions: DesktopSessionSummary[],
+  options: {
+    previousGatewayKey: string;
+    previousDesktopSessionId: string;
+    previousIsDraft: boolean;
+    previousDesktopSessions: DesktopSessionSummary[];
+    preferredMainSessionKey: string;
+  },
+): DesktopSessionSummary[] {
+  const {
+    previousGatewayKey,
+    previousDesktopSessionId,
+    previousIsDraft,
+    previousDesktopSessions,
+    preferredMainSessionKey,
+  } = options;
+
+  const previousSelectedSession = previousIsDraft
+    ? undefined
+    : previousDesktopSessions.find((session) =>
+      session.id === previousDesktopSessionId
+      || session.gatewaySessionKey === previousGatewayKey,
+    );
+
+  if (
+    previousSelectedSession
+    && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
+    && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
+    && !desktopSessions.some((session) =>
+      session.id === previousSelectedSession.id
+      || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
+    )
+  ) {
+    // Keep the explicitly opened agent main session selected when the next
+    // list refresh momentarily lags behind session creation.
+    return [previousSelectedSession, ...desktopSessions];
+  }
+
+  return desktopSessions;
+}
+
+async function fetchReconciledDesktopSessions(options: {
+  preferredAgentId: string;
+  previousGatewayKey: string;
+  previousDesktopSessionId: string;
+  previousIsDraft: boolean;
+  previousDesktopSessions: DesktopSessionSummary[];
+}): Promise<{
+  desktopSessions: DesktopSessionSummary[];
+  preferredMainSessionKey: string;
+}> {
+  const {
+    preferredAgentId,
+    previousGatewayKey,
+    previousDesktopSessionId,
+    previousIsDraft,
+    previousDesktopSessions,
+  } = options;
+
+  const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId);
+  if (!preferredMainSessionKey) {
+    throw new Error(`Missing main session key for agent ${preferredAgentId}`);
+  }
+
+  const desktopSessions = reconcilePreferredMainSession(await fetchDesktopSessions(), {
+    previousGatewayKey,
+    previousDesktopSessionId,
+    previousIsDraft,
+    previousDesktopSessions,
+    preferredMainSessionKey,
+  });
+
+  return {
+    desktopSessions,
+    preferredMainSessionKey,
+  };
+}
+
 async function deleteDesktopSessionRequest(id: string): Promise<DesktopSessionSummary> {
   const response = await hostApiFetch<DesktopSessionResponse>(
     `${DESKTOP_SESSIONS_API}/${encodeURIComponent(id)}`,
@@ -396,7 +476,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const previousGatewayKey = get().currentSessionKey;
       const previousDesktopSessionId = get().currentDesktopSessionId;
       const previousIsDraft = get().isDraftSession;
-      let desktopSessions = await fetchDesktopSessions();
+      const previousDesktopSessions = get().desktopSessions;
+      let desktopSessions: DesktopSessionSummary[] = [];
+      let preferredMainSessionKey = '';
       let sessionTokenInfoByKey = get().sessionTokenInfoByKey;
       try {
         sessionTokenInfoByKey = await fetchSessionTokenInfoByKey();
@@ -405,7 +487,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
       const preferredAgentId = get().currentAgentId || defaultAgentId;
-      const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
+      ({ desktopSessions, preferredMainSessionKey } = await fetchReconciledDesktopSessions({
+        preferredAgentId,
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessions,
+      }));
 
       const previousSession = previousIsDraft
         ? undefined
@@ -446,6 +534,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (err) {
       console.warn('Failed to load sessions:', err);
+    }
+  },
+
+  loadDesktopSessionSummaries: async () => {
+    try {
+      const previousGatewayKey = get().currentSessionKey;
+      const previousDesktopSessionId = get().currentDesktopSessionId;
+      const previousIsDraft = get().isDraftSession;
+      const previousDesktopSessions = get().desktopSessions;
+      const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
+      const preferredAgentId = get().currentAgentId || defaultAgentId;
+      const { desktopSessions } = await fetchReconciledDesktopSessions({
+        preferredAgentId,
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessions,
+      });
+
+      set({ desktopSessions });
+    } catch (err) {
+      console.warn('Failed to load desktop session summaries:', err);
     }
   },
 
@@ -633,9 +743,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Cleanup empty session on navigate away ──
 
   cleanupEmptySession: async () => {
-    const { currentDesktopSessionId, messages } = get();
+    const { currentDesktopSessionId, desktopSessions, messages } = get();
     if (!currentDesktopSessionId || messages.length > 0) return;
-    if (get().desktopSessions.length <= 1) return;
+    if (desktopSessions.length <= 1) return;
+    const currentSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
+    if (!currentSession || isMainSessionKey(currentSession.gatewaySessionKey)) return;
     await get().deleteSession(currentDesktopSessionId);
   },
 

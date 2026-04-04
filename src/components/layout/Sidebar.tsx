@@ -119,7 +119,7 @@ export function Sidebar() {
 
   const desktopSessions = useChatStore((s) => s.desktopSessions);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
-  const openAgentMainSession = useChatStore((s) => s.openAgentMainSession);
+  const loadDesktopSessionSummaries = useChatStore((s) => s.loadDesktopSessionSummaries);
   const agents = useAgentsStore((s) => s.agents);
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const channels = useChannelsStore((s) => s.channels);
@@ -154,6 +154,13 @@ export function Sidebar() {
       void fetchChannels();
     }
   }, [fetchChannels, isGatewayRunning]);
+
+  useEffect(() => {
+    if (!isGatewayRunning || desktopSessions.length > 0) {
+      return;
+    }
+    void loadDesktopSessionSummaries();
+  }, [desktopSessions.length, isGatewayRunning, loadDesktopSessionSummaries]);
 
   const onlineChannelAccounts = channels.reduce(
     (count, channel) => count + channel.accounts.filter((account) => account.status === 'connected').length,
@@ -271,10 +278,7 @@ export function Sidebar() {
                     key={agent.id}
                     type="button"
                     onClick={() => {
-                      void (async () => {
-                        await openAgentMainSession(agent.id);
-                        navigate('/chat');
-                      })();
+                      navigate('/chat', { state: { requestedAgentId: agent.id } });
                     }}
                     className={cn(
                       'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
@@ -294,10 +298,7 @@ export function Sidebar() {
                   key={agent.id}
                   type="button"
                   onClick={() => {
-                    void (async () => {
-                      await openAgentMainSession(agent.id);
-                      navigate('/chat');
-                    })();
+                    navigate('/chat', { state: { requestedAgentId: agent.id } });
                   }}
                   className={cn(
                     'w-full rounded-xl px-3 py-2 text-left transition-colors duration-200',
