@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 
@@ -227,5 +227,75 @@ describe('agent marketplace package validation', () => {
       downloadUrl: 'https://example.com/discovery-research.zip',
       checksum: 'sha256-1111111111111111111111111111111111111111111111111111111111111111',
     })).rejects.toThrow('meta.json could not be loaded');
+  });
+
+  it('prepares marketplace packages without running checksum verification', async () => {
+    const root = createTempRoot('agent-marketplace-installer-prepare-');
+    const packageDir = join(root, 'prepared-package');
+    writeExtractedPackage(packageDir, {
+      presetId: 'discovery-research',
+      name: '用户研究官',
+      description: 'desc',
+      emoji: '🔍',
+      category: 'PM',
+      managed: true,
+      packageVersion: '1.2.3',
+      agent: {
+        id: 'discovery-research',
+        skillScope: {
+          mode: 'specified',
+          skills: ['analyze-feature-requests'],
+        },
+      },
+    });
+
+    const verifyChecksum = vi.fn(async () => {
+      throw new Error('should not run');
+    });
+    const loadPackageFromDir = vi.fn(async () => ({
+      meta: {
+        presetId: 'discovery-research',
+        managed: true,
+        packageVersion: '1.2.3',
+        agent: {
+          id: 'discovery-research',
+          skillScope: {
+            mode: 'specified' as const,
+            skills: ['analyze-feature-requests'],
+          },
+        },
+      },
+      files: {
+        'AGENTS.md': '# Official agent\n',
+      },
+      skills: {},
+    }));
+    const { prepareAgentMarketplacePackage } = await import('@electron/utils/agent-marketplace-installer');
+
+    await expect(prepareAgentMarketplacePackage({
+      agentId: 'discovery-research',
+      name: '用户研究官',
+      description: 'desc',
+      emoji: '🔍',
+      category: 'PM',
+      version: '1.2.3',
+      downloadUrl: 'https://example.com/discovery-research.zip',
+      checksum: 'sha256-1111111111111111111111111111111111111111111111111111111111111111',
+    }, {
+      createTempDir: async () => root,
+      downloadArchive: async () => undefined,
+      verifyChecksum,
+      extractArchive: async () => packageDir,
+      loadPackageFromDir,
+    })).resolves.toEqual(expect.objectContaining({
+      package: expect.objectContaining({
+        meta: expect.objectContaining({
+          packageVersion: '1.2.3',
+        }),
+      }),
+    }));
+
+    expect(verifyChecksum).not.toHaveBeenCalled();
+    expect(loadPackageFromDir).toHaveBeenCalledOnce();
   });
 });

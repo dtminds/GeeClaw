@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,7 +22,6 @@ export interface PreparedAgentMarketplacePackage {
 export interface AgentMarketplaceInstallerDeps {
   loadCatalog?: () => Promise<AgentMarketplaceCatalog>;
   downloadArchive?: (downloadUrl: string, targetPath: string) => Promise<void>;
-  verifyChecksum?: (archivePath: string, expectedChecksum: string) => Promise<void>;
   extractArchive?: (archivePath: string, extractRoot: string) => Promise<string>;
   loadPackageFromDir?: (
     packageDir: string,
@@ -46,20 +44,6 @@ async function defaultDownloadArchive(downloadUrl: string, targetPath: string): 
   }
 
   await finished(Readable.fromWeb(response.body as globalThis.ReadableStream<Uint8Array>).pipe(createWriteStream(targetPath)));
-}
-
-async function defaultVerifyChecksum(archivePath: string, expectedChecksum: string): Promise<void> {
-  const hash = createHash('sha256');
-  const stream = createReadStream(archivePath);
-  for await (const chunk of stream) {
-    hash.update(chunk);
-  }
-  const actualChecksum = hash.digest('hex');
-  const expectedHash = expectedChecksum.replace(/^sha256-/i, '').toLowerCase();
-
-  if (actualChecksum !== expectedHash) {
-    throw new Error('[agent-marketplace] Downloaded package checksum did not match the catalog entry');
-  }
 }
 
 async function runExtractCommand(command: string, args: string[]): Promise<void> {
@@ -145,7 +129,6 @@ export async function prepareAgentMarketplacePackage(
 
   try {
     await (deps.downloadArchive ?? defaultDownloadArchive)(catalogEntry.downloadUrl, archivePath);
-    await (deps.verifyChecksum ?? defaultVerifyChecksum)(archivePath, catalogEntry.checksum);
     const packageDir = await (deps.extractArchive ?? defaultExtractArchive)(archivePath, extractRoot);
     const loadedPackage = await (deps.loadPackageFromDir ?? loadAgentMarketplacePackageFromDir)(packageDir, catalogEntry);
 
