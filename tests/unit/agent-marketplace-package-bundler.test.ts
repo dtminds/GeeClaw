@@ -111,6 +111,7 @@ describe('bundle-agent-marketplace-packages script', () => {
     expect(bundleAgentPresetSkillsImpl).toHaveBeenCalledTimes(1);
     expect(existsSync(join(outputRoot, 'alpha-agent', '1.0.0.zip'))).toBe(true);
     expect(existsSync(join(outputRoot, 'beta-agent', '1.0.0.zip'))).toBe(false);
+    expect(existsSync(join(outputRoot, '.staging', 'alpha-agent-1.0.0', 'skills.manifest.json'))).toBe(false);
 
     const updatedCatalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
     expect(updatedCatalog).toHaveLength(2);

@@ -7,8 +7,8 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/delivery-execution/1.0.0.zip",
-    "checksum": "sha256-eb75625b0d360d6d3ebec08b5915c4464933312e11f0acb3b532890a7508692f",
-    "size": 31319
+    "checksum": "sha256-50b5384cc5a0631690d09e0e8529382542d3a9671b9f533308322b7890dea80e",
+    "size": 30519
   },
   {
     "agentId": "discovery-research",
@@ -18,8 +18,8 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/discovery-research/1.0.0.zip",
-    "checksum": "sha256-f0646a44aee69250e8f8bf41eab6be6afbf95d71474eea92bf3da202c988c004",
-    "size": 61869
+    "checksum": "sha256-f1a24df42c175313dde997540d4354b812546ca107be25b5f7bf15b67c375282",
+    "size": 60866
   },
   {
     "agentId": "growth-optimization",
@@ -29,8 +29,8 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/growth-optimization/1.0.0.zip",
-    "checksum": "sha256-f9c19013db3e9885452d3db400cd5346f750e72f1e839fc76c2bdfec6f722977",
-    "size": 56160
+    "checksum": "sha256-83229fa6cacc6686968f67e88141d8ce2e029f20b187e2d1614d36592b888996",
+    "size": 55201
   },
   {
     "agentId": "hotspot-intel-assistant",
@@ -40,8 +40,8 @@
     "category": "资讯热点",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
-    "checksum": "sha256-7209e96dbfdd426e963441f4502a12990d1836d68851034390832ba77886c8b4",
-    "size": 5445
+    "checksum": "sha256-67faea868777a9268b61e372e53e478c589c59b41b8a9f20c5d1606eb08ab079",
+    "size": 4864
   },
   {
     "agentId": "marketing-growth-assistant",
@@ -51,8 +51,8 @@
     "category": "Marketing",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/marketing-growth-assistant/1.0.0.zip",
-    "checksum": "sha256-7c698b47518d7df046c9f295de1a0efd26212be3fd146fdac86a0fbbdd63f641",
-    "size": 233525
+    "checksum": "sha256-3fe23516a0288411384dd00176c3c97ee1a540bc377833f1bef6e1db57400d95",
+    "size": 232734
   },
   {
     "agentId": "strategy-planning",
@@ -62,8 +62,8 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/strategy-planning/1.0.0.zip",
-    "checksum": "sha256-bf9f91d5910b7345a7845e1aff793264b4332f8620d418d51110a7389765137a",
-    "size": 68960
+    "checksum": "sha256-977ddb3e3047edaca44193c370333fe842f9533f2df6c78ac8397e43f74bf816",
+    "size": 67999
   },
   {
     "agentId": "wechat-creator-assistant",
@@ -73,8 +73,8 @@
     "category": "内容运营",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/wechat-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-2a070d7549dd0a261962f73064891cf4bc04023f1b089fb3a780530e1b788dcf",
-    "size": 197892
+    "checksum": "sha256-4889226fbc8cc9c7cf58a6b08d0dd19ab633736f11f958015de5304ad94003fd",
+    "size": 197151
   },
   {
     "agentId": "xhs-creator-assistant",
@@ -84,7 +84,7 @@
     "category": "内容运营",
     "version": "1.0.0",
     "downloadUrl": "https://downloads.geeclaw.ai/agent-marketplace/xhs-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-bb5f92894859ba562c1490792429f2b90eb372906cddddafc41065370d38d33f",
-    "size": 436558
+    "checksum": "sha256-72c1b3a61f788bb905e612d1762e10e6c5826a978a6ab1b7a69fbbe57f95980d",
+    "size": 435800
   }
 ]

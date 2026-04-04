@@ -28,7 +28,7 @@ const ROOT = join(__dirname, '..');
 const CATALOG_PATH = join(ROOT, 'resources', 'agent-marketplace', 'catalog.json');
 const OUTPUT_ROOT = join(ROOT, 'build', 'agent-marketplace');
 const OUTPUT_CATALOG_PATH = join(OUTPUT_ROOT, 'catalog.json');
-const PACKAGE_ROOT_ENTRIES = new Set(['meta.json', 'files', 'skills', 'skills.manifest.json']);
+const PACKAGE_ROOT_ENTRIES = new Set(['meta.json', 'files', 'skills']);
 
 function assert(condition, message) {
   if (!condition) {
@@ -123,7 +123,7 @@ async function preparePackageDir(sourceDir, packageDir, version) {
   await rm(packageDir, { recursive: true, force: true });
   await mkdir(packageDir, { recursive: true });
 
-  for (const entry of ['files', 'skills', 'skills.manifest.json']) {
+  for (const entry of ['files', 'skills']) {
     const sourcePath = join(sourceDir, entry);
     if (!existsSync(sourcePath)) {
       continue;
