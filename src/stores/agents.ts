@@ -54,15 +54,47 @@ interface AgentsState {
   clearMarketplaceCompletion: () => void;
 }
 
-function applySnapshot(snapshot: AgentsSnapshot | undefined) {
-  return snapshot ? {
-    agents: snapshot.agents,
-    defaultAgentId: snapshot.defaultAgentId,
-    configuredChannelTypes: snapshot.configuredChannelTypes,
-    channelOwners: snapshot.channelOwners,
-    channelAccountOwners: snapshot.channelAccountOwners,
-    explicitChannelAccountBindings: snapshot.explicitChannelAccountBindings,
-  } : {};
+function resolveSnapshotError(snapshot: unknown, fallbackMessage: string): Error {
+  if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+    const error = (snapshot as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) {
+      return new Error(error);
+    }
+  }
+
+  return new Error(fallbackMessage);
+}
+
+function requireAgentsSnapshot(snapshot: AgentsSnapshot | undefined, context: string): AgentsSnapshot {
+  if (
+    snapshot
+    && Array.isArray(snapshot.agents)
+    && typeof snapshot.defaultAgentId === 'string'
+    && Array.isArray(snapshot.configuredChannelTypes)
+    && snapshot.channelOwners
+    && typeof snapshot.channelOwners === 'object'
+    && snapshot.channelAccountOwners
+    && typeof snapshot.channelAccountOwners === 'object'
+    && snapshot.explicitChannelAccountBindings
+    && typeof snapshot.explicitChannelAccountBindings === 'object'
+  ) {
+    return snapshot;
+  }
+
+  throw resolveSnapshotError(snapshot, `[agentsStore] ${context} returned an invalid agent snapshot`);
+}
+
+function applySnapshot(snapshot: AgentsSnapshot | undefined, context: string) {
+  const validSnapshot = requireAgentsSnapshot(snapshot, context);
+
+  return {
+    agents: validSnapshot.agents,
+    defaultAgentId: validSnapshot.defaultAgentId,
+    configuredChannelTypes: validSnapshot.configuredChannelTypes,
+    channelOwners: validSnapshot.channelOwners,
+    channelAccountOwners: validSnapshot.channelAccountOwners,
+    explicitChannelAccountBindings: validSnapshot.explicitChannelAccountBindings,
+  };
 }
 
 function applyMarketplacePresetMutation(
@@ -70,7 +102,8 @@ function applyMarketplacePresetMutation(
   snapshot: AgentsSnapshot | undefined,
   agentId: string,
 ) {
-  const installedAgent = snapshot?.agents.find((agent) => agent.id === agentId);
+  const validSnapshot = requireAgentsSnapshot(snapshot, 'Marketplace mutation');
+  const installedAgent = validSnapshot.agents.find((agent) => agent.id === agentId);
   const installedVersion = installedAgent?.packageVersion;
 
   return presets.map((preset) => {
@@ -194,7 +227,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     try {
       const snapshot = await hostApiFetch<AgentsSnapshot & { success?: boolean }>('/api/agents');
       set({
-        ...applySnapshot(snapshot),
+        ...applySnapshot(snapshot, 'Fetching agents'),
         loading: false,
       });
     } catch (error) {
@@ -220,7 +253,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         method: 'POST',
         body: JSON.stringify({ name, id }),
       });
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Creating agent'));
     } catch (error) {
       set({ error: String(error) });
       throw error;
@@ -241,7 +274,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
           body: JSON.stringify(updates),
         }
       );
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Updating agent settings'));
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       set({ error: String(error) });
@@ -289,7 +322,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       const nextPresets = applyMarketplacePresetMutation(get().presets, snapshot, agentId);
       if (get().installingPresetId === installTargetId) {
         set({
-          ...applySnapshot(snapshot),
+          ...applySnapshot(snapshot, 'Installing marketplace agent'),
           presets: nextPresets,
           marketplaceCompletion: snapshot.completion ?? null,
           installStage: 'completed',
@@ -297,7 +330,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         });
       } else {
         set({
-          ...applySnapshot(snapshot),
+          ...applySnapshot(snapshot, 'Installing marketplace agent'),
           presets: nextPresets,
           marketplaceCompletion: snapshot.completion ?? null,
         });
@@ -364,7 +397,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       const nextPresets = applyMarketplacePresetMutation(get().presets, snapshot, agentId);
       if (get().installingPresetId === installTargetId) {
         set({
-          ...applySnapshot(snapshot),
+          ...applySnapshot(snapshot, 'Updating marketplace agent'),
           presets: nextPresets,
           marketplaceCompletion: snapshot.completion ?? null,
           installStage: 'completed',
@@ -372,7 +405,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         });
       } else {
         set({
-          ...applySnapshot(snapshot),
+          ...applySnapshot(snapshot, 'Updating marketplace agent'),
           presets: nextPresets,
           marketplaceCompletion: snapshot.completion ?? null,
         });
@@ -405,7 +438,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         `/api/agents/${encodeURIComponent(agentId)}`,
         { method: 'DELETE' }
       );
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Deleting agent'));
       invalidatePresetAgentSkillsCache();
       try {
         const { useChatStore } = await import('./chat');
@@ -428,7 +461,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         `/api/agents/${encodeURIComponent(agentId)}/unmanage`,
         { method: 'POST' }
       );
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Unmanaging agent'));
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       set({ error: String(error) });
@@ -443,7 +476,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         `/api/agents/${encodeURIComponent(agentId)}/channels/${encodeURIComponent(channelType)}`,
         { method: 'PUT' }
       );
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Assigning channel'));
     } catch (error) {
       set({ error: String(error) });
       throw error;
@@ -457,7 +490,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
         `/api/agents/${encodeURIComponent(agentId)}/channels/${encodeURIComponent(channelType)}`,
         { method: 'DELETE' }
       );
-      set(applySnapshot(snapshot));
+      set(applySnapshot(snapshot, 'Removing channel'));
     } catch (error) {
       set({ error: String(error) });
       throw error;
