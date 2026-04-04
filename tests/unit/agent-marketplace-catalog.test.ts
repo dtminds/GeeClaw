@@ -41,8 +41,10 @@ describe('agent marketplace catalog loader', () => {
         version: expect.any(String),
         downloadUrl: expect.any(String),
         checksum: expect.any(String),
-        presetSkills: expect.any(Array),
       }));
+      if ('presetSkills' in entry) {
+        expect(entry.presetSkills).toEqual(expect.any(Array));
+      }
     }
   });
 
@@ -203,5 +205,26 @@ describe('agent marketplace catalog loader', () => {
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
 
     await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('presetSkills is invalid');
+  });
+
+  it('rejects catalog entries with empty preset skill metadata', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-preset-skills-empty-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'discovery-research',
+        name: 'User Research',
+        description: 'desc',
+        emoji: '🔍',
+        category: 'PM',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/discovery-research.zip',
+        checksum: 'sha256-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        presetSkills: [],
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('presetSkills must not be empty');
   });
 });

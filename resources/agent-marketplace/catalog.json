@@ -90,8 +90,7 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
     "checksum": "sha256-67faea868777a9268b61e372e53e478c589c59b41b8a9f20c5d1606eb08ab079",
-    "size": 4864,
-    "presetSkills": []
+    "size": 4864
   },
   {
     "agentId": "marketing-growth-assistant",

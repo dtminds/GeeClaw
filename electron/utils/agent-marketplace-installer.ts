@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import {
   loadAgentMarketplaceCatalog,
   loadAgentMarketplacePackageFromDir,
@@ -38,14 +41,20 @@ async function defaultDownloadArchive(downloadUrl: string, targetPath: string): 
   if (!response.ok) {
     throw new Error(`[agent-marketplace] Failed to download package: HTTP ${response.status}`);
   }
+  if (!response.body) {
+    throw new Error('[agent-marketplace] Response body is empty');
+  }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await writeFile(targetPath, buffer);
+  await finished(Readable.fromWeb(response.body as globalThis.ReadableStream<Uint8Array>).pipe(createWriteStream(targetPath)));
 }
 
 async function defaultVerifyChecksum(archivePath: string, expectedChecksum: string): Promise<void> {
-  const content = await readFile(archivePath);
-  const actualChecksum = createHash('sha256').update(content).digest('hex');
+  const hash = createHash('sha256');
+  const stream = createReadStream(archivePath);
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  const actualChecksum = hash.digest('hex');
   const expectedHash = expectedChecksum.replace(/^sha256-/i, '').toLowerCase();
 
   if (actualChecksum !== expectedHash) {

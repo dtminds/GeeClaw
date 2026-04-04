@@ -1259,8 +1259,8 @@ export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummar
       && typeof installedMetadata.packageVersion === 'string'
       && compareVersionStrings(entry.version, installedMetadata.packageVersion) > 0;
     const presetSkills = entry.presetSkills ? [...entry.presetSkills] : [];
-    const skillScope: AgentSkillScope = presetSkills.length > 0
-      ? { mode: 'specified', skills: [...presetSkills] }
+    const skillScope: AgentSkillScope = entry.presetSkills
+      ? { mode: 'specified', skills: [...entry.presetSkills] }
       : { mode: 'default' };
 
     return {

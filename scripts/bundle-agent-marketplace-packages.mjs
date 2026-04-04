@@ -3,7 +3,7 @@
 import 'zx/globals';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import {
   cp,
   mkdir,
@@ -115,8 +115,12 @@ async function extractArchive(archivePath, extractRoot) {
 }
 
 async function sha256File(path) {
-  const buffer = await readFile(path);
-  return `sha256-${createHash('sha256').update(buffer).digest('hex')}`;
+  const hash = createHash('sha256');
+  const stream = createReadStream(path);
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  return `sha256-${hash.digest('hex')}`;
 }
 
 async function preparePackageDir(sourceDir, packageDir, version) {
@@ -176,7 +180,7 @@ async function readPackageSummaryMetadata(packageDir) {
     ? [...new Set((Array.isArray(meta.agent.skillScope.skills) ? meta.agent.skillScope.skills : [])
       .filter((value) => typeof value === 'string' && value.trim())
       .map((value) => value.trim()))]
-    : [];
+    : undefined;
 
   return { presetSkills };
 }
@@ -290,12 +294,13 @@ export async function bundleAgentMarketplacePackages(options = {}) {
       const archiveStat = await stat(archivePath);
       const checksum = await sha256File(archivePath);
       const { presetSkills } = await readPackageSummaryMetadata(packageDir);
+      const { presetSkills: _previousPresetSkills, ...nextEntryBase } = entry;
 
       packageResults.set(entry.agentId, {
-        ...entry,
+        ...nextEntryBase,
         checksum,
         size: archiveStat.size,
-        presetSkills,
+        ...(presetSkills ? { presetSkills } : {}),
       });
 
       log(`Packaged ${entry.agentId}@${entry.version}`);

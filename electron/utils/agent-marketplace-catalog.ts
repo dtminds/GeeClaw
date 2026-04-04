@@ -130,6 +130,10 @@ function normalizeOptionalStringList(
     throw new Error(`[agent-marketplace] Entry at index ${index} ${field} is invalid`);
   }
 
+  if (value.length === 0) {
+    throw new Error(`[agent-marketplace] Entry at index ${index} ${field} must not be empty`);
+  }
+
   const normalized = value.map((entry) => {
     if (typeof entry !== 'string' || !entry.trim()) {
       throw new Error(`[agent-marketplace] Entry at index ${index} ${field} is invalid`);

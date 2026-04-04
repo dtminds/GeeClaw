@@ -46,6 +46,31 @@ function writeBundledPreset(outputRoot: string, agentId: string, packageVersion 
   writeFileSync(join(presetDir, 'skills', 'demo-skill', 'SKILL.md'), '# demo\n', 'utf8');
 }
 
+function writeDefaultScopeBundledPreset(outputRoot: string, agentId: string, packageVersion = '0.0.0') {
+  const presetDir = join(outputRoot, agentId);
+  mkdirSync(join(presetDir, 'files'), { recursive: true });
+  writeFileSync(
+    join(presetDir, 'meta.json'),
+    JSON.stringify({
+      presetId: agentId,
+      name: `${agentId} name`,
+      description: `${agentId} description`,
+      emoji: '🤖',
+      category: 'test',
+      managed: true,
+      packageVersion,
+      agent: {
+        id: agentId,
+        skillScope: {
+          mode: 'default',
+        },
+      },
+    }, null, 2),
+    'utf8',
+  );
+  writeFileSync(join(presetDir, 'files', 'AGENTS.md'), `# ${agentId}\n`, 'utf8');
+}
+
 describe('bundle-agent-marketplace-packages script', () => {
   afterEach(() => {
     while (tempDirs.length > 0) {
@@ -182,5 +207,50 @@ describe('bundle-agent-marketplace-packages script', () => {
       '--agent',
       'beta-agent',
     ], new URL('../../scripts/bundle-agent-marketplace-packages.mjs', import.meta.url).href)).toEqual(['alpha-agent', 'beta-agent']);
+  });
+
+  it('omits presetSkills from catalog output when the bundled preset uses default scope', async () => {
+    const root = createTempRoot('agent-marketplace-bundler-default-scope-');
+    const catalogPath = join(root, 'resources', 'agent-marketplace', 'catalog.json');
+    const presetOutputRoot = join(root, 'build', 'agent-presets');
+    const outputRoot = join(root, 'build', 'agent-marketplace');
+    const outputCatalogPath = join(outputRoot, 'catalog.json');
+
+    mkdirSync(join(root, 'resources', 'agent-marketplace'), { recursive: true });
+    writeDefaultScopeBundledPreset(presetOutputRoot, 'default-agent');
+    writeFileSync(
+      catalogPath,
+      JSON.stringify([
+        {
+          agentId: 'default-agent',
+          name: 'Default',
+          description: 'default',
+          emoji: 'D',
+          category: 'test',
+          version: '1.0.0',
+          downloadUrl: 'https://downloads.example.com/default-agent/1.0.0.zip',
+          checksum: 'sha256-old-default',
+          size: 10,
+          presetSkills: ['stale-skill'],
+        },
+      ], null, 2),
+      'utf8',
+    );
+
+    const bundleAgentPresetSkillsImpl = vi.fn(async () => undefined);
+    const { bundleAgentMarketplacePackages } = await import('../../scripts/bundle-agent-marketplace-packages.mjs');
+
+    await bundleAgentMarketplacePackages({
+      catalogPath,
+      presetOutputRoot,
+      outputRoot,
+      outputCatalogPath,
+      selectedAgentIds: ['default-agent'],
+      bundleAgentPresetSkillsImpl,
+      log: () => undefined,
+    });
+
+    const updatedCatalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+    expect(updatedCatalog[0]).not.toHaveProperty('presetSkills');
   });
 });
