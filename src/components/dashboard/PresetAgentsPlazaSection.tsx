@@ -52,15 +52,6 @@ export function PresetAgentsPlazaSection() {
     void Promise.all([fetchAgents(), fetchPresets()]);
   }, [fetchAgents, fetchPresets]);
 
-  useEffect(() => {
-    if (marketplaceCompletion) {
-      setActiveAgentId(null);
-      setPendingUpdateAgentId(null);
-      setActiveMarketplaceActionAgentId(null);
-      clearError();
-    }
-  }, [clearError, marketplaceCompletion]);
-
   const categories = useMemo(
     () => Array.from(new Set(presets.map((preset) => preset.category).filter(Boolean))),
     [presets],
@@ -113,6 +104,9 @@ export function PresetAgentsPlazaSection() {
     setActiveMarketplaceActionAgentId(targetAgentId);
     try {
       await updateMarketplaceAgent(targetAgentId);
+      setActiveAgentId(null);
+      setActiveMarketplaceActionAgentId(null);
+      clearError();
     } catch {
       // Store error state drives the dialog copy.
     }
@@ -141,8 +135,20 @@ export function PresetAgentsPlazaSection() {
     if (marketplaceCompletion.promptText) {
       queueComposerSeed(marketplaceCompletion.promptText);
     }
+    setActiveAgentId(null);
+    setPendingUpdateAgentId(null);
+    setActiveMarketplaceActionAgentId(null);
+    clearError();
     clearMarketplaceCompletion();
     navigate('/chat');
+  };
+
+  const handleMarketplaceCompletionDismiss = () => {
+    setActiveAgentId(null);
+    setPendingUpdateAgentId(null);
+    setActiveMarketplaceActionAgentId(null);
+    clearError();
+    clearMarketplaceCompletion();
   };
 
   return (
@@ -236,7 +242,13 @@ export function PresetAgentsPlazaSection() {
         onClose={handleDetailClose}
         onInstall={(agentId) => {
           setActiveMarketplaceActionAgentId(agentId);
-          void installMarketplaceAgent(agentId).catch(() => {});
+          void installMarketplaceAgent(agentId)
+            .then(() => {
+              setActiveAgentId(null);
+              setActiveMarketplaceActionAgentId(null);
+              clearError();
+            })
+            .catch(() => {});
         }}
         onUpdate={(agentId) => setPendingUpdateAgentId(agentId)}
         availabilityTitle={t('presetPlaza.platformsTitle')}
@@ -256,7 +268,7 @@ export function PresetAgentsPlazaSection() {
         onConfirm={() => void handleUpdateConfirm()}
       />
 
-      <Dialog open={!!marketplaceCompletion} onOpenChange={(open) => !open && clearMarketplaceCompletion()}>
+      <Dialog open={!!marketplaceCompletion} onOpenChange={(open) => !open && handleMarketplaceCompletionDismiss()}>
         <DialogContent
           hideCloseButton
           className="modal-card-surface w-[min(560px,calc(100vw-2rem))] max-w-[560px] overflow-hidden rounded-[28px] border bg-[var(--app-sidebar)] p-0 shadow-none"
@@ -265,7 +277,7 @@ export function PresetAgentsPlazaSection() {
             <div className="relative px-6 py-6 sm:px-8 sm:py-8">
               <button
                 type="button"
-                onClick={clearMarketplaceCompletion}
+                onClick={handleMarketplaceCompletionDismiss}
                 className="modal-close-button absolute right-6 top-6"
                 aria-label={t('presetPlaza.close')}
               >
@@ -302,7 +314,7 @@ export function PresetAgentsPlazaSection() {
                 <Button
                   variant="outline"
                   className="modal-secondary-button"
-                  onClick={clearMarketplaceCompletion}
+                  onClick={handleMarketplaceCompletionDismiss}
                 >
                   {tAgents('marketplace.dismiss')}
                 </Button>
