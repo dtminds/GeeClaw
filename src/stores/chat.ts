@@ -292,6 +292,48 @@ function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
   return agent?.mainSessionKey ?? `agent:${agentId}:main`;
 }
 
+function reconcilePreferredMainSession(
+  desktopSessions: DesktopSessionSummary[],
+  options: {
+    previousGatewayKey: string;
+    previousDesktopSessionId: string;
+    previousIsDraft: boolean;
+    previousDesktopSessions: DesktopSessionSummary[];
+    preferredMainSessionKey: string;
+  },
+): DesktopSessionSummary[] {
+  const {
+    previousGatewayKey,
+    previousDesktopSessionId,
+    previousIsDraft,
+    previousDesktopSessions,
+    preferredMainSessionKey,
+  } = options;
+
+  const previousSelectedSession = previousIsDraft
+    ? undefined
+    : previousDesktopSessions.find((session) =>
+      session.id === previousDesktopSessionId
+      || session.gatewaySessionKey === previousGatewayKey,
+    );
+
+  if (
+    previousSelectedSession
+    && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
+    && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
+    && !desktopSessions.some((session) =>
+      session.id === previousSelectedSession.id
+      || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
+    )
+  ) {
+    // Keep the explicitly opened agent main session selected when the next
+    // list refresh momentarily lags behind session creation.
+    return [previousSelectedSession, ...desktopSessions];
+  }
+
+  return desktopSessions;
+}
+
 async function deleteDesktopSessionRequest(id: string): Promise<DesktopSessionSummary> {
   const response = await hostApiFetch<DesktopSessionResponse>(
     `${DESKTOP_SESSIONS_API}/${encodeURIComponent(id)}`,
@@ -408,26 +450,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
       const preferredAgentId = get().currentAgentId || defaultAgentId;
       const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
-      const previousSelectedSession = previousIsDraft
-        ? undefined
-        : previousDesktopSessions.find((session) =>
-          session.id === previousDesktopSessionId
-          || session.gatewaySessionKey === previousGatewayKey,
-        );
-
-      if (
-        previousSelectedSession
-        && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
-        && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
-        && !desktopSessions.some((session) =>
-          session.id === previousSelectedSession.id
-          || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
-        )
-      ) {
-        // Keep the explicitly opened agent main session selected when the next
-        // list refresh momentarily lags behind session creation.
-        desktopSessions = [previousSelectedSession, ...desktopSessions];
-      }
+      desktopSessions = reconcilePreferredMainSession(desktopSessions, {
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessions,
+        preferredMainSessionKey,
+      });
 
       const previousSession = previousIsDraft
         ? undefined
@@ -481,24 +510,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
       const preferredAgentId = get().currentAgentId || defaultAgentId;
       const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
-      const previousSelectedSession = previousIsDraft
-        ? undefined
-        : previousDesktopSessions.find((session) =>
-          session.id === previousDesktopSessionId
-          || session.gatewaySessionKey === previousGatewayKey,
-        );
-
-      if (
-        previousSelectedSession
-        && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
-        && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
-        && !desktopSessions.some((session) =>
-          session.id === previousSelectedSession.id
-          || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
-        )
-      ) {
-        desktopSessions = [previousSelectedSession, ...desktopSessions];
-      }
+      desktopSessions = reconcilePreferredMainSession(desktopSessions, {
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessions,
+        preferredMainSessionKey,
+      });
 
       set({ desktopSessions });
     } catch (err) {

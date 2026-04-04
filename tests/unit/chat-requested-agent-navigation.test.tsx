@@ -127,7 +127,7 @@ describe('Chat requested-agent navigation', () => {
     await waitFor(() => {
       expect(agentsState.fetchAgents).toHaveBeenCalled();
       expect(chatState.openAgentMainSession).toHaveBeenCalledWith('writer');
-      expect(chatState.loadDesktopSessionSummaries).toHaveBeenCalled();
+      expect(chatState.loadDesktopSessionSummaries).not.toHaveBeenCalled();
     });
   });
 });

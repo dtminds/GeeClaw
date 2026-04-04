@@ -4,7 +4,7 @@
  * via gateway:rpc IPC. Session selector, thinking toggle, and refresh
  * are in the toolbar; messages render with markdown + streaming.
  */
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
@@ -73,6 +73,7 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
 
 export function Chat() {
   const { t } = useTranslation('chat');
+  const skipNextAutoLoadRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const requestedAgentId = (
@@ -103,7 +104,6 @@ export function Chat() {
   const currentViewMode = useChatStore((s) => s.currentViewMode);
   const selectedCronRun = useChatStore((s) => s.selectedCronRun);
   const loadHistory = useChatStore((s) => s.loadHistory);
-  const loadDesktopSessionSummaries = useChatStore((s) => s.loadDesktopSessionSummaries);
   const loadSessions = useChatStore((s) => s.loadSessions);
   const openAgentMainSession = useChatStore((s) => s.openAgentMainSession);
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -160,12 +160,16 @@ export function Chat() {
     let cancelled = false;
     const hasExistingMessages = useChatStore.getState().messages.length > 0;
     (async () => {
+      if (skipNextAutoLoadRef.current && !requestedAgentId) {
+        skipNextAutoLoadRef.current = false;
+        return;
+      }
       await fetchAgents();
       if (cancelled) return;
       if (requestedAgentId) {
         await openAgentMainSession(requestedAgentId);
         if (cancelled) return;
-        void loadDesktopSessionSummaries();
+        skipNextAutoLoadRef.current = true;
         navigate(location.pathname, { replace: true });
         return;
       }
@@ -184,7 +188,6 @@ export function Chat() {
     fetchAgents,
     isGatewayRunning,
     loadHistory,
-    loadDesktopSessionSummaries,
     loadSessions,
     location.pathname,
     navigate,
