@@ -127,6 +127,7 @@ interface ChatState {
 
   // Actions
   loadSessions: () => Promise<void>;
+  loadDesktopSessionSummaries: () => Promise<void>;
   openAgentMainSession: (agentId: string) => Promise<void>;
   switchSession: (key: string) => void;
   openCronRun: (run: CronAgentRunSummary) => Promise<void>;
@@ -396,6 +397,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const previousGatewayKey = get().currentSessionKey;
       const previousDesktopSessionId = get().currentDesktopSessionId;
       const previousIsDraft = get().isDraftSession;
+      const previousDesktopSessions = get().desktopSessions;
       let desktopSessions = await fetchDesktopSessions();
       let sessionTokenInfoByKey = get().sessionTokenInfoByKey;
       try {
@@ -406,6 +408,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
       const preferredAgentId = get().currentAgentId || defaultAgentId;
       const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
+      const previousSelectedSession = previousIsDraft
+        ? undefined
+        : previousDesktopSessions.find((session) =>
+          session.id === previousDesktopSessionId
+          || session.gatewaySessionKey === previousGatewayKey,
+        );
+
+      if (
+        previousSelectedSession
+        && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
+        && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
+        && !desktopSessions.some((session) =>
+          session.id === previousSelectedSession.id
+          || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
+        )
+      ) {
+        // Keep the explicitly opened agent main session selected when the next
+        // list refresh momentarily lags behind session creation.
+        desktopSessions = [previousSelectedSession, ...desktopSessions];
+      }
 
       const previousSession = previousIsDraft
         ? undefined
@@ -446,6 +468,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (err) {
       console.warn('Failed to load sessions:', err);
+    }
+  },
+
+  loadDesktopSessionSummaries: async () => {
+    try {
+      const previousGatewayKey = get().currentSessionKey;
+      const previousDesktopSessionId = get().currentDesktopSessionId;
+      const previousIsDraft = get().isDraftSession;
+      const previousDesktopSessions = get().desktopSessions;
+      let desktopSessions = await fetchDesktopSessions();
+      const defaultAgentId = useAgentsStore.getState().defaultAgentId || 'main';
+      const preferredAgentId = get().currentAgentId || defaultAgentId;
+      const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
+      const previousSelectedSession = previousIsDraft
+        ? undefined
+        : previousDesktopSessions.find((session) =>
+          session.id === previousDesktopSessionId
+          || session.gatewaySessionKey === previousGatewayKey,
+        );
+
+      if (
+        previousSelectedSession
+        && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
+        && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
+        && !desktopSessions.some((session) =>
+          session.id === previousSelectedSession.id
+          || session.gatewaySessionKey === previousSelectedSession.gatewaySessionKey,
+        )
+      ) {
+        desktopSessions = [previousSelectedSession, ...desktopSessions];
+      }
+
+      set({ desktopSessions });
+    } catch (err) {
+      console.warn('Failed to load desktop session summaries:', err);
     }
   },
 
@@ -633,9 +690,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Cleanup empty session on navigate away ──
 
   cleanupEmptySession: async () => {
-    const { currentDesktopSessionId, messages } = get();
+    const { currentDesktopSessionId, desktopSessions, messages } = get();
     if (!currentDesktopSessionId || messages.length > 0) return;
-    if (get().desktopSessions.length <= 1) return;
+    if (desktopSessions.length <= 1) return;
+    const currentSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
+    if (!currentSession || isMainSessionKey(currentSession.gatewaySessionKey)) return;
     await get().deleteSession(currentDesktopSessionId);
   },
 
