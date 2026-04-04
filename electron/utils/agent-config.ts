@@ -1,5 +1,5 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
-import { accessSync, constants } from 'fs';
+import { constants } from 'fs';
 import { dirname, join, normalize } from 'path';
 import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
@@ -17,9 +17,6 @@ import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
-import { getAgentPreset } from './agent-presets';
-import { resolveGeeClawAppEnvironment } from './app-env';
-import { getGeeClawCommandSearchDirs } from './runtime-path';
 import {
   formatPresetPlatforms,
   isPresetSupportedOnPlatform,
@@ -247,6 +244,10 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function normalizeManagedAgentSource(source: unknown): ManagedAgentSource {
+  return source === 'marketplace' ? 'marketplace' : 'preset';
+}
+
 function formatModelLabel(model: unknown): string | null {
   if (typeof model === 'string' && model.trim()) {
     const trimmed = model.trim();
@@ -341,9 +342,18 @@ async function ensureDir(path: string): Promise<void> {
 async function readAgentManagementMap(): Promise<Record<string, ManagedAgentMetadata>> {
   const store = await getGeeClawAgentStore();
   const value = store.get('management');
-  return value && typeof value === 'object'
-    ? cloneValue(value as Record<string, ManagedAgentMetadata>)
-    : {};
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const cloned = cloneValue(value as Record<string, ManagedAgentMetadata>);
+  for (const metadata of Object.values(cloned)) {
+    if (metadata?.managed) {
+      metadata.source = normalizeManagedAgentSource(metadata.source);
+    }
+  }
+
+  return cloned;
 }
 
 async function writeAgentManagementMap(nextMap: Record<string, ManagedAgentMetadata>): Promise<void> {
@@ -1058,7 +1068,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       mainSessionKey: buildAgentMainSessionKey(config, entry.id),
       channelTypes: configuredChannels.filter((ct) => ownedChannels.has(ct)),
       channelAccounts: ownedChannelAccounts,
-      source: managedMetadata?.managed ? 'preset' : 'custom',
+      source: managedMetadata?.managed ? managedMetadata.source : 'custom',
       managementSource: managedMetadata?.managed ? managedMetadata.source : undefined,
       managed: managedMetadata?.managed === true,
       presetId: managedMetadata?.presetId,
@@ -1287,22 +1297,6 @@ export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummar
   });
 }
 
-function assertPresetSupportedOnCurrentPlatform(preset: {
-  meta: {
-    presetId: string;
-    platforms?: AgentPresetPlatform[];
-  };
-}): void {
-  const { platforms, presetId } = preset.meta;
-  if (!platforms || isPresetSupportedOnPlatform(platforms, process.platform)) {
-    return;
-  }
-
-  throw new Error(
-    `Preset "${presetId}" is only available on ${formatPresetPlatforms(platforms)}`,
-  );
-}
-
 function assertMarketplaceEntrySupportedOnCurrentPlatform(entry: {
   agentId: string;
   platforms?: AgentPresetPlatform[];
@@ -1352,72 +1346,6 @@ function buildMarketplaceCompletion(
   return promptText
     ? { operation, agentId, promptText }
     : { operation, agentId };
-}
-
-function isCommandAvailable(command: string): boolean {
-  const relativeCandidates = process.platform === 'win32'
-    ? [`${command}.exe`, `${command}.cmd`, `${command}.bat`, `${command}.ps1`, command]
-    : [command, `${command}.sh`];
-
-  for (const directory of getGeeClawCommandSearchDirs()) {
-    for (const candidate of relativeCandidates) {
-      try {
-        accessSync(
-          join(directory, candidate),
-          process.platform === 'win32' ? constants.F_OK : constants.X_OK,
-        );
-        return true;
-      } catch {
-        // Try the next candidate.
-      }
-    }
-  }
-
-  return false;
-}
-
-function getPresetMissingRequirements(preset: {
-  meta: {
-    requires?: {
-      bins?: string[];
-      anyBins?: string[];
-      env?: string[];
-    };
-  };
-}, resolvedEnv: Record<string, string | undefined> = process.env): AgentPresetMissingRequirements | undefined {
-  const missingBins = preset.meta.requires?.bins?.filter((bin) => !isCommandAvailable(bin)) ?? [];
-  const anyBins = preset.meta.requires?.anyBins;
-  const missingAnyBins = anyBins && !anyBins.some((bin) => isCommandAvailable(bin))
-    ? [...anyBins]
-    : [];
-  const missingEnv = preset.meta.requires?.env?.filter((name) => !resolvedEnv[name]?.trim()) ?? [];
-
-  if (missingBins.length === 0 && missingAnyBins.length === 0 && missingEnv.length === 0) {
-    return undefined;
-  }
-
-  return {
-    ...(missingBins.length > 0 ? { bins: missingBins } : {}),
-    ...(missingAnyBins.length > 0 ? { anyBins: missingAnyBins } : {}),
-    ...(missingEnv.length > 0 ? { env: missingEnv } : {}),
-  };
-}
-
-function formatPresetMissingRequirementsError(
-  presetId: string,
-  missingRequirements: AgentPresetMissingRequirements,
-): Error {
-  const clauses: string[] = [];
-  if (missingRequirements.bins?.length) {
-    clauses.push(`is missing required binaries: ${missingRequirements.bins.join(', ')}`);
-  }
-  if (missingRequirements.anyBins?.length) {
-    clauses.push(`requires one of these binaries: ${missingRequirements.anyBins.join(', ')}`);
-  }
-  if (missingRequirements.env?.length) {
-    clauses.push(`is missing required environment variables: ${missingRequirements.env.join(', ')}`);
-  }
-  return new Error(`Preset "${presetId}" ${clauses.join('; ')}`);
 }
 
 async function installMarketplaceAgentFromPreparedPackage(
@@ -1598,73 +1526,6 @@ async function updateMarketplaceAgentFromPreparedPackage(
   }
 }
 
-export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
-  const preset = await getAgentPreset(presetId);
-  assertPresetSupportedOnCurrentPlatform(preset);
-  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
-  const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
-  if (missingRequirements) {
-    throw formatPresetMissingRequirementsError(preset.meta.presetId, missingRequirements);
-  }
-  const config = await readOpenClawConfig() as AgentConfigDocument;
-  const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
-  const management = await readAgentManagementMap();
-  const nextId = normalizeAgentId(preset.meta.agent.id);
-  validateAgentId(nextId);
-
-  const existingIds = new Set(entries.map((entry) => entry.id));
-  const diskIds = await listExistingAgentIdsOnDisk();
-  if (existingIds.has(nextId) || diskIds.has(nextId)) {
-    throw new Error(`Preset agent "${nextId}" is already installed`);
-  }
-
-  const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
-  const nextScope = normalizeSkillScope(preset.meta.agent.skillScope);
-  const lockedFields = preset.meta.managedPolicy?.lockedFields
-    ? [...preset.meta.managedPolicy.lockedFields]
-    : ['id', 'workspace', 'persona'];
-  const newEntry = applyAgentSkillScope({
-    id: nextId,
-    name: preset.meta.name,
-    workspace: getManagedAgentWorkspacePath(nextId),
-    ...(preset.meta.agent.model !== undefined ? { model: cloneValue(preset.meta.agent.model) } : {}),
-  }, nextScope);
-  nextEntries.push(newEntry);
-
-  config.agents = {
-    ...agentsConfig,
-    list: nextEntries,
-  };
-
-  await provisionAgentFilesystem(config, newEntry);
-  await seedPresetFilesIntoWorkspace(
-    expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
-    preset.files,
-    { overwriteExisting: true },
-  );
-  await seedPresetSkillsIntoWorkspace(
-    expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId)),
-    preset.skills,
-  );
-  await persistAgentConfigAndPatchRuntime(config);
-
-  management[nextId] = {
-    agentId: nextId,
-    source: 'preset',
-    presetId: preset.meta.presetId,
-    managed: true,
-    lockedFields,
-    canUnmanage: preset.meta.managedPolicy?.canUnmanage !== false,
-    presetSkills: nextScope.mode === 'specified' ? [...nextScope.skills] : [],
-    managedFiles: Object.keys(preset.files),
-    installedAt: new Date().toISOString(),
-  };
-  await writeAgentManagementMap(management);
-
-  logger.info('Installed preset agent', { agentId: nextId, presetId: preset.meta.presetId });
-  return buildSnapshotFromConfig(config);
-}
-
 export async function installMarketplaceAgent(agentId: string): Promise<AgentMarketplaceMutationResult> {
   const catalogEntry = await getAgentMarketplaceCatalogEntry(normalizeAgentId(agentId));
   return await installMarketplaceAgentFromPreparedPackage(catalogEntry);
@@ -1732,7 +1593,7 @@ export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
   await writeAgentManagementMap(management);
 
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  logger.info('Unmanaged preset agent', { agentId });
+  logger.info('Unmanaged managed agent', { agentId });
   return buildSnapshotFromConfig(config);
 }
 

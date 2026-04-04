@@ -88,19 +88,6 @@ export function getResourcesDir(): string {
 }
 
 /**
- * Get agent presets directory inside resources.
- */
-export function getAgentPresetsDir(): string {
-  if (!app.isPackaged) {
-    const bundledOutputDir = join(process.cwd(), 'build', 'agent-presets');
-    if (existsSync(bundledOutputDir)) {
-      return bundledOutputDir;
-    }
-  }
-  return join(getResourcesDir(), 'agent-presets');
-}
-
-/**
  * Get the official agent marketplace catalog path inside resources.
  */
 export function getAgentMarketplaceCatalogPath(): string {
