@@ -557,6 +557,22 @@ describe('managed agent config domain', () => {
     expect(management.stockexpert.installedAt).toBe(management.stockexpert.updatedAt);
   });
 
+  it('normalizes legacy managed metadata without source before building snapshots', async () => {
+    const { agentConfig, storeState } = await setupManagedPresetFixture();
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+    const management = storeState.management as Record<string, Record<string, unknown>>;
+    delete management.stockexpert.source;
+
+    const snapshot = await agentConfig.listAgentsSnapshot();
+
+    expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
+      managed: true,
+      source: 'preset',
+      managementSource: 'preset',
+    });
+  });
+
   it('updates marketplace agents in place, preserves workspace paths, and only reapplies managed content', async () => {
     const { agentConfig, configDir, homeDir, storeState, marketplaceState } = await setupManagedPresetFixture();
 

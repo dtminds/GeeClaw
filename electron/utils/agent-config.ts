@@ -244,6 +244,10 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function normalizeManagedAgentSource(source: unknown): ManagedAgentSource {
+  return source === 'marketplace' ? 'marketplace' : 'preset';
+}
+
 function formatModelLabel(model: unknown): string | null {
   if (typeof model === 'string' && model.trim()) {
     const trimmed = model.trim();
@@ -338,9 +342,18 @@ async function ensureDir(path: string): Promise<void> {
 async function readAgentManagementMap(): Promise<Record<string, ManagedAgentMetadata>> {
   const store = await getGeeClawAgentStore();
   const value = store.get('management');
-  return value && typeof value === 'object'
-    ? cloneValue(value as Record<string, ManagedAgentMetadata>)
-    : {};
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const cloned = cloneValue(value as Record<string, ManagedAgentMetadata>);
+  for (const metadata of Object.values(cloned)) {
+    if (metadata?.managed) {
+      metadata.source = normalizeManagedAgentSource(metadata.source);
+    }
+  }
+
+  return cloned;
 }
 
 async function writeAgentManagementMap(nextMap: Record<string, ManagedAgentMetadata>): Promise<void> {
