@@ -21,6 +21,9 @@ const RECOGNIZED_META_KEYS = new Set([
   'emoji',
   'category',
   'managed',
+  'packageVersion',
+  'postInstallPrompt',
+  'postUpdatePrompt',
   'requires',
   'platforms',
   'agent',
@@ -39,7 +42,13 @@ const RECOGNIZED_REQUIRES_KEYS = new Set(['bins', 'anyBins', 'env']);
 const RECOGNIZED_SKILL_MANIFEST_KEYS = new Set(['version', 'skills']);
 const RECOGNIZED_SKILL_MANIFEST_SKILL_KEYS = new Set(['slug', 'delivery', 'source']);
 const RECOGNIZED_SKILL_MANIFEST_SOURCE_KEYS = new Set(['type', 'repo', 'repoPath', 'ref', 'version']);
+const RECOGNIZED_PACKAGE_ROOT_KEYS = new Set(['meta.json', 'files', 'skills', 'skills.manifest.json']);
 const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export interface LoadAgentPresetPackageOptions {
+  packageLabel?: string;
+  strictTopLevelEntries?: boolean;
+}
 
 export interface AgentPresetMeta {
   presetId: string;
@@ -48,6 +57,9 @@ export interface AgentPresetMeta {
   emoji: string;
   category: string;
   managed: true;
+  packageVersion?: string;
+  postInstallPrompt?: string;
+  postUpdatePrompt?: string;
   requires?: {
     bins?: string[];
     anyBins?: string[];
@@ -112,6 +124,20 @@ function requireNonEmptyString(value: unknown, field: string, presetId?: string)
     throw new Error(`Preset ${field} is required`);
   }
   return value.trim();
+}
+
+function normalizeOptionalString(
+  value: unknown,
+  field: string,
+  presetId: string,
+): string | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Preset "${presetId}" ${field} is invalid`);
+  }
+  return value;
 }
 
 function normalizeOptionalStringList(
@@ -320,6 +346,19 @@ function validateMeta(meta: AgentPresetMeta): AgentPresetMeta {
     emoji: requireNonEmptyString(metaRecord.emoji, 'emoji', presetId),
     category: requireNonEmptyString(metaRecord.category, 'category', presetId),
     managed: true,
+    packageVersion: metaRecord.packageVersion === undefined
+      ? undefined
+      : requireNonEmptyString(metaRecord.packageVersion, 'packageVersion', presetId),
+    postInstallPrompt: normalizeOptionalString(
+      metaRecord.postInstallPrompt,
+      'postInstallPrompt',
+      presetId,
+    ),
+    postUpdatePrompt: normalizeOptionalString(
+      metaRecord.postUpdatePrompt,
+      'postUpdatePrompt',
+      presetId,
+    ),
     requires: normalizePresetRequirements(presetId, metaRecord.requires),
     platforms: normalizePresetPlatforms(presetId, metaRecord.platforms),
     agent: {
@@ -525,6 +564,70 @@ async function readPresetSkillManifest(
   return validatePresetSkillManifest(presetId, meta, parsedManifest);
 }
 
+async function assertSupportedPackageTopLevelEntries(
+  presetId: string,
+  presetDir: string,
+  strictTopLevelEntries: boolean,
+): Promise<void> {
+  if (!strictTopLevelEntries) {
+    return;
+  }
+
+  const entries = await readdir(presetDir, { withFileTypes: true });
+  const unsupportedEntries = entries
+    .map((entry) => entry.name)
+    .filter((entry) => !RECOGNIZED_PACKAGE_ROOT_KEYS.has(entry));
+
+  if (unsupportedEntries.length === 0) {
+    return;
+  }
+
+  if (unsupportedEntries.length === 1) {
+    throw new Error(`Preset "${presetId}" has unsupported top-level entry "${unsupportedEntries[0]}"`);
+  }
+
+  throw new Error(`Preset "${presetId}" has unsupported top-level entries: ${unsupportedEntries.join(', ')}`);
+}
+
+async function readValidatedPresetMeta(
+  presetDir: string,
+  packageLabel?: string,
+): Promise<AgentPresetMeta> {
+  const metaPath = join(presetDir, 'meta.json');
+  try {
+    const rawMeta = await readFile(metaPath, 'utf8');
+    return validateMeta(JSON.parse(rawMeta) as AgentPresetMeta);
+  } catch (error) {
+    if (!packageLabel) {
+      throw error;
+    }
+
+    throw new Error(`Preset package "${packageLabel}" meta.json could not be loaded`, {
+      cause: error,
+    });
+  }
+}
+
+export async function loadAgentPresetPackageFromDir(
+  presetDir: string,
+  options?: LoadAgentPresetPackageOptions,
+): Promise<AgentPresetPackage> {
+  const meta = await readValidatedPresetMeta(presetDir, options?.packageLabel);
+
+  await assertSupportedPackageTopLevelEntries(
+    meta.presetId,
+    presetDir,
+    options?.strictTopLevelEntries === true,
+  );
+
+  return {
+    meta,
+    files: await readPresetFiles(meta.presetId, presetDir),
+    skills: await readPresetSkills(meta.presetId, presetDir),
+    skillManifest: await readPresetSkillManifest(meta.presetId, presetDir, meta),
+  };
+}
+
 export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
   const root = getAgentPresetsDir();
   const entries = await readdir(root, { withFileTypes: true });
@@ -533,9 +636,8 @@ export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
 
   for (const entry of entries.filter((item) => item.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
     const presetDir = join(root, entry.name);
-    const meta = validateMeta(
-      JSON.parse(await readFile(join(presetDir, 'meta.json'), 'utf8')) as AgentPresetMeta,
-    );
+    const preset = await loadAgentPresetPackageFromDir(presetDir);
+    const { meta } = preset;
 
     if (presetIds.has(meta.presetId)) {
       throw new Error(`Duplicate presetId "${meta.presetId}"`);
@@ -545,12 +647,7 @@ export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
       throw new Error(`Preset "${meta.presetId}" directory name must match presetId`);
     }
 
-    packages.push({
-      meta,
-      files: await readPresetFiles(meta.presetId, presetDir),
-      skills: await readPresetSkills(meta.presetId, presetDir),
-      skillManifest: await readPresetSkillManifest(meta.presetId, presetDir, meta),
-    });
+    packages.push(preset);
   }
 
   return packages.sort((left, right) => left.meta.name.localeCompare(right.meta.name));

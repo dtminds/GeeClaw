@@ -179,6 +179,64 @@ describe('bundle-agent-preset-skills script', () => {
     expect(readFileSync(join(outputRoot, 'stock-expert', 'skills', 'stock-explorer', 'SKILL.md'), 'utf8')).toContain('Explorer');
   });
 
+  it('can bundle only selected presets without wiping other existing outputs', async () => {
+    const root = createTempRoot('agent-preset-skill-bundler-selected-');
+    const presetsRoot = join(root, 'resources', 'agent-presets');
+    const outputRoot = join(root, 'build', 'agent-presets');
+    const tempRoot = join(root, 'build', '.tmp-agent-preset-skills');
+
+    writePresetWithManifest(presetsRoot, 'alpha-agent', [
+      {
+        slug: 'alpha-skill',
+        source: {
+          repo: 'acme/market-skills',
+          repoPath: 'skills/alpha-skill',
+          ref: 'main',
+        },
+      },
+    ]);
+    writePresetWithManifest(presetsRoot, 'beta-agent', [
+      {
+        slug: 'beta-skill',
+        source: {
+          repo: 'acme/market-skills',
+          repoPath: 'skills/beta-skill',
+          ref: 'main',
+        },
+      },
+    ]);
+
+    mkdirSync(join(outputRoot, 'beta-agent', 'skills', 'existing-skill'), { recursive: true });
+    writeFileSync(join(outputRoot, 'beta-agent', 'meta.json'), '{"presetId":"beta-agent"}', 'utf8');
+    writeFileSync(join(outputRoot, 'beta-agent', 'skills', 'existing-skill', 'SKILL.md'), '# Existing\n', 'utf8');
+
+    const fetchSparseRepoImpl = vi.fn(async (_repo: string, _ref: string, paths: string[], checkoutDir: string) => {
+      const repoPath = paths[0];
+      if (!repoPath) {
+        throw new Error('expected repo path');
+      }
+      const sourceDir = join(checkoutDir, repoPath);
+      mkdirSync(sourceDir, { recursive: true });
+      writeFileSync(join(sourceDir, 'SKILL.md'), '# Selected skill\n', 'utf8');
+      return 'abc123';
+    });
+
+    const { bundleAgentPresetSkills } = await import('../../scripts/bundle-agent-preset-skills.mjs');
+    await bundleAgentPresetSkills({
+      presetsRoot,
+      outputRoot,
+      tempRoot,
+      selectedPresetIds: ['alpha-agent'],
+      fetchSparseRepoImpl,
+      now: () => new Date('2026-03-30T09:10:11.000Z'),
+      log: () => undefined,
+    });
+
+    expect(fetchSparseRepoImpl).toHaveBeenCalledTimes(1);
+    expect(readFileSync(join(outputRoot, 'alpha-agent', 'skills', 'alpha-skill', 'SKILL.md'), 'utf8')).toContain('Selected skill');
+    expect(readFileSync(join(outputRoot, 'beta-agent', 'skills', 'existing-skill', 'SKILL.md'), 'utf8')).toContain('Existing');
+  });
+
   it('rejects manifests with unsupported top-level keys', async () => {
     const root = createTempRoot('agent-preset-skill-bundler-invalid-manifest-top-');
     const presetsRoot = join(root, 'resources', 'agent-presets');

@@ -1,6 +1,7 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { accessSync, constants } from 'fs';
 import { dirname, join, normalize } from 'path';
+import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
 import {
@@ -16,7 +17,7 @@ import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
-import { getAgentPreset, listAgentPresets } from './agent-presets';
+import { getAgentPreset } from './agent-presets';
 import { resolveGeeClawAppEnvironment } from './app-env';
 import { getGeeClawCommandSearchDirs } from './runtime-path';
 import {
@@ -25,6 +26,11 @@ import {
   type AgentPresetPlatform,
 } from './agent-preset-platforms';
 import { deleteDesktopSessionsForAgent } from './desktop-sessions';
+import {
+  getAgentMarketplaceCatalogEntry,
+  prepareAgentMarketplacePackage,
+} from './agent-marketplace-installer';
+import { loadAgentMarketplaceCatalog } from './agent-marketplace-catalog';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -101,19 +107,24 @@ interface AgentConfigDocument extends Record<string, unknown> {
 
 type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
+type ManagedAgentSource = 'preset' | 'marketplace';
 const LOCKED_MANAGED_PERSONA_FILES: PersonaFieldKey[] = ['identity'];
 const LOCKED_MANAGED_PERSONA_FILE_SET = new Set<PersonaFieldKey>(LOCKED_MANAGED_PERSONA_FILES);
 
 interface ManagedAgentMetadata {
   agentId: string;
-  source: 'preset';
-  presetId: string;
+  source: ManagedAgentSource;
+  presetId?: string;
   managed: boolean;
   lockedFields: ManagedLockedField[];
   canUnmanage?: boolean;
   presetSkills: string[];
   managedFiles: string[];
+  managedSkills?: string[];
+  packageVersion?: string;
+  sourceDownloadUrl?: string;
   installedAt: string;
+  updatedAt?: string;
   unmanagedAt?: string;
 }
 
@@ -140,8 +151,10 @@ export interface AgentSummary {
   channelTypes: string[];
   channelAccounts: Array<{ channelType: string; accountId: string }>;
   source: 'custom' | 'preset';
+  managementSource?: ManagedAgentSource;
   managed: boolean;
   presetId?: string;
+  packageVersion?: string;
   lockedFields: ManagedLockedField[];
   canUnmanage: boolean;
   managedFiles: string[];
@@ -157,6 +170,39 @@ export interface AgentsSnapshot {
   channelOwners: Record<string, string>;
   channelAccountOwners: Record<string, string>;
   explicitChannelAccountBindings: Record<string, string>;
+}
+
+export interface AgentMarketplaceCompletion {
+  operation: 'install' | 'update';
+  agentId: string;
+  promptText?: string;
+}
+
+export interface AgentMarketplaceSummary {
+  source: ManagedAgentSource;
+  name: string;
+  description: string;
+  emoji: string;
+  category: string;
+  managed: boolean;
+  platforms?: AgentPresetPlatform[];
+  minAppVersion?: string;
+  latestVersion?: string;
+  installed: boolean;
+  installedVersion?: string;
+  hasUpdate: boolean;
+  installable: boolean;
+  missingRequirements?: AgentPresetMissingRequirements;
+  supportedOnCurrentPlatform: boolean;
+  supportedOnCurrentAppVersion: boolean;
+  agentId: string;
+  skillScope: AgentSkillScope;
+  presetSkills: string[];
+  managedFiles: string[];
+}
+
+export interface AgentMarketplaceMutationResult extends AgentsSnapshot {
+  completion: AgentMarketplaceCompletion;
 }
 
 export interface AgentPersonaFileSnapshot {
@@ -352,18 +398,105 @@ function mergeManagedMarkdownSection(
   return `${existing.trimEnd()}\n\n${wrapped}\n`;
 }
 
+function removeManagedMarkdownSection(
+  existing: string,
+  beginMarker: string,
+  endMarker: string,
+): string {
+  const beginIdx = existing.indexOf(beginMarker);
+  const endIdx = existing.indexOf(endMarker);
+  if (beginIdx === -1 || endIdx === -1) {
+    return existing;
+  }
+
+  const before = existing.slice(0, beginIdx).trimEnd();
+  const after = existing.slice(endIdx + endMarker.length).trimStart();
+  if (!before && !after) {
+    return '';
+  }
+  if (!before) {
+    return `${after}\n`;
+  }
+  if (!after) {
+    return `${before}\n`;
+  }
+  return `${before}\n\n${after}\n`;
+}
+
+function normalizeVersionForComparison(version: string): { segments: number[]; prerelease: string[] } {
+  const trimmed = version.trim().replace(/^v/i, '');
+  const [corePart, prereleasePart = ''] = trimmed.split('-', 2);
+  const segments = corePart
+    .split('.')
+    .map((segment) => Number.parseInt(segment, 10))
+    .map((segment) => (Number.isFinite(segment) ? segment : 0));
+  while (segments.length < 3) {
+    segments.push(0);
+  }
+
+  return {
+    segments,
+    prerelease: prereleasePart
+      ? prereleasePart.split('.').map((segment) => segment.trim()).filter(Boolean)
+      : [],
+  };
+}
+
+function compareVersionStrings(left: string, right: string): number {
+  const leftVersion = normalizeVersionForComparison(left);
+  const rightVersion = normalizeVersionForComparison(right);
+
+  for (let index = 0; index < Math.max(leftVersion.segments.length, rightVersion.segments.length); index += 1) {
+    const diff = (leftVersion.segments[index] ?? 0) - (rightVersion.segments[index] ?? 0);
+    if (diff !== 0) {
+      return diff > 0 ? 1 : -1;
+    }
+  }
+
+  if (leftVersion.prerelease.length === 0 && rightVersion.prerelease.length > 0) {
+    return 1;
+  }
+  if (leftVersion.prerelease.length > 0 && rightVersion.prerelease.length === 0) {
+    return -1;
+  }
+
+  for (let index = 0; index < Math.max(leftVersion.prerelease.length, rightVersion.prerelease.length); index += 1) {
+    const leftPart = leftVersion.prerelease[index];
+    const rightPart = rightVersion.prerelease[index];
+    if (leftPart === undefined) {
+      return -1;
+    }
+    if (rightPart === undefined) {
+      return 1;
+    }
+    const numericLeft = Number.parseInt(leftPart, 10);
+    const numericRight = Number.parseInt(rightPart, 10);
+    if (Number.isFinite(numericLeft) && Number.isFinite(numericRight) && numericLeft !== numericRight) {
+      return numericLeft > numericRight ? 1 : -1;
+    }
+    if (leftPart !== rightPart) {
+      return leftPart.localeCompare(rightPart);
+    }
+  }
+
+  return 0;
+}
+
 async function seedPresetFilesIntoWorkspace(
   workspace: string,
   files: Record<string, string>,
   options?: {
     overwriteExisting?: boolean;
+    overwriteManagedFiles?: Iterable<string>;
   },
 ): Promise<void> {
   await ensureDir(workspace);
+  const overwriteManagedFiles = new Set(options?.overwriteManagedFiles ?? []);
 
   for (const [fileName, content] of Object.entries(files)) {
     const destination = join(workspace, fileName);
-    if (fileName === 'AGENTS.md' && options?.overwriteExisting && await fileExists(destination)) {
+    const allowOverwrite = options?.overwriteExisting || overwriteManagedFiles.has(fileName);
+    if (fileName === 'AGENTS.md' && allowOverwrite && await fileExists(destination)) {
       const existing = await readFile(destination, 'utf-8');
       const merged = mergeManagedMarkdownSection(
         existing,
@@ -374,7 +507,7 @@ async function seedPresetFilesIntoWorkspace(
       await writeFile(destination, merged, 'utf-8');
       continue;
     }
-    if (!options?.overwriteExisting && await fileExists(destination)) {
+    if (!allowOverwrite && await fileExists(destination)) {
       throw new Error(`Preset-managed file "${fileName}" already exists in the target workspace`);
     }
     await writeFile(destination, content, 'utf-8');
@@ -384,6 +517,9 @@ async function seedPresetFilesIntoWorkspace(
 async function seedPresetSkillsIntoWorkspace(
   workspace: string,
   skills: Record<string, Record<string, string>>,
+  options?: {
+    overwriteManagedSkills?: Iterable<string>;
+  },
 ): Promise<void> {
   if (Object.keys(skills).length === 0) {
     return;
@@ -391,11 +527,15 @@ async function seedPresetSkillsIntoWorkspace(
 
   const skillsRoot = join(workspace, 'skills');
   await ensureDir(skillsRoot);
+  const overwriteManagedSkills = new Set(options?.overwriteManagedSkills ?? []);
 
   for (const [skillSlug, files] of Object.entries(skills)) {
     const targetDir = join(skillsRoot, skillSlug);
     if (await fileExists(targetDir)) {
-      throw new Error(`Preset skill "${skillSlug}" already exists in the target workspace`);
+      if (!overwriteManagedSkills.has(skillSlug)) {
+        throw new Error(`Preset skill "${skillSlug}" already exists in the target workspace`);
+      }
+      await rm(targetDir, { recursive: true, force: true });
     }
 
     await mapWithConcurrency(
@@ -407,6 +547,34 @@ async function seedPresetSkillsIntoWorkspace(
         await writeFile(destination, content, 'utf-8');
       },
     );
+  }
+}
+
+async function removeManagedFilesFromWorkspace(workspace: string, managedFiles: Iterable<string>): Promise<void> {
+  for (const fileName of managedFiles) {
+    const destination = join(workspace, fileName);
+    if (fileName === 'AGENTS.md' && await fileExists(destination)) {
+      const existing = await readFile(destination, 'utf-8');
+      const cleaned = removeManagedMarkdownSection(
+        existing,
+        PRESET_AGENT_SECTION_BEGIN,
+        PRESET_AGENT_SECTION_END,
+      );
+      if (cleaned.trim()) {
+        await writeFile(destination, cleaned, 'utf-8');
+      } else {
+        await rm(destination, { force: true });
+      }
+      continue;
+    }
+
+    await rm(destination, { force: true });
+  }
+}
+
+async function removeManagedSkillsFromWorkspace(workspace: string, managedSkills: Iterable<string>): Promise<void> {
+  for (const skillSlug of managedSkills) {
+    await rm(join(workspace, 'skills', skillSlug), { recursive: true, force: true });
   }
 }
 
@@ -890,9 +1058,11 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       mainSessionKey: buildAgentMainSessionKey(config, entry.id),
       channelTypes: configuredChannels.filter((ct) => ownedChannels.has(ct)),
       channelAccounts: ownedChannelAccounts,
-      source: managedMetadata?.source === 'preset' ? 'preset' : 'custom',
+      source: managedMetadata?.managed ? 'preset' : 'custom',
+      managementSource: managedMetadata?.managed ? managedMetadata.source : undefined,
       managed: managedMetadata?.managed === true,
       presetId: managedMetadata?.presetId,
+      packageVersion: managedMetadata?.source === 'marketplace' ? managedMetadata.packageVersion : undefined,
       lockedFields: managedMetadata?.managed ? [...managedMetadata.lockedFields] : [],
       canUnmanage: managedMetadata?.managed ? managedMetadata.canUnmanage !== false : false,
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
@@ -1071,45 +1241,48 @@ export async function updateDefaultAgentFallbacks(
   };
 }
 
-export async function listAgentPresetSummaries(): Promise<Array<{
-  presetId: string;
-  name: string;
-  description: string;
-  emoji: string;
-  category: string;
-  managed: boolean;
-  platforms?: AgentPresetPlatform[];
-  installable: boolean;
-  missingRequirements?: AgentPresetMissingRequirements;
-  supportedOnCurrentPlatform: boolean;
-  agentId: string;
-  skillScope: AgentSkillScope;
-  presetSkills: string[];
-  managedFiles: string[];
-}>> {
-  const presets = await listAgentPresets();
-  const resolvedAppEnv = await resolveGeeClawAppEnvironment();
-  return presets.map((preset) => {
-    const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(preset.meta.platforms, process.platform);
-    const missingRequirements = getPresetMissingRequirements(preset, resolvedAppEnv);
+export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummary[]> {
+  const [catalog, management] = await Promise.all([
+    loadAgentMarketplaceCatalog(),
+    readAgentManagementMap(),
+  ]);
+
+  return catalog.map((entry) => {
+    const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(entry.platforms, process.platform);
+    const supportedOnCurrentAppVersion = isMarketplaceEntrySupportedOnCurrentAppVersion(entry);
+    const installedMetadata = management[entry.agentId];
+    const installed = installedMetadata?.managed === true;
+    const installedVersion = installedMetadata?.source === 'marketplace'
+      ? installedMetadata.packageVersion
+      : undefined;
+    const hasUpdate = installedMetadata?.source === 'marketplace'
+      && typeof installedMetadata.packageVersion === 'string'
+      && compareVersionStrings(entry.version, installedMetadata.packageVersion) > 0;
+    const presetSkills = entry.presetSkills ? [...entry.presetSkills] : [];
+    const skillScope: AgentSkillScope = entry.presetSkills
+      ? { mode: 'specified', skills: [...entry.presetSkills] }
+      : { mode: 'default' };
 
     return {
-      presetId: preset.meta.presetId,
-      name: preset.meta.name,
-      description: preset.meta.description,
-      emoji: preset.meta.emoji,
-      category: preset.meta.category,
+      source: 'marketplace',
+      name: entry.name,
+      description: entry.description,
+      emoji: entry.emoji,
+      category: entry.category,
       managed: true,
-      platforms: preset.meta.platforms ? [...preset.meta.platforms] : undefined,
-      installable: supportedOnCurrentPlatform && !missingRequirements,
-      missingRequirements,
+      platforms: entry.platforms ? [...entry.platforms] : undefined,
+      minAppVersion: entry.minAppVersion,
+      latestVersion: entry.version,
+      installed,
+      installedVersion,
+      hasUpdate: Boolean(hasUpdate),
+      installable: supportedOnCurrentPlatform && supportedOnCurrentAppVersion,
       supportedOnCurrentPlatform,
-      agentId: preset.meta.agent.id,
-      skillScope: preset.meta.agent.skillScope,
-      presetSkills: preset.meta.agent.skillScope.mode === 'specified'
-        ? [...preset.meta.agent.skillScope.skills]
-        : [],
-      managedFiles: Object.keys(preset.files),
+      supportedOnCurrentAppVersion,
+      agentId: entry.agentId,
+      skillScope,
+      presetSkills,
+      managedFiles: [],
     };
   });
 }
@@ -1128,6 +1301,57 @@ function assertPresetSupportedOnCurrentPlatform(preset: {
   throw new Error(
     `Preset "${presetId}" is only available on ${formatPresetPlatforms(platforms)}`,
   );
+}
+
+function assertMarketplaceEntrySupportedOnCurrentPlatform(entry: {
+  agentId: string;
+  platforms?: AgentPresetPlatform[];
+}): void {
+  if (!entry.platforms || isPresetSupportedOnPlatform(entry.platforms, process.platform)) {
+    return;
+  }
+
+  throw new Error(
+    `Marketplace agent "${entry.agentId}" is only available on ${formatPresetPlatforms(entry.platforms)}`,
+  );
+}
+
+function assertMarketplaceEntrySupportedOnCurrentAppVersion(entry: {
+  agentId: string;
+  minAppVersion?: string;
+}): void {
+  if (!entry.minAppVersion) {
+    return;
+  }
+
+  const currentVersion = app.getVersion();
+  if (compareVersionStrings(currentVersion, entry.minAppVersion) >= 0) {
+    return;
+  }
+
+  throw new Error(
+    `Marketplace agent "${entry.agentId}" requires GeeClaw ${entry.minAppVersion} or newer (current: ${currentVersion})`,
+  );
+}
+
+function isMarketplaceEntrySupportedOnCurrentAppVersion(entry: {
+  minAppVersion?: string;
+}): boolean {
+  if (!entry.minAppVersion) {
+    return true;
+  }
+
+  return compareVersionStrings(app.getVersion(), entry.minAppVersion) >= 0;
+}
+
+function buildMarketplaceCompletion(
+  operation: 'install' | 'update',
+  agentId: string,
+  promptText?: string,
+): AgentMarketplaceCompletion {
+  return promptText
+    ? { operation, agentId, promptText }
+    : { operation, agentId };
 }
 
 function isCommandAvailable(command: string): boolean {
@@ -1194,6 +1418,184 @@ function formatPresetMissingRequirementsError(
     clauses.push(`is missing required environment variables: ${missingRequirements.env.join(', ')}`);
   }
   return new Error(`Preset "${presetId}" ${clauses.join('; ')}`);
+}
+
+async function installMarketplaceAgentFromPreparedPackage(
+  catalogEntry: Awaited<ReturnType<typeof getAgentMarketplaceCatalogEntry>>,
+): Promise<AgentMarketplaceMutationResult> {
+  assertMarketplaceEntrySupportedOnCurrentPlatform(catalogEntry);
+  assertMarketplaceEntrySupportedOnCurrentAppVersion(catalogEntry);
+
+  const preparedPackage = await prepareAgentMarketplacePackage(catalogEntry);
+  try {
+    const config = await readOpenClawConfig() as AgentConfigDocument;
+    const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
+    const management = await readAgentManagementMap();
+    const nextId = normalizeAgentId(preparedPackage.package.meta.agent.id);
+    validateAgentId(nextId);
+
+    const existingIds = new Set(entries.map((entry) => entry.id));
+    const diskIds = await listExistingAgentIdsOnDisk();
+    if (existingIds.has(nextId) || diskIds.has(nextId)) {
+      throw new Error(`Marketplace agent "${nextId}" is already installed`);
+    }
+
+    const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
+    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const lockedFields = preparedPackage.package.meta.managedPolicy?.lockedFields
+      ? [...preparedPackage.package.meta.managedPolicy.lockedFields]
+      : ['id', 'workspace', 'persona'];
+    const newEntry = applyAgentSkillScope({
+      id: nextId,
+      name: preparedPackage.package.meta.name,
+      workspace: getManagedAgentWorkspacePath(nextId),
+      ...(preparedPackage.package.meta.agent.model !== undefined
+        ? { model: cloneValue(preparedPackage.package.meta.agent.model) }
+        : {}),
+    }, nextScope);
+    nextEntries.push(newEntry);
+
+    config.agents = {
+      ...agentsConfig,
+      list: nextEntries,
+    };
+
+    await provisionAgentFilesystem(config, newEntry);
+    const workspace = expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
+    await seedPresetFilesIntoWorkspace(
+      workspace,
+      preparedPackage.package.files,
+      { overwriteExisting: true },
+    );
+    await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills);
+    await persistAgentConfigAndPatchRuntime(config);
+
+    const timestamp = new Date().toISOString();
+    management[nextId] = {
+      agentId: nextId,
+      source: 'marketplace',
+      managed: true,
+      lockedFields,
+      canUnmanage: preparedPackage.package.meta.managedPolicy?.canUnmanage !== false,
+      presetSkills: nextScope.mode === 'specified' ? [...nextScope.skills] : [],
+      managedFiles: Object.keys(preparedPackage.package.files),
+      managedSkills: Object.keys(preparedPackage.package.skills),
+      packageVersion: preparedPackage.package.meta.packageVersion ?? catalogEntry.version,
+      sourceDownloadUrl: catalogEntry.downloadUrl,
+      installedAt: timestamp,
+      updatedAt: timestamp,
+    };
+    await writeAgentManagementMap(management);
+
+    logger.info('Installed marketplace agent', { agentId: nextId, version: catalogEntry.version });
+    return {
+      ...await buildSnapshotFromConfig(config),
+      completion: buildMarketplaceCompletion(
+        'install',
+        nextId,
+        preparedPackage.package.meta.postInstallPrompt,
+      ),
+    };
+  } finally {
+    await preparedPackage.cleanup();
+  }
+}
+
+async function updateMarketplaceAgentFromPreparedPackage(
+  agentId: string,
+  catalogEntry: Awaited<ReturnType<typeof getAgentMarketplaceCatalogEntry>>,
+): Promise<AgentMarketplaceMutationResult> {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  validateAgentId(normalizedAgentId);
+
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const management = await readAgentManagementMap();
+  const current = management[normalizedAgentId];
+  if (!current?.managed || current.source !== 'marketplace') {
+    throw new Error(`Marketplace agent "${normalizedAgentId}" is not marketplace-managed`);
+  }
+
+  assertMarketplaceEntrySupportedOnCurrentPlatform(catalogEntry);
+  assertMarketplaceEntrySupportedOnCurrentAppVersion(catalogEntry);
+  if (current.packageVersion && compareVersionStrings(catalogEntry.version, current.packageVersion) <= 0) {
+    throw new Error(`Marketplace agent "${normalizedAgentId}" is already up to date`);
+  }
+
+  const preparedPackage = await prepareAgentMarketplacePackage(catalogEntry);
+  try {
+    const { agentsConfig, entries } = normalizeAgentsConfig(config);
+    const index = entries.findIndex((entry) => entry.id === normalizedAgentId);
+    if (index === -1) {
+      throw new Error(`Agent "${normalizedAgentId}" not found`);
+    }
+
+    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const currentEntry = entries[index];
+    const nextEntry = applyAgentSkillScope({
+      ...currentEntry,
+      id: normalizedAgentId,
+      name: preparedPackage.package.meta.name,
+      ...(preparedPackage.package.meta.agent.model !== undefined
+        ? { model: cloneValue(preparedPackage.package.meta.agent.model) }
+        : {}),
+    }, nextScope);
+    entries[index] = nextEntry;
+    config.agents = {
+      ...agentsConfig,
+      list: entries,
+    };
+
+    const workspace = getWorkspacePathForEntry(config, nextEntry);
+    const previousManagedFiles = new Set(current.managedFiles);
+    const previousManagedSkills = new Set(current.managedSkills ?? []);
+    const nextManagedFiles = Object.keys(preparedPackage.package.files);
+    const nextManagedSkills = Object.keys(preparedPackage.package.skills);
+
+    await removeManagedFilesFromWorkspace(
+      workspace,
+      [...previousManagedFiles].filter((fileName) => !nextManagedFiles.includes(fileName)),
+    );
+    await removeManagedSkillsFromWorkspace(
+      workspace,
+      [...previousManagedSkills].filter((skillSlug) => !nextManagedSkills.includes(skillSlug)),
+    );
+    await seedPresetFilesIntoWorkspace(workspace, preparedPackage.package.files, {
+      overwriteManagedFiles: previousManagedFiles,
+    });
+    await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills, {
+      overwriteManagedSkills: previousManagedSkills,
+    });
+    await persistAgentConfigAndPatchRuntime(config);
+
+    management[normalizedAgentId] = {
+      ...current,
+      source: 'marketplace',
+      managed: true,
+      lockedFields: preparedPackage.package.meta.managedPolicy?.lockedFields
+        ? [...preparedPackage.package.meta.managedPolicy.lockedFields]
+        : current.lockedFields,
+      canUnmanage: preparedPackage.package.meta.managedPolicy?.canUnmanage !== false,
+      presetSkills: nextScope.mode === 'specified' ? [...nextScope.skills] : [],
+      managedFiles: nextManagedFiles,
+      managedSkills: nextManagedSkills,
+      packageVersion: preparedPackage.package.meta.packageVersion ?? catalogEntry.version,
+      sourceDownloadUrl: catalogEntry.downloadUrl,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeAgentManagementMap(management);
+
+    logger.info('Updated marketplace agent', { agentId: normalizedAgentId, version: catalogEntry.version });
+    return {
+      ...await buildSnapshotFromConfig(config),
+      completion: buildMarketplaceCompletion(
+        'update',
+        normalizedAgentId,
+        preparedPackage.package.meta.postUpdatePrompt,
+      ),
+    };
+  } finally {
+    await preparedPackage.cleanup();
+  }
 }
 
 export async function installPresetAgent(presetId: string): Promise<AgentsSnapshot> {
@@ -1263,6 +1665,16 @@ export async function installPresetAgent(presetId: string): Promise<AgentsSnapsh
   return buildSnapshotFromConfig(config);
 }
 
+export async function installMarketplaceAgent(agentId: string): Promise<AgentMarketplaceMutationResult> {
+  const catalogEntry = await getAgentMarketplaceCatalogEntry(normalizeAgentId(agentId));
+  return await installMarketplaceAgentFromPreparedPackage(catalogEntry);
+}
+
+export async function updateMarketplaceAgent(agentId: string): Promise<AgentMarketplaceMutationResult> {
+  const catalogEntry = await getAgentMarketplaceCatalogEntry(normalizeAgentId(agentId));
+  return await updateMarketplaceAgentFromPreparedPackage(agentId, catalogEntry);
+}
+
 export async function updateAgentSettings(
   agentId: string,
   updates: AgentSettingsUpdate,
@@ -1314,6 +1726,7 @@ export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
     managed: false,
     presetSkills: [],
     managedFiles: [],
+    managedSkills: [],
     unmanagedAt: new Date().toISOString(),
   };
   await writeAgentManagementMap(management);

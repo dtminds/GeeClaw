@@ -10,10 +10,11 @@ import {
   deleteAgentConfig,
   getDefaultAgentModelConfig,
   getAgentPersona,
-  installPresetAgent,
+  installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
   unmanageAgent,
+  updateMarketplaceAgent,
   updateAgentPersona,
   updateAgentSettings,
   updateDefaultAgentFallbacks,
@@ -161,12 +162,24 @@ export async function handleAgentRoutes(
     return true;
   }
 
-  if (url.pathname === '/api/agents/presets/install' && req.method === 'POST') {
+  if (url.pathname === '/api/agents/marketplace/install' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<{ presetId: string }>(req);
-      const snapshot = await installPresetAgent(body.presetId);
-      scheduleGatewayReload(ctx, 'install-preset-agent');
-      sendJson(res, 200, { success: true, ...snapshot });
+      const body = await parseJsonBody<{ agentId: string }>(req);
+      const result = await installMarketplaceAgent(body.agentId);
+      scheduleGatewayReload(ctx, 'install-marketplace-agent');
+      sendJson(res, 200, { success: true, ...result });
+    } catch (error) {
+      sendJson(res, 400, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/agents/marketplace/update' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ agentId: string }>(req);
+      const result = await updateMarketplaceAgent(body.agentId);
+      scheduleGatewayReload(ctx, 'update-marketplace-agent');
+      sendJson(res, 200, { success: true, ...result });
     } catch (error) {
       sendJson(res, 400, { success: false, error: String(error) });
     }

@@ -101,6 +101,13 @@ export function getAgentPresetsDir(): string {
 }
 
 /**
+ * Get the official agent marketplace catalog path inside resources.
+ */
+export function getAgentMarketplaceCatalogPath(): string {
+  return join(getResourcesDir(), 'agent-marketplace', 'catalog.json');
+}
+
+/**
  * Get preload script path
  */
 export function getPreloadPath(): string {

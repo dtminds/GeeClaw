@@ -58,6 +58,39 @@ async function setupManagedPresetFixture(options?: {
   mainWorkspaceFiles?: Record<string, string>;
   failAccessPaths?: string[] | ((homeDir: string) => string[]);
   managedAppEnv?: Record<string, string>;
+  marketplacePackage?: {
+    catalogEntry?: {
+      agentId?: string;
+      name?: string;
+      description?: string;
+      emoji?: string;
+      category?: string;
+      version?: string;
+      downloadUrl?: string;
+      checksum?: string;
+      platforms?: Array<'darwin' | 'win32' | 'linux'>;
+    };
+    meta?: {
+      name?: string;
+      description?: string;
+      emoji?: string;
+      category?: string;
+      packageVersion?: string;
+      postInstallPrompt?: string;
+      postUpdatePrompt?: string;
+      managedPolicy?: {
+        lockedFields?: Array<'id' | 'workspace' | 'persona'>;
+        canUnmanage?: boolean;
+      };
+      agent?: {
+        id?: string;
+        model?: string | { primary?: string; fallbacks?: string[] };
+        skillScope?: { mode: 'default' } | { mode: 'specified'; skills: string[] };
+      };
+    };
+    files?: Record<string, string>;
+    skills?: Record<string, Record<string, string>>;
+  };
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
   tempDirs.push(homeDir);
@@ -207,13 +240,99 @@ async function setupManagedPresetFixture(options?: {
     },
   };
 
+  const marketplaceCatalogEntry = {
+    agentId: 'stockexpert',
+    name: '股票助手',
+    description: 'desc',
+    emoji: '📈',
+    category: 'finance',
+    version: '1.2.3',
+    downloadUrl: 'https://example.com/stockexpert-1.2.3.zip',
+    checksum: `sha256-${'1'.repeat(64)}`,
+    ...options?.marketplacePackage?.catalogEntry,
+  };
+  const marketplaceMetaAgent = {
+    id: marketplaceCatalogEntry.agentId,
+    skillScope: {
+      mode: 'specified' as const,
+      skills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+    },
+    ...options?.marketplacePackage?.meta?.agent,
+  };
+  const marketplaceManagedPolicy = options?.marketplacePackage?.meta?.managedPolicy === undefined
+    ? {
+        lockedFields: ['id', 'workspace', 'persona'] as Array<'id' | 'workspace' | 'persona'>,
+        canUnmanage: true,
+      }
+    : options.marketplacePackage.meta.managedPolicy;
+  const marketplacePackage = {
+    meta: {
+      presetId: 'stockexpert',
+      name: marketplaceCatalogEntry.name,
+      description: marketplaceCatalogEntry.description,
+      emoji: marketplaceCatalogEntry.emoji,
+      category: marketplaceCatalogEntry.category,
+      managed: true,
+      packageVersion: marketplaceCatalogEntry.version,
+      postInstallPrompt: 'Please review the installed workspace.',
+      postUpdatePrompt: 'Please summarize what changed.',
+      ...options?.marketplacePackage?.meta,
+      agent: marketplaceMetaAgent,
+      managedPolicy: marketplaceManagedPolicy,
+    },
+    files: options?.marketplacePackage?.files ?? {
+      'AGENTS.md': '# stock expert\n',
+      'SOUL.md': '# tone\n',
+    },
+    skills: options?.marketplacePackage?.skills ?? {
+      'stock-analyzer': {
+        'SKILL.md': '# Stock Analyzer\nUse this skill for stock analysis.\n',
+      },
+      'web-search': {
+        'SKILL.md': '# Web Search\nUse this skill for current information.\n',
+        'README.md': '# Web Search docs\n',
+      },
+    },
+  };
+  const marketplaceState = {
+    preparedPackage: {
+      catalogEntry: marketplaceCatalogEntry,
+      package: marketplacePackage,
+    },
+  };
+
   vi.doMock('@electron/utils/agent-presets', () => ({
     getAgentPreset: vi.fn(async () => presetPackage),
     listAgentPresets: vi.fn(async () => [presetPackage]),
   }));
+  vi.doMock('@electron/utils/agent-marketplace-installer', () => ({
+    getAgentMarketplaceCatalogEntry: vi.fn(async (agentId: string) => {
+      if (agentId !== marketplaceState.preparedPackage.catalogEntry.agentId) {
+        throw new Error(`Unknown marketplace agent "${agentId}"`);
+      }
+
+      return marketplaceState.preparedPackage.catalogEntry;
+    }),
+    prepareAgentMarketplacePackage: vi.fn(async (catalogEntry: { agentId: string }) => {
+      if (catalogEntry.agentId !== marketplaceState.preparedPackage.catalogEntry.agentId) {
+        throw new Error(`Unknown marketplace agent "${catalogEntry.agentId}"`);
+      }
+
+      return {
+        catalogEntry: marketplaceState.preparedPackage.catalogEntry,
+        package: marketplaceState.preparedPackage.package,
+        cleanup: vi.fn(async () => undefined),
+      };
+    }),
+  }));
+  vi.doMock('@electron/utils/agent-marketplace-catalog', () => ({
+    loadAgentMarketplaceCatalog: vi.fn(async () => [
+      marketplaceState.preparedPackage.catalogEntry,
+    ]),
+  }));
 
   const agentConfig = await import('@electron/utils/agent-config');
-  return { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent };
+  return { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent, marketplaceState };
 }
 
 afterEach(() => {
@@ -232,6 +351,7 @@ afterEach(() => {
   vi.unmock('@electron/services/agents/store-instance');
   vi.unmock('@electron/utils/desktop-sessions');
   vi.unmock('@electron/utils/agent-presets');
+  vi.unmock('@electron/utils/agent-marketplace-installer');
   vi.unmock('@electron/utils/app-env');
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
@@ -242,6 +362,11 @@ afterEach(() => {
 describe('managed agent config domain', () => {
   it('reports preset summary platforms and current platform support', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
+      marketplacePackage: {
+        catalogEntry: {
+          platforms: ['darwin'],
+        },
+      },
       presetMeta: {
         platforms: ['darwin'],
       },
@@ -250,27 +375,38 @@ describe('managed agent config domain', () => {
     setPlatform('darwin');
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
+        source: 'marketplace',
+        agentId: 'stockexpert',
         emoji: '📈',
+        latestVersion: '1.2.3',
+        installed: false,
+        installedVersion: undefined,
+        hasUpdate: false,
         platforms: ['darwin'],
         installable: true,
         supportedOnCurrentPlatform: true,
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
 
     setPlatform('win32');
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
+        source: 'marketplace',
+        agentId: 'stockexpert',
         emoji: '📈',
+        latestVersion: '1.2.3',
+        installed: false,
+        hasUpdate: false,
         platforms: ['darwin'],
         installable: false,
         supportedOnCurrentPlatform: false,
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
   });
 
-  it('reports missing preset requirements in preset summaries', async () => {
+  it('does not derive marketplace summary requirements from bundled preset metadata', async () => {
     delete process.env.NOTION_API_KEY;
     process.env.PATH = '/tmp/geeclaw-empty-bin';
 
@@ -286,34 +422,64 @@ describe('managed agent config domain', () => {
 
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
-        installable: false,
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        installable: true,
         supportedOnCurrentPlatform: true,
-        missingRequirements: {
-          bins: ['preset-required-bin'],
-          anyBins: ['missing-python3', 'missing-python'],
-          env: ['NOTION_API_KEY'],
-        },
+        supportedOnCurrentAppVersion: true,
       }),
     ]);
   });
 
-  it('treats anyBins as satisfied when at least one command exists', async () => {
-    process.env.PATH = '/usr/bin:/bin';
-
+  it('reports marketplace summary skills from catalog metadata', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
       presetMeta: {
-        requires: {
-          anyBins: ['definitely-missing-command', 'sh'],
+        agent: {
+          skillScope: {
+            mode: 'specified',
+            skills: ['preset-only-skill'],
+          },
+        },
+      },
+      marketplacePackage: {
+        catalogEntry: {
+          presetSkills: ['catalog-skill-a', 'catalog-skill-b'],
         },
       },
     });
 
     await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
       expect.objectContaining({
-        presetId: 'stock-expert',
-        installable: true,
-        missingRequirements: undefined,
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        skillScope: {
+          mode: 'specified',
+          skills: ['catalog-skill-a', 'catalog-skill-b'],
+        },
+        presetSkills: ['catalog-skill-a', 'catalog-skill-b'],
+        managedFiles: [],
+      }),
+    ]);
+  });
+
+  it('reports installed marketplace versions and update availability from management state', async () => {
+    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+    marketplaceState.preparedPackage.catalogEntry = {
+      ...marketplaceState.preparedPackage.catalogEntry,
+      version: '1.2.4',
+      downloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+    };
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        latestVersion: '1.2.4',
+        installed: true,
+        installedVersion: '1.2.3',
+        hasUpdate: true,
       }),
     ]);
   });
@@ -350,6 +516,187 @@ describe('managed agent config domain', () => {
       workspace: '~/geeclaw/workspace-stockexpert',
       agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
     });
+  });
+
+  it('installs a marketplace agent, returns completion metadata, and persists managed package metadata', async () => {
+    const { agentConfig, storeState } = await setupManagedPresetFixture();
+
+    const result = await agentConfig.installMarketplaceAgent('stockexpert');
+
+    expect(result).toMatchObject({
+      completion: {
+        operation: 'install',
+        agentId: 'stockexpert',
+        promptText: 'Please review the installed workspace.',
+      },
+      agents: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'stockexpert',
+          managed: true,
+          managedFiles: ['AGENTS.md', 'SOUL.md'],
+          presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+        }),
+      ]),
+    });
+
+    expect(storeState.management).toMatchObject({
+      stockexpert: {
+        agentId: 'stockexpert',
+        source: 'marketplace',
+        managed: true,
+        packageVersion: '1.2.3',
+        sourceDownloadUrl: 'https://example.com/stockexpert-1.2.3.zip',
+        managedFiles: ['AGENTS.md', 'SOUL.md'],
+        managedSkills: ['stock-analyzer', 'web-search'],
+        installedAt: expect.any(String),
+        updatedAt: expect.any(String),
+      },
+    });
+    const management = storeState.management as Record<string, {
+      installedAt: string;
+      updatedAt: string;
+    }>;
+    expect(management.stockexpert.installedAt).toBe(management.stockexpert.updatedAt);
+  });
+
+  it('updates marketplace agents in place, preserves workspace paths, and only reapplies managed content', async () => {
+    const { agentConfig, configDir, homeDir, storeState, marketplaceState } = await setupManagedPresetFixture();
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+
+    const customWorkspaceDir = join(homeDir, 'custom-stockexpert-workspace');
+    mkdirSync(join(customWorkspaceDir, 'skills', 'stock-analyzer'), { recursive: true });
+    mkdirSync(join(customWorkspaceDir, 'skills', 'local-only'), { recursive: true });
+    writeFileSync(
+      join(customWorkspaceDir, 'AGENTS.md'),
+      [
+        '# main agent',
+        '',
+        'Main instructions',
+        '',
+        '<!-- preset_agent_instruction:begin -->',
+        '# stock expert',
+        '<!-- preset_agent_instruction:end -->',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    writeFileSync(join(customWorkspaceDir, 'SOUL.md'), '# previous tone\n', 'utf8');
+    writeFileSync(join(customWorkspaceDir, 'NOTES.md'), 'keep me\n', 'utf8');
+    writeFileSync(join(customWorkspaceDir, 'skills', 'stock-analyzer', 'SKILL.md'), '# Old Stock Analyzer\n', 'utf8');
+    writeFileSync(join(customWorkspaceDir, 'skills', 'local-only', 'SKILL.md'), '# Local Only\n', 'utf8');
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; workspace?: string }> };
+    };
+    const targetEntry = config.agents?.list?.find((entry) => entry.id === 'stockexpert');
+    if (!targetEntry) {
+      throw new Error('Expected stockexpert entry to exist');
+    }
+    targetEntry.workspace = customWorkspaceDir;
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify(config, null, 2), 'utf8');
+
+    marketplaceState.preparedPackage = {
+      catalogEntry: {
+        ...marketplaceState.preparedPackage.catalogEntry,
+        version: '1.2.4',
+        downloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+      },
+      package: {
+        ...marketplaceState.preparedPackage.package,
+        meta: {
+          ...marketplaceState.preparedPackage.package.meta,
+          packageVersion: '1.2.4',
+          postUpdatePrompt: 'Please summarize the update before I continue.',
+          agent: {
+            id: 'stockexpert',
+            skillScope: {
+              mode: 'specified',
+              skills: ['trend-scan', 'web-search'],
+            },
+          },
+        },
+        files: {
+          'AGENTS.md': '# updated official agent\n\nUpdated instructions\n',
+          'MEMORY.md': '# official memory\n',
+        },
+        skills: {
+          'trend-scan': {
+            'SKILL.md': '# Trend Scan\n',
+          },
+          'web-search': {
+            'SKILL.md': '# Web Search v2\n',
+          },
+        },
+      },
+    };
+
+    const result = await agentConfig.updateMarketplaceAgent('stockexpert');
+
+    expect(result).toMatchObject({
+      completion: {
+        operation: 'update',
+        agentId: 'stockexpert',
+        promptText: 'Please summarize the update before I continue.',
+      },
+      agents: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'stockexpert',
+          workspace: customWorkspaceDir,
+          presetSkills: ['trend-scan', 'web-search'],
+          managedFiles: ['AGENTS.md', 'MEMORY.md'],
+        }),
+      ]),
+    });
+
+    const updatedConfig = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; workspace?: string; skills?: string[] }> };
+    };
+    expect(updatedConfig.agents?.list?.find((entry) => entry.id === 'stockexpert')).toMatchObject({
+      workspace: customWorkspaceDir,
+      skills: ['trend-scan', 'web-search'],
+    });
+    expect(readFileSync(join(customWorkspaceDir, 'AGENTS.md'), 'utf8')).toContain('Updated instructions');
+    expect(readFileSync(join(customWorkspaceDir, 'MEMORY.md'), 'utf8')).toBe('# official memory\n');
+    expect(readFileSync(join(customWorkspaceDir, 'NOTES.md'), 'utf8')).toBe('keep me\n');
+    expect(readFileSync(join(customWorkspaceDir, 'skills', 'trend-scan', 'SKILL.md'), 'utf8')).toContain('Trend Scan');
+    expect(readFileSync(join(customWorkspaceDir, 'skills', 'local-only', 'SKILL.md'), 'utf8')).toContain('Local Only');
+    expect(existsSync(join(customWorkspaceDir, 'skills', 'stock-analyzer'))).toBe(false);
+    expect(existsSync(join(customWorkspaceDir, 'SOUL.md'))).toBe(false);
+
+    expect(storeState.management).toMatchObject({
+      stockexpert: {
+        packageVersion: '1.2.4',
+        sourceDownloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+        managedFiles: ['AGENTS.md', 'MEMORY.md'],
+        managedSkills: ['trend-scan', 'web-search'],
+      },
+    });
+  });
+
+  it('rejects marketplace update for preset-managed agents', async () => {
+    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
+
+    await agentConfig.installPresetAgent('stock-expert');
+
+    marketplaceState.preparedPackage = {
+      catalogEntry: {
+        ...marketplaceState.preparedPackage.catalogEntry,
+        version: '1.2.4',
+        downloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+      },
+      package: {
+        ...marketplaceState.preparedPackage.package,
+        meta: {
+          ...marketplaceState.preparedPackage.package.meta,
+          packageVersion: '1.2.4',
+        },
+      },
+    };
+
+    await expect(agentConfig.updateMarketplaceAgent('stockexpert')).rejects.toThrow(
+      'Marketplace agent "stockexpert" is not marketplace-managed',
+    );
   });
 
   it('copies main agent bootstrap files first, then overwrites only preset-declared files', async () => {

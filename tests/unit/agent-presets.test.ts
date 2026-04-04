@@ -45,6 +45,7 @@ function writePresetPackage(
     'SOUL.md': '# Tone\n',
   },
   skills: Record<string, Record<string, string>> = {},
+  extraTopLevelEntries: Array<{ name: string; content: string }> = [],
 ): void {
   const presetDir = join(root, 'agent-presets', presetId);
   mkdirSync(join(presetDir, 'files'), { recursive: true });
@@ -59,6 +60,37 @@ function writePresetPackage(
     for (const [filename, content] of Object.entries(skillFiles)) {
       writeFileSync(join(skillDir, filename), content, 'utf8');
     }
+  }
+  for (const entry of extraTopLevelEntries) {
+    writeFileSync(join(presetDir, entry.name), entry.content, 'utf8');
+  }
+}
+
+function writeExtractedPresetPackage(
+  packageDir: string,
+  meta = createPresetMeta('stock-expert'),
+  files: Record<string, string> = {
+    'AGENTS.md': '# Stock Expert\n',
+    'SOUL.md': '# Tone\n',
+  },
+  skills: Record<string, Record<string, string>> = {},
+  extraTopLevelEntries: Array<{ name: string; content: string }> = [],
+): void {
+  mkdirSync(join(packageDir, 'files'), { recursive: true });
+  mkdirSync(join(packageDir, 'skills'), { recursive: true });
+  writeFileSync(join(packageDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+  for (const [filename, content] of Object.entries(files)) {
+    writeFileSync(join(packageDir, 'files', filename), content, 'utf8');
+  }
+  for (const [skillSlug, skillFiles] of Object.entries(skills)) {
+    const skillDir = join(packageDir, 'skills', skillSlug);
+    mkdirSync(skillDir, { recursive: true });
+    for (const [filename, content] of Object.entries(skillFiles)) {
+      writeFileSync(join(skillDir, filename), content, 'utf8');
+    }
+  }
+  for (const entry of extraTopLevelEntries) {
+    writeFileSync(join(packageDir, entry.name), entry.content, 'utf8');
   }
 }
 
@@ -156,6 +188,32 @@ describe('agent preset platform helpers', () => {
 });
 
 describe('agent preset loader', () => {
+  it('loads an extracted package directory and preserves package metadata fields', async () => {
+    const root = createTempRoot('agent-presets-extracted-');
+    const packageDir = join(root, 'extracted-package');
+    writeExtractedPresetPackage(packageDir, {
+      ...createPresetMeta('discovery-research'),
+      packageVersion: '1.2.3',
+      postInstallPrompt: 'Please review the installed workspace and suggest a first task.',
+      postUpdatePrompt: 'Please summarize what changed in this update.',
+    });
+
+    const { loadAgentPresetPackageFromDir } = await import('@electron/utils/agent-presets');
+    const preset = await loadAgentPresetPackageFromDir(packageDir);
+
+    expect(preset.meta.packageVersion).toBe('1.2.3');
+    expect(preset.meta.postInstallPrompt).toBe(
+      'Please review the installed workspace and suggest a first task.',
+    );
+    expect(preset.meta.postUpdatePrompt).toBe(
+      'Please summarize what changed in this update.',
+    );
+    expect(Object.keys(preset.files).sort()).toEqual([
+      'AGENTS.md',
+      'SOUL.md',
+    ]);
+  });
+
   it('ships a consolidated PM preset catalog with full persona files', async () => {
     const presets = await listPresetsFrom(bundledPresetsDir);
     const presetIds = presets.map((preset) => preset.meta.presetId).sort();
@@ -364,6 +422,28 @@ describe('agent preset loader', () => {
         'README.md': '# Docs\n',
       },
     });
+  });
+
+  it('ignores benign stray top-level files when discovering bundled presets', async () => {
+    const root = createTempRoot('agent-presets-benign-stray-');
+    writePresetPackage(
+      root,
+      'stock-expert',
+      createPresetMeta('stock-expert'),
+      undefined,
+      {},
+      [
+        {
+          name: 'README.md',
+          content: '# Notes\n',
+        },
+      ],
+    );
+
+    const presets = await listPresetsFrom(join(root, 'agent-presets'));
+
+    expect(presets).toHaveLength(1);
+    expect(presets[0].meta.presetId).toBe('stock-expert');
   });
 
   it('loads preset-private bundled skill manifests when declared', async () => {

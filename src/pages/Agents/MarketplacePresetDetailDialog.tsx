@@ -15,32 +15,38 @@ type MarketplacePresetDetailDialogProps = {
   preset: AgentPresetSummary | null;
   open: boolean;
   installed: boolean;
+  hasUpdate: boolean;
   isInstalling: boolean;
   installStage: PresetInstallStage;
   installProgress: number;
   disableInstall: boolean;
   onClose: () => void;
-  onInstall: (presetId: string) => void;
+  onInstall: (agentId: string) => void;
+  onUpdate: (agentId: string) => void;
   availabilityTitle?: string;
   skillsTitle?: string;
   closeLabel?: string;
   locale?: string;
+  errorMessage?: string | null;
 };
 
 export function MarketplacePresetDetailDialog({
   preset,
   open,
   installed,
+  hasUpdate,
   isInstalling,
   installStage,
   installProgress,
   disableInstall,
   onClose,
   onInstall,
+  onUpdate,
   availabilityTitle,
   skillsTitle,
   closeLabel,
   locale,
+  errorMessage,
 }: MarketplacePresetDetailDialogProps) {
   const { t } = useTranslation('agents');
 
@@ -54,15 +60,21 @@ export function MarketplacePresetDetailDialog({
     : null;
   const requirementMessages = getPresetRequirementMessages(t, locale, preset.missingRequirements);
   const installStageLabel = t(`marketplace.installState.${installStage}`);
-  const installLabel = installed
-    ? t('marketplace.installed')
-    : isInstalling
-      ? installStageLabel
+  const installLabel = isInstalling
+    ? installStageLabel
+    : installed
+      ? hasUpdate
+        ? t('marketplace.update')
+        : t('marketplace.installed')
     : !preset.supportedOnCurrentPlatform
       ? t('marketplace.unavailable')
     : preset.installable
       ? t('marketplace.install')
       : t('marketplace.requirementsMissing');
+  const primaryAction = installed && hasUpdate ? onUpdate : onInstall;
+  const actionDisabled = isInstalling
+    || disableInstall
+    || (installed ? !hasUpdate : !preset.installable);
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
@@ -154,11 +166,16 @@ export function MarketplacePresetDetailDialog({
                 </p>
               </div>
             )}
+            {errorMessage && (
+              <p className="text-center text-sm leading-6 text-destructive">
+                {errorMessage}
+              </p>
+            )}
 
             <Button
               className="modal-primary-button w-full px-8 text-[14px]"
-              disabled={installed || !preset.installable || disableInstall}
-              onClick={() => onInstall(preset.presetId)}
+              disabled={actionDisabled}
+              onClick={() => primaryAction(preset.agentId)}
             >
               {installLabel}
             </Button>
