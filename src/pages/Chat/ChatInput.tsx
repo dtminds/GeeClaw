@@ -1614,7 +1614,7 @@ export const ChatInput = memo(function ChatInput({
               <Button
                 variant="ghost"
                 size="icon"
-                className="surface-hover-strong h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors"
+                className="h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors"
                 onClick={pickFiles}
                 disabled={disabled || sending}
                 title={t('composer.attachFiles')}
