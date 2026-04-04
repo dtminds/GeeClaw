@@ -8,7 +8,18 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/delivery-execution/1.0.0.zip",
     "checksum": "sha256-50b5384cc5a0631690d09e0e8529382542d3a9671b9f533308322b7890dea80e",
-    "size": 30519
+    "size": 30519,
+    "presetSkills": [
+      "dummy-dataset",
+      "job-stories",
+      "release-notes",
+      "retro",
+      "sprint-plan",
+      "summarize-meeting",
+      "test-scenarios",
+      "user-stories",
+      "wwas"
+    ]
   },
   {
     "agentId": "discovery-research",
@@ -19,7 +30,28 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/discovery-research/1.0.0.zip",
     "checksum": "sha256-f1a24df42c175313dde997540d4354b812546ca107be25b5f7bf15b67c375282",
-    "size": 60866
+    "size": 60866,
+    "presetSkills": [
+      "analyze-feature-requests",
+      "brainstorm-experiments-existing",
+      "brainstorm-experiments-new",
+      "brainstorm-ideas-existing",
+      "brainstorm-ideas-new",
+      "competitor-analysis",
+      "customer-journey-map",
+      "identify-assumptions-existing",
+      "identify-assumptions-new",
+      "interview-script",
+      "market-segments",
+      "market-sizing",
+      "opportunity-solution-tree",
+      "prioritize-assumptions",
+      "prioritize-features",
+      "sentiment-analysis",
+      "summarize-interview",
+      "user-personas",
+      "user-segmentation"
+    ]
   },
   {
     "agentId": "growth-optimization",
@@ -30,7 +62,24 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/growth-optimization/1.0.0.zip",
     "checksum": "sha256-83229fa6cacc6686968f67e88141d8ce2e029f20b187e2d1614d36592b888996",
-    "size": 55201
+    "size": 55201,
+    "presetSkills": [
+      "ab-test-analysis",
+      "beachhead-segment",
+      "cohort-analysis",
+      "competitive-battlecard",
+      "growth-loops",
+      "gtm-motions",
+      "gtm-strategy",
+      "ideal-customer-profile",
+      "marketing-ideas",
+      "metrics-dashboard",
+      "north-star-metric",
+      "positioning-ideas",
+      "product-name",
+      "sql-queries",
+      "value-prop-statements"
+    ]
   },
   {
     "agentId": "hotspot-intel-assistant",
@@ -41,7 +90,8 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
     "checksum": "sha256-67faea868777a9268b61e372e53e478c589c59b41b8a9f20c5d1606eb08ab079",
-    "size": 4864
+    "size": 4864,
+    "presetSkills": []
   },
   {
     "agentId": "marketing-growth-assistant",
@@ -52,7 +102,14 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-growth-assistant/1.0.0.zip",
     "checksum": "sha256-3fe23516a0288411384dd00176c3c97ee1a540bc377833f1bef6e1db57400d95",
-    "size": 232734
+    "size": 232734,
+    "presetSkills": [
+      "sales-pipeline",
+      "cold-outbound-optimizer",
+      "expert-panel",
+      "growth-engine",
+      "seo-ops"
+    ]
   },
   {
     "agentId": "strategy-planning",
@@ -63,7 +120,27 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/strategy-planning/1.0.0.zip",
     "checksum": "sha256-977ddb3e3047edaca44193c370333fe842f9533f2df6c78ac8397e43f74bf816",
-    "size": 67999
+    "size": 67999,
+    "presetSkills": [
+      "ansoff-matrix",
+      "business-model",
+      "brainstorm-okrs",
+      "create-prd",
+      "lean-canvas",
+      "monetization-strategy",
+      "outcome-roadmap",
+      "pestle-analysis",
+      "porters-five-forces",
+      "pre-mortem",
+      "pricing-strategy",
+      "prioritization-frameworks",
+      "product-strategy",
+      "product-vision",
+      "stakeholder-map",
+      "startup-canvas",
+      "swot-analysis",
+      "value-proposition"
+    ]
   },
   {
     "agentId": "wechat-creator-assistant",
@@ -74,7 +151,11 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/wechat-creator-assistant/1.0.0.zip",
     "checksum": "sha256-4889226fbc8cc9c7cf58a6b08d0dd19ab633736f11f958015de5304ad94003fd",
-    "size": 197151
+    "size": 197151,
+    "presetSkills": [
+      "wewrite",
+      "md2wechat"
+    ]
   },
   {
     "agentId": "xhs-creator-assistant",
@@ -85,6 +166,13 @@
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/xhs-creator-assistant/1.0.0.zip",
     "checksum": "sha256-72c1b3a61f788bb905e612d1762e10e6c5826a978a6ab1b7a69fbbe57f95980d",
-    "size": 435800
+    "size": 435800,
+    "presetSkills": [
+      "baoyu-xhs-images",
+      "baoyu-infographic",
+      "baoyu-cover-image",
+      "baoyu-url-to-markdown",
+      "baoyu-image-gen"
+    ]
   }
 ]

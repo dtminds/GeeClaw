@@ -1258,6 +1258,10 @@ export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummar
     const hasUpdate = installedMetadata?.source === 'marketplace'
       && typeof installedMetadata.packageVersion === 'string'
       && compareVersionStrings(entry.version, installedMetadata.packageVersion) > 0;
+    const presetSkills = entry.presetSkills ? [...entry.presetSkills] : [];
+    const skillScope: AgentSkillScope = presetSkills.length > 0
+      ? { mode: 'specified', skills: [...presetSkills] }
+      : { mode: 'default' };
 
     return {
       source: 'marketplace',
@@ -1276,8 +1280,8 @@ export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummar
       supportedOnCurrentPlatform,
       supportedOnCurrentAppVersion,
       agentId: entry.agentId,
-      skillScope: { mode: 'default' },
-      presetSkills: [],
+      skillScope,
+      presetSkills,
       managedFiles: [],
     };
   });

@@ -41,8 +41,35 @@ describe('agent marketplace catalog loader', () => {
         version: expect.any(String),
         downloadUrl: expect.any(String),
         checksum: expect.any(String),
+        presetSkills: expect.any(Array),
       }));
     }
+  });
+
+  it('loads optional preset skill metadata from catalog entries', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-summary-fields-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'discovery-research',
+        name: 'User Research',
+        description: 'desc',
+        emoji: '🔍',
+        category: 'PM',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/discovery-research.zip',
+        checksum: 'sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        presetSkills: ['interview-script', 'user-personas'],
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).resolves.toEqual([
+      expect.objectContaining({
+        agentId: 'discovery-research',
+        presetSkills: ['interview-script', 'user-personas'],
+      }),
+    ]);
   });
 
   it('rejects duplicate agentIds in a catalog file', async () => {
@@ -155,5 +182,26 @@ describe('agent marketplace catalog loader', () => {
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
 
     await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('size is invalid');
+  });
+
+  it('rejects catalog entries with invalid preset skill metadata', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-preset-skills-invalid-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'discovery-research',
+        name: 'User Research',
+        description: 'desc',
+        emoji: '🔍',
+        category: 'PM',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/discovery-research.zip',
+        checksum: 'sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        presetSkills: ['user-personas', 'user-personas'],
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('presetSkills is invalid');
   });
 });

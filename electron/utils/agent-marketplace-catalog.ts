@@ -16,6 +16,7 @@ const RECOGNIZED_CATALOG_ENTRY_KEYS = new Set([
   'size',
   'minAppVersion',
   'platforms',
+  'presetSkills',
 ]);
 const RECOGNIZED_PLATFORM_VALUES = new Set(['darwin', 'win32', 'linux']);
 
@@ -31,6 +32,7 @@ export interface AgentMarketplaceCatalogEntry {
   size?: number;
   minAppVersion?: string;
   platforms?: Array<'darwin' | 'win32' | 'linux'>;
+  presetSkills?: string[];
 }
 
 export type AgentMarketplaceCatalog = AgentMarketplaceCatalogEntry[];
@@ -115,6 +117,33 @@ function normalizeCatalogPlatforms(
   return platforms;
 }
 
+function normalizeOptionalStringList(
+  value: unknown,
+  field: 'presetSkills',
+  index: number,
+): string[] | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`[agent-marketplace] Entry at index ${index} ${field} is invalid`);
+  }
+
+  const normalized = value.map((entry) => {
+    if (typeof entry !== 'string' || !entry.trim()) {
+      throw new Error(`[agent-marketplace] Entry at index ${index} ${field} is invalid`);
+    }
+    return entry.trim();
+  });
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`[agent-marketplace] Entry at index ${index} ${field} is invalid`);
+  }
+
+  return normalized;
+}
+
 function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCatalogEntry {
   const record = requirePlainObject(entry, 'catalog entry', index);
   assertSupportedKeys(record, 'catalog entry', index);
@@ -157,6 +186,11 @@ function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCa
   const platforms = normalizeCatalogPlatforms(record.platforms, index);
   if (platforms) {
     validated.platforms = platforms;
+  }
+
+  const presetSkills = normalizeOptionalStringList(record.presetSkills, 'presetSkills', index);
+  if (presetSkills) {
+    validated.presetSkills = presetSkills;
   }
 
   return validated;

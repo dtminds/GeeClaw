@@ -431,6 +431,37 @@ describe('managed agent config domain', () => {
     ]);
   });
 
+  it('reports marketplace summary skills from catalog metadata', async () => {
+    const { agentConfig } = await setupManagedPresetFixture({
+      presetMeta: {
+        agent: {
+          skillScope: {
+            mode: 'specified',
+            skills: ['preset-only-skill'],
+          },
+        },
+      },
+      marketplacePackage: {
+        catalogEntry: {
+          presetSkills: ['catalog-skill-a', 'catalog-skill-b'],
+        },
+      },
+    });
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        skillScope: {
+          mode: 'specified',
+          skills: ['catalog-skill-a', 'catalog-skill-b'],
+        },
+        presetSkills: ['catalog-skill-a', 'catalog-skill-b'],
+        managedFiles: [],
+      }),
+    ]);
+  });
+
   it('reports installed marketplace versions and update availability from management state', async () => {
     const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
 

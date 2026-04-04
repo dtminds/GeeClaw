@@ -170,6 +170,17 @@ async function validateArchive(archivePath, catalogEntry) {
   }
 }
 
+async function readPackageSummaryMetadata(packageDir) {
+  const meta = await readJson(join(packageDir, 'meta.json'));
+  const presetSkills = meta?.agent?.skillScope?.mode === 'specified'
+    ? [...new Set((Array.isArray(meta.agent.skillScope.skills) ? meta.agent.skillScope.skills : [])
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.trim()))]
+    : [];
+
+  return { presetSkills };
+}
+
 export function parseCliAgentIds(argv, importMetaUrl = import.meta.url) {
   const scriptPath = normalize(
     typeof importMetaUrl === 'string' && importMetaUrl.startsWith('file:')
@@ -278,11 +289,13 @@ export async function bundleAgentMarketplacePackages(options = {}) {
 
       const archiveStat = await stat(archivePath);
       const checksum = await sha256File(archivePath);
+      const { presetSkills } = await readPackageSummaryMetadata(packageDir);
 
       packageResults.set(entry.agentId, {
         ...entry,
         checksum,
         size: archiveStat.size,
+        presetSkills,
       });
 
       log(`Packaged ${entry.agentId}@${entry.version}`);
