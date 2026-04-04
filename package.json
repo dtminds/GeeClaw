@@ -59,6 +59,7 @@
         "bundle:openclaw-plugins": "zx scripts/bundle-openclaw-plugins.mjs",
         "bundle:preinstalled-skills": "zx scripts/bundle-preinstalled-skills.mjs",
         "bundle:agent-preset-skills": "zx scripts/bundle-agent-preset-skills.mjs",
+        "bundle:agent-marketplace": "zx scripts/bundle-agent-marketplace-packages.mjs",
         "lint": "eslint . --fix",
         "lint:check": "eslint .",
         "typecheck": "tsc --noEmit",
