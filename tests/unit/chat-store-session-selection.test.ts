@@ -112,7 +112,7 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().currentAgentId).toBe('writer');
     expect(useChatStore.getState().currentSessionKey).toBe('agent:writer:main');
 
-    hostApiFetchMock.mockResolvedValueOnce({
+    hostApiFetchMock.mockResolvedValue({
       sessions: [mainSession],
     });
 
