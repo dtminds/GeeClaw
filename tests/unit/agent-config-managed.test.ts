@@ -136,7 +136,6 @@ async function setupManagedPresetFixture(options?: {
     getLogsDir: () => join(homeDir, '.geeclaw', 'logs'),
     getDataDir: () => join(homeDir, '.geeclaw'),
     getResourcesDir: () => '/tmp/geeclaw-test-app/resources',
-    getAgentPresetsDir: () => '/tmp/geeclaw-test-app/resources/agent-presets',
     getOpenClawDir: () => '/tmp/openclaw',
     getOpenClawEntryPath: () => '/tmp/openclaw/openclaw.mjs',
     getClawHubCliEntryPath: () => '/tmp/geeclaw-test-app/node_modules/clawhub/bin/clawdhub.js',
@@ -484,9 +483,9 @@ describe('managed agent config domain', () => {
     ]);
   });
 
-  it('installs a preset agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/skills', async () => {
+  it('installs a marketplace agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/skills', async () => {
     const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
-    const snapshot = await agentConfig.installPresetAgent('stock-expert');
+    const snapshot = await agentConfig.installMarketplaceAgent('stockexpert');
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: { list?: Array<{ id?: string; skills?: string[]; agentDir?: string }> };
@@ -494,8 +493,7 @@ describe('managed agent config domain', () => {
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: true,
-      source: 'preset',
-      presetId: 'stock-expert',
+      source: 'marketplace',
       presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       managedFiles: ['AGENTS.md', 'SOUL.md'],
       canUseDefaultSkillScope: false,
@@ -674,36 +672,13 @@ describe('managed agent config domain', () => {
     });
   });
 
-  it('rejects marketplace update for preset-managed agents', async () => {
-    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
-
-    await agentConfig.installPresetAgent('stock-expert');
-
-    marketplaceState.preparedPackage = {
-      catalogEntry: {
-        ...marketplaceState.preparedPackage.catalogEntry,
-        version: '1.2.4',
-        downloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
-      },
-      package: {
-        ...marketplaceState.preparedPackage.package,
-        meta: {
-          ...marketplaceState.preparedPackage.package.meta,
-          packageVersion: '1.2.4',
-        },
-      },
-    };
-
-    await expect(agentConfig.updateMarketplaceAgent('stockexpert')).rejects.toThrow(
-      'Marketplace agent "stockexpert" is not marketplace-managed',
-    );
-  });
-
   it('copies main agent bootstrap files first, then overwrites only preset-declared files', async () => {
     const { homeDir, agentConfig } = await setupManagedPresetFixture({
-      presetFiles: {
-        'SOUL.md': '# preset tone\n',
-        'IDENTITY.md': '# preset identity\n',
+      marketplacePackage: {
+        files: {
+          'SOUL.md': '# preset tone\n',
+          'IDENTITY.md': '# preset identity\n',
+        },
       },
       mainWorkspaceFiles: {
         'USER.md': '# main user\n',
@@ -713,7 +688,7 @@ describe('managed agent config domain', () => {
       },
     });
 
-    await agentConfig.installPresetAgent('stock-expert');
+    await agentConfig.installMarketplaceAgent('stockexpert');
 
     const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
     expect(readFileSync(join(workspaceDir, 'USER.md'), 'utf8')).toBe('# main user\n');
@@ -724,15 +699,17 @@ describe('managed agent config domain', () => {
 
   it('appends preset AGENTS.md after the copied workspace AGENTS.md content', async () => {
     const { homeDir, agentConfig } = await setupManagedPresetFixture({
-      presetFiles: {
-        'AGENTS.md': '# preset agent\n\nPreset instructions\n',
+      marketplacePackage: {
+        files: {
+          'AGENTS.md': '# preset agent\n\nPreset instructions\n',
+        },
       },
       mainWorkspaceFiles: {
         'AGENTS.md': '# main agent\n\nMain instructions\n',
       },
     });
 
-    await agentConfig.installPresetAgent('stock-expert');
+    await agentConfig.installMarketplaceAgent('stockexpert');
 
     const content = readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8');
     expect(content).toContain('Main instructions');
@@ -743,31 +720,33 @@ describe('managed agent config domain', () => {
     expect(content.indexOf('Main instructions')).toBeLessThan(content.indexOf('Preset instructions'));
   });
 
-  it('installs preset agents even when direct access probes on the workspace root fail', async () => {
+  it('installs marketplace agents even when direct access probes on the workspace root fail', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
       failAccessPaths: (homeDir) => [join(homeDir, 'geeclaw', 'workspace-stockexpert')],
     });
 
-    await expect(agentConfig.installPresetAgent('stock-expert')).resolves.toMatchObject({
+    await expect(agentConfig.installMarketplaceAgent('stockexpert')).resolves.toMatchObject({
       agents: expect.arrayContaining([
         expect.objectContaining({ id: 'stockexpert', managed: true }),
       ]),
     });
   });
 
-  it('preserves preset model config on the installed agent entry', async () => {
+  it('preserves marketplace model config on the installed agent entry', async () => {
     const { configDir, agentConfig } = await setupManagedPresetFixture({
-      presetMeta: {
-        agent: {
+      marketplacePackage: {
+        meta: {
+          agent: {
           model: {
             primary: 'openrouter/stock-pro',
             fallbacks: ['openrouter/stock-lite'],
           },
         },
+        },
       },
     });
 
-    const snapshot = await agentConfig.installPresetAgent('stock-expert');
+    const snapshot = await agentConfig.installMarketplaceAgent('stockexpert');
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: {
         list?: Array<{
@@ -791,7 +770,7 @@ describe('managed agent config domain', () => {
 
   it('clears active managed restrictions after unmanage', async () => {
     const { agentConfig, homeDir } = await setupManagedPresetFixture();
-    await agentConfig.installPresetAgent('stock-expert');
+    await agentConfig.installMarketplaceAgent('stockexpert');
 
     const snapshot = await agentConfig.unmanageAgent('stockexpert');
 
@@ -806,7 +785,7 @@ describe('managed agent config domain', () => {
 
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
     const { agentConfig } = await setupManagedPresetFixture();
-    await agentConfig.installPresetAgent('stock-expert');
+    await agentConfig.installMarketplaceAgent('stockexpert');
 
     await expect(agentConfig.updateAgentPersona('stockexpert', {
       identity: '# updated identity\n',
@@ -842,16 +821,18 @@ describe('managed agent config domain', () => {
     });
   });
 
-  it('respects preset managed policy for persona locks and unmanage permission', async () => {
+  it('respects marketplace managed policy for persona locks and unmanage permission', async () => {
     const { agentConfig } = await setupManagedPresetFixture({
-      presetMeta: {
-        managedPolicy: {
+      marketplacePackage: {
+        meta: {
+          managedPolicy: {
           lockedFields: ['id', 'workspace'],
           canUnmanage: false,
         },
+        },
       },
     });
-    const installed = await agentConfig.installPresetAgent('stock-expert');
+    const installed = await agentConfig.installMarketplaceAgent('stockexpert');
 
     expect(installed.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       lockedFields: ['id', 'workspace'],
@@ -877,7 +858,7 @@ describe('managed agent config domain', () => {
 
   it('rejects empty specified skill scopes in settings updates', async () => {
     const { agentConfig } = await setupManagedPresetFixture();
-    await agentConfig.installPresetAgent('stock-expert');
+    await agentConfig.installMarketplaceAgent('stockexpert');
     await agentConfig.unmanageAgent('stockexpert');
 
     await expect(agentConfig.updateAgentSettings('stockexpert', {
@@ -911,84 +892,19 @@ describe('managed agent config domain', () => {
     )).not.toThrow();
   });
 
-  it('rejects installing presets that are unsupported on the current platform', async () => {
+  it('rejects installing marketplace agents that are unsupported on the current platform', async () => {
     setPlatform('win32');
     const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
-      presetMeta: {
-        platforms: ['darwin'],
-      },
-    });
-    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
-
-    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
-      'Preset "stock-expert" is only available on macOS',
-    );
-
-    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
-      agents?: { list?: Array<{ id?: string }> };
-    };
-
-    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
-    expect(existsSync(workspaceDir)).toBe(false);
-  });
-
-  it('rejects installing presets when required dependencies are missing', async () => {
-    delete process.env.NOTION_API_KEY;
-    const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
-      presetMeta: {
-        requires: {
-          anyBins: ['missing-candidate', 'sh'],
-          env: ['NOTION_API_KEY'],
+      marketplacePackage: {
+        catalogEntry: {
+          platforms: ['darwin'],
         },
       },
     });
     const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
 
-    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
-      'Preset "stock-expert" is missing required environment variables: NOTION_API_KEY',
-    );
-
-    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
-      agents?: { list?: Array<{ id?: string }> };
-    };
-
-    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).toBeUndefined();
-    expect(existsSync(workspaceDir)).toBe(false);
-  });
-
-  it('accepts preset env requirements from GeeClaw managed app environment', async () => {
-    delete process.env.NOTION_API_KEY;
-    const { agentConfig } = await setupManagedPresetFixture({
-      presetMeta: {
-        requires: {
-          env: ['NOTION_API_KEY'],
-        },
-      },
-      managedAppEnv: {
-        NOTION_API_KEY: 'managed-secret',
-      },
-    });
-
-    await expect(agentConfig.installPresetAgent('stock-expert')).resolves.toMatchObject({
-      agents: expect.arrayContaining([
-        expect.objectContaining({ id: 'stockexpert', managed: true }),
-      ]),
-    });
-  });
-
-  it('rejects installing presets when no anyBins candidate is available', async () => {
-    process.env.PATH = '/tmp/geeclaw-empty-bin';
-    const { agentConfig, homeDir, configDir } = await setupManagedPresetFixture({
-      presetMeta: {
-        requires: {
-          anyBins: ['missing-python3', 'missing-python'],
-        },
-      },
-    });
-    const workspaceDir = join(homeDir, 'geeclaw', 'workspace-stockexpert');
-
-    await expect(agentConfig.installPresetAgent('stock-expert')).rejects.toThrow(
-      'Preset "stock-expert" requires one of these binaries: missing-python3, missing-python',
+    await expect(agentConfig.installMarketplaceAgent('stockexpert')).rejects.toThrow(
+      'Marketplace agent "stockexpert" is only available on macOS',
     );
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {

@@ -20,7 +20,6 @@ extraResources:
     to: resources/
     filter:
       - "**/*"
-      - "!agent-presets/**"
       - "!icons/*.md"
       - "!icons/*.svg"
       - "!bin/**"
@@ -33,8 +32,6 @@ extraResources:
     to: openclaw/
   - from: build/preinstalled-skills/
     to: skills/
-  - from: build/agent-presets/
-    to: resources/agent-presets/
   # NOTE: OpenClaw plugin mirrors are copied by the afterPack hook
   # (after-pack.cjs) from build/openclaw-plugins/ when available, with a
   # node_modules fallback for the built-in npm-backed plugins.

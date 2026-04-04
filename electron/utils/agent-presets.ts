@@ -1,6 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { getAgentPresetsDir } from './paths';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { normalizePresetPlatforms, type AgentPresetPlatform } from './agent-preset-platforms';
 import { mapWithConcurrency } from './promise-pool';
@@ -626,38 +625,4 @@ export async function loadAgentPresetPackageFromDir(
     skills: await readPresetSkills(meta.presetId, presetDir),
     skillManifest: await readPresetSkillManifest(meta.presetId, presetDir, meta),
   };
-}
-
-export async function listAgentPresets(): Promise<AgentPresetPackage[]> {
-  const root = getAgentPresetsDir();
-  const entries = await readdir(root, { withFileTypes: true });
-  const packages: AgentPresetPackage[] = [];
-  const presetIds = new Set<string>();
-
-  for (const entry of entries.filter((item) => item.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
-    const presetDir = join(root, entry.name);
-    const preset = await loadAgentPresetPackageFromDir(presetDir);
-    const { meta } = preset;
-
-    if (presetIds.has(meta.presetId)) {
-      throw new Error(`Duplicate presetId "${meta.presetId}"`);
-    }
-    presetIds.add(meta.presetId);
-    if (meta.presetId !== entry.name) {
-      throw new Error(`Preset "${meta.presetId}" directory name must match presetId`);
-    }
-
-    packages.push(preset);
-  }
-
-  return packages.sort((left, right) => left.meta.name.localeCompare(right.meta.name));
-}
-
-export async function getAgentPreset(presetId: string): Promise<AgentPresetPackage> {
-  const presets = await listAgentPresets();
-  const match = presets.find((preset) => preset.meta.presetId === presetId);
-  if (!match) {
-    throw new Error(`Preset "${presetId}" not found`);
-  }
-  return match;
 }
