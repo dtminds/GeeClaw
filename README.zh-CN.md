@@ -187,6 +187,14 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - 如果还没安装 `opencli`，直接跳到 **设置 → CLI 市场**
 - 在 Chrome 未连通时，直接下载 Chrome 插件包或跳转到上游安装说明
 
+### 模型路由设置
+
+打开 **设置 → 模型配置** 可以管理 GeeClaw 写入 OpenClaw 配置中的全局模型路由默认值。
+
+- 顶部摘要区现在同时展示默认文本模型、fallback 链路，以及独立的生图模型路由。
+- 生图模型严格遵循 OpenClaw 的 `agents.defaults.imageGenerationModel` 语义：`自动` 会移除该字段并交给 OpenClaw 从已认证 provider 中推断，`手动` 会保存显式的 provider/model 与有序 fallback 列表。
+- provider 账号本身的新增、认证与模型维护，仍然放在下方的 provider 管理区域中完成。
+
 ### MCP Runtime 检查
 
 打开 **设置 → MCP** 可以查看系统 PATH 中是否已经有 `mcporter`。如果 GeeClaw 还没有检测到它，页面会优先引导你前往 **设置 → CLI 市场** 一键安装，同时保留上游项目链接作为辅助信息。

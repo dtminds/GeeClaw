@@ -176,6 +176,14 @@ Notes:
 - On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
 - The managed `openclaw` wrappers also pin `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`, `OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`, and default to `--profile geeclaw` so terminal usage matches GeeClaw's managed runtime.
 
+### Model Routing Settings
+
+Open **Settings → Models** to manage the global model-routing defaults GeeClaw writes into OpenClaw config.
+
+- The summary row now covers the default text model, the fallback chain, and the dedicated image-generation route.
+- Image generation follows OpenClaw's `agents.defaults.imageGenerationModel` behavior: `Auto` removes the field and lets OpenClaw infer a compatible authenticated provider, while `Manual` saves an explicit provider/model plus ordered fallbacks.
+- Provider account setup still lives in the main provider-management area below the summary cards.
+
 ### OpenCLI Browser Bridge Check
 
 Open **Settings → OpenCLI** to:
