@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSearchSettingsSection } from '@/components/settings/WebSearchSettingsSection';
@@ -19,7 +20,6 @@ const translations: Record<string, string> = {
   'webSearch.shared.autoUnavailable': 'No search service is ready yet. Add an API key first.',
   'webSearch.auto.title': 'Choose Automatically',
   'webSearch.auto.description': "If you do not specify one, we'll use any search service that is ready.",
-  'webSearch.sidebar.auto': 'Auto',
   'webSearch.provider.signup': 'Get API Key',
   'webSearch.provider.docs': 'Help',
   'webSearch.provider.emptyFields': 'No extra settings needed.',
@@ -227,6 +227,20 @@ describe('WebSearchSettingsSection', () => {
     expect(await screen.findByText('Web Search')).toBeInTheDocument();
     expect(screen.getByLabelText('Enable Web Search')).toBeChecked();
     expect(screen.getByRole('button', { name: /Brave Search/ })).toBeInTheDocument();
+  });
+
+  it('does not stay stuck in loading under StrictMode', async () => {
+    render(
+      <StrictMode>
+        <WebSearchSettingsSection />
+      </StrictMode>,
+    );
+
+    await screen.findByText('Web Search');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Enable Web Search')).not.toBeDisabled();
+    });
   });
 
   it('hides the saved badge after editing provider-specific values without saving', async () => {
@@ -448,6 +462,7 @@ describe('WebSearchSettingsSection', () => {
     expect(screen.getByText('Available now: Perplexity Search')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Brave Search/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Perplexity Search/ })).toBeInTheDocument();
+    expect(screen.queryByText('Auto')).not.toBeInTheDocument();
     expect(screen.queryByText('Perplexity API Key')).not.toBeInTheDocument();
     expect(screen.getByText("If you do not specify one, we'll use any search service that is ready.")).toBeInTheDocument();
     expect(screen.queryByLabelText('Perplexity API Key')).not.toBeInTheDocument();
@@ -515,7 +530,7 @@ describe('WebSearchSettingsSection', () => {
     expect(setDefaultButton).not.toHaveClass('mt-4');
   });
 
-  it('renders searxng as a base-url-driven provider', async () => {
+  it('hides searxng from the provider picker', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/web-search/providers') {
         return {
@@ -571,12 +586,13 @@ describe('WebSearchSettingsSection', () => {
 
     render(<WebSearchSettingsSection />);
 
-    expect(await screen.findByDisplayValue('https://search.example.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('en-US')).toBeInTheDocument();
-    expect(screen.queryByText(/SEARXNG_BASE_URL/)).not.toBeInTheDocument();
+    await screen.findByText('Web Search');
+    expect(screen.queryByRole('button', { name: /SearXNG/ })).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('https://search.example.com')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('en-US')).not.toBeInTheDocument();
   });
 
-  it('hides duckduckgo and ollama from the provider picker', async () => {
+  it('hides duckduckgo, ollama, and searxng from the provider picker', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/web-search/providers') {
         return {
@@ -662,7 +678,7 @@ describe('WebSearchSettingsSection', () => {
 
     expect(screen.queryByRole('button', { name: /DuckDuckGo/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ollama/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /SearXNG/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /SearXNG/ })).not.toBeInTheDocument();
   });
 
   it('saves canonical payloads for shared and provider-specific settings', async () => {

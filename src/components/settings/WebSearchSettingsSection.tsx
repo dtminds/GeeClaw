@@ -21,7 +21,7 @@ import {
   type WebSearchSettingsResponse,
 } from '@/lib/web-search-settings';
 
-const HIDDEN_PROVIDER_IDS = new Set(['duckduckgo', 'ollama']);
+const HIDDEN_PROVIDER_IDS = new Set(['duckduckgo', 'ollama', 'searxng']);
 const AUTO_PROVIDER_KEY = '__auto__';
 
 function normalizeSharedNumber(value: string, fallback: number, minimum: number, maximum?: number): number {
@@ -251,14 +251,13 @@ export function WebSearchSettingsSection() {
   }, [applyLoadedData, loadFailedLabel]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     void loadData(undefined, true);
-  }, [loadData]);
 
-  useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     setSelectedProviderKey((current) => resolveSelectedProviderKey(current, defaultProvider, visibleProviders));
@@ -579,9 +578,6 @@ export function WebSearchSettingsSection() {
                     ) : null}
                   </button>
 
-                  <span className="ml-2 shrink-0 text-[11px] text-muted-foreground/70">
-                    {t('webSearch.sidebar.auto')}
-                  </span>
                 </div>
 
                 {visibleProviders.map((entry) => {
