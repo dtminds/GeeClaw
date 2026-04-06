@@ -8,6 +8,11 @@ import { Check, Loader2, Settings2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+import {
+  ImageGenerationModelDialog,
+  type ImageGenerationModelSaveInput,
+  type ImageGenerationModelSnapshot,
+} from '@/components/settings/ImageGenerationModelDialog';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { trackUiEvent } from '@/lib/telemetry';
 import { hostApiFetch } from '@/lib/host-api';
@@ -25,6 +30,39 @@ interface AgentDefaultModelSnapshot {
   primary: string | null;
   fallbacks: string[];
   availableModels: AvailableProviderModelGroup[];
+}
+
+function getImageGenerationCardSummary(
+  snapshot: ImageGenerationModelSnapshot | null,
+  t: (key: string) => string,
+): {
+  badge: string;
+  primary: string;
+  secondary: string;
+} {
+  if (!snapshot) {
+    return {
+      badge: t('common:status.loading'),
+      primary: t('imageGenerationModel.card.none'),
+      secondary: t('imageGenerationModel.card.loading'),
+    };
+  }
+
+  if (snapshot.mode === 'manual') {
+    return {
+      badge: t('imageGenerationModel.card.manual'),
+      primary: snapshot.effective.primary ?? t('imageGenerationModel.card.none'),
+      secondary: t('imageGenerationModel.card.manualSummary'),
+    };
+  }
+
+  return {
+    badge: t('imageGenerationModel.card.auto'),
+    primary: snapshot.effective.primary ?? t('imageGenerationModel.card.none'),
+    secondary: snapshot.effective.primary
+      ? t('imageGenerationModel.card.autoSummary')
+      : t('imageGenerationModel.card.noneAvailable'),
+  };
 }
 
 function AgentFallbackDialog(props: {
@@ -151,15 +189,22 @@ function AgentFallbackDialog(props: {
 export function ModelsSettingsSection() {
   const { t } = useTranslation('settings');
   const [snapshot, setSnapshot] = useState<AgentDefaultModelSnapshot | null>(null);
+  const [imageGenerationSnapshot, setImageGenerationSnapshot] = useState<ImageGenerationModelSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showFallbackDialog, setShowFallbackDialog] = useState(false);
+  const [showImageGenerationDialog, setShowImageGenerationDialog] = useState(false);
+  const [imageGenerationSaving, setImageGenerationSaving] = useState(false);
 
   const loadSnapshot = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await hostApiFetch<AgentDefaultModelSnapshot>('/api/agents/default-model');
-      setSnapshot(result);
+      const [defaultModelResult, imageGenerationResult] = await Promise.all([
+        hostApiFetch<AgentDefaultModelSnapshot>('/api/agents/default-model'),
+        hostApiFetch<ImageGenerationModelSnapshot>('/api/agents/image-generation-model'),
+      ]);
+      setSnapshot(defaultModelResult);
+      setImageGenerationSnapshot(imageGenerationResult);
     } catch (error) {
       toast.error(`${t('agentModels.toast.failedLoad')}: ${error}`);
     } finally {
@@ -189,6 +234,28 @@ export function ModelsSettingsSection() {
     }
   };
 
+  const handleSaveImageGeneration = async (input: ImageGenerationModelSaveInput) => {
+    setImageGenerationSaving(true);
+    try {
+      const result = await hostApiFetch<ImageGenerationModelSnapshot>(
+        '/api/agents/image-generation-model',
+        {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        },
+      );
+      setImageGenerationSnapshot(result);
+      setShowImageGenerationDialog(false);
+      toast.success(t('imageGenerationModel.toast.saved'));
+    } catch (error) {
+      toast.error(`${t('imageGenerationModel.toast.failedSave')}: ${error}`);
+    } finally {
+      setImageGenerationSaving(false);
+    }
+  };
+
+  const imageGenerationCard = getImageGenerationCardSummary(imageGenerationSnapshot, t);
+
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <Card className="surface-muted rounded-3xl border border-transparent shadow-none">
@@ -198,13 +265,6 @@ export function ModelsSettingsSection() {
             {t('agentModels.title')}
           </CardTitle>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <Button
-              onClick={() => setShowFallbackDialog(true)}
-              disabled={loading || !snapshot}
-              className="rounded-full px-5 h-9 bg-black/90 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-white/90"
-            >
-              {t('agentModels.configureFallbacks')}
-            </Button>
             <Button
               variant="outline"
               onClick={() => void loadSnapshot()}
@@ -222,17 +282,50 @@ export function ModelsSettingsSection() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-[#1a1a19]">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-black/6 bg-background px-4 py-4 shadow-[0_16px_40px_-34px_rgba(16,24,40,0.5)] dark:border-white/10">
                   <p className="text-[13px] font-medium text-muted-foreground">{t('agentModels.primary')}</p>
                   <p className="mt-2 font-mono text-[13px] text-foreground break-all">
                     {snapshot.primary || t('agentModels.none')}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-[#1a1a19]">
+                <div className="rounded-2xl border border-black/6 bg-background px-4 py-4 shadow-[0_16px_40px_-34px_rgba(16,24,40,0.5)] dark:border-white/10">
                   <p className="text-[13px] font-medium text-muted-foreground">{t('agentModels.fallbacks')}</p>
                   <p className="mt-2 font-mono text-[13px] text-foreground break-all">
                     {snapshot.fallbacks.length > 0 ? snapshot.fallbacks.join(', ') : t('agentModels.none')}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowFallbackDialog(true)}
+                    className="mt-4 h-8 rounded-full px-3 text-[12px]"
+                  >
+                    {t('agentModels.configureFallbacks')}
+                  </Button>
+                </div>
+                <div className="rounded-2xl border border-black/6 bg-background px-4 py-4 shadow-[0_16px_40px_-34px_rgba(16,24,40,0.5)] dark:border-white/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-muted-foreground">{t('imageGenerationModel.card.title')}</p>
+                      <span className="mt-2 inline-flex rounded-full border border-black/8 bg-black/4 px-2.5 py-1 text-[11px] font-medium text-muted-foreground dark:border-white/10 dark:bg-white/6">
+                        {imageGenerationCard.badge}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowImageGenerationDialog(true)}
+                      className="h-8 rounded-full px-3 text-[12px]"
+                      aria-label={t('imageGenerationModel.card.configure')}
+                    >
+                      {t('imageGenerationModel.card.configure')}
+                    </Button>
+                  </div>
+                  <p className="mt-3 font-mono text-[13px] text-foreground break-all">
+                    {imageGenerationCard.primary}
+                  </p>
+                  <p className="mt-2 text-[12px] text-muted-foreground">
+                    {imageGenerationCard.secondary}
                   </p>
                 </div>
               </div>
@@ -255,6 +348,14 @@ export function ModelsSettingsSection() {
           onSave={handleSaveFallbacks}
         />
       )}
+
+      <ImageGenerationModelDialog
+        open={showImageGenerationDialog}
+        snapshot={imageGenerationSnapshot}
+        saving={imageGenerationSaving}
+        onOpenChange={setShowImageGenerationDialog}
+        onSave={handleSaveImageGeneration}
+      />
     </div>
   );
 }

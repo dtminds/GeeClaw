@@ -299,6 +299,33 @@
       "failedLoad": "Failed to load agent model defaults"
     }
   },
+  "imageGenerationModel": {
+    "card": {
+      "title": "Image Generation",
+      "configure": "Configure",
+      "auto": "Auto",
+      "manual": "Manual",
+      "none": "No image generation available",
+      "loading": "Loading image generation status",
+      "manualSummary": "Uses the saved provider/model route.",
+      "autoSummary": "Inferred from authenticated providers.",
+      "noneAvailable": "No authenticated image-generation provider is available."
+    },
+    "dialog": {
+      "title": "Image Generation Model",
+      "description": "Choose whether GeeClaw should infer image generation automatically or use an explicit provider/model route.",
+      "currentMode": "Routing Mode",
+      "modeAuto": "Auto",
+      "modeManual": "Manual",
+      "primary": "Primary Model",
+      "fallbacks": "Fallback Models",
+      "save": "Save"
+    },
+    "toast": {
+      "saved": "Image generation model settings updated",
+      "failedSave": "Failed to save image generation model settings"
+    }
+  },
   "gateway": {
     "title": "Gateway",
     "description": "OpenClaw Gateway settings",
