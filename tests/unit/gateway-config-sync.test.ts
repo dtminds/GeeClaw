@@ -352,6 +352,7 @@ describe('prepareGatewayLaunchContext', () => {
 
       const launchContext = await launchPromise;
       expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
       expect(launchContext.gatewayArgs).toEqual([
         '--profile',
         'geeclaw',
@@ -422,10 +423,66 @@ describe('prepareGatewayLaunchContext', () => {
       if (resolved) {
         const launchContext = await launchPromise;
         expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
+        expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
       }
     } finally {
       exitHandler?.(0);
       await launchPromise.catch(() => undefined);
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps bundled plugins enabled when channels are configured', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    const configPath = join(openclawConfigDir, 'openclaw.json');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        defaults: {
+          workspace: '/Users/test/.openclaw/workspace-geeclaw',
+        },
+      },
+    }), 'utf-8');
+
+    const { listConfiguredChannels } = await import('@electron/utils/channel-config');
+    vi.mocked(listConfiguredChannels).mockResolvedValue(['discord']);
+
+    let stdoutHandler: ((data: Buffer) => void) | undefined;
+
+    spawnMock.mockImplementation(() => {
+      const child = {
+        stdout: {
+          on: vi.fn((event: string, cb: (data: Buffer) => void) => {
+            if (event === 'data') {
+              stdoutHandler = cb;
+            }
+          }),
+        },
+        stderr: { on: vi.fn() },
+        kill: vi.fn(),
+        on: vi.fn(() => child),
+      };
+      return child;
+    });
+
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    try {
+      const launchPromise = prepareGatewayLaunchContext(28788);
+
+      mkdirSync(managedWorkspaceDir, { recursive: true });
+      mkdirSync(sessionsDir, { recursive: true });
+      stdoutHandler?.(Buffer.from(`Workspace OK: ${managedWorkspaceDir}\nSessions OK: ${sessionsDir}\n`));
+
+      const launchContext = await launchPromise;
+      expect(launchContext.forkEnv.OPENCLAW_SKIP_CHANNELS).toBe('');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('');
+      expect(launchContext.channelStartupSummary).toBe('enabled(discord)');
+    } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
       rmSync(homeDir, { recursive: true, force: true });
     }

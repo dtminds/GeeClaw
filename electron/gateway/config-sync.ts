@@ -523,6 +523,7 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
 
 async function resolveChannelStartupPolicy(): Promise<{
   skipChannels: boolean;
+  disableBundledPlugins: boolean;
   channelStartupSummary: string;
 }> {
   try {
@@ -530,18 +531,21 @@ async function resolveChannelStartupPolicy(): Promise<{
     if (configuredChannels.length === 0) {
       return {
         skipChannels: true,
+        disableBundledPlugins: true,
         channelStartupSummary: 'skipped(no configured channels)',
       };
     }
 
     return {
       skipChannels: false,
+      disableBundledPlugins: false,
       channelStartupSummary: `enabled(${configuredChannels.join(',')})`,
     };
   } catch (error) {
     logger.warn('Failed to determine configured channels for gateway launch:', error);
     return {
       skipChannels: false,
+      disableBundledPlugins: false,
       channelStartupSummary: 'enabled(unknown)',
     };
   }
@@ -595,7 +599,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     '--allow-unconfigured',
   ]);
   const { providerEnv, loadedProviderKeyCount } = await loadProviderEnv();
-  const { skipChannels, channelStartupSummary } = await resolveChannelStartupPolicy();
+  const { skipChannels, disableBundledPlugins, channelStartupSummary } = await resolveChannelStartupPolicy();
   const resolvedProxy = resolveProxySettings(appSettings);
   const proxySummary = appSettings.proxyEnabled
     ? `http=${resolvedProxy.httpProxy || '-'}, https=${resolvedProxy.httpsProxy || '-'}, all=${resolvedProxy.allProxy || '-'}`
@@ -611,6 +615,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
       ...proxyEnv,
       OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
       OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
+      OPENCLAW_DISABLE_BUNDLED_PLUGINS: disableBundledPlugins ? '1' : '',
       CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',
     },
     openclawConfigDir,

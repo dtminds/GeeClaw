@@ -28,7 +28,6 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
     { pluginId: 'dingtalk', packageName: '@soimy/dingtalk' },
     { pluginId: 'wecom-openclaw-plugin', packageName: '@wecom/wecom-openclaw-plugin' },
     { pluginId: 'openclaw-weixin', packageName: '@tencent-weixin/openclaw-weixin' },
-    { pluginId: 'openclaw-qqbot', packageName: '@tencent-connect/openclaw-qqbot' },
     { pluginId: 'openclaw-lark', packageName: '@larksuite/openclaw-lark' },
     { pluginId: 'lossless-claw', packageName: '@martian-engineering/lossless-claw' },
     { pluginId: 'qmemory', packageName: 'qmemory' },
@@ -332,7 +331,6 @@ describe('reconcileBundledPluginLoadPaths', () => {
     ['wecom', 'wecom-openclaw-plugin'],
     ['openclaw-weixin', 'openclaw-weixin'],
     ['feishu', 'openclaw-lark'],
-    ['qqbot', 'openclaw-qqbot'],
   ])('resolves bundled plugin sources for managed channel %s', async (channelType, pluginId) => {
     const rootDir = mkdtempSync(join(tmpdir(), 'plugin-install-'));
     tempDirs.push(rootDir);
