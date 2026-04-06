@@ -71,6 +71,32 @@ function providerHasSavedConfig(
   return getComparableProviderConfig(savedProviderConfigByProvider[providerId]).length > 0;
 }
 
+function getEffectiveProviderConfig(
+  provider: WebSearchProviderDescriptor | null,
+  providerConfig: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const nextConfig = Object.fromEntries(
+    Object.entries(providerConfig ?? {}).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  );
+
+  if (!provider) {
+    return nextConfig;
+  }
+
+  for (const field of provider.fields) {
+    if (field.type !== 'enum' || field.key in nextConfig) {
+      continue;
+    }
+
+    const fallbackValue = field.enumValues?.[0];
+    if (fallbackValue !== undefined) {
+      nextConfig[field.key] = fallbackValue;
+    }
+  }
+
+  return nextConfig;
+}
+
 function getLocalizedProviderRuntimeHint(
   provider: WebSearchProviderDescriptor,
   t: (key: string, options?: { defaultValue?: string }) => string,
@@ -226,6 +252,7 @@ export function WebSearchSettingsSection() {
   const selectedProviderConfig = selectedProvider
     ? (providerConfigByProvider[selectedProvider.providerId] ?? {})
     : {};
+  const effectiveSelectedProviderConfig = getEffectiveProviderConfig(selectedProvider, selectedProviderConfig);
   const savedSelectedProviderConfig = selectedProvider
     ? (savedProviderConfigByProvider[selectedProvider.providerId] ?? {})
     : {};
@@ -295,7 +322,7 @@ export function WebSearchSettingsSection() {
     if (selectedProvider) {
       payload.providerConfig = {
         providerId: selectedProvider.providerId,
-        values: selectedProviderConfig,
+        values: effectiveSelectedProviderConfig,
       };
     }
 
@@ -312,10 +339,16 @@ export function WebSearchSettingsSection() {
       if (response.settings) {
         syncFromSettings(response.settings, selectedProviderKey);
       } else if (selectedProvider) {
+        setProviderConfigByProvider((current) => ({
+          ...current,
+          [selectedProvider.providerId]: {
+            ...effectiveSelectedProviderConfig,
+          },
+        }));
         setSavedProviderConfigByProvider((current) => ({
           ...current,
           [selectedProvider.providerId]: {
-            ...selectedProviderConfig,
+            ...effectiveSelectedProviderConfig,
           },
         }));
       }
@@ -362,7 +395,11 @@ export function WebSearchSettingsSection() {
 
   const renderProviderField = (field: WebSearchProviderField) => {
     const fieldId = `web-search-provider-${selectedProvider?.providerId}-${field.key}`;
-    const fieldValue = selectedProvider ? selectedProviderConfig[field.key] : undefined;
+    const fieldValue = selectedProvider
+      ? (field.type === 'enum'
+        ? effectiveSelectedProviderConfig[field.key]
+        : selectedProviderConfig[field.key])
+      : undefined;
 
     if (field.type === 'boolean') {
       return (
@@ -527,21 +564,22 @@ export function WebSearchSettingsSection() {
             </div>
           ) : null}
 
-          {!enabled ? (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                className="rounded-full"
-                onClick={() => void handleSave()}
-                disabled={loading || saving}
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {t('webSearch.actions.save')}
-              </Button>
-            </div>
-          ) : null}
         </div>
       </section>
+
+      {!enabled ? (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            className="rounded-full"
+            onClick={() => void handleSave()}
+            disabled={loading || saving}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {t('webSearch.actions.save')}
+          </Button>
+        </div>
+      ) : null}
 
       {enabled ? (
         <section className="overflow-hidden rounded-[20px] border border-black/8 bg-card dark:border-white/10">
@@ -646,21 +684,25 @@ export function WebSearchSettingsSection() {
                           </p>
                         </div>
                       </div>
+
+                      {!isAutoDefault ? (
+                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-9 px-3 text-[13px] text-muted-foreground shadow-none"
+                            onClick={() => setDefaultProvider('')}
+                          >
+                            {t('webSearch.actions.setDefault')}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="rounded-3xl border border-dashed border-black/8 bg-black/[0.02] p-5 dark:border-white/10 dark:bg-white/[0.03]">
                       <p className="text-[15px] font-medium text-foreground">
                         {automaticProviderHelp}
                       </p>
-                      {!isAutoDefault ? (
-                        <Button
-                          type="button"
-                          onClick={() => setDefaultProvider('')}
-                          className="mt-4 h-10 rounded-full px-5 text-[13px] font-medium shadow-none"
-                        >
-                          {t('webSearch.actions.setDefault')}
-                        </Button>
-                      ) : null}
                     </div>
 
                     <div className="flex justify-end">
@@ -689,7 +731,7 @@ export function WebSearchSettingsSection() {
                                 {t('webSearch.provider.default')}
                               </span>
                             ) : null}
-                            {hasSavedProviderConfig(selectedProviderConfig, savedSelectedProviderConfig) ? (
+                            {hasSavedProviderConfig(effectiveSelectedProviderConfig, savedSelectedProviderConfig) ? (
                               <span className="inline-flex items-center rounded-full border border-black/8 bg-black/[0.045] px-2.5 py-1 text-[11px] font-medium text-foreground/75 dark:border-white/10 dark:bg-white/[0.08] dark:text-foreground/85">
                                 {t('webSearch.provider.configured')}
                               </span>

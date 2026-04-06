@@ -284,6 +284,47 @@ describe('openclaw-web-search-config', () => {
     });
   });
 
+  it('enables the selected brave plugin when saving brave as the provider', () => {
+    const config: Record<string, unknown> = {};
+
+    const changed = applyWebSearchSettingsPatch(config, {
+      enabled: true,
+      provider: 'brave',
+      providerConfig: {
+        providerId: 'brave',
+        values: {
+          apiKey: 'BSA-test',
+          mode: 'web',
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(config).toMatchObject({
+      tools: {
+        web: {
+          search: {
+            enabled: true,
+            provider: 'brave',
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          brave: {
+            enabled: true,
+            config: {
+              webSearch: {
+                apiKey: 'BSA-test',
+                mode: 'web',
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('clears the explicit provider when auto-select is saved', () => {
     const config: Record<string, unknown> = {
       tools: {

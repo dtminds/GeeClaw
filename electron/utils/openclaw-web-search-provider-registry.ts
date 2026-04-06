@@ -56,6 +56,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.brave.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',
@@ -170,6 +171,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.google.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',
@@ -200,6 +202,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.xai.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',
@@ -235,6 +238,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.moonshot.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',
@@ -271,6 +275,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.minimax.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',
@@ -316,6 +321,7 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     credentialPath: 'plugins.entries.perplexity.config.webSearch.apiKey',
     availabilityKind: 'secret',
     availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
     fields: [
       {
         key: 'apiKey',

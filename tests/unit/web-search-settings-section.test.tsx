@@ -359,14 +359,18 @@ describe('WebSearchSettingsSection', () => {
       throw new Error(`Unhandled hostApiFetch call: ${path}`);
     });
 
-    render(<WebSearchSettingsSection />);
+    const { container } = render(<WebSearchSettingsSection />);
 
     expect(await screen.findByText('Web Search')).toBeInTheDocument();
     expect(screen.getByLabelText('Enable Web Search')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Kimi' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Max Results')).not.toBeInTheDocument();
     expect(screen.queryByText('Choose Automatically')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+    expect(saveButton).toBeInTheDocument();
+    const sections = Array.from(container.querySelectorAll('section'));
+    expect(sections).toHaveLength(1);
+    expect(saveButton.closest('section')).toBeNull();
   });
 
   it('hides provider-specific section when provider selection is auto-detect', async () => {
@@ -448,6 +452,67 @@ describe('WebSearchSettingsSection', () => {
     expect(screen.getByText("If you do not specify one, we'll use any search service that is ready.")).toBeInTheDocument();
     expect(screen.queryByLabelText('Perplexity API Key')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('uses the same compact header action style for auto-mode set default', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/web-search/providers') {
+        return {
+          providers: [
+            {
+              providerId: 'brave',
+              pluginId: 'brave',
+              label: 'Brave Search',
+              hint: 'Structured results',
+              availability: {
+                available: true,
+                source: 'saved',
+              },
+              envVarStatuses: {
+                BRAVE_API_KEY: false,
+              },
+              envVars: ['BRAVE_API_KEY'],
+              signupUrl: 'https://brave.com/search/api/',
+              fields: [
+                { key: 'apiKey', type: 'secret', label: 'Brave Search API Key' },
+              ],
+            },
+          ],
+        };
+      }
+
+      if (path === '/api/settings/web-search' && (!init || init.method === undefined)) {
+        return {
+          search: {
+            enabled: true,
+            provider: 'brave',
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfigByProvider: {
+            brave: {
+              apiKey: 'BSA-test',
+            },
+          },
+        };
+      }
+
+      if (path === '/api/settings/web-search' && init?.method === 'PUT') {
+        return { success: true };
+      }
+
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    render(<WebSearchSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose Automatically' }));
+
+    const setDefaultButton = screen.getByRole('button', { name: 'Set Default' });
+    expect(setDefaultButton).toHaveClass('h-9');
+    expect(setDefaultButton).toHaveClass('text-muted-foreground');
+    expect(setDefaultButton).not.toHaveClass('mt-4');
   });
 
   it('renders searxng as a base-url-driven provider', async () => {
@@ -633,6 +698,89 @@ describe('WebSearchSettingsSection', () => {
       });
     });
     expect(toastSuccessMock).toHaveBeenCalledWith('Saved');
+  });
+
+  it('persists enum defaults even when the user saves without touching the provider form', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/web-search/providers') {
+        return {
+          providers: [
+            {
+              providerId: 'brave',
+              pluginId: 'brave',
+              label: 'Brave Search',
+              hint: 'Structured results',
+              availability: {
+                available: true,
+                source: 'environment',
+              },
+              envVarStatuses: {
+                BRAVE_API_KEY: true,
+              },
+              envVars: ['BRAVE_API_KEY'],
+              signupUrl: 'https://brave.com/search/api/',
+              fields: [
+                { key: 'apiKey', type: 'secret', label: 'Brave Search API Key', placeholder: 'BSA...' },
+                {
+                  key: 'mode',
+                  type: 'enum',
+                  label: 'Brave Search Mode',
+                  enumValues: ['web', 'llm-context'],
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      if (path === '/api/settings/web-search' && (!init || init.method === undefined)) {
+        return {
+          search: {
+            enabled: true,
+            provider: 'brave',
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfigByProvider: {},
+        };
+      }
+
+      if (path === '/api/settings/web-search' && init?.method === 'PUT') {
+        return { success: true };
+      }
+
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    render(<WebSearchSettingsSection />);
+
+    await screen.findByRole('button', { name: /Brave Search/ });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/web-search', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          enabled: true,
+          provider: 'brave',
+          shared: {
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfig: {
+            providerId: 'brave',
+            values: {
+              mode: 'web',
+            },
+          },
+        }),
+      });
+    });
   });
 
   it('sends null provider when saving auto-detect mode', async () => {
