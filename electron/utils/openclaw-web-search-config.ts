@@ -6,6 +6,7 @@ import {
 } from './openclaw-web-search-provider-registry';
 
 type WebSearchSharedField = 'maxResults' | 'timeoutSeconds' | 'cacheTtlMinutes';
+const WEB_SEARCH_SHARED_FIELDS = ['maxResults', 'timeoutSeconds', 'cacheTtlMinutes'] satisfies WebSearchSharedField[];
 
 export type WebSearchSettingsSnapshot = {
   search: {
@@ -82,8 +83,8 @@ function updatePluginEntry(
   return true;
 }
 
-function copyKnownWebSearchFields(source: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(source));
+function shallowCopy(source: Record<string, unknown>): Record<string, unknown> {
+  return { ...source };
 }
 
 export {
@@ -211,7 +212,7 @@ export function readWebSearchSettingsSnapshot(config: OpenClawConfigDocument): W
     const providerConfig = cloneConfigObject(pluginConfig?.webSearch);
 
     if (providerConfig && Object.keys(providerConfig).length > 0) {
-      providerConfigByProvider[descriptor.providerId] = copyKnownWebSearchFields(providerConfig);
+      providerConfigByProvider[descriptor.providerId] = shallowCopy(providerConfig);
     }
   }
 
@@ -226,7 +227,7 @@ export function readWebSearchSettingsSnapshot(config: OpenClawConfigDocument): W
     snapshot.search.provider = search.provider;
   }
 
-  for (const field of ['maxResults', 'timeoutSeconds', 'cacheTtlMinutes'] satisfies WebSearchSharedField[]) {
+  for (const field of WEB_SEARCH_SHARED_FIELDS) {
     const value = search?.[field];
     if (typeof value === 'number' && Number.isFinite(value)) {
       snapshot.search[field] = value;
@@ -271,7 +272,7 @@ export function applyWebSearchSettingsPatch(
     }
 
     if (patch.shared) {
-      for (const field of ['maxResults', 'timeoutSeconds', 'cacheTtlMinutes'] satisfies WebSearchSharedField[]) {
+      for (const field of WEB_SEARCH_SHARED_FIELDS) {
         if (!(field in patch.shared)) {
           continue;
         }

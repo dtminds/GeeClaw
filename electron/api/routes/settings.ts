@@ -173,9 +173,11 @@ export async function handleSettingsRoutes(
   if (url.pathname === '/api/settings/web-search/providers' && req.method === 'GET') {
     try {
       const descriptors = listWebSearchProviderDescriptors();
-      const config = await readOpenClawConfigDocument();
+      const [config, runtimeEnv] = await Promise.all([
+        readOpenClawConfigDocument(),
+        resolveGeeClawAppEnvironment({}),
+      ]);
       const snapshot = readWebSearchSettingsSnapshot(config);
-      const runtimeEnv = await resolveGeeClawAppEnvironment({});
       const availabilityByProvider = buildWebSearchProviderAvailabilityMap(
         snapshot.providerConfigByProvider,
         runtimeEnv,
