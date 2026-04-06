@@ -15,6 +15,7 @@ import { getOpenClawResolvedDir, getOpenClawConfigDir } from './paths';
 import { buildManagedOpenClawArgs } from './openclaw-managed-profile';
 import { reconcileBundledPluginLoadPaths } from './plugin-install';
 import * as logger from './logger';
+import { LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS } from './legacy-built-in-plugins';
 import { proxyAwareFetch } from './proxy-fetch';
 import { hasConfiguredWhatsAppSession } from './whatsapp-credentials';
 import {
@@ -36,10 +37,6 @@ const MANAGED_PLUGIN_ENTRY_IDS = [DINGTALK_PLUGIN_ID, WECOM_PLUGIN_ID, WEIXIN_PL
 
 // Channels that are managed as plugins (config goes under plugins.entries, not channels)
 const PLUGIN_CHANNELS: string[] = [];
-const LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS: Record<string, string[]> = {
-    qqbot: ['qqbot', 'openclaw-qqbot'],
-    whatsapp: ['whatsapp'],
-};
 const BUILTIN_CHANNEL_IDS = new Set([
     'discord',
     'telegram',

@@ -1,5 +1,6 @@
 import { access } from 'fs/promises';
 import { constants } from 'fs';
+import { LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS, LEGACY_BUILTIN_PLUGIN_ID_SET } from './legacy-built-in-plugins';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getManagedAgentWorkspacePath } from './managed-agent-workspace';
 import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
@@ -20,10 +21,6 @@ const BUILTIN_CHANNEL_IDS = new Set([
   'googlechat',
   'mattermost',
 ]);
-const LEGACY_BUILTIN_PLUGIN_IDS: Record<string, string[]> = {
-  whatsapp: ['whatsapp'],
-  qqbot: ['qqbot', 'openclaw-qqbot'],
-};
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -169,7 +166,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             : {}
         ) as Record<string, unknown>;
 
-        for (const [channelId, legacyPluginIds] of Object.entries(LEGACY_BUILTIN_PLUGIN_IDS)) {
+        for (const [channelId, legacyPluginIds] of Object.entries(LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS)) {
           for (const pluginId of legacyPluginIds) {
             if (!(pluginId in entries)) continue;
             delete entries[pluginId];
@@ -188,7 +185,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           (pluginId) => (
             pluginId !== LEGACY_QWEN_PLUGIN_ID
             && !BUILTIN_CHANNEL_IDS.has(pluginId)
-            && pluginId !== 'openclaw-qqbot'
+            && !LEGACY_BUILTIN_PLUGIN_ID_SET.has(pluginId)
           ),
         );
         const nextAllow = [...externalPluginIds];
