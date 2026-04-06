@@ -78,8 +78,7 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
     return descendants;
   };
 
-  const terminateUnixChildProcesses = async (pid: number, signal: NodeJS.Signals): Promise<void> => {
-    const descendantPids = await getUnixDescendantProcessIds(pid);
+  const terminateUnixChildProcesses = async (descendantPids: number[], signal: NodeJS.Signals): Promise<void> => {
     for (const descendantPid of descendantPids) {
       try {
         process.kill(descendantPid, signal);
@@ -110,14 +109,21 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
         return;
       }
 
+      const descendantPids = pid
+        ? await getUnixDescendantProcessIds(pid).catch((error) => {
+          logger.warn(`Failed to inspect Unix Gateway child processes for pid=${pid}:`, error);
+          return [] as number[];
+        })
+        : [];
+
       try {
         child.kill();
       } catch {
         // ignore if already exited
       }
 
-      if (pid) {
-        await terminateUnixChildProcesses(pid, 'SIGTERM').catch((error) => {
+      if (descendantPids.length > 0) {
+        await terminateUnixChildProcesses(descendantPids, 'SIGTERM').catch((error) => {
           logger.warn(`Unix Gateway child-process termination failed for pid=${pid}:`, error);
         });
       }
@@ -132,9 +138,11 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
               logger.warn(`Forced Windows process-tree kill failed for Gateway pid=${pid}:`, error);
             });
           } else {
-            void terminateUnixChildProcesses(pid, 'SIGKILL').catch((error) => {
-              logger.warn(`Forced Unix child-process kill failed for Gateway pid=${pid}:`, error);
-            });
+            void getUnixDescendantProcessIds(pid)
+              .then((descendantPids) => terminateUnixChildProcesses(descendantPids, 'SIGKILL'))
+              .catch((error) => {
+                logger.warn(`Forced Unix child-process kill failed for Gateway pid=${pid}:`, error);
+              });
             try {
               process.kill(pid, 'SIGKILL');
             } catch {
@@ -233,14 +241,18 @@ export async function getGatewayListenerProcessIds(port: number): Promise<string
 }
 
 async function getProcessCommandLine(pid: string): Promise<string> {
-  const cp = await import('child_process');
+  if (!/^\d+$/.test(pid)) {
+    return '';
+  }
 
-  const command = process.platform === 'win32'
-    ? `powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\"ProcessId = ${pid}\\").CommandLine"`
-    : `ps -o command= -p ${pid}`;
+  const cp = await import('child_process');
+  const command = process.platform === 'win32' ? 'powershell' : 'ps';
+  const args = process.platform === 'win32'
+    ? ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`]
+    : ['-o', 'command=', '-p', pid];
 
   const { stdout } = await new Promise<{ stdout: string }>((resolve) => {
-    cp.exec(command, { timeout: 5000, windowsHide: true }, (err, stdout) => {
+    cp.execFile(command, args, { timeout: 5000, windowsHide: true }, (err, stdout) => {
       if (err) {
         resolve({ stdout: '' });
       } else {

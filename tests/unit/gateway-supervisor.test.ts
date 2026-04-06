@@ -5,10 +5,12 @@ const originalPlatform = process.platform;
 
 const {
   mockExec,
+  mockExecFile,
   mockCreateServer,
   mockWebSocketState,
 } = vi.hoisted(() => ({
   mockExec: vi.fn(),
+  mockExecFile: vi.fn(),
   mockCreateServer: vi.fn(),
   mockWebSocketState: { mode: 'error' as 'open' | 'error' },
 }));
@@ -23,10 +25,12 @@ vi.mock('electron', () => ({
 
 vi.mock('child_process', () => ({
   exec: mockExec,
+  execFile: mockExecFile,
   execSync: vi.fn(),
   spawn: vi.fn(),
   default: {
     exec: mockExec,
+    execFile: mockExecFile,
     execSync: vi.fn(),
     spawn: vi.fn(),
   },
@@ -74,6 +78,14 @@ describe('gateway supervisor process cleanup', () => {
     mockWebSocketState.mode = 'error';
 
     mockExec.mockImplementation((...args: unknown[]) => {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') {
+        callback(null, '');
+      }
+      return {} as never;
+    });
+
+    mockExecFile.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1);
       if (typeof callback === 'function') {
         callback(null, '');
@@ -131,23 +143,31 @@ describe('gateway supervisor process cleanup', () => {
     child.emit('exit', 0);
     await stopPromise;
 
-    expect(child.kill).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(child.kill).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('terminates Unix child descendants before considering owned process stopped', async () => {
     setPlatform('darwin');
     const child = new MockUtilityChild(9876);
     const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
+    const callOrder: string[] = [];
 
     mockExec.mockImplementation((...args: unknown[]) => {
       const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
       void options;
       if (cmd === 'ps -axo pid=,ppid=') {
+        callOrder.push('ps-tree');
         callback(null, '111 9876\n222 111\n333 222\n');
         return {} as never;
       }
       callback(null, '');
       return {} as never;
+    });
+    child.kill.mockImplementation(() => {
+      callOrder.push('child-kill');
+      return true;
     });
 
     const { terminateOwnedGatewayProcess } = await import('@electron/gateway/supervisor');
@@ -156,7 +176,10 @@ describe('gateway supervisor process cleanup', () => {
     child.emit('exit', 0);
     await stopPromise;
 
-    expect(child.kill).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(child.kill).toHaveBeenCalledTimes(1);
+    });
+    expect(callOrder.indexOf('ps-tree')).toBeLessThan(callOrder.indexOf('child-kill'));
     await vi.waitFor(() => {
       expect(processKillSpy).toHaveBeenCalledWith(333, 'SIGTERM');
       expect(processKillSpy).toHaveBeenCalledWith(222, 'SIGTERM');
@@ -201,7 +224,13 @@ describe('gateway supervisor process cleanup', () => {
         callback(null, '4321\n');
         return {} as never;
       }
-      if (cmd === 'ps -o command= -p 4321') {
+      callback(null, '');
+      return {} as never;
+    });
+    mockExecFile.mockImplementation((...args: unknown[]) => {
+      const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'ps' && argv.join(' ') === '-o command= -p 4321') {
         callback(null, '/usr/bin/node /tmp/openclaw gateway.js\n');
         return {} as never;
       }
@@ -220,6 +249,39 @@ describe('gateway supervisor process cleanup', () => {
 
     expect(result).toBeNull();
     expect(processKillSpy).toHaveBeenCalledWith(4321, 'SIGTERM');
+  });
+
+  it('ignores non-numeric listener ids when checking process command lines', async () => {
+    setPlatform('darwin');
+    const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
+
+    mockExec.mockImplementation((...args: unknown[]) => {
+      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'lsof -i :28788 -sTCP:LISTEN -t') {
+        callback(null, '4321;rm -rf /\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+
+    const { findExistingGatewayProcess } = await import('@electron/gateway/supervisor');
+
+    await expect(findExistingGatewayProcess({
+      port: 28788,
+      terminateForeignProcess: false,
+      rejectForeignProcess: true,
+      reclaimLikelyGatewayResidue: true,
+    })).rejects.toThrow('already in use by another process');
+
+    expect(mockExecFile).not.toHaveBeenCalledWith(
+      'ps',
+      expect.arrayContaining(['4321;rm -rf /']),
+      expect.anything(),
+      expect.any(Function),
+    );
+    expect(processKillSpy).not.toHaveBeenCalled();
   });
 
   it('does not reclaim an active external OpenClaw-compatible gateway', async () => {
