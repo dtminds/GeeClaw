@@ -11,6 +11,14 @@ const isSecurityPolicyMock = vi.fn();
 const syncOpenClawSafetySettingsMock = vi.fn();
 const getManagedAppEnvironmentEntriesMock = vi.fn();
 const replaceManagedAppEnvironmentEntriesMock = vi.fn();
+const resolveGeeClawAppEnvironmentMock = vi.fn();
+const listWebSearchProviderDescriptorsMock = vi.fn();
+const applyWebSearchSettingsPatchMock = vi.fn();
+const buildWebSearchProviderAvailabilityMapMock = vi.fn();
+const buildWebSearchProviderEnvVarStatusMapMock = vi.fn();
+const readWebSearchSettingsSnapshotMock = vi.fn();
+const readOpenClawConfigDocumentMock = vi.fn();
+const mutateOpenClawConfigDocumentMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
 const sendJsonMock = vi.fn();
 
@@ -34,6 +42,23 @@ vi.mock('@electron/utils/openclaw-safety-settings', () => ({
 vi.mock('@electron/utils/app-env', () => ({
   getManagedAppEnvironmentEntries: (...args: unknown[]) => getManagedAppEnvironmentEntriesMock(...args),
   replaceManagedAppEnvironmentEntries: (...args: unknown[]) => replaceManagedAppEnvironmentEntriesMock(...args),
+  resolveGeeClawAppEnvironment: (...args: unknown[]) => resolveGeeClawAppEnvironmentMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-web-search-provider-registry', () => ({
+  listWebSearchProviderDescriptors: (...args: unknown[]) => listWebSearchProviderDescriptorsMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-web-search-config', () => ({
+  applyWebSearchSettingsPatch: (...args: unknown[]) => applyWebSearchSettingsPatchMock(...args),
+  buildWebSearchProviderAvailabilityMap: (...args: unknown[]) => buildWebSearchProviderAvailabilityMapMock(...args),
+  buildWebSearchProviderEnvVarStatusMap: (...args: unknown[]) => buildWebSearchProviderEnvVarStatusMapMock(...args),
+  readWebSearchSettingsSnapshot: (...args: unknown[]) => readWebSearchSettingsSnapshotMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-config-coordinator', () => ({
+  readOpenClawConfigDocument: (...args: unknown[]) => readOpenClawConfigDocumentMock(...args),
+  mutateOpenClawConfigDocument: (...args: unknown[]) => mutateOpenClawConfigDocumentMock(...args),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -57,6 +82,25 @@ describe('handleSettingsRoutes', () => {
       value === 'moderate' || value === 'strict' || value === 'fullAccess'
     ));
     getManagedAppEnvironmentEntriesMock.mockResolvedValue([]);
+    resolveGeeClawAppEnvironmentMock.mockResolvedValue({});
+    listWebSearchProviderDescriptorsMock.mockReturnValue([]);
+    applyWebSearchSettingsPatchMock.mockReturnValue(false);
+    buildWebSearchProviderAvailabilityMapMock.mockReturnValue({});
+    buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({});
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: false,
+      },
+      providerConfigByProvider: {},
+    });
+    readOpenClawConfigDocumentMock.mockResolvedValue({});
+    mutateOpenClawConfigDocumentMock.mockImplementation(async (
+      mutate: (config: Record<string, unknown>) => Promise<{ changed: boolean; result: unknown }> | { changed: boolean; result: unknown },
+    ) => {
+      const config: Record<string, unknown> = {};
+      const { result } = await mutate(config);
+      return result;
+    });
   });
 
   it('debounces a gateway reload after saving safety settings while running', async () => {
@@ -182,6 +226,151 @@ describe('handleSettingsRoutes', () => {
     expect(restart).toHaveBeenCalledTimes(1);
     expect(sendJsonMock).toHaveBeenLastCalledWith(
       res,
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('returns normalized web search provider descriptors', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'brave',
+        pluginId: 'brave',
+        label: 'Brave Search',
+      },
+      {
+        providerId: 'gemini',
+        pluginId: 'google',
+        label: 'Gemini',
+      },
+    ]);
+    buildWebSearchProviderAvailabilityMapMock.mockReturnValue({
+      brave: {
+        available: true,
+        source: 'saved',
+      },
+      gemini: {
+        available: false,
+        source: 'missing',
+      },
+    });
+    buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({
+      brave: {
+        BRAVE_API_KEY: true,
+      },
+      gemini: {
+        GEMINI_API_KEY: false,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerId: 'brave',
+            pluginId: 'brave',
+            availability: {
+              available: true,
+              source: 'saved',
+            },
+            envVarStatuses: {
+              BRAVE_API_KEY: true,
+            },
+          }),
+          expect.objectContaining({
+            providerId: 'gemini',
+            pluginId: 'google',
+            availability: {
+              available: false,
+              source: 'missing',
+            },
+            envVarStatuses: {
+              GEMINI_API_KEY: false,
+            },
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('persists web search config and debounces gateway reload when running', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      enabled: true,
+      provider: 'perplexity',
+      shared: {
+        maxResults: 5,
+        timeoutSeconds: 30,
+        cacheTtlMinutes: 15,
+      },
+      providerConfig: {
+        providerId: 'perplexity',
+        values: {
+          apiKey: 'pplx-test',
+          model: 'perplexity/sonar-pro',
+        },
+      },
+    });
+    applyWebSearchSettingsPatchMock.mockReturnValue(true);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+        provider: 'perplexity',
+        maxResults: 5,
+        timeoutSeconds: 30,
+        cacheTtlMinutes: 15,
+      },
+      providerConfigByProvider: {
+        perplexity: {
+          apiKey: 'pplx-test',
+          model: 'perplexity/sonar-pro',
+        },
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(mutateOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(applyWebSearchSettingsPatchMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        enabled: true,
+        provider: 'perplexity',
+      }),
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
       200,
       expect.objectContaining({ success: true }),
     );

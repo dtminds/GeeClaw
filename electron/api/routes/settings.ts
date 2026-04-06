@@ -4,7 +4,20 @@ import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings
 import {
   getManagedAppEnvironmentEntries,
   replaceManagedAppEnvironmentEntries,
+  resolveGeeClawAppEnvironment,
 } from '../../utils/app-env';
+import {
+  applyWebSearchSettingsPatch,
+  buildWebSearchProviderAvailabilityMap,
+  buildWebSearchProviderEnvVarStatusMap,
+  readWebSearchSettingsSnapshot,
+  type WebSearchSettingsPatch,
+} from '../../utils/openclaw-web-search-config';
+import { listWebSearchProviderDescriptors } from '../../utils/openclaw-web-search-provider-registry';
+import {
+  mutateOpenClawConfigDocument,
+  readOpenClawConfigDocument,
+} from '../../utils/openclaw-config-coordinator';
 import {
   buildOpenClawSafetySettings,
   isSecurityPolicy,
@@ -150,6 +163,63 @@ export async function handleSettingsRoutes(
       }
 
       sendJson(res, 200, { success: true, entries });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search/providers' && req.method === 'GET') {
+    try {
+      const descriptors = listWebSearchProviderDescriptors();
+      const config = await readOpenClawConfigDocument();
+      const snapshot = readWebSearchSettingsSnapshot(config);
+      const runtimeEnv = await resolveGeeClawAppEnvironment({});
+      const availabilityByProvider = buildWebSearchProviderAvailabilityMap(
+        snapshot.providerConfigByProvider,
+        runtimeEnv,
+      );
+      const envVarStatusByProvider = buildWebSearchProviderEnvVarStatusMap(runtimeEnv);
+
+      sendJson(res, 200, {
+        providers: descriptors.map((descriptor) => ({
+          ...descriptor,
+          availability: availabilityByProvider[descriptor.providerId],
+          envVarStatuses: envVarStatusByProvider[descriptor.providerId],
+        })),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search' && req.method === 'GET') {
+    try {
+      const config = await readOpenClawConfigDocument();
+      sendJson(res, 200, readWebSearchSettingsSnapshot(config));
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search' && req.method === 'PUT') {
+    try {
+      const body = await parseJsonBody<WebSearchSettingsPatch>(req);
+      const settings = await mutateOpenClawConfigDocument((config) => {
+        const changed = applyWebSearchSettingsPatch(config, body);
+        return {
+          changed,
+          result: readWebSearchSettingsSnapshot(config),
+        };
+      });
+
+      if (ctx.gatewayManager.getStatus().state === 'running') {
+        ctx.gatewayManager.debouncedReload();
+      }
+
+      sendJson(res, 200, { success: true, settings });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

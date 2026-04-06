@@ -7,7 +7,63 @@
     "cliMarketplace": "CLI Market",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "webSearch": "Web Search",
     "environment": "Environment"
+  },
+  "webSearch": {
+    "title": "Web Search",
+    "description": "Set up web search for your agent.",
+    "shared": {
+      "enabled": "Enable Web Search",
+      "provider": "Search Service",
+      "providerAuto": "Choose Automatically",
+      "maxResults": "Max Results",
+      "timeoutSeconds": "Web Search Timeout (sec)",
+      "cacheTtlMinutes": "Web Search Cache TTL (min)",
+      "help": "If you don't choose one, we'll use any service that's ready.",
+      "autoReady": "Available now: {{providers}}",
+      "autoUnavailable": "No search service is ready yet. Add an API key first."
+    },
+    "provider": {
+      "title": "Service Settings",
+      "empty": "Choose a search service first.",
+      "signup": "Get API Key",
+      "docs": "Help",
+      "configured": "Saved",
+      "available": "Available",
+      "unavailable": "Not Ready",
+      "envFallback": "Leave blank to use env vars: {{envVars}}",
+      "reveal": "Show value",
+      "hide": "Hide value"
+    },
+    "providers": {
+      "brave": {
+        "hint": "Good for web search."
+      },
+      "gemini": {
+        "hint": "Google search."
+      },
+      "grok": {
+        "hint": "Shows citations."
+      },
+      "kimi": {
+        "hint": "Moonshot search."
+      },
+      "perplexity": {
+        "hint": "Perplexity search."
+      },
+      "firecrawl": {
+        "hint": "Firecrawl search."
+      }
+    },
+    "actions": {
+      "save": "Save"
+    },
+    "toast": {
+      "loadFailed": "Couldn't load settings",
+      "saved": "Saved",
+      "saveFailed": "Couldn't save settings"
+    }
   },
   "environment": {
     "title": "Environment Variables",

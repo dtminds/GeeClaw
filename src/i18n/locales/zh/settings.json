@@ -7,7 +7,63 @@
     "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "webSearch": "联网搜索",
     "environment": "环境变量"
+  },
+  "webSearch": {
+    "title": "联网搜索",
+    "description": "为 Agent 配置联网搜索的能力",
+    "shared": {
+      "enabled": "启用联网搜索",
+      "provider": "搜索服务",
+      "providerAuto": "自动选择",
+      "maxResults": "最多返回",
+      "timeoutSeconds": "超时时间（秒）",
+      "cacheTtlMinutes": "缓存 TTL（分钟）",
+      "help": "不选时，会自动使用当前可用的服务",
+      "autoReady": "当前可用：{{providers}}",
+      "autoUnavailable": "当前还没有可用的搜索服务，请先填写密钥或配置环境变量"
+    },
+    "provider": {
+      "title": "服务设置",
+      "empty": "先选择一个搜索服务",
+      "signup": "获取密钥",
+      "docs": "查看说明",
+      "configured": "已保存",
+      "available": "可用",
+      "unavailable": "未就绪",
+      "envFallback": "可留空，留空则从环境变量中读取：{{envVars}}",
+      "reveal": "显示值",
+      "hide": "隐藏值"
+    },
+    "providers": {
+      "brave": {
+        "hint": "适合网页搜索"
+      },
+      "gemini": {
+        "hint": "Google 搜索"
+      },
+      "grok": {
+        "hint": "可显示引用"
+      },
+      "kimi": {
+        "hint": "Moonshot 搜索"
+      },
+      "perplexity": {
+        "hint": "Perplexity 搜索"
+      },
+      "firecrawl": {
+        "hint": "Firecrawl 搜索"
+      }
+    },
+    "actions": {
+      "save": "保存设置"
+    },
+    "toast": {
+      "loadFailed": "加载失败",
+      "saved": "已保存",
+      "saveFailed": "保存失败"
+    }
   },
   "environment": {
     "title": "环境变量",
