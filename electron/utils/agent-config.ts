@@ -15,6 +15,7 @@ import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
+import { getProviderSecret } from '../services/secrets/secret-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import {
@@ -59,6 +60,7 @@ interface AgentModelConfig {
 interface AgentDefaultsConfig {
   workspace?: string;
   model?: string | AgentModelConfig;
+  imageGenerationModel?: string | AgentModelConfig;
   [key: string]: unknown;
 }
 
@@ -232,6 +234,134 @@ export interface DefaultAgentModelConfigSnapshot {
   fallbacks: string[];
   availableModels: AvailableProviderModelGroup[];
 }
+
+interface ImageGenerationProviderMetadata {
+  defaultModel: string;
+  models: string[];
+  capabilities: {
+    generate: {
+      maxCount?: number;
+      supportsSize?: boolean;
+      supportsAspectRatio?: boolean;
+      supportsResolution?: boolean;
+    };
+    edit: {
+      enabled: boolean;
+      maxCount?: number;
+      maxInputImages?: number;
+      supportsSize?: boolean;
+      supportsAspectRatio?: boolean;
+      supportsResolution?: boolean;
+    };
+    geometry?: {
+      sizes?: string[];
+      aspectRatios?: string[];
+      resolutions?: Array<'1K' | '2K' | '4K'>;
+    };
+  };
+}
+
+export interface ImageGenerationProviderGroup {
+  providerId: string;
+  providerName: string;
+  authConfigured: boolean;
+  defaultModelRef: string | null;
+  modelRefs: string[];
+  capabilities: ImageGenerationProviderMetadata['capabilities'];
+}
+
+export interface ImageGenerationModelSnapshot {
+  mode: 'auto' | 'manual';
+  primary: string | null;
+  fallbacks: string[];
+  effective: {
+    source: 'manual' | 'inferred' | 'none';
+    primary: string | null;
+  };
+  availableProviders: ImageGenerationProviderGroup[];
+}
+
+export interface ImageGenerationModelSaveInput {
+  mode: 'auto' | 'manual';
+  primary: string | null;
+  fallbacks: string[];
+}
+
+const IMAGE_GENERATION_PROVIDER_METADATA: Record<string, ImageGenerationProviderMetadata> = {
+  openai: {
+    defaultModel: 'gpt-image-1',
+    models: ['gpt-image-1'],
+    capabilities: {
+      generate: {
+        maxCount: 4,
+        supportsSize: true,
+        supportsAspectRatio: false,
+        supportsResolution: false,
+      },
+      edit: {
+        enabled: false,
+        maxCount: 0,
+        maxInputImages: 0,
+        supportsSize: false,
+        supportsAspectRatio: false,
+        supportsResolution: false,
+      },
+      geometry: {
+        sizes: ['1024x1024', '1024x1536', '1536x1024'],
+      },
+    },
+  },
+  google: {
+    defaultModel: 'gemini-3.1-flash-image-preview',
+    models: ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
+    capabilities: {
+      generate: {
+        maxCount: 4,
+        supportsSize: true,
+        supportsAspectRatio: true,
+        supportsResolution: true,
+      },
+      edit: {
+        enabled: true,
+        maxCount: 4,
+        maxInputImages: 5,
+        supportsSize: true,
+        supportsAspectRatio: true,
+        supportsResolution: true,
+      },
+      geometry: {
+        sizes: ['1024x1024', '1024x1536', '1536x1024', '1024x1792', '1792x1024'],
+        aspectRatios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+        resolutions: ['1K', '2K', '4K'],
+      },
+    },
+  },
+  fal: {
+    defaultModel: 'fal-ai/flux/dev',
+    models: ['fal-ai/flux/dev'],
+    capabilities: {
+      generate: {
+        maxCount: 4,
+        supportsSize: true,
+        supportsAspectRatio: true,
+        supportsResolution: true,
+      },
+      edit: {
+        enabled: true,
+        maxCount: 4,
+        maxInputImages: 1,
+        supportsSize: true,
+        supportsAspectRatio: false,
+        supportsResolution: true,
+      },
+      geometry: {
+        sizes: ['1024x1024', '1024x1536', '1536x1024', '1024x1792', '1792x1024'],
+        aspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16'],
+        resolutions: ['1K', '2K', '4K'],
+      },
+    },
+  },
+};
 
 const PERSONA_FILE_MAP = {
   identity: 'IDENTITY.md',
@@ -753,6 +883,124 @@ function readDefaultAgentModelConfig(
   return { primary: null, fallbacks: [] };
 }
 
+function readImageGenerationModelConfigValue(
+  config: AgentConfigDocument,
+): { primary: string | null; fallbacks: string[] } {
+  const defaults = (
+    config.agents && typeof config.agents === 'object'
+      ? (config.agents as AgentsConfig).defaults
+      : undefined
+  );
+  const modelConfig = defaults?.imageGenerationModel;
+
+  if (typeof modelConfig === 'string') {
+    return {
+      primary: modelConfig.trim() || null,
+      fallbacks: [],
+    };
+  }
+
+  if (modelConfig && typeof modelConfig === 'object') {
+    const primary = typeof modelConfig.primary === 'string' && modelConfig.primary.trim()
+      ? modelConfig.primary.trim()
+      : null;
+    const fallbacks = normalizeProviderModelList(
+      Array.isArray((modelConfig as Record<string, unknown>).fallbacks)
+        ? ((modelConfig as Record<string, unknown>).fallbacks as Array<string | null | undefined>)
+        : [],
+    );
+    return { primary, fallbacks };
+  }
+
+  return { primary: null, fallbacks: [] };
+}
+
+function parseProviderFromModelRef(modelRef: string | null): string | null {
+  if (typeof modelRef !== 'string') {
+    return null;
+  }
+  const trimmed = modelRef.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const slashIndex = trimmed.indexOf('/');
+  if (slashIndex <= 0) {
+    return null;
+  }
+  return trimmed.slice(0, slashIndex).toLowerCase();
+}
+
+function getImageGenerationProviderMetadata(providerType: string): ImageGenerationProviderMetadata | null {
+  return IMAGE_GENERATION_PROVIDER_METADATA[providerType] ?? null;
+}
+
+async function listAvailableImageGenerationProviderGroups(): Promise<ImageGenerationProviderGroup[]> {
+  const providers = (await listProviderAccounts()).map(providerAccountToConfig);
+  const authByProviderId = new Map<string, boolean>();
+
+  await Promise.all(providers.map(async (provider) => {
+    const secret = await getProviderSecret(provider.id);
+    authByProviderId.set(provider.id, Boolean(secret));
+  }));
+
+  return providers
+    .filter((provider) => provider.enabled !== false)
+    .map((provider) => {
+      const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id);
+      const metadata = getImageGenerationProviderMetadata(provider.type);
+      if (!metadata) {
+        return null;
+      }
+
+      return {
+        providerId: provider.id,
+        providerName: provider.name,
+        authConfigured: authByProviderId.get(provider.id) === true,
+        defaultModelRef: `${providerKey}/${metadata.defaultModel}`,
+        modelRefs: normalizeProviderModelList(metadata.models.map((modelId) => `${providerKey}/${modelId}`)),
+        capabilities: cloneValue(metadata.capabilities),
+      } satisfies ImageGenerationProviderGroup;
+    })
+    .filter((provider): provider is ImageGenerationProviderGroup => provider !== null)
+    .sort((left, right) => left.providerName.localeCompare(right.providerName));
+}
+
+function inferImageGenerationPrimary(
+  config: AgentConfigDocument,
+  providers: ImageGenerationProviderGroup[],
+): string | null {
+  const providerByRuntimeKey = new Map<string, ImageGenerationProviderGroup>();
+  for (const provider of providers) {
+    if (!provider.authConfigured || !provider.defaultModelRef) {
+      continue;
+    }
+    const providerKey = parseProviderFromModelRef(provider.defaultModelRef);
+    if (providerKey && !providerByRuntimeKey.has(providerKey)) {
+      providerByRuntimeKey.set(providerKey, provider);
+    }
+  }
+
+  const defaultModelProvider = parseProviderFromModelRef(readDefaultAgentModelConfig(config).primary);
+  const orderedProviderKeys = [
+    defaultModelProvider,
+    'openai',
+    'google',
+    ...providerByRuntimeKey.keys(),
+  ];
+
+  for (const providerKey of orderedProviderKeys) {
+    if (!providerKey) {
+      continue;
+    }
+    const provider = providerByRuntimeKey.get(providerKey);
+    if (provider?.defaultModelRef) {
+      return provider.defaultModelRef;
+    }
+  }
+
+  return null;
+}
+
 function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
   return normalizeProviderModelList(
     (getProviderRegistryConfig(providerId)?.models ?? []).map((model) => {
@@ -1248,6 +1496,104 @@ export async function updateDefaultAgentFallbacks(
     primary: current.primary,
     fallbacks: normalizedFallbacks,
     availableModels,
+  };
+}
+
+export async function getImageGenerationModelConfig(): Promise<ImageGenerationModelSnapshot> {
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const { primary, fallbacks } = readImageGenerationModelConfigValue(config);
+  const availableProviders = await listAvailableImageGenerationProviderGroups();
+  const effectivePrimary = primary ?? fallbacks[0] ?? null;
+
+  if (effectivePrimary) {
+    return {
+      mode: 'manual',
+      primary,
+      fallbacks,
+      effective: {
+        source: 'manual',
+        primary: effectivePrimary,
+      },
+      availableProviders,
+    };
+  }
+
+  const inferredPrimary = inferImageGenerationPrimary(config, availableProviders);
+
+  return {
+    mode: 'auto',
+    primary: null,
+    fallbacks: [],
+    effective: {
+      source: inferredPrimary ? 'inferred' : 'none',
+      primary: inferredPrimary,
+    },
+    availableProviders,
+  };
+}
+
+export async function updateImageGenerationModelConfig(
+  input: ImageGenerationModelSaveInput,
+): Promise<ImageGenerationModelSnapshot> {
+  const config = await readOpenClawConfig() as AgentConfigDocument;
+  const availableProviders = await listAvailableImageGenerationProviderGroups();
+  const availableRefs = new Set(availableProviders.flatMap((provider) => provider.modelRefs));
+  const primary = typeof input.primary === 'string' && input.primary.trim() ? input.primary.trim() : null;
+  const fallbacks = normalizeProviderModelList(input.fallbacks);
+  const refsToValidate = normalizeProviderModelList([primary, ...fallbacks]);
+  const invalidRefs = refsToValidate.filter((modelRef) => !availableRefs.has(modelRef));
+
+  if (invalidRefs.length > 0) {
+    throw new Error(`Unknown image generation models: ${invalidRefs.join(', ')}`);
+  }
+
+  const defaults = (
+    config.agents && typeof config.agents === 'object'
+      ? (((config.agents as AgentsConfig).defaults ?? {}) as AgentDefaultsConfig)
+      : {}
+  );
+
+  if (input.mode === 'manual') {
+    defaults.imageGenerationModel = {
+      primary: primary ?? undefined,
+      fallbacks,
+    };
+  } else {
+    delete defaults.imageGenerationModel;
+  }
+
+  config.agents = {
+    ...(config.agents && typeof config.agents === 'object' ? (config.agents as AgentsConfig) : {}),
+    defaults,
+  };
+
+  await persistAgentConfigAndPatchRuntime(config);
+
+  if (input.mode === 'manual') {
+    const effectivePrimary = primary ?? fallbacks[0] ?? null;
+    return {
+      mode: 'manual',
+      primary,
+      fallbacks,
+      effective: {
+        source: 'manual',
+        primary: effectivePrimary,
+      },
+      availableProviders,
+    };
+  }
+
+  const inferredPrimary = inferImageGenerationPrimary(config, availableProviders);
+
+  return {
+    mode: 'auto',
+    primary: null,
+    fallbacks: [],
+    effective: {
+      source: inferredPrimary ? 'inferred' : 'none',
+      primary: inferredPrimary,
+    },
+    availableProviders,
   };
 }
 
