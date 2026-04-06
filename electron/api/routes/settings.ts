@@ -210,15 +210,16 @@ export async function handleSettingsRoutes(
   if (url.pathname === '/api/settings/web-search' && req.method === 'PUT') {
     try {
       const body = await parseJsonBody<WebSearchSettingsPatch>(req);
+      let changed = false;
       const settings = await mutateOpenClawConfigDocument((config) => {
-        const changed = applyWebSearchSettingsPatch(config, body);
+        changed = applyWebSearchSettingsPatch(config, body);
         return {
           changed,
           result: readWebSearchSettingsSnapshot(config),
         };
       });
 
-      if (ctx.gatewayManager.getStatus().state === 'running') {
+      if (changed && ctx.gatewayManager.getStatus().state === 'running') {
         ctx.gatewayManager.debouncedReload();
       }
 
@@ -245,15 +246,16 @@ export async function handleSettingsRoutes(
         return true;
       }
 
+      let changed = false;
       const settings = await mutateOpenClawConfigDocument((currentConfig) => {
-        const changed = deleteWebSearchProviderConfig(currentConfig, supportedProvider.providerId);
+        changed = deleteWebSearchProviderConfig(currentConfig, supportedProvider.providerId);
         return {
           changed,
           result: readWebSearchSettingsSnapshot(currentConfig),
         };
       });
 
-      if (ctx.gatewayManager.getStatus().state === 'running') {
+      if (changed && ctx.gatewayManager.getStatus().state === 'running') {
         ctx.gatewayManager.debouncedReload();
       }
 

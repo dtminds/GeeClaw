@@ -379,6 +379,38 @@ describe('handleSettingsRoutes', () => {
     );
   });
 
+  it('does not debounce a gateway reload after saving web search config when nothing changed', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      enabled: true,
+      provider: 'perplexity',
+    });
+    applyWebSearchSettingsPatchMock.mockReturnValue(false);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(applyWebSearchSettingsPatchMock).toHaveBeenCalledTimes(1);
+    expect(debouncedReload).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
   it('deletes web search provider config and debounces gateway reload when running', async () => {
     listWebSearchProviderDescriptorsMock.mockReturnValue([
       {
@@ -427,6 +459,50 @@ describe('handleSettingsRoutes', () => {
       'minimax',
     );
     expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('does not debounce a gateway reload after deleting web search provider config when nothing changed', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+      },
+      providerConfigByProvider: {},
+    });
+    deleteWebSearchProviderConfigMock.mockReturnValue(false);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      'minimax',
+    );
+    expect(debouncedReload).not.toHaveBeenCalled();
     expect(sendJsonMock).toHaveBeenCalledWith(
       expect.anything(),
       200,

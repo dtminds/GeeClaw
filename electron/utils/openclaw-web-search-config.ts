@@ -97,25 +97,16 @@ function hasConfiguredAvailabilityValue(
   descriptor: WebSearchProviderDescriptor,
   providerConfig: Record<string, unknown> | undefined,
 ): boolean {
-  if (!providerConfig) {
+  if (!providerConfig || !descriptor.availabilityFieldKey) {
     return false;
   }
 
-  if (descriptor.availabilityKind === 'config' && descriptor.availabilityFieldKey) {
+  if (descriptor.availabilityKind === 'config' || descriptor.availabilityKind === 'secret') {
     const value = providerConfig[descriptor.availabilityFieldKey];
     return typeof value === 'string' && value.trim().length > 0;
   }
 
-  if (descriptor.availabilityKind !== 'secret') {
-    return false;
-  }
-
-  const key = descriptor.availabilityFieldKey;
-  if (!key) {
-    return false;
-  }
-  const value = providerConfig[key];
-  return typeof value === 'string' && value.trim().length > 0;
+  return false;
 }
 
 function hasEnvironmentAvailabilityValue(
