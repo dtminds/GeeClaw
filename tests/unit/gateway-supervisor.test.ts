@@ -154,10 +154,10 @@ describe('gateway supervisor process cleanup', () => {
     const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
     const callOrder: string[] = [];
 
-    mockExec.mockImplementation((...args: unknown[]) => {
-      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+    mockExecFile.mockImplementation((...args: unknown[]) => {
+      const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
       void options;
-      if (cmd === 'ps -axo pid=,ppid=') {
+      if (cmd === 'ps' && argv.join(' ') === '-axo pid=,ppid=') {
         callOrder.push('ps-tree');
         callback(null, '111 9876\n222 111\n333 222\n');
         return {} as never;
@@ -185,6 +185,40 @@ describe('gateway supervisor process cleanup', () => {
       expect(processKillSpy).toHaveBeenCalledWith(222, 'SIGTERM');
       expect(processKillSpy).toHaveBeenCalledWith(111, 'SIGTERM');
     });
+  });
+
+  it('waits for Unix descendant signaling before resolving stop', async () => {
+    setPlatform('darwin');
+    const child = new MockUtilityChild(9876);
+    let releaseProcessTree: ((err: Error | null, stdout: string) => void) | null = null;
+    let stopResolved = false;
+
+    mockExecFile.mockImplementation((...args: unknown[]) => {
+      const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'ps' && argv.join(' ') === '-axo pid=,ppid=') {
+        releaseProcessTree = callback;
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+
+    const { terminateOwnedGatewayProcess } = await import('@electron/gateway/supervisor');
+
+    const stopPromise = terminateOwnedGatewayProcess(child as unknown as Electron.UtilityProcess)
+      .then(() => {
+        stopResolved = true;
+      });
+
+    child.emit('exit', 0);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(stopResolved).toBe(false);
+    releaseProcessTree?.(null, '111 9876\n');
+
+    await stopPromise;
+    expect(stopResolved).toBe(true);
   });
 
   it('waits for port release after orphan cleanup on Windows', async () => {

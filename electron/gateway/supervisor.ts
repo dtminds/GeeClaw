@@ -39,7 +39,7 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
   const getUnixDescendantProcessIds = async (pid: number): Promise<number[]> => {
     const cp = await import('child_process');
     const { stdout } = await new Promise<{ stdout: string }>((resolve) => {
-      cp.exec('ps -axo pid=,ppid=', { timeout: 5000, windowsHide: true }, (err, stdout) => {
+      cp.execFile('ps', ['-axo', 'pid=,ppid='], { timeout: 5000, windowsHide: true }, (err, stdout) => {
         if (err) {
           resolve({ stdout: '' });
         } else {
@@ -90,22 +90,39 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
 
   await new Promise<void>((resolve) => {
     let exited = false;
+    let gracefulShutdownSignaled = false;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.off('exit', exitListener);
+      resolve();
+    };
+
+    const maybeFinishAfterGracefulShutdown = () => {
+      if (exited && gracefulShutdownSignaled) {
+        finish();
+      }
+    };
 
     const exitListener = () => {
       exited = true;
-      clearTimeout(timeout);
-      resolve();
+      maybeFinishAfterGracefulShutdown();
     };
     child.once('exit', exitListener);
 
     const pid = child.pid;
     logger.info(`Sending kill to Gateway process (pid=${pid ?? 'unknown'})`);
 
-    void (async () => {
+    const signalGracefulShutdown = async () => {
       if (process.platform === 'win32' && pid) {
         await terminateWindowsProcessTree(pid).catch((error) => {
           logger.warn(`Windows process-tree kill failed for Gateway pid=${pid}:`, error);
         });
+        gracefulShutdownSignaled = true;
+        maybeFinishAfterGracefulShutdown();
         return;
       }
 
@@ -127,22 +144,38 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
           logger.warn(`Unix Gateway child-process termination failed for pid=${pid}:`, error);
         });
       }
-    })();
+
+      gracefulShutdownSignaled = true;
+      maybeFinishAfterGracefulShutdown();
+    };
+
+    void signalGracefulShutdown().catch((error) => {
+      logger.warn(`Gateway graceful shutdown signaling failed (pid=${pid ?? 'unknown'}):`, error);
+      gracefulShutdownSignaled = true;
+      maybeFinishAfterGracefulShutdown();
+    });
 
     const timeout = setTimeout(() => {
-      if (!exited) {
+      void (async () => {
+        if (settled) {
+          return;
+        }
         logger.warn(`Gateway did not exit in time, force-killing (pid=${pid ?? 'unknown'})`);
         if (pid) {
           if (process.platform === 'win32') {
-            void terminateWindowsProcessTree(pid).catch((error) => {
+            await terminateWindowsProcessTree(pid).catch((error) => {
               logger.warn(`Forced Windows process-tree kill failed for Gateway pid=${pid}:`, error);
             });
           } else {
-            void getUnixDescendantProcessIds(pid)
-              .then((descendantPids) => terminateUnixChildProcesses(descendantPids, 'SIGKILL'))
-              .catch((error) => {
+            const descendantPids = await getUnixDescendantProcessIds(pid).catch((error) => {
+              logger.warn(`Failed to inspect Unix Gateway child processes for forced kill pid=${pid}:`, error);
+              return [] as number[];
+            });
+            if (descendantPids.length > 0) {
+              await terminateUnixChildProcesses(descendantPids, 'SIGKILL').catch((error) => {
                 logger.warn(`Forced Unix child-process kill failed for Gateway pid=${pid}:`, error);
               });
+            }
             try {
               process.kill(pid, 'SIGKILL');
             } catch {
@@ -150,9 +183,8 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
             }
           }
         }
-      }
-      child.off('exit', exitListener);
-      resolve();
+        finish();
+      })();
     }, 5000);
   });
 }
