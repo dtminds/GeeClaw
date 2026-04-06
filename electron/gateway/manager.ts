@@ -711,13 +711,24 @@ export class GatewayManager extends EventEmitter {
       },
       onExit: (exitedChild, code) => {
         this.processExitCode = code;
+        const exitedOwnedChild = this.process === exitedChild;
+        const socketStillOpen = this.ws?.readyState === WebSocket.OPEN;
+        const keepLiveConnection = this.status.state === 'running' && socketStillOpen;
         this.ownsProcess = false;
-        this.connectionMonitor.clear();
-        if (this.process === exitedChild) {
+        if (exitedOwnedChild) {
           this.process = null;
+          this.setStatus({ pid: undefined });
         }
         this.emit('exit', code);
 
+        if (keepLiveConnection) {
+          logger.info(
+            'Gateway child exited after a live WebSocket connection was established; continuing with the existing listener',
+          );
+          return;
+        }
+
+        this.connectionMonitor.clear();
         if (this.status.state === 'running') {
           this.setStatus({ state: 'stopped' });
           this.scheduleReconnect();

@@ -360,8 +360,8 @@
             ]
         },
         "qqbot": {
-            "description": "通过 @tencent-connect/openclaw-qqbot 插件连接 QQ 机器人",
-            "docsUrl": "https://github.com/sliverp/qqbot/blob/main/README.zh.md",
+            "description": "通过官方 QQ 机器人 API 连接 QQ",
+            "docsUrl": "https://docs.openclaw.ai/channels/qqbot",
             "fields": {
                 "appId": {
                     "label": "App ID",

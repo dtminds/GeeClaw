@@ -89,7 +89,12 @@ describe('agent runtime sync', () => {
         },
       },
       plugins: {
-        allow: ['openclaw-qqbot', 'other-plugin'],
+        allow: ['qqbot', 'openclaw-qqbot', 'other-plugin'],
+        entries: {
+          'openclaw-qqbot': {
+            enabled: true,
+          },
+        },
       },
       skills: {
         entries: {
@@ -175,9 +180,11 @@ describe('agent runtime sync', () => {
     const configAfterChannelSync = JSON.parse(readFileSync(configPath, 'utf8')) as {
       plugins?: {
         allow?: string[];
+        entries?: Record<string, { enabled?: boolean }>;
       };
     };
     expect(configAfterChannelSync.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
+    expect(configAfterChannelSync.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
 
     const { syncAllAgentConfigToOpenClaw } = await import('@electron/services/agents/agent-runtime-sync');
     await syncAllAgentConfigToOpenClaw();
@@ -200,6 +207,7 @@ describe('agent runtime sync', () => {
       };
       plugins?: {
         allow?: string[];
+        entries?: Record<string, { enabled?: boolean }>;
       };
       skills?: {
         entries?: Record<string, { enabled?: boolean }>;
@@ -224,6 +232,7 @@ describe('agent runtime sync', () => {
     ]);
     expect(config.channels?.wecom?.enabled).toBe(true);
     expect(config.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
+    expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
     expect(config.skills?.entries?.existing?.enabled).toBe(true);
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('managed');
     expect(JSON.stringify(config)).not.toContain('canUnmanage');

@@ -619,11 +619,6 @@ describe('saveChannelConfig', () => {
       entryIds: ['openclaw-lark', 'feishu'],
     },
     {
-      channelType: 'qqbot',
-      allowIds: ['openclaw-qqbot', 'qqbot'],
-      entryIds: ['openclaw-qqbot', 'qqbot'],
-    },
-    {
       channelType: 'openclaw-weixin',
       allowIds: ['openclaw-weixin'],
       entryIds: ['openclaw-weixin'],
@@ -710,11 +705,6 @@ describe('saveChannelConfig', () => {
       channelType: 'feishu',
       allowIds: ['openclaw-lark', 'feishu'],
       entryIds: ['openclaw-lark', 'feishu'],
-    },
-    {
-      channelType: 'qqbot',
-      allowIds: ['openclaw-qqbot', 'qqbot'],
-      entryIds: ['openclaw-qqbot', 'qqbot'],
     },
     {
       channelType: 'openclaw-weixin',
@@ -827,6 +817,71 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.entries?.['wecom-openclaw-plugin']?.enabled).toBe(false);
   });
 
+  it('removes legacy qqbot plugin registrations when deleting qqbot channel config', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      channels: {
+        qqbot: {
+          defaultAccount: 'default',
+          accounts: {
+            default: {
+              enabled: true,
+              appId: 'qq-app',
+            },
+          },
+        },
+      },
+      plugins: {
+        enabled: true,
+        allow: ['qqbot', 'openclaw-qqbot'],
+        entries: {
+          qqbot: { enabled: true },
+          'openclaw-qqbot': { enabled: true },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { deleteChannelConfig, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    await deleteChannelConfig('qqbot');
+
+    const config = await readOpenClawConfig() as {
+      channels?: Record<string, unknown>;
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.qqbot).toBeUndefined();
+    expect(config.plugins?.allow?.includes('qqbot')).not.toBe(true);
+    expect(config.plugins?.allow?.includes('openclaw-qqbot')).not.toBe(true);
+    expect(config.plugins?.entries?.qqbot).toBeUndefined();
+    expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
+  });
+
   it('saves whatsapp as a built-in channel instead of a plugin entry', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);
@@ -925,7 +980,7 @@ describe('saveChannelConfig', () => {
     expect(config.channels?.whatsapp?.enabled).toBe(true);
   });
 
-  it('keeps configured built-in channels in plugins.allow when plugin-backed channels are enabled', async () => {
+  it('does not keep built-in channels or legacy qqbot plugin registrations in plugins.allow', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);
     vi.resetModules();
@@ -949,16 +1004,35 @@ describe('saveChannelConfig', () => {
     mockStores();
 
     const { readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      plugins: {
+        enabled: true,
+        allow: ['openclaw-qqbot'],
+        entries: {
+          'openclaw-qqbot': { enabled: true },
+        },
+      },
+    }, null, 2), 'utf8');
+
     await saveChannelConfig('discord', { token: 'discord-token' }, 'default');
     await saveChannelConfig('whatsapp', { enabled: true }, 'default');
     await saveChannelConfig('qqbot', { appId: 'qq-app', token: 'qq-token', appSecret: 'qq-secret' }, 'default');
+    await saveChannelConfig('wecom', { corpId: 'corp-id', agentId: 'agent-id', secret: 'secret' }, 'default');
 
     const config = await readOpenClawConfig() as {
       plugins?: {
         allow?: string[];
+        entries?: Record<string, { enabled?: boolean }>;
       };
     };
 
-    expect(config.plugins?.allow).toEqual(expect.arrayContaining(['openclaw-qqbot', 'discord', 'whatsapp']));
+    expect(config.plugins?.allow).toEqual(['wecom-openclaw-plugin']);
+    expect(config.plugins?.allow).not.toContain('discord');
+    expect(config.plugins?.allow).not.toContain('whatsapp');
+    expect(config.plugins?.allow).not.toContain('qqbot');
+    expect(config.plugins?.allow).not.toContain('openclaw-qqbot');
+    expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
   });
 });

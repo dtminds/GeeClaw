@@ -604,7 +604,6 @@ exports.default = async function afterPack(context) {
     const BUNDLED_PLUGINS = [
       { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
       { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
-      { npmName: '@tencent-connect/openclaw-qqbot', pluginId: 'openclaw-qqbot' },
       { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
       { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
     ];
