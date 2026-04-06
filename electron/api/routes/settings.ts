@@ -10,6 +10,7 @@ import {
   applyWebSearchSettingsPatch,
   buildWebSearchProviderAvailabilityMap,
   buildWebSearchProviderEnvVarStatusMap,
+  deleteWebSearchProviderConfig,
   readWebSearchSettingsSnapshot,
   type WebSearchSettingsPatch,
 } from '../../utils/openclaw-web-search-config';
@@ -212,6 +213,41 @@ export async function handleSettingsRoutes(
         return {
           changed,
           result: readWebSearchSettingsSnapshot(config),
+        };
+      });
+
+      if (ctx.gatewayManager.getStatus().state === 'running') {
+        ctx.gatewayManager.debouncedReload();
+      }
+
+      sendJson(res, 200, { success: true, settings });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname.startsWith('/api/settings/web-search/providers/') && req.method === 'DELETE') {
+    try {
+      const providerId = decodeURIComponent(url.pathname.slice('/api/settings/web-search/providers/'.length));
+      const supportedProvider = listWebSearchProviderDescriptors().find((entry) => entry.providerId === providerId);
+      if (!supportedProvider) {
+        sendJson(res, 404, { success: false, error: 'Unknown web search provider' });
+        return true;
+      }
+      const config = await readOpenClawConfigDocument();
+      const snapshot = readWebSearchSettingsSnapshot(config);
+
+      if (snapshot.search.provider === providerId) {
+        sendJson(res, 409, { success: false, error: 'Cannot delete config for the default web search provider' });
+        return true;
+      }
+
+      const settings = await mutateOpenClawConfigDocument((currentConfig) => {
+        const changed = deleteWebSearchProviderConfig(currentConfig, supportedProvider.providerId);
+        return {
+          changed,
+          result: readWebSearchSettingsSnapshot(currentConfig),
         };
       });
 

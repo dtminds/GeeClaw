@@ -16,6 +16,7 @@ const listWebSearchProviderDescriptorsMock = vi.fn();
 const applyWebSearchSettingsPatchMock = vi.fn();
 const buildWebSearchProviderAvailabilityMapMock = vi.fn();
 const buildWebSearchProviderEnvVarStatusMapMock = vi.fn();
+const deleteWebSearchProviderConfigMock = vi.fn();
 const readWebSearchSettingsSnapshotMock = vi.fn();
 const readOpenClawConfigDocumentMock = vi.fn();
 const mutateOpenClawConfigDocumentMock = vi.fn();
@@ -53,6 +54,7 @@ vi.mock('@electron/utils/openclaw-web-search-config', () => ({
   applyWebSearchSettingsPatch: (...args: unknown[]) => applyWebSearchSettingsPatchMock(...args),
   buildWebSearchProviderAvailabilityMap: (...args: unknown[]) => buildWebSearchProviderAvailabilityMapMock(...args),
   buildWebSearchProviderEnvVarStatusMap: (...args: unknown[]) => buildWebSearchProviderEnvVarStatusMapMock(...args),
+  deleteWebSearchProviderConfig: (...args: unknown[]) => deleteWebSearchProviderConfigMock(...args),
   readWebSearchSettingsSnapshot: (...args: unknown[]) => readWebSearchSettingsSnapshotMock(...args),
 }));
 
@@ -87,6 +89,7 @@ describe('handleSettingsRoutes', () => {
     applyWebSearchSettingsPatchMock.mockReturnValue(false);
     buildWebSearchProviderAvailabilityMapMock.mockReturnValue({});
     buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({});
+    deleteWebSearchProviderConfigMock.mockReturnValue(false);
     readWebSearchSettingsSnapshotMock.mockReturnValue({
       search: {
         enabled: false,
@@ -234,33 +237,33 @@ describe('handleSettingsRoutes', () => {
   it('returns normalized web search provider descriptors', async () => {
     listWebSearchProviderDescriptorsMock.mockReturnValue([
       {
-        providerId: 'brave',
-        pluginId: 'brave',
-        label: 'Brave Search',
+        providerId: 'duckduckgo',
+        pluginId: 'duckduckgo',
+        label: 'DuckDuckGo',
+        availabilityKind: 'none',
+        enablePluginOnSelect: true,
       },
       {
-        providerId: 'gemini',
-        pluginId: 'google',
-        label: 'Gemini',
+        providerId: 'ollama',
+        pluginId: 'ollama',
+        label: 'Ollama',
+        availabilityKind: 'runtime',
+        runtimeRequirementHint: 'Requires a running Ollama service.',
       },
     ]);
     buildWebSearchProviderAvailabilityMapMock.mockReturnValue({
-      brave: {
+      duckduckgo: {
         available: true,
-        source: 'saved',
+        source: 'built-in',
       },
-      gemini: {
+      ollama: {
         available: false,
-        source: 'missing',
+        source: 'runtime-prereq',
       },
     });
     buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({
-      brave: {
-        BRAVE_API_KEY: true,
-      },
-      gemini: {
-        GEMINI_API_KEY: false,
-      },
+      duckduckgo: {},
+      ollama: {},
     });
 
     const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
@@ -284,26 +287,26 @@ describe('handleSettingsRoutes', () => {
       expect.objectContaining({
         providers: expect.arrayContaining([
           expect.objectContaining({
-            providerId: 'brave',
-            pluginId: 'brave',
+            providerId: 'duckduckgo',
+            pluginId: 'duckduckgo',
             availability: {
               available: true,
-              source: 'saved',
+              source: 'built-in',
             },
-            envVarStatuses: {
-              BRAVE_API_KEY: true,
-            },
+            availabilityKind: 'none',
+            enablePluginOnSelect: true,
+            envVarStatuses: {},
           }),
           expect.objectContaining({
-            providerId: 'gemini',
-            pluginId: 'google',
+            providerId: 'ollama',
+            pluginId: 'ollama',
             availability: {
               available: false,
-              source: 'missing',
+              source: 'runtime-prereq',
             },
-            envVarStatuses: {
-              GEMINI_API_KEY: false,
-            },
+            availabilityKind: 'runtime',
+            runtimeRequirementHint: 'Requires a running Ollama service.',
+            envVarStatuses: {},
           }),
         ]),
       }),
@@ -373,6 +376,104 @@ describe('handleSettingsRoutes', () => {
       expect.anything(),
       200,
       expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('deletes web search provider config and debounces gateway reload when running', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock
+      .mockReturnValueOnce({
+        search: {
+          enabled: true,
+        },
+        providerConfigByProvider: {
+          minimax: {
+            apiKey: 'mm-test',
+          },
+        },
+      })
+      .mockReturnValueOnce({
+        search: {
+          enabled: true,
+        },
+        providerConfigByProvider: {},
+      });
+    deleteWebSearchProviderConfigMock.mockReturnValue(true);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      'minimax',
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('blocks deleting config for the default web search provider', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+        provider: 'minimax',
+      },
+      providerConfigByProvider: {
+        minimax: {
+          apiKey: 'mm-test',
+        },
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      409,
+      expect.objectContaining({ success: false }),
     );
   });
 });

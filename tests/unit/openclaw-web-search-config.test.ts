@@ -3,6 +3,7 @@ import {
   applyWebSearchSettingsPatch,
   buildWebSearchProviderAvailabilityMap,
   buildWebSearchProviderEnvVarStatusMap,
+  deleteWebSearchProviderConfig,
   listWebSearchProviderDescriptors,
   readWebSearchSettingsSnapshot,
 } from '@electron/utils/openclaw-web-search-config';
@@ -48,6 +49,41 @@ describe('openclaw-web-search-config', () => {
       apiKey: 'pplx-test',
       baseUrl: 'https://openrouter.ai/api/v1',
       model: 'perplexity/sonar-pro',
+    });
+  });
+
+  it('defaults web search to enabled when the flag is omitted', () => {
+    const snapshot = readWebSearchSettingsSnapshot({
+      tools: {
+        web: {
+          search: {
+            maxResults: 5,
+          },
+        },
+      },
+    });
+
+    expect(snapshot.search).toEqual({
+      enabled: true,
+      maxResults: 5,
+    });
+  });
+
+  it('keeps web search disabled when the flag is explicitly false', () => {
+    const snapshot = readWebSearchSettingsSnapshot({
+      tools: {
+        web: {
+          search: {
+            enabled: false,
+            maxResults: 5,
+          },
+        },
+      },
+    });
+
+    expect(snapshot.search).toEqual({
+      enabled: false,
+      maxResults: 5,
     });
   });
 
@@ -106,15 +142,35 @@ describe('openclaw-web-search-config', () => {
 
     expect(providers.map((provider) => provider.providerId)).toEqual([
       'brave',
+      'minimax',
       'gemini',
       'grok',
       'kimi',
       'perplexity',
       'firecrawl',
+      'exa',
+      'tavily',
+      'duckduckgo',
+      'ollama',
+      'searxng',
     ]);
-    expect(providers.find((provider) => provider.providerId === 'gemini')).toMatchObject({
-      pluginId: 'google',
-      envVars: ['GEMINI_API_KEY'],
+    expect(providers.find((provider) => provider.providerId === 'minimax')).toMatchObject({
+      pluginId: 'minimax',
+      autoDetectOrder: 2,
+      availabilityKind: 'secret',
+    });
+    expect(providers.find((provider) => provider.providerId === 'searxng')).toMatchObject({
+      pluginId: 'searxng',
+      availabilityKind: 'config',
+      availabilityFieldKey: 'baseUrl',
+      enablePluginOnSelect: true,
+    });
+    expect(providers.find((provider) => provider.providerId === 'ollama')).toMatchObject({
+      pluginId: 'ollama',
+      availabilityKind: 'runtime',
+      requiresCredential: false,
+      credentialPath: '',
+      fields: [],
     });
     expect(providers.find((provider) => provider.providerId === 'grok')?.fields).toEqual(
       expect.arrayContaining([
@@ -142,6 +198,13 @@ describe('openclaw-web-search-config', () => {
               },
             },
           },
+          searxng: {
+            config: {
+              webSearch: {
+                baseUrl: 'https://search.example.com',
+              },
+            },
+          },
         },
       },
     });
@@ -153,15 +216,129 @@ describe('openclaw-web-search-config', () => {
         available: true,
         source: 'saved',
       },
+      duckduckgo: {
+        available: true,
+        source: 'built-in',
+      },
       kimi: {
         available: true,
         source: 'environment',
+      },
+      ollama: {
+        available: false,
+        source: 'runtime-prereq',
       },
       perplexity: {
         available: false,
         source: 'missing',
       },
+      searxng: {
+        available: true,
+        source: 'saved',
+      },
     });
+  });
+
+  it('writes canonical paths and enables descriptor-driven plugins on provider selection', () => {
+    const config: Record<string, unknown> = {};
+
+    const changed = applyWebSearchSettingsPatch(config, {
+      enabled: true,
+      provider: 'searxng',
+      shared: {
+        maxResults: 5,
+      },
+      providerConfig: {
+        providerId: 'searxng',
+        values: {
+          baseUrl: 'https://search.example.com',
+          language: 'zh-CN',
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(config).toMatchObject({
+      tools: {
+        web: {
+          search: {
+            enabled: true,
+            provider: 'searxng',
+            maxResults: 5,
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          searxng: {
+            enabled: true,
+            config: {
+              webSearch: {
+                baseUrl: 'https://search.example.com',
+                language: 'zh-CN',
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('clears the explicit provider when auto-select is saved', () => {
+    const config: Record<string, unknown> = {
+      tools: {
+        web: {
+          search: {
+            enabled: true,
+            provider: 'minimax',
+            maxResults: 5,
+          },
+        },
+      },
+    };
+
+    const changed = applyWebSearchSettingsPatch(config, {
+      provider: null,
+    });
+
+    expect(changed).toBe(true);
+    expect((config.tools as any)?.web?.search).toEqual({
+      enabled: true,
+      maxResults: 5,
+    });
+    expect(readWebSearchSettingsSnapshot(config).search.provider).toBeUndefined();
+  });
+
+  it('deletes only the provider webSearch config while preserving enabled state', () => {
+    const config: Record<string, unknown> = {
+      plugins: {
+        entries: {
+          minimax: {
+            enabled: true,
+            config: {
+              webSearch: {
+                apiKey: 'mm-test',
+                region: 'global',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const changed = deleteWebSearchProviderConfig(config, 'minimax');
+
+    expect(changed).toBe(true);
+    expect(config).toMatchObject({
+      plugins: {
+        entries: {
+          minimax: {
+            enabled: true,
+          },
+        },
+      },
+    });
+    expect(((config.plugins as any)?.entries?.minimax?.config as Record<string, unknown> | undefined)?.webSearch).toBeUndefined();
   });
 
   it('reports per-env-var configured state for each provider', () => {

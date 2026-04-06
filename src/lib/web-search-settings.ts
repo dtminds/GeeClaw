@@ -10,7 +10,7 @@ export type WebSearchProviderField = {
 
 export type WebSearchProviderAvailability = {
   available: boolean;
-  source: 'saved' | 'environment' | 'missing';
+  source: 'saved' | 'environment' | 'built-in' | 'runtime-prereq' | 'missing';
 };
 
 export type WebSearchProviderDescriptor = {
@@ -18,6 +18,13 @@ export type WebSearchProviderDescriptor = {
   pluginId: string;
   label: string;
   hint: string;
+  autoDetectOrder?: number;
+  requiresCredential?: boolean;
+  credentialPath?: string;
+  availabilityKind?: 'secret' | 'config' | 'runtime' | 'none';
+  availabilityFieldKey?: string;
+  enablePluginOnSelect?: boolean;
+  runtimeRequirementHint?: string;
   availability?: WebSearchProviderAvailability;
   envVarStatuses?: Record<string, boolean>;
   envVars: string[];
@@ -43,7 +50,7 @@ export type WebSearchProvidersResponse = {
 
 export type WebSearchSettingsPatch = {
   enabled?: boolean;
-  provider?: string;
+  provider?: string | null;
   shared?: {
     maxResults?: number | null;
     timeoutSeconds?: number | null;

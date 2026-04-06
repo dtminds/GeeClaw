@@ -20,49 +20,49 @@
       "maxResults": "Max Results",
       "timeoutSeconds": "Web Search Timeout (sec)",
       "cacheTtlMinutes": "Web Search Cache TTL (min)",
-      "help": "If you don't choose one, we'll use any service that's ready.",
       "autoReady": "Available now: {{providers}}",
       "autoUnavailable": "No search service is ready yet. Add an API key first."
     },
+    "auto": {
+      "title": "Choose Automatically",
+      "description": "If you do not specify one, we will use any search service that is ready."
+    },
+    "sidebar": {
+      "auto": "Auto"
+    },
     "provider": {
-      "title": "Service Settings",
-      "empty": "Choose a search service first.",
+      "emptyFields": "No extra settings needed.",
+      "runtimeHint": "Requires a running local service.",
       "signup": "Get API Key",
       "docs": "Help",
       "configured": "Saved",
+      "default": "Default",
       "available": "Available",
+      "builtIn": "Built In",
+      "runtimePrereq": "Needs Runtime",
       "unavailable": "Not Ready",
       "envFallback": "Leave blank to use env vars: {{envVars}}",
       "reveal": "Show value",
       "hide": "Hide value"
     },
-    "providers": {
-      "brave": {
-        "hint": "Good for web search."
-      },
-      "gemini": {
-        "hint": "Google search."
-      },
-      "grok": {
-        "hint": "Shows citations."
-      },
-      "kimi": {
-        "hint": "Moonshot search."
-      },
-      "perplexity": {
-        "hint": "Perplexity search."
-      },
-      "firecrawl": {
-        "hint": "Firecrawl search."
-      }
-    },
     "actions": {
-      "save": "Save"
+      "save": "Save",
+      "setDefault": "Set Default",
+      "delete": "Delete Config",
+      "deleteDisabledDefault": "Default service cannot be deleted"
+    },
+    "deleteConfirm": {
+      "title": "Delete Config",
+      "description": "Delete search config for {{name}}?",
+      "cancel": "Cancel",
+      "confirm": "Delete"
     },
     "toast": {
       "loadFailed": "Couldn't load settings",
       "saved": "Saved",
-      "saveFailed": "Couldn't save settings"
+      "saveFailed": "Couldn't save settings",
+      "deleted": "Deleted",
+      "deleteFailed": "Couldn't delete settings"
     }
   },
   "environment": {

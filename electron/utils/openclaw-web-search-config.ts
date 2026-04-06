@@ -20,14 +20,14 @@ export type WebSearchSettingsSnapshot = {
 
 export type WebSearchProviderAvailability = {
   available: boolean;
-  source: 'saved' | 'environment' | 'missing';
+  source: 'saved' | 'environment' | 'built-in' | 'runtime-prereq' | 'missing';
 };
 
 export type WebSearchProviderEnvVarStatusMap = Record<WebSearchProviderId, Record<string, boolean>>;
 
 export type WebSearchSettingsPatch = {
   enabled?: boolean;
-  provider?: WebSearchProviderId;
+  provider?: WebSearchProviderId | null;
   shared?: Partial<Record<WebSearchSharedField, number | null>>;
   providerConfig?: {
     providerId: WebSearchProviderId;
@@ -53,6 +53,10 @@ function findDescriptor(providerId: WebSearchProviderId): WebSearchProviderDescr
     throw new Error(`Unsupported web search provider: ${providerId}`);
   }
   return descriptor;
+}
+
+function isEmptyRecord(value: Record<string, unknown> | undefined): boolean {
+  return !value || Object.keys(value).length === 0;
 }
 
 function updatePluginEntry(
@@ -88,7 +92,7 @@ export {
   type WebSearchProviderId,
 };
 
-function hasConfiguredSecretValue(
+function hasConfiguredAvailabilityValue(
   descriptor: WebSearchProviderDescriptor,
   providerConfig: Record<string, unknown> | undefined,
 ): boolean {
@@ -96,20 +100,31 @@ function hasConfiguredSecretValue(
     return false;
   }
 
-  return descriptor.fields.some((field) => {
-    if (field.type !== 'secret') {
-      return false;
-    }
-
-    const value = providerConfig[field.key];
+  if (descriptor.availabilityKind === 'config' && descriptor.availabilityFieldKey) {
+    const value = providerConfig[descriptor.availabilityFieldKey];
     return typeof value === 'string' && value.trim().length > 0;
-  });
+  }
+
+  if (descriptor.availabilityKind !== 'secret') {
+    return false;
+  }
+
+  const key = descriptor.availabilityFieldKey;
+  if (!key) {
+    return false;
+  }
+  const value = providerConfig[key];
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
-function hasEnvironmentSecretValue(
+function hasEnvironmentAvailabilityValue(
   descriptor: WebSearchProviderDescriptor,
   runtimeEnv: Record<string, string | undefined>,
 ): boolean {
+  if (descriptor.availabilityKind !== 'secret' && descriptor.availabilityKind !== 'config') {
+    return false;
+  }
+
   return descriptor.envVars.some((envVar) => {
     const value = runtimeEnv[envVar];
     return typeof value === 'string' && value.trim().length > 0;
@@ -141,7 +156,23 @@ export function buildWebSearchProviderAvailabilityMap(
 
   for (const descriptor of listWebSearchProviderDescriptors()) {
     const providerConfig = providerConfigByProvider[descriptor.providerId];
-    if (hasConfiguredSecretValue(descriptor, providerConfig)) {
+    if (descriptor.availabilityKind === 'none') {
+      availabilityByProvider[descriptor.providerId] = {
+        available: true,
+        source: 'built-in',
+      };
+      continue;
+    }
+
+    if (descriptor.availabilityKind === 'runtime') {
+      availabilityByProvider[descriptor.providerId] = {
+        available: false,
+        source: 'runtime-prereq',
+      };
+      continue;
+    }
+
+    if (hasConfiguredAvailabilityValue(descriptor, providerConfig)) {
       availabilityByProvider[descriptor.providerId] = {
         available: true,
         source: 'saved',
@@ -149,7 +180,7 @@ export function buildWebSearchProviderAvailabilityMap(
       continue;
     }
 
-    if (hasEnvironmentSecretValue(descriptor, runtimeEnv)) {
+    if (hasEnvironmentAvailabilityValue(descriptor, runtimeEnv)) {
       availabilityByProvider[descriptor.providerId] = {
         available: true,
         source: 'environment',
@@ -186,7 +217,7 @@ export function readWebSearchSettingsSnapshot(config: OpenClawConfigDocument): W
 
   const snapshot: WebSearchSettingsSnapshot = {
     search: {
-      enabled: search?.enabled === true,
+      enabled: search?.enabled !== false,
     },
     providerConfigByProvider,
   };
@@ -211,7 +242,7 @@ export function applyWebSearchSettingsPatch(
 ): boolean {
   let changed = false;
 
-  if (patch.enabled !== undefined || patch.provider !== undefined || patch.shared) {
+  if (patch.enabled !== undefined || 'provider' in patch || patch.shared) {
     const existingTools = cloneConfigObject(config.tools);
     const existingWeb = cloneConfigObject(existingTools?.web);
     const existingSearch = cloneConfigObject(existingWeb?.search);
@@ -227,9 +258,16 @@ export function applyWebSearchSettingsPatch(
       searchChanged = true;
     }
 
-    if (patch.provider !== undefined && nextSearch.provider !== patch.provider) {
-      nextSearch.provider = patch.provider;
-      searchChanged = true;
+    if ('provider' in patch) {
+      if (patch.provider === null) {
+        if ('provider' in nextSearch) {
+          delete nextSearch.provider;
+          searchChanged = true;
+        }
+      } else if (patch.provider !== undefined && nextSearch.provider !== patch.provider) {
+        nextSearch.provider = patch.provider;
+        searchChanged = true;
+      }
     }
 
     if (patch.shared) {
@@ -298,8 +336,13 @@ export function applyWebSearchSettingsPatch(
     changed = providerEntryChanged || changed;
   }
 
-  if (patch.provider === 'firecrawl') {
-    const firecrawlChanged = updatePluginEntry(config, 'firecrawl', (entry) => {
+  if (patch.provider) {
+    const descriptor = findDescriptor(patch.provider);
+    if (!descriptor.enablePluginOnSelect) {
+      return changed;
+    }
+
+    const providerEnableChanged = updatePluginEntry(config, descriptor.pluginId, (entry) => {
       if (entry.enabled === true) {
         return false;
       }
@@ -307,8 +350,40 @@ export function applyWebSearchSettingsPatch(
       entry.enabled = true;
       return true;
     });
-    changed = firecrawlChanged || changed;
+    changed = providerEnableChanged || changed;
   }
 
   return changed;
+}
+
+export function deleteWebSearchProviderConfig(
+  config: OpenClawConfigDocument,
+  providerId: WebSearchProviderId,
+): boolean {
+  const descriptor = findDescriptor(providerId);
+  const plugins = cloneConfigObject(config.plugins);
+  const entries = cloneConfigObject(plugins?.entries);
+  const entry = cloneConfigObject(entries?.[descriptor.pluginId]);
+  const entryConfig = cloneConfigObject(entry?.config);
+  const webSearch = cloneConfigObject(entryConfig?.webSearch);
+
+  if (!entry || !entryConfig || !webSearch) {
+    return false;
+  }
+
+  delete entryConfig.webSearch;
+
+  if (isEmptyRecord(entryConfig)) {
+    delete entry.config;
+  } else {
+    entry.config = entryConfig;
+  }
+
+  const nextEntries = entries ?? {};
+  nextEntries[descriptor.pluginId] = entry;
+
+  const nextPlugins = plugins ?? {};
+  nextPlugins.entries = nextEntries;
+  config.plugins = nextPlugins;
+  return true;
 }
