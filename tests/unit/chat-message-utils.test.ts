@@ -16,4 +16,22 @@ describe('extractText', () => {
 
     expect(text).toBe('hello');
   });
+
+  it('strips assistant MEDIA control lines from visible text', () => {
+    const text = extractText({
+      role: 'assistant',
+      content: 'Here is the screenshot.\nMEDIA:https://example.com/screenshot.png',
+    });
+
+    expect(text).toBe('Here is the screenshot.');
+  });
+
+  it('keeps MEDIA mentions in assistant prose when they are not standalone directives', () => {
+    const text = extractText({
+      role: 'assistant',
+      content: 'The MEDIA: tag must be on its own line.',
+    });
+
+    expect(text).toBe('The MEDIA: tag must be on its own line.');
+  });
 });
