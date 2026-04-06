@@ -33,6 +33,12 @@ import { extractText, extractImages, extractToolUse, formatTimestamp } from './m
 import { formatTokenCount, getMessageUsage } from './message-usage';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
+  DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
+  ComputerTerminal01Icon,
+  FileViewIcon,
+  LeftToRightListStarIcon,
+  Globe02Icon,
+  ChromeIcon,
   AiBrain01Icon,
   AlertCircleIcon,
 } from '@hugeicons/core-free-icons';
@@ -249,6 +255,207 @@ const EMPTY_ATTACHMENTS: AttachedFileMeta[] = [];
 const EMPTY_ASSISTANT_CONTENT_PARTS: AssistantContentPart[] = [];
 const EMPTY_TOOL_DISPLAY_STATUSES: ToolDisplayStatus[] = [];
 const EMPTY_MARKDOWN_IMAGES: ExtractedImage[] = [];
+
+const COMMON_TOOL_NAME_MAP_ZH: Record<string, string> = {
+  read: '读取文件',
+  read_file: '读取文件',
+  cat: '写入文件',
+  view: '查看内容',
+  list_dir: '查看目录',
+  ls: '查看目录',
+  tree: '查看目录',
+  glob: '查找文件',
+  find: '查找文件',
+  fd: '查找文件',
+  grep: '搜索内容',
+  search: '搜索内容',
+  write: '写入文件',
+  write_file: '写入文件',
+  create_file: '创建文件',
+  edit: '编辑文件',
+  edit_file: '编辑文件',
+  replace: '替换内容',
+  rename: '重命名文件',
+  move_file: '移动文件',
+  delete_file: '删除文件',
+  rm: '删除文件',
+  rmdir: '删除目录',
+  mkdir: '创建目录',
+  fetch: '浏览网页',
+  web_fetch: '浏览网页',
+  web_search: '联网搜索',
+  curl: '浏览网页',
+  wget: '浏览网页',
+  browser: '使用浏览器',
+  browser_open: '打开网页',
+  bash: '执行本地命令',
+  shell: '执行本地命令',
+  exec: '执行本地命令',
+  run_command: '执行本地命令',
+  command: '执行本地命令',
+  sql: '执行数据库查询',
+  query: '执行查询',
+};
+
+function normalizeToolName(name: string): string {
+  return name.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function getBaseCommand(command: string): string {
+  const match = command.match(/^\s*([^\s]+)/);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function extractExecCommand(input: unknown): string | undefined {
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === 'object' && parsed) {
+        input = parsed;
+      } else {
+        return trimmed;
+      }
+    } catch {
+      return trimmed;
+    }
+  }
+
+  if (!input || typeof input !== 'object') return undefined;
+
+  const value = input as Record<string, unknown>;
+  const candidates = [
+    value.command,
+    value.cmd,
+    value.bash,
+    value.script,
+    value.shellCommand,
+    value.shell_command,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function getToolDisplayIcon(name: string, input?: unknown) {
+  const normalized = normalizeToolName(name);
+
+  if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {
+    if (input) {
+      const commandStr = extractExecCommand(input);
+      if (commandStr) {
+        const base = getBaseCommand(commandStr);
+        if (base === 'ls' || base === 'tree' || base === 'find' || base === 'fd') return LeftToRightListStarIcon;
+        if (base === 'cat' || base === 'less' || base === 'more' || base === 'tail' || base === 'head' || base === 'bat') return FileViewIcon;
+        if (base === 'grep' || base === 'awk' || base === 'sed' || base === 'rg' || base === 'ag') return FileSearchIcon;
+        if (base === 'vi' || base === 'vim' || base === 'nano' || base === 'emacs') return FileEditIcon;
+        if (base === 'rm' || base === 'rmdir') return Delete01Icon;
+        if (base === 'curl' || base === 'wget') return Globe02Icon;
+      }
+    }
+    return ComputerTerminal01Icon;
+  }
+
+  if (normalized === 'read' || normalized === 'read_file' || normalized === 'cat' || normalized === 'view') return FileViewIcon;
+  if (normalized === 'list_dir' || normalized === 'ls') return LeftToRightListStarIcon;
+  if (normalized === 'glob' || normalized === 'grep' || normalized === 'search') return FileSearchIcon;
+  if (normalized === 'write' || normalized === 'write_file' || normalized === 'create_file' || normalized === 'edit' || normalized === 'edit_file' || normalized === 'replace') return FileEditIcon;
+  if (normalized === 'rename' || normalized === 'move_file') return FileEditIcon;
+  if (normalized === 'delete_file') return Delete01Icon;
+  if (normalized === 'fetch' || normalized === 'web_fetch' || normalized === 'web_search') return Globe02Icon;
+  if (normalized === 'browser' || normalized === 'browser_open') return ChromeIcon;
+  if (normalized === 'sql' || normalized === 'query') return DatabaseIcon;
+  return AiGenerativeIcon;
+}
+
+function extractToolFilePath(input: unknown): string | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+
+  const value = input as Record<string, unknown>;
+  const candidates = [
+    value.file_path,
+    value.filePath,
+    value.path,
+    value.target_file,
+    value.targetFile,
+    value.filename,
+    value.file,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function extractToolFileName(input: unknown): string | undefined {
+  const filePath = extractToolFilePath(input);
+  if (!filePath) {
+    return undefined;
+  }
+
+  const parts = filePath.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || filePath;
+}
+
+function extractBrowserAction(input: unknown): string | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+
+  const value = input as Record<string, unknown>;
+  const candidate = value.action;
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
+}
+
+function getToolDisplayName(name: string, input: unknown, preferZh: boolean): string {
+  const normalized = normalizeToolName(name);
+  if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {
+    const command = extractExecCommand(input);
+    if (command) {
+      if (preferZh) {
+        const baseCmd = getBaseCommand(command);
+        if (baseCmd && COMMON_TOOL_NAME_MAP_ZH[baseCmd]) {
+          return `${COMMON_TOOL_NAME_MAP_ZH[baseCmd]} ${command}`;
+        }
+        return `运行 ${command}`;
+      }
+      return command;
+    }
+    return preferZh ? '运行' : name;
+  }
+
+  if (
+    normalized === 'read' ||
+    normalized === 'read_file' ||
+    normalized === 'write' ||
+    normalized === 'write_file' ||
+    normalized === 'edit' ||
+    normalized === 'edit_file'
+  ) {
+    const fileName = extractToolFileName(input);
+    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
+    if (fileName) return `${actionName} ${fileName}`;
+    return actionName;
+  }
+
+  if (normalized === 'browser') {
+    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
+    const action = extractBrowserAction(input);
+    if (action) return `${actionName} ${action}`;
+    return actionName;
+  }
+
+  if (!preferZh) return name;
+  return COMMON_TOOL_NAME_MAP_ZH[normalized] || name;
+}
 
 function getInlineToolResultStatus(block: ContentBlock, resultText: string): 'running' | 'completed' | 'error' {
   if (block.isError || block.is_error) return 'error';
@@ -1325,11 +1532,15 @@ function ToolCard({
   result?: string;
   input?: unknown;
 }) {
+  const { i18n } = useTranslation('chat');
+  const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
   const [open, setOpen] = useState(false);
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
   const summary = useMemo(() => formatToolDisplaySummary(name, input), [input, name]);
+  const displayName = useMemo(() => getToolDisplayName(name, input, preferZh), [input, name, preferZh]);
+  const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
   const formattedInput = useMemo(() => {
     if (!open || input == null) {
       return null;
@@ -1352,7 +1563,7 @@ function ToolCard({
         <Popover.Trigger asChild>
           <button
             className="flex min-w-0 items-center gap-2 py-1.5 focus:outline-none cursor-pointer"
-            aria-label={summary.summaryLine}
+            aria-label={displayName}
           >
             <span
               className={cn(
@@ -1363,7 +1574,7 @@ function ToolCard({
               )}
             >
               {isRunning && <UnicodeSpinner className="w-4 text-[13px]" />}
-              {!isRunning && !isError && <span className="text-sm leading-none">{summary.emoji}</span>}
+              {!isRunning && !isError && <HugeiconsIcon icon={toolIcon} className="h-4 w-4 shrink-0" />}
               {isError && <HugeiconsIcon icon={AlertCircleIcon} className="h-4 w-4 shrink-0" />}
             </span>
             <span 
@@ -1373,7 +1584,7 @@ function ToolCard({
               )} 
               title={summary.summaryLine}
             >
-              {summary.summaryLine}
+              {displayName}
             </span>
             {duration && <span className="text-[11px] opacity-60">{duration}</span>}
           </button>

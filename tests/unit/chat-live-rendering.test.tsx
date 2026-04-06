@@ -295,7 +295,7 @@ describe('chat live rendering', () => {
     expect(screen.queryByText('orphan tool result')).not.toBeInTheDocument();
   });
 
-  it('renders compact OpenClaw-style tool summaries and preserves raw tool results in the popover', () => {
+  it('preserves ClawX tool name mapping and icon while keeping raw tool results in the popover', () => {
     render(
       <ChatMessage
         message={{
@@ -323,8 +323,13 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByText('🌐 browser: open · https://example.com')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /🌐 browser: open · https:\/\/example.com/i }));
+    const trigger = screen.getByRole('button', { name: /使用浏览器 open/i });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger.textContent).toContain('使用浏览器 open');
+    expect(trigger.textContent).not.toContain('🌐 browser: open · https://example.com');
+    expect(trigger.querySelector('svg')).not.toBeNull();
+
+    fireEvent.click(trigger);
     expect(screen.getByText('Raw Result')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });
