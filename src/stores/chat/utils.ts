@@ -7,6 +7,7 @@ import type { ContentBlock, RawMessage } from './model';
 
 const EXEC_TOOL_NAMES = new Set(['exec', 'bash', 'shell', 'run_command', 'command']);
 const RAW_PATH_SCAN_COMMANDS = new Set(['ls', 'find', 'tree', 'fd', 'rg', 'grep', 'ag', 'locate', 'which', 'where']);
+const INTERNAL_ASSISTANT_ACK_MESSAGES = new Set(['HEARTBEAT_OK', 'NO_REPLY']);
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
 export function toMs(ts: number): number {
@@ -24,6 +25,26 @@ export function getMessageText(content: unknown): string {
       .join('\n');
   }
   return '';
+}
+
+export function isInternalMessage(message: RawMessage): boolean {
+  const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
+  if (role === 'system') {
+    return true;
+  }
+
+  if (role !== 'assistant') {
+    return false;
+  }
+
+  const contentText = getMessageText(message.content).trim();
+  if (contentText) {
+    return INTERNAL_ASSISTANT_ACK_MESSAGES.has(contentText);
+  }
+
+  const messageRecord = message as unknown as Record<string, unknown>;
+  return typeof messageRecord.text === 'string'
+    && INTERNAL_ASSISTANT_ACK_MESSAGES.has(messageRecord.text.trim());
 }
 
 export function hasEquivalentFinalAssistantMessage(
@@ -99,14 +120,14 @@ export function getLatestMessagePreview(messages: RawMessage[]): string {
   // fall back to the latest user message so drafts still show context.
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (!message || message.role !== 'assistant') continue;
+    if (!message || message.role !== 'assistant' || isInternalMessage(message)) continue;
     const preview = toSessionPreview(getMessagePreviewText(message));
     if (preview) return preview;
   }
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (!message || message.role !== 'user') continue;
+    if (!message || message.role !== 'user' || isInternalMessage(message)) continue;
     const preview = toSessionPreview(getMessagePreviewText(message));
     if (preview) return preview;
   }

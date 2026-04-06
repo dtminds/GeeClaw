@@ -8,6 +8,7 @@ import type { AttachedFileMeta, ContentBlock, RawMessage } from './model';
 import {
   findToolCallInputBeforeIndex,
   getMessageText,
+  isInternalMessage,
   shouldExtractRawFilePathsForTool,
 } from './utils';
 import {
@@ -440,7 +441,8 @@ export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
 
 export function prepareHistoryMessagesForDisplay(rawMessages: RawMessage[]): RawMessage[] {
   const sanitizedMessages = sanitizeMessagesForDisplay(rawMessages);
-  const messagesWithToolImages = enrichWithToolResultFiles(sanitizedMessages);
+  const visibleMessages = sanitizedMessages.filter((msg) => !isInternalMessage(msg));
+  const messagesWithToolImages = enrichWithToolResultFiles(visibleMessages);
   const filteredMessages = messagesWithToolImages.filter((msg) => !isToolResultRole(msg.role));
   return enrichWithCachedImages(filteredMessages);
 }
