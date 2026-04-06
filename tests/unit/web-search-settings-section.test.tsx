@@ -530,7 +530,7 @@ describe('WebSearchSettingsSection', () => {
     expect(setDefaultButton).not.toHaveClass('mt-4');
   });
 
-  it('renders searxng as a base-url-driven provider', async () => {
+  it('hides searxng from the provider picker', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/web-search/providers') {
         return {
@@ -586,12 +586,13 @@ describe('WebSearchSettingsSection', () => {
 
     render(<WebSearchSettingsSection />);
 
-    expect(await screen.findByDisplayValue('https://search.example.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('en-US')).toBeInTheDocument();
-    expect(screen.queryByText(/SEARXNG_BASE_URL/)).not.toBeInTheDocument();
+    await screen.findByText('Web Search');
+    expect(screen.queryByRole('button', { name: /SearXNG/ })).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('https://search.example.com')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('en-US')).not.toBeInTheDocument();
   });
 
-  it('hides duckduckgo and ollama from the provider picker', async () => {
+  it('hides duckduckgo, ollama, and searxng from the provider picker', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/web-search/providers') {
         return {
@@ -677,7 +678,7 @@ describe('WebSearchSettingsSection', () => {
 
     expect(screen.queryByRole('button', { name: /DuckDuckGo/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ollama/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /SearXNG/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /SearXNG/ })).not.toBeInTheDocument();
   });
 
   it('saves canonical payloads for shared and provider-specific settings', async () => {
