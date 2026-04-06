@@ -905,8 +905,8 @@ function getManagedWorkspaceDirectory(agent: AgentListEntry): string | null {
     : null;
 }
 
-async function removeAgentWorkspaceDirectory(agent: AgentListEntry): Promise<void> {
-  const workspaceDir = getManagedWorkspaceDirectory(agent);
+export async function removeAgentWorkspaceDirectory(agent: { id: string; workspace?: string }): Promise<void> {
+  const workspaceDir = getManagedWorkspaceDirectory(agent as AgentListEntry);
   if (!workspaceDir) {
     logger.warn('Skipping agent workspace deletion for unmanaged path', {
       agentId: agent.id,
@@ -1657,7 +1657,9 @@ export async function updateAgentName(agentId: string, name: string): Promise<Ag
   return buildSnapshotFromConfig(config);
 }
 
-export async function deleteAgentConfig(agentId: string): Promise<AgentsSnapshot> {
+export async function deleteAgentConfig(
+  agentId: string,
+): Promise<{ snapshot: AgentsSnapshot; removedEntry: AgentListEntry }> {
   if (agentId === MAIN_AGENT_ID) {
     throw new Error('The main agent cannot be deleted');
   }
@@ -1693,9 +1695,11 @@ export async function deleteAgentConfig(agentId: string): Promise<AgentsSnapshot
   }
   await deleteDesktopSessionsForAgent(agentId);
   await removeAgentRuntimeDirectory(agentId);
-  await removeAgentWorkspaceDirectory(removedEntry);
   logger.info('Deleted agent config entry', { agentId });
-  return buildSnapshotFromConfig(config);
+  return {
+    snapshot: await buildSnapshotFromConfig(config),
+    removedEntry,
+  };
 }
 
 export async function assignChannelToAgent(agentId: string, channelType: string): Promise<AgentsSnapshot> {
