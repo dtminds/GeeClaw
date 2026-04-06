@@ -183,7 +183,7 @@ describe('agent runtime sync', () => {
         entries?: Record<string, { enabled?: boolean }>;
       };
     };
-    expect(configAfterChannelSync.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
+    expect(configAfterChannelSync.plugins?.allow).toEqual(['qqbot', 'other-plugin', 'wecom-openclaw-plugin']);
     expect(configAfterChannelSync.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
 
     const { syncAllAgentConfigToOpenClaw } = await import('@electron/services/agents/agent-runtime-sync');
@@ -231,7 +231,7 @@ describe('agent runtime sync', () => {
       },
     ]);
     expect(config.channels?.wecom?.enabled).toBe(true);
-    expect(config.plugins?.allow).toEqual(['other-plugin', 'wecom-openclaw-plugin']);
+    expect(config.plugins?.allow).toEqual(['qqbot', 'other-plugin', 'wecom-openclaw-plugin']);
     expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
     expect(config.skills?.entries?.existing?.enabled).toBe(true);
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('managed');

@@ -7,20 +7,6 @@ import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
-const BUILTIN_CHANNEL_IDS = new Set([
-  'discord',
-  'telegram',
-  'whatsapp',
-  'slack',
-  'signal',
-  'imessage',
-  'matrix',
-  'line',
-  'msteams',
-  'qqbot',
-  'googlechat',
-  'mattermost',
-]);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -184,7 +170,6 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
         const externalPluginIds = allow.filter(
           (pluginId) => (
             pluginId !== LEGACY_QWEN_PLUGIN_ID
-            && !BUILTIN_CHANNEL_IDS.has(pluginId)
             && !LEGACY_BUILTIN_PLUGIN_ID_SET.has(pluginId)
           ),
         );

@@ -927,7 +927,7 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.entries?.whatsapp).toBeUndefined();
   });
 
-  it('cleans up stale whatsapp plugin registration when saving whatsapp config', async () => {
+  it('preserves canonical whatsapp plugin registration when saving whatsapp config', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);
     vi.resetModules();
@@ -975,12 +975,12 @@ describe('saveChannelConfig', () => {
       };
     };
 
-    expect(config.plugins?.allow).toBeUndefined();
-    expect(config.plugins?.entries?.whatsapp).toBeUndefined();
+    expect(config.plugins?.allow).toEqual(['whatsapp']);
+    expect(config.plugins?.entries?.whatsapp).toEqual({ enabled: true });
     expect(config.channels?.whatsapp?.enabled).toBe(true);
   });
 
-  it('does not keep built-in channels or legacy qqbot plugin registrations in plugins.allow', async () => {
+  it('preserves canonical channel plugin registrations while cleaning legacy qqbot ids on save', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);
     vi.resetModules();
@@ -1009,8 +1009,11 @@ describe('saveChannelConfig', () => {
     writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
       plugins: {
         enabled: true,
-        allow: ['openclaw-qqbot'],
+        allow: ['discord', 'whatsapp', 'qqbot', 'openclaw-qqbot'],
         entries: {
+          discord: { enabled: true },
+          whatsapp: { enabled: true },
+          qqbot: { enabled: true },
           'openclaw-qqbot': { enabled: true },
         },
       },
@@ -1028,11 +1031,73 @@ describe('saveChannelConfig', () => {
       };
     };
 
-    expect(config.plugins?.allow).toEqual(['wecom-openclaw-plugin']);
-    expect(config.plugins?.allow).not.toContain('discord');
-    expect(config.plugins?.allow).not.toContain('whatsapp');
-    expect(config.plugins?.allow).not.toContain('qqbot');
+    expect(config.plugins?.allow).toEqual(['discord', 'whatsapp', 'qqbot', 'wecom-openclaw-plugin']);
+    expect(config.plugins?.entries?.discord).toEqual({ enabled: true });
+    expect(config.plugins?.entries?.whatsapp).toEqual({ enabled: true });
+    expect(config.plugins?.entries?.qqbot).toEqual({ enabled: true });
     expect(config.plugins?.allow).not.toContain('openclaw-qqbot');
     expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
+  });
+
+  it('removes canonical plugin registrations when deleting a built-in channel config', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      channels: {
+        discord: {
+          defaultAccount: 'default',
+          accounts: {
+            default: {
+              enabled: true,
+              token: 'discord-token',
+            },
+          },
+        },
+      },
+      plugins: {
+        enabled: true,
+        allow: ['discord'],
+        entries: {
+          discord: { enabled: true },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { deleteChannelConfig, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    await deleteChannelConfig('discord');
+
+    const config = await readOpenClawConfig() as {
+      channels?: Record<string, unknown>;
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.discord).toBeUndefined();
+    expect(config.plugins?.allow?.includes('discord')).not.toBe(true);
+    expect(config.plugins?.entries?.discord).toBeUndefined();
   });
 });

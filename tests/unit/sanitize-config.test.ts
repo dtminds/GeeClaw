@@ -78,23 +78,8 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
 
   const config = JSON.parse(raw) as Record<string, unknown>;
   let modified = false;
-  const BUILTIN_CHANNEL_IDS = new Set([
-    'discord',
-    'telegram',
-    'whatsapp',
-    'slack',
-    'signal',
-    'imessage',
-    'matrix',
-    'line',
-    'msteams',
-    'qqbot',
-    'googlechat',
-    'mattermost',
-  ]);
   const LEGACY_BUILTIN_PLUGIN_IDS: Record<string, string[]> = {
-    whatsapp: ['whatsapp'],
-    qqbot: ['qqbot', 'openclaw-qqbot'],
+    qqbot: ['openclaw-qqbot'],
   };
 
   // Mirror of the production blocklist logic
@@ -154,9 +139,7 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
         }
       }
 
-      const externalPluginIds = allow.filter(
-        (pluginId) => !BUILTIN_CHANNEL_IDS.has(pluginId) && pluginId !== 'openclaw-qqbot',
-      );
+      const externalPluginIds = allow.filter((pluginId) => pluginId !== 'openclaw-qqbot');
       const nextAllow = [...externalPluginIds];
 
       if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
@@ -381,7 +364,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     expect(result.agents).toEqual({ defaults: { model: { primary: 'gpt-4' } } });
   });
 
-  it('removes built-in and legacy qqbot channel entries from plugins.allow', async () => {
+  it('preserves canonical channel plugin ids while removing legacy qqbot plugin ids', async () => {
     await writeConfig({
       plugins: {
         enabled: true,
@@ -408,8 +391,9 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     });
     expect(result.plugins).toEqual({
       enabled: true,
-      allow: ['customPlugin'],
+      allow: ['whatsapp', 'qqbot', 'customPlugin'],
       entries: {
+        whatsapp: { enabled: true },
         customPlugin: { enabled: true },
       },
     });

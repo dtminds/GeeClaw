@@ -37,21 +37,6 @@ const MANAGED_PLUGIN_ENTRY_IDS = [DINGTALK_PLUGIN_ID, WECOM_PLUGIN_ID, WEIXIN_PL
 
 // Channels that are managed as plugins (config goes under plugins.entries, not channels)
 const PLUGIN_CHANNELS: string[] = [];
-const BUILTIN_CHANNEL_IDS = new Set([
-    'discord',
-    'telegram',
-    'whatsapp',
-    'slack',
-    'signal',
-    'imessage',
-    'matrix',
-    'line',
-    'msteams',
-    'qqbot',
-    'googlechat',
-    'mattermost',
-]);
-
 interface ManagedChannelPluginInstall {
     pluginId: string;
     installDir: string;
@@ -238,30 +223,19 @@ function cleanupAllLegacyBuiltInChannelPluginRegistrations(currentConfig: OpenCl
     return modified;
 }
 
-function isBuiltinChannelId(channelId: string): boolean {
-    return BUILTIN_CHANNEL_IDS.has(channelId);
+function cleanupCanonicalChannelPluginRegistration(
+    currentConfig: OpenClawConfig,
+    channelType: string,
+): boolean {
+    return removePluginRegistration(currentConfig, channelType);
 }
 
 function syncBuiltinChannelsWithPluginAllowlist(
     currentConfig: OpenClawConfig,
     additionalBuiltinChannelIds: string[] = [],
 ): void {
-    const plugins = currentConfig.plugins;
-    if (!plugins || !Array.isArray(plugins.allow)) {
-        return;
-    }
-
-    const existingAllow = plugins.allow as string[];
-    const externalPluginIds = existingAllow.filter((pluginId) => !isBuiltinChannelId(pluginId));
+    void currentConfig;
     void additionalBuiltinChannelIds;
-
-    const nextAllow = [...externalPluginIds];
-
-    if (nextAllow.length > 0) {
-        plugins.allow = nextAllow;
-    } else {
-        delete plugins.allow;
-    }
 }
 
 // ── Types ────────────────────────────────────────────────────────
@@ -989,6 +963,7 @@ export async function deleteChannelAccountConfig(channelType: string, accountId:
 
     if (Object.keys(accounts).length === 0) {
         delete currentConfig.channels![channelType];
+        cleanupCanonicalChannelPluginRegistration(currentConfig, channelType);
         if (pluginInstall) {
             removeManagedChannelPluginRegistration(currentConfig, channelType);
         }
@@ -1029,7 +1004,8 @@ export async function deleteChannelConfig(channelType: string): Promise<void> {
     const currentConfig = await readOpenClawConfig();
     const pluginInstall = getManagedChannelPluginInstall(channelType);
     const cleanedLegacyBuiltinPlugin = cleanupLegacyBuiltInChannelPluginRegistration(currentConfig, channelType);
-    let modified = cleanedLegacyBuiltinPlugin;
+    const cleanedCanonicalPlugin = cleanupCanonicalChannelPluginRegistration(currentConfig, channelType);
+    let modified = cleanedLegacyBuiltinPlugin || cleanedCanonicalPlugin;
 
     if (currentConfig.channels?.[channelType]) {
         delete currentConfig.channels[channelType];
@@ -1202,6 +1178,7 @@ export async function deleteAgentChannelAccounts(agentId: string): Promise<void>
         delete accounts[accountId];
         if (Object.keys(accounts).length === 0) {
             delete currentConfig.channels[channelType];
+            cleanupCanonicalChannelPluginRegistration(currentConfig, channelType);
             if (pluginInstall) {
                 removeManagedChannelPluginRegistration(currentConfig, channelType);
             }
