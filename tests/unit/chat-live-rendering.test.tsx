@@ -197,4 +197,163 @@ describe('chat live rendering', () => {
 
     expect(screen.getByText('The gateway replied with HEARTBEAT_OK, so we can continue.')).toBeInTheDocument();
   });
+
+  it('renders only final assistant text from think/final-tagged output when trace is off', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-think-final',
+          timestamp: 1,
+          content: '<think>hidden reasoning</think><final>Visible answer</final>',
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('Visible answer')).toBeInTheDocument();
+    expect(screen.queryByText('hidden reasoning')).not.toBeInTheDocument();
+    expect(screen.queryByText('Think Completed')).not.toBeInTheDocument();
+  });
+
+  it('surfaces think-tagged output through the thinking block when trace is on', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-think-visible',
+          timestamp: 1,
+          content: '<think>hidden reasoning</think><final>Visible answer</final>',
+        }}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('Visible answer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Think Completed/i }));
+    expect(screen.getByText('hidden reasoning')).toBeInTheDocument();
+  });
+
+  it('does not render commentary-only assistant bubbles', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-commentary-only',
+          timestamp: 1,
+          content: [
+            {
+              type: 'text',
+              text: 'thinking like caveman',
+              textSignature: JSON.stringify({ v: 1, id: 'msg-commentary', phase: 'commentary' }),
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('thinking like caveman')).not.toBeInTheDocument();
+  });
+
+  it('renders unmatched standalone tool_result turns when tool traces are enabled', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-orphan',
+          timestamp: 1,
+          content: 'orphan tool result',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('orphan tool result')).toBeInTheDocument();
+  });
+
+  it('keeps standalone tool_result turns hidden when tool traces are disabled', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-hidden',
+          timestamp: 1,
+          content: 'orphan tool result',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls={false}
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('orphan tool result')).not.toBeInTheDocument();
+  });
+
+  it('renders compact OpenClaw-style tool summaries and preserves raw tool results in the popover', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-tool-summary',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'browser',
+              arguments: { action: 'open', targetUrl: 'https://example.com' },
+            },
+            {
+              type: 'toolResult',
+              id: 'tool-1',
+              name: 'browser',
+              text: '{"foo":"bar"}',
+              status: 'completed',
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('🌐 browser: open · https://example.com')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /🌐 browser: open · https:\/\/example.com/i }));
+    expect(screen.getByText('Raw Result')).toBeInTheDocument();
+    expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
+  });
+
+  it('shows assistant usage badges when numeric usage metadata exists', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-usage',
+          timestamp: 1,
+          content: 'Visible answer',
+          usage: {
+            input: 1200,
+            output: 345,
+            total: 1545,
+            cacheRead: 22,
+            cost: { total: 0.0123 },
+          },
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText(/Input 1,200/i)).toBeInTheDocument();
+    expect(screen.getByText(/Output 345/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total 1,545/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cache read 22/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cost 0.0123/i)).toBeInTheDocument();
+  });
 });

@@ -3,6 +3,7 @@ import {
   renderSkillMarkersAsPlainText,
   stripRuntimeChannelTags,
 } from '@/lib/chat-message-text';
+import { extractAssistantVisibleText } from '@/pages/Chat/assistant-display';
 import type { ContentBlock, RawMessage } from './model';
 
 const EXEC_TOOL_NAMES = new Set(['exec', 'bash', 'shell', 'run_command', 'command']);
@@ -106,6 +107,13 @@ export function toSessionPreview(text: string): string {
 }
 
 function getMessagePreviewText(message: RawMessage): string {
+  if (message.role === 'assistant') {
+    const assistantPreview = extractAssistantVisibleText(message)?.trim();
+    if (assistantPreview) {
+      return assistantPreview;
+    }
+  }
+
   const contentText = getMessageText(message.content);
   if (contentText.trim()) {
     return contentText;

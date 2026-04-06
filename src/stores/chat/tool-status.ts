@@ -79,51 +79,31 @@ function extractTextFromContent(content: unknown): string {
   return parts.join('\n');
 }
 
-function assistantMessageHasAnyTool(message: RawMessage): boolean {
-  const msg = message as unknown as Record<string, unknown>;
-  const content = msg.content;
-
-  if (Array.isArray(content)) {
-    for (const block of content as ContentBlock[]) {
-      if (block.type === 'tool_use' || block.type === 'toolCall') {
-        return true;
-      }
-    }
+function assistantMessageHasMatchingTool(message: RawMessage, update: ToolStatus): boolean {
+  if (!update.toolCallId) {
+    return false;
   }
 
-  const toolCalls = msg.tool_calls ?? msg.toolCalls;
-  return Array.isArray(toolCalls) && toolCalls.length > 0;
-}
-
-function assistantMessageHasMatchingTool(message: RawMessage, update: ToolStatus): boolean {
   const msg = message as unknown as Record<string, unknown>;
   const content = msg.content;
 
   if (Array.isArray(content)) {
     for (const block of content as ContentBlock[]) {
       if ((block.type !== 'tool_use' && block.type !== 'toolCall') || !block.name) continue;
-      if (update.toolCallId && block.id === update.toolCallId) return true;
-      if (update.id && block.id === update.id) return true;
-      if (block.name === update.name) return true;
+      if (block.id === update.toolCallId) return true;
     }
   }
 
   const toolCalls = msg.tool_calls ?? msg.toolCalls;
   if (Array.isArray(toolCalls)) {
     for (const toolCall of toolCalls as Array<Record<string, unknown>>) {
-      const fn = (toolCall.function ?? toolCall) as Record<string, unknown>;
-      const name = typeof fn.name === 'string' ? fn.name : '';
       const id = typeof toolCall.id === 'string' ? toolCall.id : '';
-      if (update.toolCallId && id === update.toolCallId) return true;
-      if (update.id && id === update.id) return true;
-      if (name && name === update.name) return true;
+      if (id === update.toolCallId) return true;
     }
   }
 
   for (const status of message._toolStatuses || []) {
-    if (update.toolCallId && status.toolCallId === update.toolCallId) return true;
-    if (update.id && status.id === update.id) return true;
-    if (status.name === update.name) return true;
+    if (status.toolCallId === update.toolCallId) return true;
   }
 
   return false;
@@ -134,18 +114,17 @@ export function findPreviousAssistantToolMessageIndex(
   beforeIndex: number,
   update: ToolStatus,
 ): number {
-  let fallbackIndex = -1;
+  if (!update.toolCallId) {
+    return -1;
+  }
 
   for (let index = beforeIndex - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message || message.role !== 'assistant') continue;
     if (assistantMessageHasMatchingTool(message, update)) return index;
-    if (fallbackIndex === -1 && assistantMessageHasAnyTool(message)) {
-      fallbackIndex = index;
-    }
   }
 
-  return fallbackIndex;
+  return -1;
 }
 
 function normalizeToolStatus(rawStatus: unknown, fallback: 'running' | 'completed'): ToolStatus['status'] {

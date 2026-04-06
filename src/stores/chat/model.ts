@@ -11,13 +11,14 @@ export interface AttachedFileMeta {
 
 /** Raw message from OpenClaw chat.history */
 export interface RawMessage {
-  role: 'user' | 'assistant' | 'system' | 'toolresult';
+  role: 'user' | 'assistant' | 'system' | 'toolresult' | 'tool_result';
   content: unknown; // string | ContentBlock[]
   timestamp?: number;
   id?: string;
   senderLabel?: string;
   toolCallId?: string;
   toolName?: string;
+  phase?: 'commentary' | 'final_answer';
   details?: unknown;
   isError?: boolean;
   api?: string;
@@ -44,13 +45,17 @@ export interface RawMessage {
   _hiddenAttachmentCount?: number;
   /** Local-only: merged tool execution states for assistant tool-use turns */
   _toolStatuses?: ToolStatus[];
+  /** Local-only: true when a standalone tool_result has already been merged into a prior assistant turn */
+  _toolResultMatched?: boolean;
 }
 
 /** Content block inside a message */
 export interface ContentBlock {
   type: 'text' | 'image' | 'thinking' | 'tool_use' | 'tool_result' | 'toolCall' | 'toolResult';
   text?: string;
+  textSignature?: string;
   thinking?: string;
+  thinkingSignature?: string;
   source?: { type: string; media_type?: string; data?: string; url?: string };
   /** Flat image format from Gateway tool results (no source wrapper) */
   data?: string;

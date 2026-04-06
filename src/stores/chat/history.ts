@@ -3,6 +3,9 @@ import {
   renderSkillMarkersAsPlainText,
   sanitizeMessagesForDisplay,
 } from '@/lib/chat-message-text';
+import {
+  extractAssistantVisibleText,
+} from '@/pages/Chat/assistant-display';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { AttachedFileMeta, ContentBlock, RawMessage } from './model';
 import {
@@ -336,13 +339,22 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
       }
 
       const updates = collectToolUpdates(msg, 'final');
+      let matchedAnyUpdate = false;
       for (const update of updates) {
         const targetIndex = findPreviousAssistantToolMessageIndex(next, index, update);
         if (targetIndex === -1) continue;
         const target = next[targetIndex];
+        matchedAnyUpdate = true;
         next[targetIndex] = {
           ...target,
           _toolStatuses: upsertToolStatuses(target._toolStatuses || [], [update]),
+        };
+      }
+
+      if (matchedAnyUpdate) {
+        next[index] = {
+          ...msg,
+          _toolResultMatched: true,
         };
       }
 
@@ -374,6 +386,25 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
   }
 
   return next;
+}
+
+function hasRenderableAssistantHistoryContent(message: RawMessage): boolean {
+  if (extractAssistantVisibleText(message)) {
+    return true;
+  }
+
+  if (Array.isArray(message.content)) {
+    return (message.content as ContentBlock[]).some((block) => (
+      block.type === 'thinking'
+      || block.type === 'image'
+      || block.type === 'tool_use'
+      || block.type === 'toolCall'
+      || block.type === 'tool_result'
+      || block.type === 'toolResult'
+    ));
+  }
+
+  return false;
 }
 
 export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
@@ -443,7 +474,15 @@ export function prepareHistoryMessagesForDisplay(rawMessages: RawMessage[]): Raw
   const sanitizedMessages = sanitizeMessagesForDisplay(rawMessages);
   const visibleMessages = sanitizedMessages.filter((msg) => !isInternalMessage(msg));
   const messagesWithToolImages = enrichWithToolResultFiles(visibleMessages);
-  const filteredMessages = messagesWithToolImages.filter((msg) => !isToolResultRole(msg.role));
+  const filteredMessages = messagesWithToolImages.filter((msg) => {
+    if (isToolResultRole(msg.role)) {
+      return !msg._toolResultMatched;
+    }
+    if (msg.role === 'assistant') {
+      return hasRenderableAssistantHistoryContent(msg);
+    }
+    return true;
+  });
   return enrichWithCachedImages(filteredMessages);
 }
 
