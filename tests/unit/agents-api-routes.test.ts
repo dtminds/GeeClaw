@@ -13,6 +13,7 @@ const {
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
+  removeAgentWorkspaceDirectory,
   unmanageAgent,
   updateMarketplaceAgent,
   updateAgentName,
@@ -66,6 +67,7 @@ const {
     channelAccountOwners: {},
     explicitChannelAccountBindings: {},
   })),
+  removeAgentWorkspaceDirectory: vi.fn(),
   unmanageAgent: vi.fn(async () => ({
     agents: [{ id: 'stockexpert', managed: false }],
     defaultAgentId: 'main',
@@ -110,6 +112,7 @@ vi.mock('@electron/utils/agent-config', () => ({
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
+  removeAgentWorkspaceDirectory,
   unmanageAgent,
   updateMarketplaceAgent,
   updateAgentName,
@@ -270,5 +273,50 @@ describe('agent API routes', () => {
 
     expect(handled).toBe(true);
     expect(unmanageAgent).toHaveBeenCalledWith('stockexpert');
+  });
+
+  it('defers managed workspace deletion until after gateway restart when deleting an agent', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    const removedEntry = { id: 'stockexpert', workspace: '~/geeclaw/workspace-stockexpert' };
+    deleteAgentConfig.mockResolvedValueOnce({
+      snapshot: {
+        agents: [{ id: 'main' }],
+        defaultAgentId: 'main',
+        configuredChannelTypes: [],
+        channelOwners: {},
+        channelAccountOwners: {},
+        explicitChannelAccountBindings: {},
+      },
+      removedEntry,
+    });
+
+    const restart = vi.fn(async () => undefined);
+    const handled = await handleAgentRoutes(
+      { method: 'DELETE' } as never,
+      {} as never,
+      new URL('http://127.0.0.1/api/agents/stockexpert'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running', pid: undefined, port: 28788 }),
+          restart,
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(deleteAgentConfig).toHaveBeenCalledWith('stockexpert');
+    expect(restart).toHaveBeenCalledTimes(1);
+    expect(removeAgentWorkspaceDirectory).toHaveBeenCalledWith(removedEntry);
+    expect(restart.mock.invocationCallOrder[0]).toBeLessThan(removeAgentWorkspaceDirectory.mock.invocationCallOrder[0]);
+    expect(sendJson).toHaveBeenCalledWith({}, 200, {
+      success: true,
+      agents: [{ id: 'main' }],
+      defaultAgentId: 'main',
+      configuredChannelTypes: [],
+      channelOwners: {},
+      channelAccountOwners: {},
+      explicitChannelAccountBindings: {},
+    });
   });
 });

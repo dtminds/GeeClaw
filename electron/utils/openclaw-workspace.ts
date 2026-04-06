@@ -93,17 +93,6 @@ async function resolveAllWorkspaceDirs(): Promise<string[]> {
     // ignore read errors
   }
 
-  try {
-    const entries: Dirent[] = await readdir(openclawDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith('workspace')) {
-        dirs.add(join(openclawDir, entry.name));
-      }
-    }
-  } catch {
-    // ignore read errors
-  }
-
   if (dirs.size === 0) {
     dirs.add(resolveManagedAgentWorkspacePath('main'));
   }
@@ -180,7 +169,9 @@ async function mergeGeeClawContextOnce(): Promise<number> {
   let skipped = 0;
 
   for (const workspaceDir of workspaceDirs) {
-    await ensureDir(workspaceDir);
+    if (!(await fileExists(workspaceDir))) {
+      continue;
+    }
 
     for (const file of files) {
       const targetName = file.replace('.geeclaw.md', '.md');

@@ -48,7 +48,7 @@ const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
 const OPENCLAW_SETUP_ARTIFACT_POLL_MS = 250;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
-const BUILTIN_CHANNEL_EXTENSIONS = ['discord', 'telegram'];
+const BUILTIN_CHANNEL_EXTENSIONS = ['discord', 'telegram', 'qqbot'];
 
 function cleanupStaleBuiltInExtensions(openclawConfigDir: string): void {
   for (const extensionId of BUILTIN_CHANNEL_EXTENSIONS) {

@@ -13,6 +13,7 @@ import {
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
+  removeAgentWorkspaceDirectory,
   unmanageAgent,
   updateMarketplaceAgent,
   updateAgentPersona,
@@ -266,8 +267,13 @@ export async function handleAgentRoutes(
     if (parts.length === 1) {
       try {
         const agentId = decodeURIComponent(parts[0]);
-        const snapshot = await deleteAgentConfig(agentId);
+        const { snapshot, removedEntry } = await deleteAgentConfig(agentId);
         await restartGatewayForAgentDeletion(ctx);
+        try {
+          await removeAgentWorkspaceDirectory(removedEntry);
+        } catch (error) {
+          console.warn('[agents] Failed to remove workspace after agent deletion:', error);
+        }
         sendJson(res, 200, { success: true, ...snapshot });
       } catch (error) {
         sendJson(res, 500, { success: false, error: String(error) });

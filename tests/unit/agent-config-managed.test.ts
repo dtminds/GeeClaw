@@ -951,8 +951,12 @@ describe('managed agent config domain', () => {
     expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'research-helper')).not.toHaveProperty('agentDir');
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
 
-    await agentConfig.deleteAgentConfig('research-helper');
-    expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(false);
+    const deletion = await agentConfig.deleteAgentConfig('research-helper');
+    expect(deletion.removedEntry).toMatchObject({
+      id: 'research-helper',
+      workspace: '~/geeclaw/workspace-research-helper',
+    });
+    expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
     expect(deleteDesktopSessionsForAgent).toHaveBeenCalledWith('research-helper');
   });
 
