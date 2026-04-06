@@ -5,6 +5,7 @@
  */
 import type { RawMessage, ContentBlock } from '@/stores/chat';
 import { cleanUserMessageText, sanitizeMessageForDisplay } from '@/lib/chat-message-text';
+import { splitMediaFromOutput } from '@/lib/media-output';
 import i18n from '@/i18n';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -52,6 +53,10 @@ function cleanUserText(text: string): string {
   return cleanUserMessageText(text);
 }
 
+function cleanAssistantText(text: string): string {
+  return splitMediaFromOutput(text).text;
+}
+
 /**
  * Extract displayable text from a message's content field.
  * Handles both string content and array-of-blocks content.
@@ -86,6 +91,8 @@ export function extractText(message: RawMessage | unknown): string {
   // Strip Gateway metadata from user messages for clean display
   if (isUser && result) {
     result = cleanUserText(result);
+  } else if (result) {
+    result = cleanAssistantText(result);
   }
 
   return result;

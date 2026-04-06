@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
+import { splitMediaFromOutput } from '@/lib/media-output';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { extractText, extractThinking, extractImages, extractToolUse, formatTimestamp } from './message-utils';
 import { 
@@ -550,7 +551,10 @@ function buildAssistantContentParts(
 
   for (const block of content) {
     if (block.type === 'text' && block.text?.trim()) {
-      textBuffer.push(block.text);
+      const visibleText = splitMediaFromOutput(block.text).text;
+      if (visibleText.trim()) {
+        textBuffer.push(visibleText);
+      }
       continue;
     }
 
@@ -1334,18 +1338,22 @@ function FileIcon({ mimeType, className }: { mimeType: string; className?: strin
 
 function FileCard({ file }: { file: AttachedFileMeta }) {
   const handleOpen = useCallback(async () => {
+    if (file.url) {
+      await invokeIpc('shell:openExternal', file.url);
+      return;
+    }
     if (!file.filePath) return;
     await openLocalPath(file.filePath, file.fileName);
-  }, [file.fileName, file.filePath]);
+  }, [file.fileName, file.filePath, file.url]);
 
   return (
     <div 
       className={cn(
         "flex items-center gap-2 rounded-full border border-primary/15 bg-primary/8 px-3 py-2 min-w-[180px] max-w-[250px]",
-        file.filePath && "surface-hover cursor-pointer transition-colors"
+        (file.filePath || file.url) && "surface-hover cursor-pointer transition-colors"
       )}
       onClick={handleOpen}
-      title={file.filePath ? "Open file" : undefined}
+      title={file.filePath || file.url ? "Open file" : undefined}
     >
       <FileIcon mimeType={file.mimeType} className="h-4 w-4 shrink-0 text-primary" />
       <div className="min-w-0 overflow-hidden text-primary">

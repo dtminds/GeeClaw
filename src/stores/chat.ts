@@ -12,11 +12,13 @@ import {
 import type { CronAgentRunSummary } from '@/types/cron';
 import {
   extractImagesAsAttachedFiles,
+  extractMediaDirectiveSources,
   extractMediaRefs,
   extractRawFilePaths,
   hydrateHistoryMessagesForDisplay,
   limitAttachedFilesForMessage,
   loadMissingPreviews,
+  makeAttachedFileFromMediaSource,
   makeAttachedFile,
   prepareHistoryMessagesForDisplay,
   upsertImageCacheEntry,
@@ -1333,6 +1335,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ];
             const text = getMessageText(finalMsg.content);
             if (text && !isErroredToolResult(finalMsg)) {
+              const mediaDirectiveSources = extractMediaDirectiveSources(text);
+              const mediaDirectivePathSet = new Set(
+                mediaDirectiveSources.filter((source) => !/^https?:\/\//i.test(source)),
+              );
+              for (const source of mediaDirectiveSources) toolFiles.push(makeAttachedFileFromMediaSource(source));
               const mediaRefs = extractMediaRefs(text);
               const mediaRefPaths = new Set(mediaRefs.map(r => r.filePath));
               for (const ref of mediaRefs) toolFiles.push(makeAttachedFile(ref));
@@ -1345,7 +1352,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
               const toolInput = getToolCallInput(currentToolMessage, finalMsg.toolCallId, finalMsg.toolName);
               if (shouldExtractRawFilePathsForTool(finalMsg.toolName, toolInput)) {
                 for (const ref of extractRawFilePaths(text)) {
-                  if (!mediaRefPaths.has(ref.filePath)) toolFiles.push(makeAttachedFile(ref));
+                  if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
+                    toolFiles.push(makeAttachedFile(ref));
+                  }
                 }
               }
             }
@@ -1406,10 +1415,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const hasOutput = hasNonToolAssistantContent(finalMsg);
           const hadToolEvents = get().toolStreamOrder.length > 0;
           const msgId = finalMsg.id || (toolOnly ? `run-${runId}-tool-${Date.now()}` : `run-${runId}`);
+          const inlineMediaFiles = (() => {
+            const text = getMessageText(finalMsg.content);
+            if (!text) return [] as AttachedFileMeta[];
+            return extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource);
+          })();
           set((s) => {
             const pendingImgs = s.pendingToolImages;
             const limitedMessageAttachments = limitAttachedFilesForMessage(
-              [...(finalMsg._attachedFiles || []), ...pendingImgs],
+              [...(finalMsg._attachedFiles || []), ...inlineMediaFiles, ...pendingImgs],
               (finalMsg._hiddenAttachmentCount || 0) + s.pendingToolHiddenCount,
             );
             const msgWithImages: RawMessage = {
