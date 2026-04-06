@@ -138,4 +138,63 @@ describe('chat live rendering', () => {
     expect((container.firstElementChild as HTMLElement).style.contentVisibility).toBe('');
     expect((container.firstElementChild as HTMLElement).style.containIntrinsicSize).toBe('');
   });
+
+  it('does not render internal system messages', () => {
+    const message: RawMessage = {
+      role: 'system',
+      id: 'system-heartbeat',
+      timestamp: 1,
+      content: 'Heartbeat poll prompt',
+    };
+
+    const { container } = render(
+      <ChatMessage
+        message={message}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('Heartbeat poll prompt')).not.toBeInTheDocument();
+  });
+
+  it('does not render ack-only assistant plumbing messages', () => {
+    const message: RawMessage = {
+      role: 'assistant',
+      id: 'assistant-heartbeat-ok',
+      timestamp: 1,
+      content: 'HEARTBEAT_OK',
+    };
+
+    const { container } = render(
+      <ChatMessage
+        message={message}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('HEARTBEAT_OK')).not.toBeInTheDocument();
+  });
+
+  it('preserves normal assistant messages that merely mention ack tokens', () => {
+    const message: RawMessage = {
+      role: 'assistant',
+      id: 'assistant-normal-text',
+      timestamp: 1,
+      content: 'The gateway replied with HEARTBEAT_OK, so we can continue.',
+    };
+
+    render(
+      <ChatMessage
+        message={message}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('The gateway replied with HEARTBEAT_OK, so we can continue.')).toBeInTheDocument();
+  });
 });

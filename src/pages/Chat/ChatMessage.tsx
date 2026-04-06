@@ -23,6 +23,7 @@ import { invokeIpc } from '@/lib/api-client';
 import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
+import { isInternalMessage } from '@/stores/chat';
 import { extractText, extractThinking, extractImages, extractToolUse, formatTimestamp } from './message-utils';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
@@ -677,6 +678,7 @@ export const ChatMessage = memo(function ChatMessage({
   const isUser = message.role === 'user';
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   const isToolResult = role === 'toolresult' || role === 'tool_result';
+  const shouldHideInternalMessage = useMemo(() => isInternalMessage(message), [message]);
   const images = useMemo(() => extractImages(message), [message]);
   const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
   const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
@@ -700,6 +702,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   // Never render tool result messages in chat UI
   if (isToolResult) return null;
+  if (shouldHideInternalMessage) return null;
 
   if (!hasText && assistantContentParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
 

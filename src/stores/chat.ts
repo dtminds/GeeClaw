@@ -76,6 +76,7 @@ export {
 } from './chat/history';
 export {
   hasEquivalentFinalAssistantMessage,
+  isInternalMessage,
   stripRenderedPrefixFromStreamingText,
 } from './chat/utils';
 
