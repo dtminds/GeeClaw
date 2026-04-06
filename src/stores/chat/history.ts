@@ -3,6 +3,7 @@ import {
   renderSkillMarkersAsPlainText,
   sanitizeMessagesForDisplay,
 } from '@/lib/chat-message-text';
+import { splitMediaFromOutput } from '@/lib/media-output';
 import type { AttachedFileMeta, ContentBlock, RawMessage } from './model';
 import {
   findToolCallInputBeforeIndex,
@@ -104,7 +105,17 @@ export function extractMediaRefs(text: string): Array<{ filePath: string; mimeTy
 
 /** Map common file extensions to MIME types */
 function mimeFromExtension(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const normalizedPath = (() => {
+    if (/^https?:\/\//i.test(filePath)) {
+      try {
+        return new URL(filePath).pathname || filePath;
+      } catch {
+        return filePath;
+      }
+    }
+    return filePath;
+  })().split(/[?#]/)[0];
+  const ext = normalizedPath.split('.').pop()?.toLowerCase() || '';
   const map: Record<string, string> = {
     'png': 'image/png',
     'jpg': 'image/jpeg',
@@ -147,6 +158,47 @@ function mimeFromExtension(filePath: string): string {
     'html': 'text/html',
   };
   return map[ext] || 'application/octet-stream';
+}
+
+function getMediaSourceFileName(source: string): string {
+  if (/^https?:\/\//i.test(source)) {
+    try {
+      const pathname = decodeURIComponent(new URL(source).pathname || '');
+      const fileName = pathname.split('/').filter(Boolean).pop();
+      return fileName || 'file';
+    } catch {
+      return 'file';
+    }
+  }
+
+  return source.split(/[\\/]/).pop() || 'file';
+}
+
+function isRemoteMediaSource(source: string): boolean {
+  return /^https?:\/\//i.test(source);
+}
+
+function getAttachmentIdentity(file: Pick<AttachedFileMeta, 'filePath' | 'url' | 'preview'>): string | undefined {
+  return file.filePath || file.url || file.preview || undefined;
+}
+
+export function extractMediaDirectiveSources(text: string): string[] {
+  return splitMediaFromOutput(text).mediaUrls || [];
+}
+
+export function makeAttachedFileFromMediaSource(source: string): AttachedFileMeta {
+  if (!isRemoteMediaSource(source)) {
+    return makeAttachedFile({ filePath: source, mimeType: mimeFromExtension(source) });
+  }
+
+  const mimeType = mimeFromExtension(source);
+  return {
+    fileName: getMediaSourceFileName(source),
+    mimeType,
+    fileSize: 0,
+    preview: mimeType.startsWith('image/') ? source : null,
+    url: source,
+  };
 }
 
 /**
@@ -257,6 +309,14 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
 
       const text = getMessageText(msg.content);
       if (text && !isErroredToolResult(msg)) {
+        const mediaDirectiveSources = extractMediaDirectiveSources(text);
+        const mediaDirectivePathSet = new Set(
+          mediaDirectiveSources.filter((source) => !isRemoteMediaSource(source)),
+        );
+        for (const source of mediaDirectiveSources) {
+          pending.push(makeAttachedFileFromMediaSource(source));
+        }
+
         const mediaRefs = extractMediaRefs(text);
         const mediaRefPaths = new Set(mediaRefs.map((ref) => ref.filePath));
         for (const ref of mediaRefs) {
@@ -267,7 +327,7 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
         const toolInput = findToolCallInputBeforeIndex(next, index, msg.toolCallId, toolName);
         if (shouldExtractRawFilePathsForTool(toolName, toolInput)) {
           for (const ref of extractRawFilePaths(text)) {
-            if (!mediaRefPaths.has(ref.filePath)) {
+            if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
               pending.push(makeAttachedFile(ref));
             }
           }
@@ -290,10 +350,13 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
 
     if (msg.role === 'assistant' && pending.length > 0) {
       const toAttach = pending.splice(0);
-      const existingPaths = new Set(
-        (msg._attachedFiles || []).map((file) => file.filePath).filter(Boolean),
+      const existingAttachmentIds = new Set(
+        (msg._attachedFiles || []).map(getAttachmentIdentity).filter(Boolean),
       );
-      const newFiles = toAttach.filter((file) => !file.filePath || !existingPaths.has(file.filePath));
+      const newFiles = toAttach.filter((file) => {
+        const identity = getAttachmentIdentity(file);
+        return !identity || !existingAttachmentIds.has(identity);
+      });
       if (newFiles.length === 0) {
         continue;
       }
@@ -317,6 +380,8 @@ export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
     if ((msg.role !== 'user' && msg.role !== 'assistant') || msg._attachedFiles) return msg;
     const text = getMessageText(msg.content);
 
+    const mediaDirectiveFiles = extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource);
+    const attachmentIds = new Set(mediaDirectiveFiles.map(getAttachmentIdentity).filter(Boolean));
     const mediaRefs = extractMediaRefs(text);
     const mediaRefPaths = new Set(mediaRefs.map((ref) => ref.filePath));
 
@@ -341,15 +406,29 @@ export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
       }
     }
 
-    const allRefs = [...mediaRefs, ...rawRefs];
-    if (allRefs.length === 0) return msg;
-
-    const files: AttachedFileMeta[] = allRefs.map((ref) => {
+    const files: AttachedFileMeta[] = [...mediaDirectiveFiles];
+    for (const ref of [...mediaRefs, ...rawRefs]) {
       const cached = imageCache.get(ref.filePath);
-      if (cached) return { ...cached, filePath: ref.filePath, exists: cached.exists ?? true };
-      const fileName = ref.filePath.split(/[\\/]/).pop() || 'file';
-      return { fileName, mimeType: ref.mimeType, fileSize: 0, preview: null, filePath: ref.filePath };
-    });
+      const file = cached
+        ? { ...cached, filePath: ref.filePath, exists: cached.exists ?? true }
+        : {
+            fileName: ref.filePath.split(/[\\/]/).pop() || 'file',
+            mimeType: ref.mimeType,
+            fileSize: 0,
+            preview: null,
+            filePath: ref.filePath,
+          };
+      const identity = getAttachmentIdentity(file);
+      if (identity && attachmentIds.has(identity)) {
+        continue;
+      }
+      if (identity) {
+        attachmentIds.add(identity);
+      }
+      files.push(file);
+    }
+    if (files.length === 0) return msg;
+
     const limited = limitAttachedFilesForMessage(files, msg._hiddenAttachmentCount || 0);
     return {
       ...msg,

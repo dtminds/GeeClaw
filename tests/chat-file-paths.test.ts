@@ -125,6 +125,26 @@ describe('chat file path extraction', () => {
     }]);
   });
 
+  it('keeps MEDIA url attachments from assistant history messages', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: 'Here is the screenshot.\nMEDIA:https://example.com/screenshot.png',
+      },
+    ];
+
+    const prepared = prepareHistoryMessagesForDisplay(messages);
+
+    expect(prepared[0]?._attachedFiles).toEqual([
+      expect.objectContaining({
+        fileName: 'screenshot.png',
+        mimeType: 'image/png',
+        fileSize: 0,
+        preview: 'https://example.com/screenshot.png',
+      }),
+    ]);
+  });
+
   it('filters attached files whose paths do not exist', async () => {
     hostApiFetchMock.mockResolvedValue({
       '/path/to/slide-01.jpg': { exists: false, preview: null, fileSize: 0 },

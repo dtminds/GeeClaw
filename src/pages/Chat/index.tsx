@@ -76,14 +76,7 @@ export function Chat() {
   const skipNextAutoLoadRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const requestedAgentId = (
-    location.state
-    && typeof location.state === 'object'
-    && 'requestedAgentId' in location.state
-    && typeof (location.state as { requestedAgentId?: unknown }).requestedAgentId === 'string'
-  )
-    ? (location.state as { requestedAgentId: string }).requestedAgentId
-    : '';
+  const requestedAgentId = (location.state as { requestedAgentId?: string } | null)?.requestedAgentId ?? '';
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);

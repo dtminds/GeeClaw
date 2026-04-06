@@ -7,7 +7,60 @@
     "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "webSearch": "联网搜索",
     "environment": "环境变量"
+  },
+  "webSearch": {
+    "title": "联网搜索",
+    "description": "为 Agent 配置联网搜索的能力",
+    "shared": {
+      "enabled": "启用联网搜索",
+      "provider": "搜索服务",
+      "providerAuto": "自动选择",
+      "maxResults": "最多返回结果数",
+      "timeoutSeconds": "超时时间（秒）",
+      "cacheTtlMinutes": "缓存 TTL（分钟）",
+      "autoReady": "当前可用：{{providers}}",
+      "autoUnavailable": "当前还没有可用的搜索服务，请先填写密钥或配置环境变量"
+    },
+    "auto": {
+      "title": "自动选择",
+      "description": "不指定服务时，运行时会自动使用当前可用的搜索服务"
+    },
+    "provider": {
+      "emptyFields": "这个服务不需要额外设置",
+      "runtimeHint": "需要先启动本地服务",
+      "signup": "获取密钥",
+      "docs": "查看说明",
+      "configured": "已保存",
+      "default": "默认",
+      "available": "可用",
+      "builtIn": "内置可用",
+      "runtimePrereq": "需先启动",
+      "unavailable": "未就绪",
+      "envFallback": "可留空，留空则从环境变量中读取：{{envVars}}",
+      "reveal": "显示值",
+      "hide": "隐藏值"
+    },
+    "actions": {
+      "save": "保存设置",
+      "setDefault": "设为默认",
+      "delete": "删除配置",
+      "deleteDisabledDefault": "默认服务不能删除"
+    },
+    "deleteConfirm": {
+      "title": "删除配置",
+      "description": "删除 {{name}} 的搜索配置？",
+      "cancel": "取消",
+      "confirm": "删除"
+    },
+    "toast": {
+      "loadFailed": "加载失败",
+      "saved": "已保存",
+      "saveFailed": "保存失败",
+      "deleted": "已删除",
+      "deleteFailed": "删除失败"
+    }
   },
   "environment": {
     "title": "环境变量",

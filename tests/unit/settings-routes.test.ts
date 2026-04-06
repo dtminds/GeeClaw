@@ -11,6 +11,15 @@ const isSecurityPolicyMock = vi.fn();
 const syncOpenClawSafetySettingsMock = vi.fn();
 const getManagedAppEnvironmentEntriesMock = vi.fn();
 const replaceManagedAppEnvironmentEntriesMock = vi.fn();
+const resolveGeeClawAppEnvironmentMock = vi.fn();
+const listWebSearchProviderDescriptorsMock = vi.fn();
+const applyWebSearchSettingsPatchMock = vi.fn();
+const buildWebSearchProviderAvailabilityMapMock = vi.fn();
+const buildWebSearchProviderEnvVarStatusMapMock = vi.fn();
+const deleteWebSearchProviderConfigMock = vi.fn();
+const readWebSearchSettingsSnapshotMock = vi.fn();
+const readOpenClawConfigDocumentMock = vi.fn();
+const mutateOpenClawConfigDocumentMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
 const sendJsonMock = vi.fn();
 
@@ -34,6 +43,24 @@ vi.mock('@electron/utils/openclaw-safety-settings', () => ({
 vi.mock('@electron/utils/app-env', () => ({
   getManagedAppEnvironmentEntries: (...args: unknown[]) => getManagedAppEnvironmentEntriesMock(...args),
   replaceManagedAppEnvironmentEntries: (...args: unknown[]) => replaceManagedAppEnvironmentEntriesMock(...args),
+  resolveGeeClawAppEnvironment: (...args: unknown[]) => resolveGeeClawAppEnvironmentMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-web-search-provider-registry', () => ({
+  listWebSearchProviderDescriptors: (...args: unknown[]) => listWebSearchProviderDescriptorsMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-web-search-config', () => ({
+  applyWebSearchSettingsPatch: (...args: unknown[]) => applyWebSearchSettingsPatchMock(...args),
+  buildWebSearchProviderAvailabilityMap: (...args: unknown[]) => buildWebSearchProviderAvailabilityMapMock(...args),
+  buildWebSearchProviderEnvVarStatusMap: (...args: unknown[]) => buildWebSearchProviderEnvVarStatusMapMock(...args),
+  deleteWebSearchProviderConfig: (...args: unknown[]) => deleteWebSearchProviderConfigMock(...args),
+  readWebSearchSettingsSnapshot: (...args: unknown[]) => readWebSearchSettingsSnapshotMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-config-coordinator', () => ({
+  readOpenClawConfigDocument: (...args: unknown[]) => readOpenClawConfigDocumentMock(...args),
+  mutateOpenClawConfigDocument: (...args: unknown[]) => mutateOpenClawConfigDocumentMock(...args),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -57,6 +84,26 @@ describe('handleSettingsRoutes', () => {
       value === 'moderate' || value === 'strict' || value === 'fullAccess'
     ));
     getManagedAppEnvironmentEntriesMock.mockResolvedValue([]);
+    resolveGeeClawAppEnvironmentMock.mockResolvedValue({});
+    listWebSearchProviderDescriptorsMock.mockReturnValue([]);
+    applyWebSearchSettingsPatchMock.mockReturnValue(false);
+    buildWebSearchProviderAvailabilityMapMock.mockReturnValue({});
+    buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({});
+    deleteWebSearchProviderConfigMock.mockReturnValue(false);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: false,
+      },
+      providerConfigByProvider: {},
+    });
+    readOpenClawConfigDocumentMock.mockResolvedValue({});
+    mutateOpenClawConfigDocumentMock.mockImplementation(async (
+      mutate: (config: Record<string, unknown>) => Promise<{ changed: boolean; result: unknown }> | { changed: boolean; result: unknown },
+    ) => {
+      const config: Record<string, unknown> = {};
+      const { result } = await mutate(config);
+      return result;
+    });
   });
 
   it('debounces a gateway reload after saving safety settings while running', async () => {
@@ -184,6 +231,325 @@ describe('handleSettingsRoutes', () => {
       res,
       200,
       expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('returns normalized web search provider descriptors', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'duckduckgo',
+        pluginId: 'duckduckgo',
+        label: 'DuckDuckGo',
+        availabilityKind: 'none',
+        enablePluginOnSelect: true,
+      },
+      {
+        providerId: 'ollama',
+        pluginId: 'ollama',
+        label: 'Ollama',
+        availabilityKind: 'runtime',
+        runtimeRequirementHint: 'Requires a running Ollama service.',
+      },
+    ]);
+    buildWebSearchProviderAvailabilityMapMock.mockReturnValue({
+      duckduckgo: {
+        available: true,
+        source: 'built-in',
+      },
+      ollama: {
+        available: false,
+        source: 'runtime-prereq',
+      },
+    });
+    buildWebSearchProviderEnvVarStatusMapMock.mockReturnValue({
+      duckduckgo: {},
+      ollama: {},
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerId: 'duckduckgo',
+            pluginId: 'duckduckgo',
+            availability: {
+              available: true,
+              source: 'built-in',
+            },
+            availabilityKind: 'none',
+            enablePluginOnSelect: true,
+            envVarStatuses: {},
+          }),
+          expect.objectContaining({
+            providerId: 'ollama',
+            pluginId: 'ollama',
+            availability: {
+              available: false,
+              source: 'runtime-prereq',
+            },
+            availabilityKind: 'runtime',
+            runtimeRequirementHint: 'Requires a running Ollama service.',
+            envVarStatuses: {},
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('persists web search config and debounces gateway reload when running', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      enabled: true,
+      provider: 'perplexity',
+      shared: {
+        maxResults: 5,
+        timeoutSeconds: 30,
+        cacheTtlMinutes: 15,
+      },
+      providerConfig: {
+        providerId: 'perplexity',
+        values: {
+          apiKey: 'pplx-test',
+          model: 'perplexity/sonar-pro',
+        },
+      },
+    });
+    applyWebSearchSettingsPatchMock.mockReturnValue(true);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+        provider: 'perplexity',
+        maxResults: 5,
+        timeoutSeconds: 30,
+        cacheTtlMinutes: 15,
+      },
+      providerConfigByProvider: {
+        perplexity: {
+          apiKey: 'pplx-test',
+          model: 'perplexity/sonar-pro',
+        },
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(mutateOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(applyWebSearchSettingsPatchMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        enabled: true,
+        provider: 'perplexity',
+      }),
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('does not debounce a gateway reload after saving web search config when nothing changed', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      enabled: true,
+      provider: 'perplexity',
+    });
+    applyWebSearchSettingsPatchMock.mockReturnValue(false);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(applyWebSearchSettingsPatchMock).toHaveBeenCalledTimes(1);
+    expect(debouncedReload).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('deletes web search provider config and debounces gateway reload when running', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock
+      .mockReturnValueOnce({
+        search: {
+          enabled: true,
+        },
+        providerConfigByProvider: {
+          minimax: {
+            apiKey: 'mm-test',
+          },
+        },
+      })
+      .mockReturnValueOnce({
+        search: {
+          enabled: true,
+        },
+        providerConfigByProvider: {},
+      });
+    deleteWebSearchProviderConfigMock.mockReturnValue(true);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      'minimax',
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('does not debounce a gateway reload after deleting web search provider config when nothing changed', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+      },
+      providerConfigByProvider: {},
+    });
+    deleteWebSearchProviderConfigMock.mockReturnValue(false);
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      'minimax',
+    );
+    expect(debouncedReload).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('blocks deleting config for the default web search provider', async () => {
+    listWebSearchProviderDescriptorsMock.mockReturnValue([
+      {
+        providerId: 'minimax',
+        pluginId: 'minimax',
+        label: 'MiniMax',
+      },
+    ]);
+    readWebSearchSettingsSnapshotMock.mockReturnValue({
+      search: {
+        enabled: true,
+        provider: 'minimax',
+      },
+      providerConfigByProvider: {
+        minimax: {
+          apiKey: 'mm-test',
+        },
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/web-search/providers/minimax'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(deleteWebSearchProviderConfigMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      409,
+      expect.objectContaining({ success: false }),
     );
   });
 });

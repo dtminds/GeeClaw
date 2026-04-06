@@ -206,6 +206,14 @@ Open **Settings → Environment** to manage app-level environment variables for 
 - Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
 - Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
 
+### Web Search Providers
+
+Open **Settings → Web Search** to manage OpenClaw `web_search` providers without editing `openclaw.json` by hand.
+
+- Shared tool settings such as enablement, provider selection, max results, timeout, and cache TTL are written under the canonical `tools.web.search` keys.
+- Provider-specific credentials and advanced fields are saved under `plugins.entries.<pluginId>.config.webSearch.*`, so GeeClaw no longer needs to rely on deprecated legacy paths.
+- The settings panel renders provider-specific fields dynamically from GeeClaw's normalized provider registry, and selecting Firecrawl also enables the bundled Firecrawl plugin entry automatically.
+
 ### CLI Market
 
 Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect, install, reinstall, and uninstall.

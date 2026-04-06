@@ -42,6 +42,7 @@ import { warmupOpenCliDoctor } from '../utils/opencli-runtime';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
+import { loadRendererWindow } from './renderer-loader';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -206,12 +207,12 @@ function createWindow(): BrowserWindow {
   });
 
   // Load the app
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL);
-    win.webContents.openDevTools();
-  } else {
-    win.loadFile(join(__dirname, '../../dist/index.html'));
-  }
+  void loadRendererWindow(win, {
+    devServerUrl: process.env.VITE_DEV_SERVER_URL,
+    distHtmlPath: join(__dirname, '../../dist/index.html'),
+  }).catch((error) => {
+    logger.error('Failed to load renderer window:', error);
+  });
 
   return win;
 }

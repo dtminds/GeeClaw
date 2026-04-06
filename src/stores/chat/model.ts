@@ -5,6 +5,7 @@ export interface AttachedFileMeta {
   fileSize: number;
   preview: string | null;
   filePath?: string;
+  url?: string;
   exists?: boolean;
 }
 
