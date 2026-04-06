@@ -783,6 +783,107 @@ describe('WebSearchSettingsSection', () => {
     });
   });
 
+  it('refreshes provider availability in the sidebar after saving', async () => {
+    let providersRequestCount = 0;
+    let settingsRequestCount = 0;
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/web-search/providers') {
+        providersRequestCount += 1;
+        return {
+          providers: [
+            {
+              providerId: 'brave',
+              pluginId: 'brave',
+              label: 'Brave Search',
+              hint: 'Structured results',
+              availability: providersRequestCount === 1
+                ? { available: false, source: 'missing' }
+                : { available: true, source: 'saved' },
+              envVarStatuses: {
+                BRAVE_API_KEY: false,
+              },
+              envVars: ['BRAVE_API_KEY'],
+              signupUrl: 'https://brave.com/search/api/',
+              fields: [
+                {
+                  key: 'mode',
+                  type: 'enum',
+                  label: 'Brave Search Mode',
+                  enumValues: ['web', 'llm-context'],
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      if (path === '/api/settings/web-search' && (!init || init.method === undefined)) {
+        settingsRequestCount += 1;
+        return {
+          search: {
+            enabled: true,
+            provider: 'brave',
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfigByProvider: settingsRequestCount === 1
+            ? {}
+            : {
+              brave: {
+                mode: 'web',
+              },
+            },
+        };
+      }
+
+      if (path === '/api/settings/web-search' && init?.method === 'PUT') {
+        return { success: true };
+      }
+
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    render(<WebSearchSettingsSection />);
+
+    const initialBraveRow = (await screen.findByRole('button', { name: /Brave Search/ })).closest('div');
+    expect(initialBraveRow).not.toBeNull();
+    expect(within(initialBraveRow as HTMLElement).getByText('Not Ready')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/web-search', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          enabled: true,
+          provider: 'brave',
+          shared: {
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfig: {
+            providerId: 'brave',
+            values: {
+              mode: 'web',
+            },
+          },
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      const refreshedBraveRow = screen.getByRole('button', { name: /Brave Search/ }).closest('div');
+      expect(refreshedBraveRow).not.toBeNull();
+      expect(within(refreshedBraveRow as HTMLElement).getByText('Available')).toBeInTheDocument();
+    });
+  });
+
   it('sends null provider when saving auto-detect mode', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/web-search/providers') {
@@ -1008,6 +1109,129 @@ describe('WebSearchSettingsSection', () => {
     expect(minimaxRow).not.toBeNull();
     expect(within(minimaxRow as HTMLElement).getByText('Available')).toBeInTheDocument();
     expect(toastSuccessMock).toHaveBeenCalledWith('Deleted');
+  });
+
+  it('refreshes provider availability in the sidebar after deleting config', async () => {
+    let providersRequestCount = 0;
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/web-search/providers') {
+        providersRequestCount += 1;
+        return {
+          providers: [
+            {
+              providerId: 'brave',
+              pluginId: 'brave',
+              label: 'Brave Search',
+              hint: 'Structured results',
+              availability: {
+                available: true,
+                source: 'saved',
+              },
+              envVarStatuses: {
+                BRAVE_API_KEY: false,
+              },
+              envVars: ['BRAVE_API_KEY'],
+              signupUrl: 'https://brave.com/search/api/',
+              fields: [
+                { key: 'apiKey', type: 'secret', label: 'Brave Search API Key' },
+              ],
+            },
+            {
+              providerId: 'minimax',
+              pluginId: 'minimax',
+              label: 'MiniMax',
+              hint: 'MiniMax search.',
+              availability: providersRequestCount === 1
+                ? { available: true, source: 'saved' }
+                : { available: false, source: 'missing' },
+              envVarStatuses: {
+                MINIMAX_API_KEY: false,
+              },
+              envVars: ['MINIMAX_API_KEY'],
+              signupUrl: 'https://platform.minimax.io',
+              fields: [
+                { key: 'apiKey', type: 'secret', label: 'MiniMax API Key' },
+              ],
+            },
+          ],
+        };
+      }
+
+      if (path === '/api/settings/web-search' && (!init || init.method === undefined)) {
+        return {
+          search: {
+            enabled: true,
+            provider: 'brave',
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfigByProvider: providersRequestCount === 1
+            ? {
+              brave: {
+                apiKey: 'BSA-test',
+              },
+              minimax: {
+                apiKey: 'mm-test',
+              },
+            }
+            : {
+              brave: {
+                apiKey: 'BSA-test',
+              },
+            },
+        };
+      }
+
+      if (path === '/api/settings/web-search/providers/minimax' && init?.method === 'DELETE') {
+        return {
+          success: true,
+          settings: {
+            search: {
+              enabled: true,
+              provider: 'brave',
+              maxResults: 5,
+              timeoutSeconds: 30,
+              cacheTtlMinutes: 15,
+            },
+            providerConfigByProvider: {
+              brave: {
+                apiKey: 'BSA-test',
+              },
+            },
+          },
+        };
+      }
+
+      if (path === '/api/settings/web-search' && init?.method === 'PUT') {
+        return { success: true };
+      }
+
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    render(<WebSearchSettingsSection />);
+
+    const initialMinimaxRow = (await screen.findByRole('button', { name: /MiniMax/ })).closest('div');
+    expect(initialMinimaxRow).not.toBeNull();
+    expect(within(initialMinimaxRow as HTMLElement).getByText('Available')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /MiniMax/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Config' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/web-search/providers/minimax', {
+        method: 'DELETE',
+      });
+    });
+
+    await waitFor(() => {
+      const refreshedMinimaxRow = screen.getByRole('button', { name: /MiniMax/ }).closest('div');
+      expect(refreshedMinimaxRow).not.toBeNull();
+      expect(within(refreshedMinimaxRow as HTMLElement).getByText('Not Ready')).toBeInTheDocument();
+    });
   });
 
   it('disables deleting config for the default provider', async () => {

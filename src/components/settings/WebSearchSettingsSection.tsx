@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink, Eye, EyeOff, Loader2, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -182,6 +182,7 @@ function resolveSelectedProviderKey(
 export function WebSearchSettingsSection() {
   const { t, i18n } = useTranslation('settings');
   const loadFailedLabel = t('webSearch.toast.loadFailed');
+  const isMountedRef = useRef(true);
   const [providers, setProviders] = useState<WebSearchProviderDescriptor[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -199,50 +200,65 @@ export function WebSearchSettingsSection() {
 
   const visibleProviders = providers.filter((entry) => !HIDDEN_PROVIDER_IDS.has(entry.providerId));
 
-  useEffect(() => {
-    let cancelled = false;
+  const applyLoadedData = useCallback((
+    providersResponse: WebSearchProvidersResponse,
+    settingsResponse: WebSearchSettingsResponse,
+    currentSelectionKey?: string,
+  ) => {
+    const nextProviders = Array.isArray(providersResponse.providers) ? providersResponse.providers : [];
+    const nextVisibleProviders = nextProviders.filter((entry) => !HIDDEN_PROVIDER_IDS.has(entry.providerId));
+    const nextDefaultProvider = typeof settingsResponse.search.provider === 'string' ? settingsResponse.search.provider : '';
+    const nextProviderConfigs = settingsResponse.providerConfigByProvider ?? {};
 
-    void (async () => {
+    setProviders(nextProviders);
+    setEnabled(settingsResponse.search.enabled !== false);
+    setDefaultProvider(nextDefaultProvider);
+    setSelectedProviderKey(resolveSelectedProviderKey(currentSelectionKey, nextDefaultProvider, nextVisibleProviders));
+    setMaxResults(String(settingsResponse.search.maxResults ?? WEB_SEARCH_SHARED_DEFAULTS.maxResults));
+    setTimeoutSeconds(String(settingsResponse.search.timeoutSeconds ?? WEB_SEARCH_SHARED_DEFAULTS.timeoutSeconds));
+    setCacheTtlMinutes(String(settingsResponse.search.cacheTtlMinutes ?? WEB_SEARCH_SHARED_DEFAULTS.cacheTtlMinutes));
+    setProviderConfigByProvider(nextProviderConfigs);
+    setSavedProviderConfigByProvider(nextProviderConfigs);
+  }, []);
+
+  const loadData = useCallback(async (currentSelectionKey?: string, withLoadingState = false) => {
+    if (withLoadingState && isMountedRef.current) {
       setLoading(true);
-      try {
-        const [providersResponse, settingsResponse] = await Promise.all([
-          hostApiFetch<WebSearchProvidersResponse>('/api/settings/web-search/providers'),
-          hostApiFetch<WebSearchSettingsResponse>('/api/settings/web-search'),
-        ]);
+    }
 
-        if (cancelled) {
-          return;
-        }
+    try {
+      const [providersResponse, settingsResponse] = await Promise.all([
+        hostApiFetch<WebSearchProvidersResponse>('/api/settings/web-search/providers'),
+        hostApiFetch<WebSearchSettingsResponse>('/api/settings/web-search'),
+      ]);
 
-        const nextProviders = Array.isArray(providersResponse.providers) ? providersResponse.providers : [];
-        const nextVisibleProviders = nextProviders.filter((entry) => !HIDDEN_PROVIDER_IDS.has(entry.providerId));
-        const nextDefaultProvider = typeof settingsResponse.search.provider === 'string' ? settingsResponse.search.provider : '';
-        const nextProviderConfigs = settingsResponse.providerConfigByProvider ?? {};
-
-        setProviders(nextProviders);
-        setEnabled(settingsResponse.search.enabled !== false);
-        setDefaultProvider(nextDefaultProvider);
-        setSelectedProviderKey(resolveSelectedProviderKey(undefined, nextDefaultProvider, nextVisibleProviders));
-        setMaxResults(String(settingsResponse.search.maxResults ?? WEB_SEARCH_SHARED_DEFAULTS.maxResults));
-        setTimeoutSeconds(String(settingsResponse.search.timeoutSeconds ?? WEB_SEARCH_SHARED_DEFAULTS.timeoutSeconds));
-        setCacheTtlMinutes(String(settingsResponse.search.cacheTtlMinutes ?? WEB_SEARCH_SHARED_DEFAULTS.cacheTtlMinutes));
-        setProviderConfigByProvider(nextProviderConfigs);
-        setSavedProviderConfigByProvider(nextProviderConfigs);
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(`${loadFailedLabel}: ${toUserMessage(error)}`);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (!isMountedRef.current) {
+        return false;
       }
-    })();
 
+      applyLoadedData(providersResponse, settingsResponse, currentSelectionKey);
+      return true;
+    } catch (error) {
+      if (isMountedRef.current) {
+        toast.error(`${loadFailedLabel}: ${toUserMessage(error)}`);
+      }
+      return false;
+    } finally {
+      if (withLoadingState && isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [applyLoadedData, loadFailedLabel]);
+
+  useEffect(() => {
+    void loadData(undefined, true);
+  }, [loadData]);
+
+  useEffect(() => {
     return () => {
-      cancelled = true;
+      isMountedRef.current = false;
     };
-  }, [loadFailedLabel]);
+  }, []);
 
   useEffect(() => {
     setSelectedProviderKey((current) => resolveSelectedProviderKey(current, defaultProvider, visibleProviders));
@@ -272,23 +288,6 @@ export function WebSearchSettingsSection() {
   const selectedProviderHasSavedConfig = selectedProvider
     ? providerHasSavedConfig(savedProviderConfigByProvider, selectedProvider.providerId)
     : false;
-
-  const syncFromSettings = (
-    settingsResponse: WebSearchSettingsResponse,
-    currentSelectionKey: string,
-  ) => {
-    const nextDefaultProvider = typeof settingsResponse.search.provider === 'string' ? settingsResponse.search.provider : '';
-    const nextProviderConfigs = settingsResponse.providerConfigByProvider ?? {};
-
-    setEnabled(settingsResponse.search.enabled !== false);
-    setDefaultProvider(nextDefaultProvider);
-    setSelectedProviderKey(resolveSelectedProviderKey(currentSelectionKey, nextDefaultProvider, visibleProviders));
-    setMaxResults(String(settingsResponse.search.maxResults ?? WEB_SEARCH_SHARED_DEFAULTS.maxResults));
-    setTimeoutSeconds(String(settingsResponse.search.timeoutSeconds ?? WEB_SEARCH_SHARED_DEFAULTS.timeoutSeconds));
-    setCacheTtlMinutes(String(settingsResponse.search.cacheTtlMinutes ?? WEB_SEARCH_SHARED_DEFAULTS.cacheTtlMinutes));
-    setProviderConfigByProvider(nextProviderConfigs);
-    setSavedProviderConfigByProvider(nextProviderConfigs);
-  };
 
   const handleProviderFieldChange = (providerId: string, fieldKey: string, value: unknown) => {
     setProviderConfigByProvider((current) => ({
@@ -328,30 +327,14 @@ export function WebSearchSettingsSection() {
 
     setSaving(true);
     try {
-      const response = await hostApiFetch<{ settings?: WebSearchSettingsResponse }>('/api/settings/web-search', {
+      await hostApiFetch<{ settings?: WebSearchSettingsResponse }>('/api/settings/web-search', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       });
-
-      if (response.settings) {
-        syncFromSettings(response.settings, selectedProviderKey);
-      } else if (selectedProvider) {
-        setProviderConfigByProvider((current) => ({
-          ...current,
-          [selectedProvider.providerId]: {
-            ...effectiveSelectedProviderConfig,
-          },
-        }));
-        setSavedProviderConfigByProvider((current) => ({
-          ...current,
-          [selectedProvider.providerId]: {
-            ...effectiveSelectedProviderConfig,
-          },
-        }));
-      }
+      await loadData(selectedProviderKey);
 
       toast.success(t('webSearch.toast.saved'));
     } catch (error) {
@@ -364,25 +347,11 @@ export function WebSearchSettingsSection() {
   const handleDeleteProviderConfig = async (providerId: string) => {
     setDeletingProviderId(providerId);
     try {
-      const response = await hostApiFetch<{ settings?: WebSearchSettingsResponse }>(
+      await hostApiFetch<{ settings?: WebSearchSettingsResponse }>(
         `/api/settings/web-search/providers/${providerId}`,
         { method: 'DELETE' },
       );
-
-      if (response.settings) {
-        syncFromSettings(response.settings, providerId);
-      } else {
-        setProviderConfigByProvider((current) => {
-          const next = { ...current };
-          delete next[providerId];
-          return next;
-        });
-        setSavedProviderConfigByProvider((current) => {
-          const next = { ...current };
-          delete next[providerId];
-          return next;
-        });
-      }
+      await loadData(providerId);
 
       setPendingDeleteProviderId(null);
       toast.success(t('webSearch.toast.deleted'));
