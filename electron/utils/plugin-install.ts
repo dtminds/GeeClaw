@@ -507,22 +507,6 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
   }
 }
 
-export function ensureDingTalkPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[0]);
-}
-
-export function ensureWeComPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[1]);
-}
-
-export function ensureWeixinPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[2]);
-}
-
-export function ensureFeishuPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[4]);
-}
-
 export function ensureManagedChannelPluginInstalled(channelType: string): BundledPluginSourceResult | null {
   const pluginId = MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL[channelType];
   if (!pluginId) {
