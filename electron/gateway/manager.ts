@@ -263,6 +263,7 @@ export class GatewayManager extends EventEmitter {
             terminateForeignProcess: false,
             allowForeignAttach: false,
             rejectForeignProcess: true,
+            reclaimLikelyGatewayResidue: true,
           });
         },
         connect: async (port, externalToken) => {
@@ -352,6 +353,7 @@ export class GatewayManager extends EventEmitter {
   async stop(options?: { shutdownExternal?: boolean }): Promise<void> {
     const shutdownExternal = options?.shutdownExternal ?? true;
     const stopPort = this.status.port;
+    const ownedProcessAtStop = this.process != null && this.ownsProcess;
     logger.info('Gateway stop requested');
     this.lifecycleController.bump('stop');
     // Disable auto-reconnect
@@ -419,11 +421,22 @@ export class GatewayManager extends EventEmitter {
       }
       logger.info(`Verified Gateway port ${stopPort} is no longer listening after stop`);
     } else {
-      const remainingListeners = await getGatewayListenerProcessIds(stopPort);
-      if (remainingListeners.length > 0) {
-        logger.info(
-          `Gateway stop during app quit left listener(s) on port ${stopPort}: ${remainingListeners.join(', ')}`,
-        );
+      if (ownedProcessAtStop) {
+        const remainingListeners = await terminateGatewayListenersOnPort(stopPort);
+        if (remainingListeners.length > 0) {
+          logger.warn(
+            `Gateway stop during app quit left listener(s) on port ${stopPort}: ${remainingListeners.join(', ')}`,
+          );
+        } else {
+          logger.info(`Verified Gateway port ${stopPort} is no longer listening during app quit cleanup`);
+        }
+      } else {
+        const remainingListeners = await getGatewayListenerProcessIds(stopPort);
+        if (remainingListeners.length > 0) {
+          logger.info(
+            `Gateway stop during app quit left listener(s) on port ${stopPort}: ${remainingListeners.join(', ')}`,
+          );
+        }
       }
     }
 
@@ -449,6 +462,12 @@ export class GatewayManager extends EventEmitter {
       this.process = null;
     }
     this.ownsProcess = false;
+    const remainingListeners = await terminateGatewayListenersOnPort(this.status.port);
+    if (remainingListeners.length > 0) {
+      logger.warn(
+        `Forced Gateway quit cleanup left listener(s) on port ${this.status.port}: ${remainingListeners.join(', ')}`,
+      );
+    }
     this.setStatus({ pid: undefined });
     return true;
   }

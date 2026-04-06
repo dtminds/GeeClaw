@@ -36,40 +36,146 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
     });
   };
 
+  const getUnixDescendantProcessIds = async (pid: number): Promise<number[]> => {
+    const cp = await import('child_process');
+    const { stdout } = await new Promise<{ stdout: string }>((resolve) => {
+      cp.execFile('ps', ['-axo', 'pid=,ppid='], { timeout: 5000, windowsHide: true }, (err, stdout) => {
+        if (err) {
+          resolve({ stdout: '' });
+        } else {
+          resolve({ stdout });
+        }
+      });
+    });
+
+    if (!stdout.trim()) {
+      return [];
+    }
+
+    const childrenByParent = new Map<number, number[]>();
+    for (const line of stdout.trim().split(/\r?\n/)) {
+      const [childPidRaw, parentPidRaw] = line.trim().split(/\s+/);
+      const childPid = Number.parseInt(childPidRaw ?? '', 10);
+      const parentPid = Number.parseInt(parentPidRaw ?? '', 10);
+      if (!Number.isFinite(childPid) || !Number.isFinite(parentPid)) {
+        continue;
+      }
+      const siblings = childrenByParent.get(parentPid) ?? [];
+      siblings.push(childPid);
+      childrenByParent.set(parentPid, siblings);
+    }
+
+    const descendants: number[] = [];
+    const collect = (parentPid: number): void => {
+      const childPids = childrenByParent.get(parentPid) ?? [];
+      for (const childPid of childPids) {
+        collect(childPid);
+        descendants.push(childPid);
+      }
+    };
+
+    collect(pid);
+    return descendants;
+  };
+
+  const terminateUnixChildProcesses = async (descendantPids: number[], signal: NodeJS.Signals): Promise<void> => {
+    for (const descendantPid of descendantPids) {
+      try {
+        process.kill(descendantPid, signal);
+      } catch {
+        // ignore if the process already exited
+      }
+    }
+  };
+
   await new Promise<void>((resolve) => {
     let exited = false;
+    let gracefulShutdownSignaled = false;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.off('exit', exitListener);
+      resolve();
+    };
+
+    const maybeFinishAfterGracefulShutdown = () => {
+      if (exited && gracefulShutdownSignaled) {
+        finish();
+      }
+    };
 
     const exitListener = () => {
       exited = true;
-      clearTimeout(timeout);
-      resolve();
+      maybeFinishAfterGracefulShutdown();
     };
     child.once('exit', exitListener);
 
     const pid = child.pid;
     logger.info(`Sending kill to Gateway process (pid=${pid ?? 'unknown'})`);
 
-    if (process.platform === 'win32' && pid) {
-      void terminateWindowsProcessTree(pid).catch((error) => {
-        logger.warn(`Windows process-tree kill failed for Gateway pid=${pid}:`, error);
-      });
-    } else {
+    const signalGracefulShutdown = async () => {
+      if (process.platform === 'win32' && pid) {
+        await terminateWindowsProcessTree(pid).catch((error) => {
+          logger.warn(`Windows process-tree kill failed for Gateway pid=${pid}:`, error);
+        });
+        gracefulShutdownSignaled = true;
+        maybeFinishAfterGracefulShutdown();
+        return;
+      }
+
+      const descendantPids = pid
+        ? await getUnixDescendantProcessIds(pid).catch((error) => {
+          logger.warn(`Failed to inspect Unix Gateway child processes for pid=${pid}:`, error);
+          return [] as number[];
+        })
+        : [];
+
       try {
         child.kill();
       } catch {
         // ignore if already exited
       }
-    }
+
+      if (descendantPids.length > 0) {
+        await terminateUnixChildProcesses(descendantPids, 'SIGTERM').catch((error) => {
+          logger.warn(`Unix Gateway child-process termination failed for pid=${pid}:`, error);
+        });
+      }
+
+      gracefulShutdownSignaled = true;
+      maybeFinishAfterGracefulShutdown();
+    };
+
+    void signalGracefulShutdown().catch((error) => {
+      logger.warn(`Gateway graceful shutdown signaling failed (pid=${pid ?? 'unknown'}):`, error);
+      gracefulShutdownSignaled = true;
+      maybeFinishAfterGracefulShutdown();
+    });
 
     const timeout = setTimeout(() => {
-      if (!exited) {
+      void (async () => {
+        if (settled) {
+          return;
+        }
         logger.warn(`Gateway did not exit in time, force-killing (pid=${pid ?? 'unknown'})`);
         if (pid) {
           if (process.platform === 'win32') {
-            void terminateWindowsProcessTree(pid).catch((error) => {
+            await terminateWindowsProcessTree(pid).catch((error) => {
               logger.warn(`Forced Windows process-tree kill failed for Gateway pid=${pid}:`, error);
             });
           } else {
+            const descendantPids = await getUnixDescendantProcessIds(pid).catch((error) => {
+              logger.warn(`Failed to inspect Unix Gateway child processes for forced kill pid=${pid}:`, error);
+              return [] as number[];
+            });
+            if (descendantPids.length > 0) {
+              await terminateUnixChildProcesses(descendantPids, 'SIGKILL').catch((error) => {
+                logger.warn(`Forced Unix child-process kill failed for Gateway pid=${pid}:`, error);
+              });
+            }
             try {
               process.kill(pid, 'SIGKILL');
             } catch {
@@ -77,9 +183,8 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
             }
           }
         }
-      }
-      child.off('exit', exitListener);
-      resolve();
+        finish();
+      })();
     }, 5000);
   });
 }
@@ -167,6 +272,74 @@ export async function getGatewayListenerProcessIds(port: number): Promise<string
   return await getListeningProcessIds(port);
 }
 
+async function getProcessCommandLine(pid: string): Promise<string> {
+  if (!/^\d+$/.test(pid)) {
+    return '';
+  }
+
+  const cp = await import('child_process');
+  const command = process.platform === 'win32' ? 'powershell' : 'ps';
+  const args = process.platform === 'win32'
+    ? ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`]
+    : ['-o', 'command=', '-p', pid];
+
+  const { stdout } = await new Promise<{ stdout: string }>((resolve) => {
+    cp.execFile(command, args, { timeout: 5000, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        resolve({ stdout: '' });
+      } else {
+        resolve({ stdout });
+      }
+    });
+  });
+
+  return stdout.trim();
+}
+
+function isLikelyGatewayRelatedCommand(commandLine: string): boolean {
+  return /(openclaw|geeclaw|clawx|claw-x)/i.test(commandLine);
+}
+
+async function getGatewayRelatedResidualPids(pids: string[]): Promise<string[]> {
+  const relatedPids: string[] = [];
+
+  for (const pid of pids) {
+    const commandLine = await getProcessCommandLine(pid);
+    if (commandLine && isLikelyGatewayRelatedCommand(commandLine)) {
+      relatedPids.push(pid);
+    }
+  }
+
+  return relatedPids;
+}
+
+async function probeGatewayWebSocket(port: number): Promise<{ port: number; externalToken?: string } | null> {
+  return await new Promise<{ port: number; externalToken?: string } | null>((resolve) => {
+    const testWs = new WebSocket(`ws://localhost:${port}/ws`);
+    const terminateAndResolve = (result: { port: number; externalToken?: string } | null) => {
+      try {
+        testWs.terminate();
+      } catch {
+        // ignore
+      }
+      resolve(result);
+    };
+    const timeout = setTimeout(() => {
+      terminateAndResolve(null);
+    }, 2000);
+
+    testWs.on('open', () => {
+      clearTimeout(timeout);
+      terminateAndResolve({ port });
+    });
+
+    testWs.on('error', () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
+}
+
 async function terminateOrphanedProcessIds(port: number, pids: string[]): Promise<void> {
   logger.info(`Found orphaned process listening on port ${port} (PIDs: ${pids.join(', ')}), attempting to kill...`);
 
@@ -224,6 +397,7 @@ export async function findExistingGatewayProcess(options: {
   terminateForeignProcess?: boolean;
   allowForeignAttach?: boolean;
   rejectForeignProcess?: boolean;
+  reclaimLikelyGatewayResidue?: boolean;
 }): Promise<{ port: number; externalToken?: string } | null> {
   const {
     port,
@@ -231,6 +405,7 @@ export async function findExistingGatewayProcess(options: {
     terminateForeignProcess = true,
     allowForeignAttach = false,
     rejectForeignProcess = false,
+    reclaimLikelyGatewayResidue = false,
   } = options;
 
   try {
@@ -246,9 +421,38 @@ export async function findExistingGatewayProcess(options: {
         return null;
       }
 
+      const existingGateway = await probeGatewayWebSocket(port);
+      if (existingGateway) {
+        if (rejectForeignProcess) {
+          throw new Error(
+            `Port ${port} is already in use by another OpenClaw-compatible process (PIDs: ${foreignPids.join(', ')}). GeeClaw will not attach to or terminate external OpenClaw runtimes.`,
+          );
+        }
+
+        if (!allowForeignAttach) {
+          return null;
+        }
+
+        return existingGateway;
+      }
+
+      if (reclaimLikelyGatewayResidue) {
+        const residualGatewayPids = await getGatewayRelatedResidualPids(foreignPids);
+        if (residualGatewayPids.length > 0) {
+          logger.warn(
+            `Port ${port} is occupied by likely stale GeeClaw/OpenClaw process(es) (PIDs: ${residualGatewayPids.join(', ')}); reclaiming listener before startup`,
+          );
+          await terminateOrphanedProcessIds(port, residualGatewayPids);
+          if (process.platform === 'win32') {
+            await waitForPortFree(port, 10000);
+          }
+          return null;
+        }
+      }
+
       if (rejectForeignProcess) {
         throw new Error(
-          `Port ${port} is already in use by another process. GeeClaw will not attach to or terminate external OpenClaw runtimes.`,
+          `Port ${port} is already in use by another process (PIDs: ${foreignPids.join(', ')}). GeeClaw will not attach to or terminate external OpenClaw runtimes.`,
         );
       }
 
@@ -257,30 +461,7 @@ export async function findExistingGatewayProcess(options: {
       }
     }
 
-    return await new Promise<{ port: number; externalToken?: string } | null>((resolve) => {
-      const testWs = new WebSocket(`ws://localhost:${port}/ws`);
-      const terminateAndResolve = (result: { port: number; externalToken?: string } | null) => {
-        try {
-          testWs.terminate();
-        } catch {
-          // ignore
-        }
-        resolve(result);
-      };
-      const timeout = setTimeout(() => {
-        terminateAndResolve(null);
-      }, 2000);
-
-      testWs.on('open', () => {
-        clearTimeout(timeout);
-        terminateAndResolve({ port });
-      });
-
-      testWs.on('error', () => {
-        clearTimeout(timeout);
-        resolve(null);
-      });
-    });
+    return await probeGatewayWebSocket(port);
   } catch (error) {
     if (error instanceof Error && rejectForeignProcess) {
       throw error;
