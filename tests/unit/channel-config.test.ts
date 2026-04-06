@@ -1100,4 +1100,69 @@ describe('saveChannelConfig', () => {
     expect(config.plugins?.allow?.includes('discord')).not.toBe(true);
     expect(config.plugins?.entries?.discord).toBeUndefined();
   });
+
+  it('removes canonical and legacy qqbot plugin registrations when deleting agent-owned channel accounts', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      channels: {
+        qqbot: {
+          defaultAccount: 'helper',
+          accounts: {
+            helper: {
+              enabled: true,
+              appId: 'qq-app',
+            },
+          },
+        },
+      },
+      plugins: {
+        enabled: true,
+        allow: ['qqbot', 'openclaw-qqbot'],
+        entries: {
+          qqbot: { enabled: true },
+          'openclaw-qqbot': { enabled: true },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { deleteAgentChannelAccounts, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    await deleteAgentChannelAccounts('helper');
+
+    const config = await readOpenClawConfig() as {
+      channels?: Record<string, unknown>;
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.qqbot).toBeUndefined();
+    expect(config.plugins?.allow?.includes('qqbot')).not.toBe(true);
+    expect(config.plugins?.allow?.includes('openclaw-qqbot')).not.toBe(true);
+    expect(config.plugins?.entries?.qqbot).toBeUndefined();
+    expect(config.plugins?.entries?.['openclaw-qqbot']).toBeUndefined();
+  });
 });
