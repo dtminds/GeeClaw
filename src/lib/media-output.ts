@@ -9,6 +9,13 @@ type FenceSpan = {
   end: number;
 };
 
+type OpenFence =
+  | {
+      markerChar: string;
+      markerLen: number;
+    }
+  | undefined;
+
 function parseFenceSpans(buffer: string): FenceSpan[] {
   const spans: FenceSpan[] = [];
   let open:
@@ -63,6 +70,68 @@ function parseFenceSpans(buffer: string): FenceSpan[] {
 
 function isInsideFence(fenceSpans: FenceSpan[], offset: number): boolean {
   return fenceSpans.some((span) => offset >= span.start && offset < span.end);
+}
+
+function updateFenceState(line: string, open: OpenFence): OpenFence {
+  const match = line.match(/^( {0,3})(`{3,}|~{3,})(.*)$/);
+  if (!match) {
+    return open;
+  }
+
+  const marker = match[2];
+  const markerChar = marker[0];
+  const markerLen = marker.length;
+  if (!open) {
+    return {
+      markerChar,
+      markerLen,
+    };
+  }
+  if (open.markerChar === markerChar && markerLen >= open.markerLen) {
+    return undefined;
+  }
+  return open;
+}
+
+function collapseBlankLinesOutsideFences(lines: string[]): string[] {
+  const result: string[] = [];
+  let openFence: OpenFence;
+  let previousBlankOutsideFence = false;
+
+  for (const line of lines) {
+    const isBlank = line.trim() === '';
+    if (!openFence && isBlank) {
+      if (!previousBlankOutsideFence) {
+        result.push('');
+      }
+      previousBlankOutsideFence = true;
+      continue;
+    }
+
+    previousBlankOutsideFence = false;
+    result.push(line);
+    openFence = updateFenceState(line, openFence);
+  }
+
+  return result;
+}
+
+function trimOuterBlankLines(lines: string[]): string[] {
+  let start = 0;
+  while (start < lines.length && lines[start]?.trim() === '') {
+    start += 1;
+  }
+
+  let end = lines.length;
+  while (end > start && lines[end - 1]?.trim() === '') {
+    end -= 1;
+  }
+
+  return lines.slice(start, end);
+}
+
+function normalizeMarkdownLines(lines: string[]): string {
+  return trimOuterBlankLines(collapseBlankLinesOutsideFences(lines)).join('\n');
 }
 
 function normalizeMediaSource(src: string): string {
@@ -127,8 +196,9 @@ function parseAudioTag(text: string): { text: string; audioAsVoice: boolean; had
   AUDIO_AS_VOICE_RE.lastIndex = 0;
   const hadTag = AUDIO_AS_VOICE_RE.test(text);
   AUDIO_AS_VOICE_RE.lastIndex = 0;
+  const cleanedLines = text.split('\n').map((line) => line.replace(AUDIO_AS_VOICE_RE, ''));
   return {
-    text: text.replace(AUDIO_AS_VOICE_RE, '').replace(/\s{2,}/g, ' ').trim(),
+    text: normalizeMarkdownLines(cleanedLines),
     audioAsVoice: hadTag,
     hadTag,
   };
@@ -224,7 +294,6 @@ export function splitMediaFromOutput(raw: string): {
           media.splice(mediaStartIndex, media.length - mediaStartIndex, fallback);
           hasValidMedia = true;
           foundMediaToken = true;
-          validCount = 1;
           invalidParts.length = 0;
         }
       }
@@ -254,28 +323,20 @@ export function splitMediaFromOutput(raw: string): {
 
     pieces.push(line.slice(cursor));
 
-    const cleanedLine = pieces
-      .join('')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim();
+    const cleanedLine = pieces.join('');
 
-    if (cleanedLine) {
+    if (cleanedLine.trim()) {
       keptLines.push(cleanedLine);
     }
     lineOffset += line.length + 1;
   }
 
-  let cleanedText = keptLines
-    .join('\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
+  let cleanedText = normalizeMarkdownLines(keptLines);
 
   const audioTagResult = parseAudioTag(cleanedText);
   const hasAudioAsVoice = audioTagResult.audioAsVoice;
   if (audioTagResult.hadTag) {
-    cleanedText = audioTagResult.text.replace(/\n{2,}/g, '\n').trim();
+    cleanedText = audioTagResult.text.trim();
   }
 
   if (media.length === 0) {

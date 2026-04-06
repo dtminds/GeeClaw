@@ -32,4 +32,42 @@ describe('splitMediaFromOutput', () => {
     expect(result.mediaUrls).toBeUndefined();
     expect(result.text).toBe(input);
   });
+
+  it('preserves markdown paragraph breaks when removing MEDIA directive lines', () => {
+    const input = [
+      'First paragraph.',
+      '',
+      'MEDIA:https://example.com/screenshot.png',
+      '',
+      'Second paragraph.',
+    ].join('\n');
+
+    const result = splitMediaFromOutput(input);
+
+    expect(result).toEqual({
+      text: 'First paragraph.\n\nSecond paragraph.',
+      mediaUrls: ['https://example.com/screenshot.png'],
+      mediaUrl: 'https://example.com/screenshot.png',
+    });
+  });
+
+  it('preserves markdown formatting when removing the audio-as-voice tag', () => {
+    const input = [
+      'Summary paragraph.',
+      '',
+      '[[audio_as_voice]]',
+      '',
+      '- first item',
+      '  - nested item',
+      '',
+      'Final paragraph.',
+    ].join('\n');
+
+    const result = splitMediaFromOutput(input);
+
+    expect(result).toEqual({
+      text: 'Summary paragraph.\n\n- first item\n  - nested item\n\nFinal paragraph.',
+      audioAsVoice: true,
+    });
+  });
 });
