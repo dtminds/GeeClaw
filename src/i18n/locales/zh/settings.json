@@ -27,9 +27,6 @@
       "title": "自动选择",
       "description": "不指定服务时，运行时会自动使用当前可用的搜索服务"
     },
-    "sidebar": {
-      "auto": "自动"
-    },
     "provider": {
       "emptyFields": "这个服务不需要额外设置",
       "runtimeHint": "需要先启动本地服务",

@@ -27,9 +27,6 @@
       "title": "Choose Automatically",
       "description": "If you do not specify one, we will use any search service that is ready."
     },
-    "sidebar": {
-      "auto": "Auto"
-    },
     "provider": {
       "emptyFields": "No extra settings needed.",
       "runtimeHint": "Requires a running local service.",
