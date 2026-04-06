@@ -10,6 +10,7 @@ const {
   deleteAgentConfig,
   getAgentPersona,
   getDefaultAgentModelConfig,
+  getImageGenerationModelConfig,
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
@@ -19,6 +20,7 @@ const {
   updateAgentPersona,
   updateAgentSettings,
   updateDefaultAgentFallbacks,
+  updateImageGenerationModelConfig,
 } = vi.hoisted(() => ({
   assignChannelToAgent: vi.fn(),
   clearChannelBinding: vi.fn(),
@@ -26,6 +28,7 @@ const {
   deleteAgentConfig: vi.fn(),
   getAgentPersona: vi.fn(),
   getDefaultAgentModelConfig: vi.fn(),
+  getImageGenerationModelConfig: vi.fn(),
   installMarketplaceAgent: vi.fn(async () => ({
     completion: {
       operation: 'install',
@@ -98,6 +101,7 @@ const {
     explicitChannelAccountBindings: {},
   })),
   updateDefaultAgentFallbacks: vi.fn(),
+  updateImageGenerationModelConfig: vi.fn(),
 }));
 
 vi.mock('@electron/utils/agent-config', () => ({
@@ -107,6 +111,7 @@ vi.mock('@electron/utils/agent-config', () => ({
   deleteAgentConfig,
   getAgentPersona,
   getDefaultAgentModelConfig,
+  getImageGenerationModelConfig,
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
@@ -116,6 +121,7 @@ vi.mock('@electron/utils/agent-config', () => ({
   updateAgentPersona,
   updateAgentSettings,
   updateDefaultAgentFallbacks,
+  updateImageGenerationModelConfig,
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -251,6 +257,78 @@ describe('agent API routes', () => {
         skills: ['stock-analyzer', 'web-search'],
       },
     });
+  });
+
+  it('serves and updates image generation model config', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    const res = {} as never;
+    const ctx = {
+      gatewayManager: {
+        getStatus: () => ({ state: 'running' }),
+        debouncedReload: vi.fn(),
+      },
+    } as never;
+
+    getImageGenerationModelConfig.mockResolvedValue({
+      mode: 'auto',
+      primary: null,
+      fallbacks: [],
+      effective: { source: 'inferred', primary: 'openai/gpt-image-1' },
+      availableProviders: [],
+    });
+
+    await handleAgentRoutes(
+      { method: 'GET' } as never,
+      res,
+      new URL('http://127.0.0.1/api/agents/image-generation-model'),
+      ctx,
+    );
+
+    expect(sendJson).toHaveBeenCalledWith(
+      res,
+      200,
+      expect.objectContaining({
+        success: true,
+        mode: 'auto',
+        effective: { source: 'inferred', primary: 'openai/gpt-image-1' },
+      }),
+    );
+
+    parseJsonBody.mockResolvedValueOnce({
+      mode: 'manual',
+      primary: 'google/gemini-3-pro-image-preview',
+      fallbacks: ['fal/fal-ai/flux/dev'],
+    });
+    updateImageGenerationModelConfig.mockResolvedValue({
+      mode: 'manual',
+      primary: 'google/gemini-3-pro-image-preview',
+      fallbacks: ['fal/fal-ai/flux/dev'],
+      effective: { source: 'manual', primary: 'google/gemini-3-pro-image-preview' },
+      availableProviders: [],
+    });
+
+    await handleAgentRoutes(
+      { method: 'PUT' } as never,
+      res,
+      new URL('http://127.0.0.1/api/agents/image-generation-model'),
+      ctx,
+    );
+
+    expect(updateImageGenerationModelConfig).toHaveBeenCalledWith({
+      mode: 'manual',
+      primary: 'google/gemini-3-pro-image-preview',
+      fallbacks: ['fal/fal-ai/flux/dev'],
+    });
+    expect(sendJson).toHaveBeenCalledWith(
+      res,
+      200,
+      expect.objectContaining({
+        success: true,
+        mode: 'manual',
+      }),
+    );
+    expect(ctx.gatewayManager.debouncedReload).toHaveBeenCalledTimes(1);
   });
 
   it('unmanages preset agents through the dedicated route', async () => {

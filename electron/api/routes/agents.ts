@@ -10,6 +10,7 @@ import {
   deleteAgentConfig,
   getDefaultAgentModelConfig,
   getAgentPersona,
+  getImageGenerationModelConfig,
   installMarketplaceAgent,
   listAgentPresetSummaries,
   listAgentsSnapshot,
@@ -18,6 +19,7 @@ import {
   updateAgentPersona,
   updateAgentSettings,
   updateDefaultAgentFallbacks,
+  updateImageGenerationModelConfig,
 } from '../../utils/agent-config';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -143,6 +145,31 @@ export async function handleAgentRoutes(
       const body = await parseJsonBody<{ fallbacks?: string[] }>(req);
       const snapshot = await updateDefaultAgentFallbacks(body.fallbacks ?? []);
       scheduleGatewayReload(ctx, 'update-default-agent-model');
+      sendJson(res, 200, { success: true, ...snapshot });
+    } catch (error) {
+      sendJson(res, 400, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/agents/image-generation-model' && req.method === 'GET') {
+    sendJson(res, 200, { success: true, ...(await getImageGenerationModelConfig()) });
+    return true;
+  }
+
+  if (url.pathname === '/api/agents/image-generation-model' && req.method === 'PUT') {
+    try {
+      const body = await parseJsonBody<{
+        mode: 'auto' | 'manual';
+        primary?: string | null;
+        fallbacks?: string[];
+      }>(req);
+      const snapshot = await updateImageGenerationModelConfig({
+        mode: body.mode,
+        primary: body.primary ?? null,
+        fallbacks: body.fallbacks ?? [],
+      });
+      scheduleGatewayReload(ctx, 'update-image-generation-model');
       sendJson(res, 200, { success: true, ...snapshot });
     } catch (error) {
       sendJson(res, 400, { success: false, error: String(error) });
