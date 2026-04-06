@@ -14,6 +14,10 @@ describe('settings modal paths', () => {
     expect(getSettingsModalPath('environment')).toBe('/settings/environment');
   });
 
+  it('builds the web search settings path', () => {
+    expect(getSettingsModalPath('webSearch')).toBe('/settings/web-search');
+  });
+
   it('builds the cli marketplace settings path', () => {
     expect(getSettingsModalPath('cliMarketplace')).toBe('/settings/cli-marketplace');
   });
@@ -31,6 +35,11 @@ describe('settings modal paths', () => {
   it('resolves the environment settings section from the route', () => {
     expect(resolveSettingsSection('/settings/environment')).toBe('environment');
     expect(resolveSettingsSection('/settings/environment/runtime')).toBe('environment');
+  });
+
+  it('resolves the web search settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/web-search')).toBe('webSearch');
+    expect(resolveSettingsSection('/settings/web-search/providers')).toBe('webSearch');
   });
 
   it('resolves the cli marketplace settings section from the route', () => {

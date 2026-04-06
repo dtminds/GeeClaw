@@ -4,7 +4,21 @@ import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings
 import {
   getManagedAppEnvironmentEntries,
   replaceManagedAppEnvironmentEntries,
+  resolveGeeClawAppEnvironment,
 } from '../../utils/app-env';
+import {
+  applyWebSearchSettingsPatch,
+  buildWebSearchProviderAvailabilityMap,
+  buildWebSearchProviderEnvVarStatusMap,
+  deleteWebSearchProviderConfig,
+  readWebSearchSettingsSnapshot,
+  type WebSearchSettingsPatch,
+} from '../../utils/openclaw-web-search-config';
+import { listWebSearchProviderDescriptors } from '../../utils/openclaw-web-search-provider-registry';
+import {
+  mutateOpenClawConfigDocument,
+  readOpenClawConfigDocument,
+} from '../../utils/openclaw-config-coordinator';
 import {
   buildOpenClawSafetySettings,
   isSecurityPolicy,
@@ -150,6 +164,102 @@ export async function handleSettingsRoutes(
       }
 
       sendJson(res, 200, { success: true, entries });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search/providers' && req.method === 'GET') {
+    try {
+      const descriptors = listWebSearchProviderDescriptors();
+      const [config, runtimeEnv] = await Promise.all([
+        readOpenClawConfigDocument(),
+        resolveGeeClawAppEnvironment({}),
+      ]);
+      const snapshot = readWebSearchSettingsSnapshot(config);
+      const availabilityByProvider = buildWebSearchProviderAvailabilityMap(
+        snapshot.providerConfigByProvider,
+        runtimeEnv,
+      );
+      const envVarStatusByProvider = buildWebSearchProviderEnvVarStatusMap(runtimeEnv);
+
+      sendJson(res, 200, {
+        providers: descriptors.map((descriptor) => ({
+          ...descriptor,
+          availability: availabilityByProvider[descriptor.providerId],
+          envVarStatuses: envVarStatusByProvider[descriptor.providerId],
+        })),
+      });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search' && req.method === 'GET') {
+    try {
+      const config = await readOpenClawConfigDocument();
+      sendJson(res, 200, readWebSearchSettingsSnapshot(config));
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/web-search' && req.method === 'PUT') {
+    try {
+      const body = await parseJsonBody<WebSearchSettingsPatch>(req);
+      let changed = false;
+      const settings = await mutateOpenClawConfigDocument((config) => {
+        changed = applyWebSearchSettingsPatch(config, body);
+        return {
+          changed,
+          result: readWebSearchSettingsSnapshot(config),
+        };
+      });
+
+      if (changed && ctx.gatewayManager.getStatus().state === 'running') {
+        ctx.gatewayManager.debouncedReload();
+      }
+
+      sendJson(res, 200, { success: true, settings });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname.startsWith('/api/settings/web-search/providers/') && req.method === 'DELETE') {
+    try {
+      const providerId = decodeURIComponent(url.pathname.slice('/api/settings/web-search/providers/'.length));
+      const supportedProvider = listWebSearchProviderDescriptors().find((entry) => entry.providerId === providerId);
+      if (!supportedProvider) {
+        sendJson(res, 404, { success: false, error: 'Unknown web search provider' });
+        return true;
+      }
+      const config = await readOpenClawConfigDocument();
+      const snapshot = readWebSearchSettingsSnapshot(config);
+
+      if (snapshot.search.provider === providerId) {
+        sendJson(res, 409, { success: false, error: 'Cannot delete config for the default web search provider' });
+        return true;
+      }
+
+      let changed = false;
+      const settings = await mutateOpenClawConfigDocument((currentConfig) => {
+        changed = deleteWebSearchProviderConfig(currentConfig, supportedProvider.providerId);
+        return {
+          changed,
+          result: readWebSearchSettingsSnapshot(currentConfig),
+        };
+      });
+
+      if (changed && ctx.gatewayManager.getStatus().state === 'running') {
+        ctx.gatewayManager.debouncedReload();
+      }
+
+      sendJson(res, 200, { success: true, settings });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

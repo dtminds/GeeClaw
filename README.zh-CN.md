@@ -199,6 +199,14 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - preset 安装前的 `requires.env` 检查会同时读取这批应用级变量与当前进程环境。
 - 保存后会自动重启 Gateway，让变更立即生效。
 
+### 联网搜索提供商
+
+打开 **设置 → 联网搜索**，可以直接管理 OpenClaw 的 `web_search` 提供商，而不需要手动编辑 `openclaw.json`。
+
+- 启用状态、提供商选择、最大结果数、超时和缓存 TTL 等共享设置会写入 canonical 的 `tools.web.search`。
+- 各提供商的 API Key 和高级字段会保存到 `plugins.entries.<pluginId>.config.webSearch.*`，不再依赖旧的 legacy path。
+- 设置面板会根据 GeeClaw 归一化后的 provider registry 动态渲染提供商专属字段；当你选择 Firecrawl 时，也会自动启用内置的 Firecrawl plugin entry。
+
 ### CLI 市场
 
 打开 **设置 → CLI 市场** 可以查看一组 GeeClaw 已知如何检测、安装、重装和卸载的 npm CLI。
