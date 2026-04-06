@@ -1,24 +1,12 @@
 import { access } from 'fs/promises';
 import { constants } from 'fs';
+import { LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS, LEGACY_BUILTIN_PLUGIN_ID_SET } from './legacy-built-in-plugins';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getManagedAgentWorkspacePath } from './managed-agent-workspace';
 import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
-const BUILTIN_CHANNEL_IDS = new Set([
-  'discord',
-  'telegram',
-  'whatsapp',
-  'slack',
-  'signal',
-  'imessage',
-  'matrix',
-  'line',
-  'msteams',
-  'googlechat',
-  'mattermost',
-]);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -164,10 +152,13 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             : {}
         ) as Record<string, unknown>;
 
-        if ('whatsapp' in entries) {
-          delete entries.whatsapp;
-          changed = true;
-          console.log('[sanitize] Removed legacy plugins.entries.whatsapp for built-in channel');
+        for (const [channelId, legacyPluginIds] of Object.entries(LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS)) {
+          for (const pluginId of legacyPluginIds) {
+            if (!(pluginId in entries)) continue;
+            delete entries[pluginId];
+            changed = true;
+            console.log(`[sanitize] Removed legacy plugins.entries.${pluginId} for built-in channel ${channelId}`);
+          }
         }
 
         if (LEGACY_QWEN_PLUGIN_ID in entries) {
@@ -176,29 +167,13 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           console.log(`[sanitize] Removed deprecated plugins.entries.${LEGACY_QWEN_PLUGIN_ID}`);
         }
 
-        const configuredBuiltIns = new Set<string>();
-        const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
-        if (channelsObj && typeof channelsObj === 'object') {
-          for (const [channelId, section] of Object.entries(channelsObj)) {
-            if (!BUILTIN_CHANNEL_IDS.has(channelId)) continue;
-            if (!section || section.enabled === false) continue;
-            if (Object.keys(section).length > 0) {
-              configuredBuiltIns.add(channelId);
-            }
-          }
-        }
-
         const externalPluginIds = allow.filter(
-          (pluginId) => pluginId !== LEGACY_QWEN_PLUGIN_ID && !BUILTIN_CHANNEL_IDS.has(pluginId),
+          (pluginId) => (
+            pluginId !== LEGACY_QWEN_PLUGIN_ID
+            && !LEGACY_BUILTIN_PLUGIN_ID_SET.has(pluginId)
+          ),
         );
         const nextAllow = [...externalPluginIds];
-        if (externalPluginIds.length > 0) {
-          for (const channelId of configuredBuiltIns) {
-            if (!nextAllow.includes(channelId)) {
-              nextAllow.push(channelId);
-            }
-          }
-        }
 
         if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
           if (nextAllow.length > 0) {

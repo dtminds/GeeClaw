@@ -78,19 +78,9 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
 
   const config = JSON.parse(raw) as Record<string, unknown>;
   let modified = false;
-  const BUILTIN_CHANNEL_IDS = new Set([
-    'discord',
-    'telegram',
-    'whatsapp',
-    'slack',
-    'signal',
-    'imessage',
-    'matrix',
-    'line',
-    'msteams',
-    'googlechat',
-    'mattermost',
-  ]);
+  const LEGACY_BUILTIN_PLUGIN_IDS: Record<string, string[]> = {
+    qqbot: ['openclaw-qqbot'],
+  };
 
   // Mirror of the production blocklist logic
   const skills = config.skills;
@@ -141,32 +131,16 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
           : {}
       ) as Record<string, unknown>;
 
-      if ('whatsapp' in entries) {
-        delete entries.whatsapp;
-        modified = true;
-      }
-
-      const configuredBuiltIns = new Set<string>();
-      const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
-      if (channelsObj && typeof channelsObj === 'object') {
-        for (const [channelId, section] of Object.entries(channelsObj)) {
-          if (!BUILTIN_CHANNEL_IDS.has(channelId)) continue;
-          if (!section || section.enabled === false) continue;
-          if (Object.keys(section).length > 0) {
-            configuredBuiltIns.add(channelId);
-          }
+      for (const legacyPluginIds of Object.values(LEGACY_BUILTIN_PLUGIN_IDS)) {
+        for (const pluginId of legacyPluginIds) {
+          if (!(pluginId in entries)) continue;
+          delete entries[pluginId];
+          modified = true;
         }
       }
 
-      const externalPluginIds = allow.filter((pluginId) => !BUILTIN_CHANNEL_IDS.has(pluginId));
+      const externalPluginIds = allow.filter((pluginId) => pluginId !== 'openclaw-qqbot');
       const nextAllow = [...externalPluginIds];
-      if (externalPluginIds.length > 0) {
-        for (const channelId of configuredBuiltIns) {
-          if (!nextAllow.includes(channelId)) {
-            nextAllow.push(channelId);
-          }
-        }
-      }
 
       if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
         if (nextAllow.length > 0) {
@@ -390,18 +364,20 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     expect(result.agents).toEqual({ defaults: { model: { primary: 'gpt-4' } } });
   });
 
-  it('keeps configured built-in channels in plugins.allow when external plugins are enabled', async () => {
+  it('preserves canonical channel plugin ids while removing legacy qqbot plugin ids', async () => {
     await writeConfig({
       plugins: {
         enabled: true,
-        allow: ['whatsapp', 'customPlugin'],
+        allow: ['whatsapp', 'qqbot', 'openclaw-qqbot', 'customPlugin'],
         entries: {
           whatsapp: { enabled: true },
+          'openclaw-qqbot': { enabled: true },
           customPlugin: { enabled: true },
         },
       },
       channels: {
         discord: { enabled: true, token: 'abc' },
+        qqbot: { enabled: true, appId: 'abc' },
       },
     });
 
@@ -409,11 +385,15 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     expect(modified).toBe(true);
 
     const result = await readConfig();
-    expect(result.channels).toEqual({ discord: { enabled: true, token: 'abc' } });
+    expect(result.channels).toEqual({
+      discord: { enabled: true, token: 'abc' },
+      qqbot: { enabled: true, appId: 'abc' },
+    });
     expect(result.plugins).toEqual({
       enabled: true,
-      allow: ['customPlugin', 'discord'],
+      allow: ['whatsapp', 'qqbot', 'customPlugin'],
       entries: {
+        whatsapp: { enabled: true },
         customPlugin: { enabled: true },
       },
     });

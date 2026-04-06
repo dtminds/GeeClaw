@@ -21,7 +21,6 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'dingtalk', npmName: '@soimy/dingtalk', displayName: '钉钉' },
   { pluginId: 'wecom-openclaw-plugin', npmName: '@wecom/wecom-openclaw-plugin', displayName: '企业微信' },
   { pluginId: 'openclaw-weixin', npmName: '@tencent-weixin/openclaw-weixin', displayName: '微信' },
-  { pluginId: 'openclaw-qqbot', npmName: '@tencent-connect/openclaw-qqbot', displayName: 'QQ Bot' },
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
   { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
   { pluginId: 'qmemory', npmName: 'qmemory', displayName: 'QMemory' },
@@ -36,7 +35,6 @@ const MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL: Record<string, string> = {
   dingtalk: 'dingtalk',
   wecom: 'wecom-openclaw-plugin',
   'openclaw-weixin': 'openclaw-weixin',
-  qqbot: 'openclaw-qqbot',
   feishu: 'openclaw-lark',
 };
 
@@ -507,26 +505,6 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
     console.error('Failed to enforce always-enabled bundled plugins:', err);
     return { success: false, updated: [], error: String(err) };
   }
-}
-
-export function ensureDingTalkPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[0]);
-}
-
-export function ensureWeComPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[1]);
-}
-
-export function ensureWeixinPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[2]);
-}
-
-export function ensureQQBotPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[3]);
-}
-
-export function ensureFeishuPluginInstalled(): BundledPluginSourceResult {
-  return resolveBundledPluginSource(ALL_BUNDLED_PLUGINS[4]);
 }
 
 export function ensureManagedChannelPluginInstalled(channelType: string): BundledPluginSourceResult | null {

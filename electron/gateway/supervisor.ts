@@ -322,6 +322,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
       OPENCLAW_STATE_DIR: openclawConfigDir,
       OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(openclawConfigDir),
       OPENCLAW_GATEWAY_PORT: String(PORTS.OPENCLAW_GATEWAY),
+      OPENCLAW_DISABLE_BUNDLED_PLUGINS: '1',
       OPENCLAW_NO_RESPAWN: '1',
     };
 
@@ -335,6 +336,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       resolve(ok);
     };
 
@@ -349,7 +351,9 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
     }, 120000);
 
     child.on('error', (err) => {
-      clearTimeout(timeout);
+      if (settled) {
+        return;
+      }
       logger.error('Failed to spawn OpenClaw doctor repair process:', err);
       finish(false);
     });
@@ -373,7 +377,10 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
     });
 
     child.on('exit', (code: number) => {
-      clearTimeout(timeout);
+      if (settled) {
+        logger.debug(`Ignoring late OpenClaw doctor repair exit after settle (code=${code})`);
+        return;
+      }
       if (code === 0) {
         logger.info('OpenClaw doctor repair completed successfully');
         finish(true);
