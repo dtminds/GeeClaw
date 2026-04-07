@@ -360,7 +360,7 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
         };
       }
 
-      if (matchedAnyUpdate && (!sawMatchableUpdate || matchedAllMatchableUpdates)) {
+      if (matchedAnyUpdate && matchedAllMatchableUpdates) {
         next[index] = {
           ...msg,
           _toolResultMatched: true,
