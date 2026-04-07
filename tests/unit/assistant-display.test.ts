@@ -123,14 +123,14 @@ describe('assistant-display', () => {
     });
   });
 
-  it('flattens remote markdown images to alt text and extracts data images separately', () => {
+  it('preserves remote markdown images and extracts data images separately', () => {
     const message = {
       role: 'assistant',
-      content: 'Before ![diagram](https://example.com/diagram.png) after ![](https://example.com/raw.png)\n![inline](data:image/png;base64,AAA=)',
+      content: 'Before ![diagram](https://example.com/diagram.png) after\n![inline](data:image/png;base64,AAA=)',
     } as unknown as RawMessage;
 
     expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
-      visibleText: 'Before diagram after image',
+      visibleText: 'Before ![diagram](https://example.com/diagram.png) after',
       markdownImages: [{ mimeType: 'image/png', data: 'AAA=', alt: 'inline' }],
     });
   });
@@ -142,7 +142,7 @@ describe('assistant-display', () => {
     } as unknown as RawMessage;
 
     expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
-      visibleText: 'Before diagram [v2] and  after',
+      visibleText: 'Before ![diagram [v2]](https://example.com/image(1).png) and  after',
       markdownImages: [{ mimeType: 'image/png', data: 'AAA=', alt: 'inline [v1]' }],
     });
   });

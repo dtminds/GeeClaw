@@ -314,6 +314,24 @@ describe('chat live rendering', () => {
     expect(screen.queryByText('{"foo":"bar"}')).not.toBeInTheDocument();
   });
 
+  it('renders remote markdown images inside assistant messages', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-remote-markdown-image',
+          timestamp: 1,
+          content: '已为你生成图片：\n\n![underwater-city](https://example.com/underwater-city.png)',
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('已为你生成图片：')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'underwater-city' })).toHaveAttribute('src', 'https://example.com/underwater-city.png');
+  });
+
   it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
     render(
       <ChatMessage

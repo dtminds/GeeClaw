@@ -286,7 +286,7 @@ function flattenMarkdownImages(text: string): {
     }
 
     if (/^https?:\/\//i.test(normalizedSrc)) {
-      flattened += normalizedAlt || 'image';
+      flattened += original;
       index = src.endIndex - 1;
       continue;
     }
