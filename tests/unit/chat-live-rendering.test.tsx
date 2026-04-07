@@ -323,9 +323,9 @@ describe('chat live rendering', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: /使用浏览器: open · https:\/\/example\.com/i });
+    const trigger = screen.getByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i });
     expect(trigger).toBeInTheDocument();
-    expect(trigger.textContent).toContain('使用浏览器: open · https://example.com');
+    expect(trigger.textContent).toContain('使用浏览器 open · https://example.com');
     expect(trigger.textContent).not.toContain('browser');
     expect(trigger.querySelector('svg')).not.toBeNull();
 
@@ -334,7 +334,7 @@ describe('chat live rendering', () => {
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });
 
-  it('shows assistant usage badges when numeric usage metadata exists', () => {
+  it('does not show assistant usage badges in the hover row', () => {
     render(
       <ChatMessage
         message={{
@@ -355,10 +355,10 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByText(/Input 1,200/i)).toBeInTheDocument();
-    expect(screen.getByText(/Output 345/i)).toBeInTheDocument();
-    expect(screen.getByText(/Total 1,545/i)).toBeInTheDocument();
-    expect(screen.getByText(/Cache read 22/i)).toBeInTheDocument();
-    expect(screen.getByText(/Cost 0.0123/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Input 1,200/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Output 345/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total 1,545/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cache read 22/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cost 0.0123/i)).not.toBeInTheDocument();
   });
 });

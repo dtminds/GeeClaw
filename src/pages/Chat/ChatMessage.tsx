@@ -30,7 +30,6 @@ import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { isInternalMessage } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, formatTimestamp } from './message-utils';
-import { formatTokenCount, getMessageUsage } from './message-usage';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -835,30 +834,8 @@ function formatDuration(durationMs?: number): string | null {
 
 // ── Assistant hover bar (timestamp + copy, shown on group hover) ─
 
-function AssistantHoverBar({ text, timestamp, message }: { text: string; timestamp?: number; message?: RawMessage }) {
+function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: number; message?: RawMessage }) {
   const [copied, setCopied] = useState(false);
-  const { t } = useTranslation('chat');
-  const usage = useMemo(() => getMessageUsage(message), [message]);
-  const usageItems = [
-    typeof usage?.inputTokens === 'number'
-      ? { key: 'input', label: t('assistantHover.usage.input', 'Input'), value: formatTokenCount(usage.inputTokens) }
-      : null,
-    typeof usage?.outputTokens === 'number'
-      ? { key: 'output', label: t('assistantHover.usage.output', 'Output'), value: formatTokenCount(usage.outputTokens) }
-      : null,
-    typeof usage?.totalTokens === 'number'
-      ? { key: 'total', label: t('assistantHover.usage.total', 'Total'), value: formatTokenCount(usage.totalTokens) }
-      : null,
-    typeof usage?.cacheReadTokens === 'number'
-      ? { key: 'cacheRead', label: t('assistantHover.usage.cacheRead', 'Cache read'), value: formatTokenCount(usage.cacheReadTokens) }
-      : null,
-    typeof usage?.cacheWriteTokens === 'number'
-      ? { key: 'cacheWrite', label: t('assistantHover.usage.cacheWrite', 'Cache write'), value: formatTokenCount(usage.cacheWriteTokens) }
-      : null,
-    typeof usage?.costTotal === 'number'
-      ? { key: 'cost', label: t('assistantHover.usage.cost', 'Cost'), value: usage.costTotal.toFixed(4) }
-      : null,
-  ].filter((item): item is { key: string; label: string; value: string } => Boolean(item));
 
   const copyContent = useCallback(() => {
     navigator.clipboard.writeText(text);
@@ -871,15 +848,6 @@ function AssistantHoverBar({ text, timestamp, message }: { text: string; timesta
       <span className="text-xs text-muted-foreground">
         {timestamp ? formatTimestamp(timestamp) : ''}
       </span>
-      {usageItems.length > 0 && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground/55">
-          {usageItems.map((item) => (
-            <span key={item.key} className="rounded-full bg-black/[0.035] px-2 py-0.5 dark:bg-white/[0.06]">
-              {item.label} {item.value}
-            </span>
-          ))}
-        </div>
-      )}
       <Button
         variant="ghost"
         size="icon"
@@ -1464,7 +1432,7 @@ function ToolCard({
   const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
   const displaySummary = useMemo(
-    () => (summary.detailLine ? `${displayName}: ${summary.detailLine}` : displayName),
+    () => (summary.detailLine ? `${displayName} ${summary.detailLine}` : displayName),
     [displayName, summary.detailLine],
   );
   const formattedInput = useMemo(() => {
