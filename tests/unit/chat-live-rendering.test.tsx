@@ -295,6 +295,25 @@ describe('chat live rendering', () => {
     expect(screen.queryByText('orphan tool result')).not.toBeInTheDocument();
   });
 
+  it('does not render opaque JSON-only standalone tool_result payloads', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-opaque-json',
+          toolName: 'bash',
+          timestamp: 1,
+          content: '{"foo":"bar"}',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('{"foo":"bar"}')).not.toBeInTheDocument();
+  });
+
   it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
     render(
       <ChatMessage

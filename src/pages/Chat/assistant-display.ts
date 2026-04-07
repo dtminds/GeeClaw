@@ -41,7 +41,6 @@ function normalizeDisplayText(text: string): string {
   return text
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
@@ -309,7 +308,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
     }
     const role = typeof entry.role === 'string' ? entry.role.toLowerCase() : '';
     if (role === 'toolresult' || role === 'tool_result') {
-      return formatToolResultText(text, typeof entry.toolName === 'string' ? entry.toolName : undefined) || text;
+      return formatToolResultText(text, typeof entry.toolName === 'string' ? entry.toolName : undefined) || undefined;
     }
     return text;
   }
@@ -365,9 +364,11 @@ export function extractAssistantDisplaySegments(
     if (fallbackText.trim()) {
       const role = typeof entry.role === 'string' ? entry.role.toLowerCase() : '';
       const displayText = (role === 'toolresult' || role === 'tool_result')
-        ? (formatToolResultText(fallbackText, typeof entry.toolName === 'string' ? entry.toolName : undefined) || fallbackText)
+        ? formatToolResultText(fallbackText, typeof entry.toolName === 'string' ? entry.toolName : undefined)
         : fallbackText;
-      appendProcessedSegments(parts, markdownImages, displayText, 0, options.showThinking);
+      if (displayText) {
+        appendProcessedSegments(parts, markdownImages, displayText, 0, options.showThinking);
+      }
     }
   }
 

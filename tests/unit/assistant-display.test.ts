@@ -112,6 +112,17 @@ describe('assistant-display', () => {
     });
   });
 
+  it('preserves markdown-significant spacing inside assistant text', () => {
+    const message = {
+      role: 'assistant',
+      content: '```ts\nconst  value = 1;\n  return value;\n```\n\n| col a | col b |\n| --- | --- |\n| 1 |  two |\n',
+    } as unknown as RawMessage;
+
+    expect(extractAssistantDisplaySegments(message, { showThinking: false }).visibleText).toBe(
+      '```ts\nconst  value = 1;\n  return value;\n```\n\n| col a | col b |\n| --- | --- |\n| 1 |  two |',
+    );
+  });
+
   it('only shows standalone tool_result turns when tool traces are enabled and content is displayable', () => {
     const visibleToolResult = {
       role: 'toolresult',
@@ -125,6 +136,21 @@ describe('assistant-display', () => {
     expect(shouldRenderStandaloneToolResult(visibleToolResult, { showToolCalls: false })).toBe(false);
     expect(shouldRenderStandaloneToolResult(visibleToolResult, { showToolCalls: true })).toBe(true);
     expect(shouldRenderStandaloneToolResult(emptyToolResult, { showToolCalls: true })).toBe(false);
+  });
+
+  it('suppresses opaque JSON-only tool results instead of rendering raw payloads', () => {
+    const message = {
+      role: 'toolresult',
+      toolName: 'bash',
+      content: '{"foo":"bar"}',
+    } as unknown as RawMessage;
+
+    expect(extractAssistantVisibleText(message)).toBeUndefined();
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: '',
+      parts: [],
+    });
+    expect(shouldRenderStandaloneToolResult(message, { showToolCalls: true })).toBe(false);
   });
 
   it('formats structured tool errors and suppresses opaque JSON previews', () => {
