@@ -78,6 +78,7 @@
         "queueCount": "还有 {{count}} 个待处理",
         "execLabel": "命令",
         "pluginDescriptionLabel": "插件说明",
+        "details": "更多详情",
         "errorTitle": "发送决策失败",
         "clearError": "关闭错误",
         "submitting": "正在等待 OpenClaw 确认您的决策……",

@@ -78,6 +78,7 @@
         "queueCount": "{{count}} pending",
         "execLabel": "Command",
         "pluginDescriptionLabel": "Plugin description",
+        "details": "More details",
         "errorTitle": "Failed to send decision",
         "clearError": "Dismiss",
         "submitting": "Waiting for OpenClaw to confirm your decision…",

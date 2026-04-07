@@ -25,6 +25,7 @@ const translations: Record<string, string> = {
   'approvalDialog.queueCount': '{{count}} pending',
   'approvalDialog.execLabel': 'Command',
   'approvalDialog.pluginDescriptionLabel': 'Plugin description',
+  'approvalDialog.details': 'More details',
   'approvalDialog.errorTitle': 'Failed to send decision',
   'approvalDialog.clearError': 'Dismiss',
   'approvalDialog.submitting': 'Waiting for OpenClaw to confirm your decision…',
@@ -162,8 +163,9 @@ describe('ApprovalDialog', () => {
     expect(screen.getByText('Exec approval needed')).toBeInTheDocument();
     expect(screen.getByText('expires in 29m')).toBeInTheDocument();
     expect(screen.getByText('mcporter --version')).toBeInTheDocument();
-    expect(screen.getByText('Working directory')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/workspace')).toBeInTheDocument();
+    expect(screen.getByText('More details')).toBeInTheDocument();
+    expect(screen.getByText('Working directory')).not.toBeVisible();
+    expect(screen.getByText('/tmp/workspace')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Allow once' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Always allow' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
@@ -177,6 +179,10 @@ describe('ApprovalDialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.pointerDown(overlay as Element);
     fireEvent.click(overlay as Element);
+    fireEvent.click(screen.getByText('More details'));
+
+    expect(screen.getByText('Working directory')).toBeVisible();
+    expect(screen.getByText('/tmp/workspace')).toBeVisible();
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
@@ -220,13 +226,17 @@ describe('ApprovalDialog', () => {
     expect(screen.getByText('2 pending')).toBeInTheDocument();
     expect(screen.getByText('Plugin description')).toBeInTheDocument();
     expect(screen.getByText('Needs install permission')).toBeInTheDocument();
-    expect(screen.getByText('Plugin ID')).toBeInTheDocument();
-    expect(screen.getByText('market/foo')).toBeInTheDocument();
     expect(screen.getByText('Plugin severity')).toBeInTheDocument();
     expect(screen.getByText('high')).toBeInTheDocument();
+    expect(screen.getByText('Plugin ID')).not.toBeVisible();
+    expect(screen.getByText('market/foo')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Allow once' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Always allow' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('More details'));
+    expect(screen.getByText('Plugin ID')).toBeVisible();
+    expect(screen.getByText('market/foo')).toBeVisible();
   });
 
   it('calls resolveActive for the selected decision and supports busy/error state', async () => {

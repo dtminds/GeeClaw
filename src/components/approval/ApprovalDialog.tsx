@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -128,6 +129,13 @@ export function ApprovalDialog() {
   const visibleDecisions = DECISION_OPTIONS.filter((option) => decisionSet.has(option.value));
   const decisions = visibleDecisions.length > 0 ? visibleDecisions : DECISION_OPTIONS;
 
+  const primaryRows = [
+    {
+      label: t('approvalDialog.metadata.pluginSeverity'),
+      value: active.kind === 'plugin' ? active.pluginSeverity : null,
+    },
+  ].filter((row) => hasDisplayValue(row.value));
+
   const metadataRows = [
     {
       label: t('approvalDialog.metadata.cwd'),
@@ -163,7 +171,7 @@ export function ApprovalDialog() {
     },
     {
       label: t('approvalDialog.metadata.pluginSeverity'),
-      value: active.kind === 'plugin' ? active.pluginSeverity : null,
+      value: null,
     },
   ].filter((row) => hasDisplayValue(row.value));
 
@@ -223,9 +231,9 @@ export function ApprovalDialog() {
               </div>
             )}
 
-            {metadataRows.length > 0 && (
+            {primaryRows.length > 0 && (
               <dl className="mt-2 grid gap-2 sm:grid-cols-2">
-                {metadataRows.map((row) => (
+                {primaryRows.map((row) => (
                   <div key={row.label} className="modal-field-surface rounded-xl border px-3 py-2">
                     <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       {row.label}
@@ -234,6 +242,25 @@ export function ApprovalDialog() {
                   </div>
                 ))}
               </dl>
+            )}
+
+            {metadataRows.length > 0 && (
+              <details className="group mt-3 rounded-xl border border-black/8 bg-background/55 px-3 py-3 dark:border-white/10 dark:bg-black/10">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground">
+                  <span>{t('approvalDialog.details')}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                </summary>
+                <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {metadataRows.map((row) => (
+                    <div key={row.label} className="modal-field-surface rounded-xl border px-3 py-2">
+                      <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        {row.label}
+                      </dt>
+                      <dd className="mt-1 break-words text-xs text-foreground">{toDisplayText(row.value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
             )}
 
             {hasDisplayValue(error) && (
