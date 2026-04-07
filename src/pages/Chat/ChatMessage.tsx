@@ -374,87 +374,9 @@ function getToolDisplayIcon(name: string, input?: unknown) {
   return AiGenerativeIcon;
 }
 
-function extractToolFilePath(input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-
-  const value = input as Record<string, unknown>;
-  const candidates = [
-    value.file_path,
-    value.filePath,
-    value.path,
-    value.target_file,
-    value.targetFile,
-    value.filename,
-    value.file,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return undefined;
-}
-
-function extractToolFileName(input: unknown): string | undefined {
-  const filePath = extractToolFilePath(input);
-  if (!filePath) {
-    return undefined;
-  }
-
-  const parts = filePath.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] || filePath;
-}
-
-function extractBrowserAction(input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-
-  const value = input as Record<string, unknown>;
-  const candidate = value.action;
-  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
-}
-
-function getToolDisplayName(name: string, input: unknown, preferZh: boolean): string {
+function getToolDisplayName(name: string, preferZh: boolean): string {
   const normalized = normalizeToolName(name);
-  if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {
-    const command = extractExecCommand(input);
-    if (command) {
-      if (preferZh) {
-        const baseCmd = getBaseCommand(command);
-        if (baseCmd && COMMON_TOOL_NAME_MAP_ZH[baseCmd]) {
-          return `${COMMON_TOOL_NAME_MAP_ZH[baseCmd]} ${command}`;
-        }
-        return `运行 ${command}`;
-      }
-      return command;
-    }
-    return preferZh ? '运行' : name;
-  }
-
-  if (
-    normalized === 'read' ||
-    normalized === 'read_file' ||
-    normalized === 'write' ||
-    normalized === 'write_file' ||
-    normalized === 'edit' ||
-    normalized === 'edit_file'
-  ) {
-    const fileName = extractToolFileName(input);
-    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
-    if (fileName) return `${actionName} ${fileName}`;
-    return actionName;
-  }
-
-  if (normalized === 'browser') {
-    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
-    const action = extractBrowserAction(input);
-    if (action) return `${actionName} ${action}`;
-    return actionName;
-  }
-
-  if (!preferZh) return name;
-  return COMMON_TOOL_NAME_MAP_ZH[normalized] || name;
+  return preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
 }
 
 function getInlineToolResultStatus(block: ContentBlock, resultText: string): 'running' | 'completed' | 'error' {
@@ -1539,8 +1461,12 @@ function ToolCard({
   const isRunning = status === 'running';
   const isError = status === 'error';
   const summary = useMemo(() => formatToolDisplaySummary(name, input), [input, name]);
-  const displayName = useMemo(() => getToolDisplayName(name, input, preferZh), [input, name, preferZh]);
+  const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
+  const displaySummary = useMemo(
+    () => (summary.detailLine ? `${displayName}: ${summary.detailLine}` : displayName),
+    [displayName, summary.detailLine],
+  );
   const formattedInput = useMemo(() => {
     if (!open || input == null) {
       return null;
@@ -1563,7 +1489,7 @@ function ToolCard({
         <Popover.Trigger asChild>
           <button
             className="flex min-w-0 items-center gap-2 py-1.5 focus:outline-none cursor-pointer"
-            aria-label={displayName}
+            aria-label={displaySummary}
           >
             <span
               className={cn(
@@ -1584,7 +1510,7 @@ function ToolCard({
               )} 
               title={summary.summaryLine}
             >
-              {displayName}
+              {displaySummary}
             </span>
             {duration && <span className="text-[11px] opacity-60">{duration}</span>}
           </button>

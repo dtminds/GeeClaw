@@ -295,7 +295,7 @@ describe('chat live rendering', () => {
     expect(screen.queryByText('orphan tool result')).not.toBeInTheDocument();
   });
 
-  it('preserves ClawX tool name mapping and icon while keeping raw tool results in the popover', () => {
+  it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
     render(
       <ChatMessage
         message={{
@@ -323,10 +323,10 @@ describe('chat live rendering', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: /使用浏览器 open/i });
+    const trigger = screen.getByRole('button', { name: /使用浏览器: open · https:\/\/example\.com/i });
     expect(trigger).toBeInTheDocument();
-    expect(trigger.textContent).toContain('使用浏览器 open');
-    expect(trigger.textContent).not.toContain('🌐 browser: open · https://example.com');
+    expect(trigger.textContent).toContain('使用浏览器: open · https://example.com');
+    expect(trigger.textContent).not.toContain('browser');
     expect(trigger.querySelector('svg')).not.toBeNull();
 
     fireEvent.click(trigger);
