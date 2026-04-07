@@ -31,7 +31,7 @@ Important properties of the coordinator:
 
 - it serializes writes through an in-memory queue
 - each mutation reads the latest file, applies a targeted patch, then writes back once
-- it always ensures `commands.restart = true` on write
+- it always ensures `commands.restart = false` on write
 
 Do not add new startup logic that directly does its own `readFile(openclaw.json) -> mutate -> writeFile(openclaw.json)` flow.
 
@@ -179,7 +179,7 @@ Responsibilities:
 - restore `agents.defaults.maxConcurrent`
 - remove invalid `skills.enabled` or `skills.disabled` root keys
 - remove stale plugin load paths
-- ensure `commands.restart = true`
+- ensure `commands.restart = false`
 - mirror default channel account credentials to top-level channel config when required
 - remove stale Moonshot/Kimi nested API key config
 

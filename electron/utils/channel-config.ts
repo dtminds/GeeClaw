@@ -344,12 +344,12 @@ export async function writeOpenClawConfig(
             logger.warn(`[plugin] ${warning}`);
         }
 
-        // Enable graceful in-process reload authorization for SIGUSR1 flows.
+        // Keep restart command disabled in the managed OpenClaw profile.
         const commands =
             config.commands && typeof config.commands === 'object'
                 ? { ...(config.commands as Record<string, unknown>) }
                 : {};
-        commands.restart = true;
+        commands.restart = false;
         config.commands = commands;
 
         const syncTargets = resolveStoreSyncTargets(options);
