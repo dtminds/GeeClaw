@@ -14,7 +14,7 @@ export function patchOpenClawDoctorBundledRuntimeDepsSource(source) {
     DOCTOR_PATCH_TARGET_RE,
     (_match, prefix, indent) => (
       `${prefix}`
-      + `${indent}const bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim().toLowerCase();${newline}`
+      + `${indent}const bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim()?.toLowerCase();${newline}`
       + `${indent}if (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;${newline}`
       + `${indent}const packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({`
     ),

@@ -18,7 +18,8 @@ describe('openclaw doctor patch helper', () => {
 
     expect(result.matched).toBe(true);
     expect(result.changed).toBe(true);
-    expect(result.source).toContain('const bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim().toLowerCase();');
+    expect(result.source).toContain('const bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim()?.toLowerCase();');
+    expect(result.source).not.toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim().toLowerCase()');
     expect(result.source).toContain('if (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;');
     expect(result.source).toContain('\r\n  const packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({');
   });
