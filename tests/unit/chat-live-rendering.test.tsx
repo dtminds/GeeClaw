@@ -197,4 +197,187 @@ describe('chat live rendering', () => {
 
     expect(screen.getByText('The gateway replied with HEARTBEAT_OK, so we can continue.')).toBeInTheDocument();
   });
+
+  it('renders only final assistant text from think/final-tagged output when trace is off', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-think-final',
+          timestamp: 1,
+          content: '<think>hidden reasoning</think><final>Visible answer</final>',
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('Visible answer')).toBeInTheDocument();
+    expect(screen.queryByText('hidden reasoning')).not.toBeInTheDocument();
+    expect(screen.queryByText('Think Completed')).not.toBeInTheDocument();
+  });
+
+  it('surfaces think-tagged output through the thinking block when trace is on', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-think-visible',
+          timestamp: 1,
+          content: '<think>hidden reasoning</think><final>Visible answer</final>',
+        }}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('Visible answer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Think Completed/i }));
+    expect(screen.getByText('hidden reasoning')).toBeInTheDocument();
+  });
+
+  it('does not render commentary-only assistant bubbles', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-commentary-only',
+          timestamp: 1,
+          content: [
+            {
+              type: 'text',
+              text: 'thinking like caveman',
+              textSignature: JSON.stringify({ v: 1, id: 'msg-commentary', phase: 'commentary' }),
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('thinking like caveman')).not.toBeInTheDocument();
+  });
+
+  it('renders unmatched standalone tool_result turns when tool traces are enabled', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-orphan',
+          timestamp: 1,
+          content: 'orphan tool result',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('orphan tool result')).toBeInTheDocument();
+  });
+
+  it('keeps standalone tool_result turns hidden when tool traces are disabled', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-hidden',
+          timestamp: 1,
+          content: 'orphan tool result',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls={false}
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('orphan tool result')).not.toBeInTheDocument();
+  });
+
+  it('does not render opaque JSON-only standalone tool_result payloads', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'toolresult',
+          id: 'tool-result-opaque-json',
+          toolName: 'bash',
+          timestamp: 1,
+          content: '{"foo":"bar"}',
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('{"foo":"bar"}')).not.toBeInTheDocument();
+  });
+
+  it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-tool-summary',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'browser',
+              arguments: { action: 'open', targetUrl: 'https://example.com' },
+            },
+            {
+              type: 'toolResult',
+              id: 'tool-1',
+              name: 'browser',
+              text: '{"foo":"bar"}',
+              status: 'completed',
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger.textContent).toContain('使用浏览器 open · https://example.com');
+    expect(trigger.textContent).not.toContain('browser');
+    expect(trigger.querySelector('svg')).not.toBeNull();
+
+    fireEvent.click(trigger);
+    expect(screen.getByText('Raw Result')).toBeInTheDocument();
+    expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
+  });
+
+  it('does not show assistant usage badges in the hover row', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-usage',
+          timestamp: 1,
+          content: 'Visible answer',
+          usage: {
+            input: 1200,
+            output: 345,
+            total: 1545,
+            cacheRead: 22,
+            cost: { total: 0.0123 },
+          },
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.queryByText(/Input 1,200/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Output 345/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total 1,545/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cache read 22/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cost 0.0123/i)).not.toBeInTheDocument();
+  });
 });

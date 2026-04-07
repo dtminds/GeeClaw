@@ -60,4 +60,100 @@ describe('prepareHistoryMessagesForDisplay', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.content).toBe('The gateway replied with NO_REPLY earlier, but this is still a real answer.');
   });
+
+  it('drops commentary-only assistant history messages', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'text',
+            text: 'thinking like caveman',
+            textSignature: JSON.stringify({ v: 1, id: 'msg-commentary', phase: 'commentary' }),
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(0);
+  });
+
+  it('keeps unmatched tool_result turns visible instead of merging by tool name alone', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'toolCall',
+            id: 'call-1',
+            name: 'bash',
+            arguments: { command: 'pwd' },
+          },
+        ],
+      },
+      {
+        role: 'toolresult',
+        timestamp: 2,
+        toolCallId: 'call-2',
+        toolName: 'bash',
+        content: 'orphan tool result',
+      },
+    ]);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).not.toHaveProperty('_toolStatuses.0.result', 'orphan tool result');
+    expect(messages[1]).toMatchObject({
+      role: 'toolresult',
+      content: 'orphan tool result',
+    });
+  });
+
+  it('keeps partially matched standalone tool_result messages visible', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'toolCall',
+            id: 'call-1',
+            name: 'bash',
+            arguments: { command: 'pwd' },
+          },
+        ],
+      },
+      {
+        role: 'toolresult',
+        timestamp: 2,
+        content: [
+          {
+            type: 'toolResult',
+            id: 'call-1',
+            name: 'bash',
+            text: 'matched result',
+            status: 'completed',
+          },
+          {
+            type: 'toolResult',
+            id: 'call-2',
+            name: 'bash',
+            text: 'unmatched result',
+            status: 'completed',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?._toolStatuses).toEqual([
+      expect.objectContaining({
+        toolCallId: 'call-1',
+        result: 'matched result',
+      }),
+    ]);
+    expect(messages[1]).toMatchObject({ role: 'toolresult' });
+    expect(messages[1]).not.toHaveProperty('_toolResultMatched');
+  });
 });

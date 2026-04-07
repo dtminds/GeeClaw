@@ -21,10 +21,15 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
-import { splitMediaFromOutput } from '@/lib/media-output';
+import {
+  extractAssistantDisplaySegments,
+  formatToolResultText,
+  shouldRenderStandaloneToolResult,
+} from './assistant-display';
+import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { isInternalMessage } from '@/stores/chat';
-import { extractText, extractThinking, extractImages, extractToolUse, formatTimestamp } from './message-utils';
+import { extractText, extractImages, extractToolUse, formatTimestamp } from './message-utils';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -248,6 +253,7 @@ function looksLikeToolErrorText(text: string | undefined): boolean {
 const EMPTY_ATTACHMENTS: AttachedFileMeta[] = [];
 const EMPTY_ASSISTANT_CONTENT_PARTS: AssistantContentPart[] = [];
 const EMPTY_TOOL_DISPLAY_STATUSES: ToolDisplayStatus[] = [];
+const EMPTY_MARKDOWN_IMAGES: ExtractedImage[] = [];
 
 const COMMON_TOOL_NAME_MAP_ZH: Record<string, string> = {
   read: '读取文件',
@@ -299,37 +305,6 @@ function getBaseCommand(command: string): string {
   return match ? match[1].toLowerCase() : '';
 }
 
-function getToolDisplayIcon(name: string, input?: unknown) {
-  const normalized = normalizeToolName(name);
-
-  if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {
-    if (input) {
-      const commandStr = extractExecCommand(input);
-      if (commandStr) {
-        const base = getBaseCommand(commandStr);
-        if (base === 'ls' || base === 'tree' || base === 'find' || base === 'fd') return LeftToRightListStarIcon;
-        if (base === 'cat' || base === 'less' || base === 'more' || base === 'tail' || base === 'head' || base === 'bat') return FileViewIcon;
-        if (base === 'grep' || base === 'awk' || base === 'sed' || base === 'rg' || base === 'ag') return FileSearchIcon;
-        if (base === 'vi' || base === 'vim' || base === 'nano' || base === 'emacs') return FileEditIcon;
-        if (base === 'rm' || base === 'rmdir') return Delete01Icon;
-        if (base === 'curl' || base === 'wget') return Globe02Icon;
-      }
-    }
-    return ComputerTerminal01Icon;
-  }
-  
-  if (normalized === 'read' || normalized === 'read_file' || normalized === 'cat' || normalized === 'view') return FileViewIcon;
-  if (normalized === 'list_dir' || normalized === 'ls') return LeftToRightListStarIcon;
-  if (normalized === 'glob' || normalized === 'grep' || normalized === 'search') return FileSearchIcon;
-  if (normalized === 'write' || normalized === 'write_file' || normalized === 'create_file' || normalized === 'edit' || normalized === 'edit_file' || normalized === 'replace') return FileEditIcon;
-  if (normalized === 'rename' || normalized === 'move_file') return FileEditIcon;
-  if (normalized === 'delete_file') return Delete01Icon;
-  if (normalized === 'fetch' || normalized === 'web_fetch' || normalized === 'web_search') return Globe02Icon;
-  if (normalized === 'browser' || normalized === 'browser_open') return ChromeIcon;
-  if (normalized === 'sql' || normalized === 'query') return DatabaseIcon;
-  return AiGenerativeIcon;
-}
-
 function extractExecCommand(input: unknown): string | undefined {
   if (typeof input === 'string') {
     const trimmed = input.trim();
@@ -345,7 +320,7 @@ function extractExecCommand(input: unknown): string | undefined {
       return trimmed;
     }
   }
-  
+
   if (!input || typeof input !== 'object') return undefined;
 
   const value = input as Record<string, unknown>;
@@ -367,96 +342,40 @@ function extractExecCommand(input: unknown): string | undefined {
   return undefined;
 }
 
-function extractToolFilePath(input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-
-  const value = input as Record<string, unknown>;
-  const candidates = [
-    value.file_path,
-    value.filePath,
-    value.path,
-    value.target_file,
-    value.targetFile,
-    value.filename,
-    value.file,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return undefined;
-}
-
-function extractToolFileName(input: unknown): string | undefined {
-  const filePath = extractToolFilePath(input);
-  if (!filePath) {
-    return undefined;
-  }
-
-  const parts = filePath.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] || filePath;
-}
-
-function extractBrowserAction(input: unknown): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-
-  const value = input as Record<string, unknown>;
-  const candidates = [
-    value.action,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return undefined;
-}
-
-function getToolDisplayName(name: string, input: unknown, preferZh: boolean): string {
+function getToolDisplayIcon(name: string, input?: unknown) {
   const normalized = normalizeToolName(name);
+
   if (normalized === 'exec' || normalized === 'bash' || normalized === 'shell' || normalized === 'run_command' || normalized === 'command') {
-    const command = extractExecCommand(input);
-    if (command) {
-      if (preferZh) {
-        const baseCmd = getBaseCommand(command);
-        if (baseCmd && COMMON_TOOL_NAME_MAP_ZH[baseCmd]) {
-          return `${COMMON_TOOL_NAME_MAP_ZH[baseCmd]} ${command}`;
-        }
-        return `运行 ${command}`;
+    if (input) {
+      const commandStr = extractExecCommand(input);
+      if (commandStr) {
+        const base = getBaseCommand(commandStr);
+        if (base === 'ls' || base === 'tree' || base === 'find' || base === 'fd') return LeftToRightListStarIcon;
+        if (base === 'cat' || base === 'less' || base === 'more' || base === 'tail' || base === 'head' || base === 'bat') return FileViewIcon;
+        if (base === 'grep' || base === 'awk' || base === 'sed' || base === 'rg' || base === 'ag') return FileSearchIcon;
+        if (base === 'vi' || base === 'vim' || base === 'nano' || base === 'emacs') return FileEditIcon;
+        if (base === 'rm' || base === 'rmdir') return Delete01Icon;
+        if (base === 'curl' || base === 'wget') return Globe02Icon;
       }
-      return command;
     }
-    return preferZh ? '运行' : name;
+    return ComputerTerminal01Icon;
   }
 
-  if (
-    normalized === 'read' ||
-    normalized === 'read_file' ||
-    normalized === 'write' ||
-    normalized === 'write_file' ||
-    normalized === 'edit' ||
-    normalized === 'edit_file'
-  ) {
-    const fileName = extractToolFileName(input);
-    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
-    if (fileName) return `${actionName} ${fileName}`;
-    return actionName;
-  }
+  if (normalized === 'read' || normalized === 'read_file' || normalized === 'cat' || normalized === 'view') return FileViewIcon;
+  if (normalized === 'list_dir' || normalized === 'ls') return LeftToRightListStarIcon;
+  if (normalized === 'glob' || normalized === 'grep' || normalized === 'search') return FileSearchIcon;
+  if (normalized === 'write' || normalized === 'write_file' || normalized === 'create_file' || normalized === 'edit' || normalized === 'edit_file' || normalized === 'replace') return FileEditIcon;
+  if (normalized === 'rename' || normalized === 'move_file') return FileEditIcon;
+  if (normalized === 'delete_file') return Delete01Icon;
+  if (normalized === 'fetch' || normalized === 'web_fetch' || normalized === 'web_search') return Globe02Icon;
+  if (normalized === 'browser' || normalized === 'browser_open') return ChromeIcon;
+  if (normalized === 'sql' || normalized === 'query') return DatabaseIcon;
+  return AiGenerativeIcon;
+}
 
-  if (normalized === 'browser') {
-    const actionName = preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
-    const action = extractBrowserAction(input);
-    if (action) return `${actionName} ${action}`;
-    return actionName;
-  }
-
-  if (!preferZh) return name;
-  return COMMON_TOOL_NAME_MAP_ZH[normalized] || name;
+function getToolDisplayName(name: string, preferZh: boolean): string {
+  const normalized = normalizeToolName(name);
+  return preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
 }
 
 function getInlineToolResultStatus(block: ContentBlock, resultText: string): 'running' | 'completed' | 'error' {
@@ -501,9 +420,9 @@ function findMatchingToolStatus(toolStatusLookup: ToolStatusLookup, id?: string,
 
 function buildAssistantContentParts(
   message: RawMessage,
-  showThinking: boolean,
   showToolCalls: boolean,
   toolStatuses: ToolDisplayStatus[] = [],
+  assistantTextParts: Array<{ type: 'text' | 'thinking'; text: string; blockIndex: number }> = [],
 ): AssistantContentPart[] {
   const toolStatusLookup = buildToolStatusLookup(toolStatuses);
   const content = Array.isArray(message.content) ? message.content as ContentBlock[] : null;
@@ -511,19 +430,15 @@ function buildAssistantContentParts(
   // OpenAI-compatible streams may expose text/tool_calls separately rather than
   // as an ordered block list. Prefer text before tools in that fallback path.
   if (!content) {
-    const parts: AssistantContentPart[] = [];
-    const thinking = showThinking ? extractThinking(message) : null;
-    const text = extractText(message);
+    const parts: AssistantContentPart[] = assistantTextParts.map((part) => (
+      part.type === 'thinking'
+        ? { type: 'thinking', content: part.text }
+        : { type: 'text', text: part.text }
+    ));
     const tools = showToolCalls ? extractToolUse(message) : [];
-
-    if (thinking) {
-      parts.push({ type: 'thinking', content: thinking });
-    }
-    if (text.trim()) {
-      parts.push({ type: 'text', text });
-    }
     for (const tool of tools) {
       const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
+      const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
       if (showToolCalls) {
         parts.push({
           type: 'tool',
@@ -532,7 +447,7 @@ function buildAssistantContentParts(
           input: tool.input,
           status: toolStatus?.status || 'running',
           durationMs: toolStatus?.durationMs,
-          result: toolStatus?.result,
+          result: formattedResult || toolStatus?.result,
         });
       }
     }
@@ -540,37 +455,39 @@ function buildAssistantContentParts(
   }
 
   const parts: AssistantContentPart[] = [];
-  let textBuffer: string[] = [];
+  const textPartsByBlock = assistantTextParts.reduce<Map<number, Array<{ type: 'text' | 'thinking'; text: string }>>>((map, part) => {
+    const group = map.get(part.blockIndex) || [];
+    group.push({ type: part.type, text: part.text });
+    map.set(part.blockIndex, group);
+    return map;
+  }, new Map());
 
-  const flushTextBuffer = () => {
-    const combined = textBuffer.join('\n\n').trim();
-    if (combined) {
-      parts.push({ type: 'text', text: combined });
+  const pushTextPartsForBlock = (blockIndex: number) => {
+    const blockParts = textPartsByBlock.get(blockIndex);
+    if (!blockParts || blockParts.length === 0) {
+      return;
     }
-    textBuffer = [];
+    for (const part of blockParts) {
+      if (part.type === 'thinking') {
+        parts.push({ type: 'thinking', content: part.text });
+      } else {
+        parts.push({ type: 'text', text: part.text });
+      }
+    }
   };
 
-  for (const block of content) {
-    if (block.type === 'text' && block.text?.trim()) {
-      const visibleText = splitMediaFromOutput(block.text).text;
-      if (visibleText.trim()) {
-        textBuffer.push(visibleText);
-      }
-      continue;
-    }
+  for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
+    const block = content[blockIndex];
+    pushTextPartsForBlock(blockIndex);
 
-    if (block.type === 'thinking' && block.thinking?.trim()) {
-      if (showThinking) {
-        flushTextBuffer();
-        parts.push({ type: 'thinking', content: block.thinking.trim() });
-      }
+    if (block.type === 'text' || block.type === 'thinking') {
       continue;
     }
 
     if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
-      flushTextBuffer();
       if (showToolCalls) {
         const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
+        const formattedResult = formatToolResultText(toolStatus?.result, block.name);
         parts.push({
           type: 'tool',
           id: block.id || block.name,
@@ -578,7 +495,7 @@ function buildAssistantContentParts(
           input: block.input ?? block.arguments,
           status: toolStatus?.status || 'running',
           durationMs: toolStatus?.durationMs,
-          result: toolStatus?.result,
+          result: formattedResult || toolStatus?.result,
         });
       }
       continue;
@@ -591,16 +508,15 @@ function buildAssistantContentParts(
         if (part.type !== 'tool') continue;
         const isMatch = (block.id && (part.id === block.id)) || (block.name && part.name === block.name) || !block.id;
         if (!isMatch) continue;
+        const formattedResult = formatToolResultText(resultText || block.error?.trim() || '', part.name);
         parts[index] = mergeToolDisplayState(part, {
           status: getInlineToolResultStatus(block, resultText || block.error?.trim() || ''),
-          result: resultText || block.error?.trim() || undefined,
+          result: formattedResult || resultText || block.error?.trim() || undefined,
         });
         break;
       }
     }
   }
-
-  flushTextBuffer();
 
   // Some streaming providers send text blocks in `content[]` while exposing
   // tool calls only via top-level `tool_calls`. Keep content order first, then
@@ -615,6 +531,7 @@ function buildAssistantContentParts(
       });
       if (alreadyRendered) continue;
       const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
+      const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
       parts.push({
         type: 'tool',
         id: tool.id || tool.name,
@@ -622,7 +539,7 @@ function buildAssistantContentParts(
         input: tool.input,
         status: toolStatus?.status || 'running',
         durationMs: toolStatus?.durationMs,
-        result: toolStatus?.result,
+        result: formattedResult || toolStatus?.result,
       });
     }
   }
@@ -679,14 +596,28 @@ export const ChatMessage = memo(function ChatMessage({
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   const isToolResult = role === 'toolresult' || role === 'tool_result';
   const shouldHideInternalMessage = useMemo(() => isInternalMessage(message), [message]);
-  const images = useMemo(() => extractImages(message), [message]);
+  const assistantDisplay = useMemo(
+    () => (!isUser ? extractAssistantDisplaySegments(message, { showThinking }) : null),
+    [isUser, message, showThinking],
+  );
+  const markdownImages = useMemo<Array<ExtractedImage>>(
+    () => assistantDisplay?.markdownImages.map((image) => ({
+      mimeType: image.mimeType,
+      data: image.data,
+    })) || EMPTY_MARKDOWN_IMAGES,
+    [assistantDisplay],
+  );
+  const images = useMemo(
+    () => [...extractImages(message), ...markdownImages],
+    [markdownImages, message],
+  );
   const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
   const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
   const assistantContentParts = useMemo(
     () => (isUser
       ? EMPTY_ASSISTANT_CONTENT_PARTS
-      : buildAssistantContentParts(message, showThinking, showToolCalls, effectiveToolStatuses)),
-    [effectiveToolStatuses, isUser, message, showThinking, showToolCalls],
+      : buildAssistantContentParts(message, showToolCalls, effectiveToolStatuses, assistantDisplay?.parts || [])),
+    [assistantDisplay?.parts, effectiveToolStatuses, isUser, message, showToolCalls],
   );
   const assistantText = useMemo(
     () => (isUser ? '' : getAssistantDisplayText(assistantContentParts)),
@@ -700,8 +631,7 @@ export const ChatMessage = memo(function ChatMessage({
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
 
-  // Never render tool result messages in chat UI
-  if (isToolResult) return null;
+  if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
   if (shouldHideInternalMessage) return null;
 
   if (!hasText && assistantContentParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
@@ -877,7 +807,7 @@ export const ChatMessage = memo(function ChatMessage({
 
         {/* Hover row for assistant messages — only when there is real text content */}
         {!isUser && hasAssistantText && (
-          <AssistantHoverBar text={text} timestamp={message.timestamp} />
+          <AssistantHoverBar text={text} timestamp={message.timestamp} message={message} />
         )}
       </div>
 
@@ -904,28 +834,8 @@ function formatDuration(durationMs?: number): string | null {
 
 // ── Assistant hover bar (timestamp + copy, shown on group hover) ─
 
-function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: number }) {
+function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: number; message?: RawMessage }) {
   const [copied, setCopied] = useState(false);
-  // const usageItems = [
-  //   typeof usage?.inputTokens === 'number'
-  //     ? { key: 'input', label: t('assistantHover.usage.input'), value: formatTokenCount(usage.inputTokens) }
-  //     : null,
-  //   typeof usage?.outputTokens === 'number'
-  //     ? { key: 'output', label: t('assistantHover.usage.output'), value: formatTokenCount(usage.outputTokens) }
-  //     : null,
-  //   typeof usage?.totalTokens === 'number'
-  //     ? { key: 'total', label: t('assistantHover.usage.total'), value: formatTokenCount(usage.totalTokens) }
-  //     : null,
-  //   typeof usage?.cacheReadTokens === 'number'
-  //     ? { key: 'cacheRead', label: t('assistantHover.usage.cacheRead'), value: formatTokenCount(usage.cacheReadTokens) }
-  //     : null,
-  //   typeof usage?.cacheWriteTokens === 'number'
-  //     ? { key: 'cacheWrite', label: t('assistantHover.usage.cacheWrite'), value: formatTokenCount(usage.cacheWriteTokens) }
-  //     : null,
-  //   typeof usage?.costTotal === 'number'
-  //     ? { key: 'cost', label: t('assistantHover.usage.cost'), value: usage.costTotal.toFixed(4) }
-  //     : null,
-  // ].filter((item): item is { key: string; label: string; value: string } => Boolean(item));
 
   const copyContent = useCallback(() => {
     navigator.clipboard.writeText(text);
@@ -938,15 +848,6 @@ function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: numb
       <span className="text-xs text-muted-foreground">
         {timestamp ? formatTimestamp(timestamp) : ''}
       </span>
-      {/* {usageItems.length > 0 && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground/55">
-          {usageItems.map((item) => (
-            <span key={item.key} className="rounded-full bg-black/[0.035] px-2 py-0.5 dark:bg-white/[0.06]">
-              {item.label} {item.value}
-            </span>
-          ))}
-        </div>
-      )} */}
       <Button
         variant="ghost"
         size="icon"
@@ -1527,8 +1428,13 @@ function ToolCard({
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
-  const displayName = useMemo(() => getToolDisplayName(name, input, preferZh), [input, name, preferZh]);
+  const summary = useMemo(() => formatToolDisplaySummary(name, input), [input, name]);
+  const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
+  const displaySummary = useMemo(
+    () => (summary.detailLine ? `${displayName} ${summary.detailLine}` : displayName),
+    [displayName, summary.detailLine],
+  );
   const formattedInput = useMemo(() => {
     if (!open || input == null) {
       return null;
@@ -1536,6 +1442,8 @@ function ToolCard({
 
     return typeof input === 'string' ? input : JSON.stringify(input, null, 2);
   }, [input, open]);
+  const formattedResult = useMemo(() => formatToolResultText(result, name), [name, result]);
+  const visibleResult = formattedResult || null;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -1549,6 +1457,7 @@ function ToolCard({
         <Popover.Trigger asChild>
           <button
             className="flex min-w-0 items-center gap-2 py-1.5 focus:outline-none cursor-pointer"
+            aria-label={displaySummary}
           >
             <span
               className={cn(
@@ -1567,9 +1476,9 @@ function ToolCard({
                 "min-w-0 flex-1 truncate text-xs text-left",
                 isRunning && "animate-shimmer bg-[linear-gradient(110deg,color-mix(in_oklab,var(--color-foreground)_25%,transparent)_35%,var(--color-foreground)_48%,var(--color-foreground)_52%,color-mix(in_oklab,var(--color-foreground)_25%,transparent)_65%)] bg-[length:200%_100%] bg-clip-text text-transparent"
               )} 
-              title={displayName}
+              title={summary.summaryLine}
             >
-              {displayName}
+              {displaySummary}
             </span>
             {duration && <span className="text-[11px] opacity-60">{duration}</span>}
           </button>
@@ -1591,9 +1500,17 @@ function ToolCard({
                   </pre>
                 </div>
               )}
-              {result && (
+              {visibleResult && (
                 <div className="space-y-1">
                   <div className="font-medium uppercase tracking-wide opacity-70">Result</div>
+                  <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
+                    {visibleResult}
+                  </pre>
+                </div>
+              )}
+              {result && (!formattedResult || result !== formattedResult) && (
+                <div className="space-y-1">
+                  <div className="font-medium uppercase tracking-wide opacity-70">Raw Result</div>
                   <pre className="surface-muted w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-md px-2 py-2 font-mono">
                     {result}
                   </pre>
