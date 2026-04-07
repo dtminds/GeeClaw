@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { getAllSettings } from '../utils/store';
@@ -42,6 +42,7 @@ import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 import { getBundledNodePath } from '../utils/managed-bin';
+import { ensureOpenClawDoctorBundledRuntimeDepsPatch } from '../utils/openclaw-doctor-patch';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
@@ -64,6 +65,113 @@ function cleanupStaleBuiltInExtensions(openclawConfigDir: string): void {
       logger.warn(`[plugin] Failed to remove stale extension ${extensionId}:`, error);
     }
   }
+}
+
+/**
+ * OpenClaw shared dist chunks resolve bare ESM imports from openclaw/node_modules,
+ * not from dist/extensions/<ext>/node_modules. Link missing extension packages
+ * into the top-level node_modules tree before launch so shared chunks can load.
+ */
+function ensureExtensionDepsResolvable(openclawDir: string): void {
+  const extensionsDir = path.join(openclawDir, 'dist', 'extensions');
+  const topLevelNodeModulesDir = path.join(openclawDir, 'node_modules');
+  let linkedCount = 0;
+
+  try {
+    if (!existsSync(extensionsDir)) {
+      return;
+    }
+
+    for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+      if (!extensionEntry.isDirectory()) {
+        continue;
+      }
+
+      const extensionNodeModulesDir = path.join(extensionsDir, extensionEntry.name, 'node_modules');
+      if (!existsSync(extensionNodeModulesDir)) {
+        continue;
+      }
+
+      for (const packageEntry of readdirSync(extensionNodeModulesDir, { withFileTypes: true })) {
+        if (!packageEntry.isDirectory() || packageEntry.name === '.bin') {
+          continue;
+        }
+
+        if (packageEntry.name.startsWith('@')) {
+          const scopeDir = path.join(extensionNodeModulesDir, packageEntry.name);
+          let scopedEntries: ReturnType<typeof readdirSync>;
+          try {
+            scopedEntries = readdirSync(scopeDir, { withFileTypes: true });
+          } catch {
+            continue;
+          }
+
+          for (const scopedEntry of scopedEntries) {
+            if (!scopedEntry.isDirectory()) {
+              continue;
+            }
+
+            const destination = path.join(topLevelNodeModulesDir, packageEntry.name, scopedEntry.name);
+            if (existsSync(destination)) {
+              continue;
+            }
+
+            try {
+              mkdirSync(path.dirname(destination), { recursive: true });
+              if (pathExistsButBroken(destination)) {
+                rmSync(destination, { recursive: true, force: true });
+              }
+              symlinkSync(path.join(scopeDir, scopedEntry.name), destination, getDirectorySymlinkType());
+              linkedCount++;
+            } catch {
+              // Non-fatal: best-effort for extension-only dependencies.
+            }
+          }
+
+          continue;
+        }
+
+        const destination = path.join(topLevelNodeModulesDir, packageEntry.name);
+        if (existsSync(destination)) {
+          continue;
+        }
+
+        try {
+          mkdirSync(path.dirname(destination), { recursive: true });
+          if (pathExistsButBroken(destination)) {
+            rmSync(destination, { recursive: true, force: true });
+          }
+          symlinkSync(path.join(extensionNodeModulesDir, packageEntry.name), destination, getDirectorySymlinkType());
+          linkedCount++;
+        } catch {
+          // Non-fatal: best-effort for extension-only dependencies.
+        }
+      }
+    }
+  } catch {
+    // Extension bundles may not exist yet in all runtime layouts.
+  }
+
+  if (linkedCount > 0) {
+    logger.info(`[extension-deps] Linked ${linkedCount} extension packages into ${topLevelNodeModulesDir}`);
+  }
+}
+
+function pathExistsButBroken(targetPath: string): boolean {
+  if (existsSync(targetPath)) {
+    return false;
+  }
+
+  try {
+    lstatSync(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getDirectorySymlinkType(): 'dir' | 'junction' {
+  return process.platform === 'win32' ? 'junction' : 'dir';
 }
 
 export interface GatewayLaunchContext {
@@ -565,6 +673,10 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     throw new Error(`OpenClaw entry script not found at: ${entryScript}`);
   }
 
+  if (runtime.source === 'bundled') {
+    ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir);
+  }
+
   const mode = app.isPackaged ? 'packaged' : 'dev';
 
   const baseProcessEnv = process.env as Record<string, string | undefined>;
@@ -590,6 +702,10 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   });
 
   await syncGatewayConfigBeforeLaunch(appSettings, port);
+
+  if (runtime.source === 'bundled') {
+    ensureExtensionDepsResolvable(openclawDir);
+  }
 
   const gatewayArgs = buildManagedOpenClawArgs('gateway', [
     '--port',

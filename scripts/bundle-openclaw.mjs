@@ -18,6 +18,10 @@
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import {
+  findOpenClawDoctorPatchRelativePath,
+  patchOpenClawDoctorBundledRuntimeDepsSource,
+} from '../shared/openclaw-doctor-patch.js';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -296,6 +300,7 @@ for (const [realPath, pkgName] of collected) {
 
 let copiedCount = 0;
 let skippedDupes = 0;
+const copiedNames = new Set();
 for (const [pkgName, candidates] of candidatesByName.entries()) {
   const picked = pickPreferredCandidate(pkgName, candidates);
   skippedDupes += Math.max(0, candidates.length - 1);
@@ -311,9 +316,76 @@ for (const [pkgName, candidates] of candidatesByName.entries()) {
     fs.mkdirSync(normWin(path.dirname(dest)), { recursive: true });
     fs.cpSync(normWin(picked.realPath), normWin(dest), { recursive: true, dereference: true });
     copiedCount++;
+    copiedNames.add(pkgName);
   } catch (err) {
     echo`   ⚠️  Skipped ${pkgName}: ${err.message}`;
   }
+}
+
+// 5b. Merge built-in extension packages into the top-level node_modules.
+//
+// OpenClaw places some extension-only dependencies under
+// dist/extensions/<ext>/node_modules/. Shared dist chunks resolve bare imports
+// from openclaw/node_modules, so those packages must also exist at the top
+// level for bundled builds.
+const extensionsDir = path.join(OUTPUT, 'dist', 'extensions');
+let mergedExtensionCount = 0;
+if (fs.existsSync(extensionsDir)) {
+  for (const extensionEntry of fs.readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+
+    const extensionNodeModulesDir = path.join(extensionsDir, extensionEntry.name, 'node_modules');
+    if (!fs.existsSync(extensionNodeModulesDir)) continue;
+
+    for (const packageEntry of fs.readdirSync(extensionNodeModulesDir, { withFileTypes: true })) {
+      if (!packageEntry.isDirectory() || packageEntry.name === '.bin') continue;
+
+      const sourcePackageDir = path.join(extensionNodeModulesDir, packageEntry.name);
+      if (packageEntry.name.startsWith('@')) {
+        let scopedEntries;
+        try {
+          scopedEntries = fs.readdirSync(sourcePackageDir, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+
+        for (const scopedEntry of scopedEntries) {
+          if (!scopedEntry.isDirectory()) continue;
+
+          const scopedPackageName = `${packageEntry.name}/${scopedEntry.name}`;
+          if (copiedNames.has(scopedPackageName)) continue;
+
+          const sourceScopedDir = path.join(sourcePackageDir, scopedEntry.name);
+          const destScopedDir = path.join(outputNodeModules, packageEntry.name, scopedEntry.name);
+          try {
+            fs.mkdirSync(normWin(path.dirname(destScopedDir)), { recursive: true });
+            fs.cpSync(normWin(sourceScopedDir), normWin(destScopedDir), { recursive: true, dereference: true });
+            copiedNames.add(scopedPackageName);
+            mergedExtensionCount++;
+          } catch {
+            // Non-fatal: continue merging the rest of the extension deps.
+          }
+        }
+
+        continue;
+      }
+
+      if (copiedNames.has(packageEntry.name)) continue;
+
+      const destPackageDir = path.join(outputNodeModules, packageEntry.name);
+      try {
+        fs.cpSync(normWin(sourcePackageDir), normWin(destPackageDir), { recursive: true, dereference: true });
+        copiedNames.add(packageEntry.name);
+        mergedExtensionCount++;
+      } catch {
+        // Non-fatal: continue merging the rest of the extension deps.
+      }
+    }
+  }
+}
+
+if (mergedExtensionCount > 0) {
+  echo`   Merged ${mergedExtensionCount} extension packages into top-level node_modules`;
 }
 
 // 6. Clean up the bundle to reduce package size
@@ -789,6 +861,33 @@ function patchBundledRuntime(outputDir) {
   if (ptyCount > 0) {
     echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
   }
+
+  const distDir = path.join(outputDir, 'dist');
+  const doctorRelativePath = findOpenClawDoctorPatchRelativePath(
+    fs.existsSync(distDir)
+      ? fs.readdirSync(distDir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name)
+      : [],
+    (candidateName) => fs.readFileSync(path.join(distDir, candidateName), 'utf8'),
+  );
+  if (!doctorRelativePath) {
+    echo`   ⚠️  Skipped doctor deps patch: target file not found`;
+    return;
+  }
+
+  const doctorTarget = path.join(distDir, doctorRelativePath);
+  const current = fs.readFileSync(doctorTarget, 'utf8');
+  const result = patchOpenClawDoctorBundledRuntimeDepsSource(current);
+  if (!result.matched) {
+    echo`   ⚠️  Skipped doctor deps patch: expected source snippet not found`;
+    return;
+  }
+
+  if (!result.changed) {
+    return;
+  }
+
+  fs.writeFileSync(doctorTarget, result.source, 'utf8');
+  echo`   🩹 Patched bundled doctor deps guard`;
 }
 
 patchBrokenModules(outputNodeModules);
