@@ -1,4 +1,5 @@
 import { utilityProcess } from 'electron';
+import path from 'path';
 import { existsSync } from 'fs';
 import WebSocket from 'ws';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
@@ -8,6 +9,7 @@ import { isPythonReady, setupManagedPython } from '../utils/uv-setup';
 import {
   buildManagedOpenClawArgs,
   getManagedOpenClawConfigPath,
+  MANAGED_OPENCLAW_PROFILE,
 } from '../utils/openclaw-managed-profile';
 import { PORTS } from '../utils/config';
 import { logger } from '../utils/logger';
@@ -189,9 +191,82 @@ export async function terminateOwnedGatewayProcess(child: ManagedGatewayProcess)
   });
 }
 
+function getManagedLaunchctlServiceLabels(): string[] {
+  return [`ai.openclaw.${MANAGED_OPENCLAW_PROFILE}`];
+}
+
 export async function unloadLaunchctlGatewayService(): Promise<void> {
   if (process.platform !== 'darwin') return;
-  logger.info('Skipping launchctl service unload; GeeClaw no longer modifies system-wide ai.openclaw.gateway launch agents');
+
+  try {
+    const uid = process.getuid?.();
+    if (uid === undefined) return;
+
+    const cp = await import('child_process');
+    const fsPromises = await import('fs/promises');
+    const os = await import('os');
+
+    for (const launchdLabel of getManagedLaunchctlServiceLabels()) {
+      const serviceTarget = `gui/${uid}/${launchdLabel}`;
+      const loaded = await new Promise<boolean>((resolve) => {
+        cp.exec(`launchctl print ${serviceTarget}`, { timeout: 5000 }, (err) => {
+          resolve(!err);
+        });
+      });
+
+      if (!loaded) {
+        continue;
+      }
+
+      logger.info(`Unloading launchctl service ${serviceTarget} to preserve embedded gateway ownership`);
+      await new Promise<void>((resolve) => {
+        cp.exec(`launchctl bootout ${serviceTarget}`, { timeout: 10000 }, (err) => {
+          if (err) {
+            logger.warn(`Failed to bootout launchctl service ${serviceTarget}: ${err.message}`);
+          } else {
+            logger.info(`Successfully unloaded launchctl gateway service ${serviceTarget}`);
+          }
+          resolve();
+        });
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      try {
+        const plistPath = path.join(os.homedir(), 'Library', 'LaunchAgents', `${launchdLabel}.plist`);
+        await fsPromises.access(plistPath);
+        await fsPromises.unlink(plistPath);
+        logger.info(`Removed managed launchd plist to prevent reload on next login: ${plistPath}`);
+      } catch {
+        // File does not exist or could not be removed. Not fatal.
+      }
+    }
+  } catch (err) {
+    logger.warn('Error while unloading launchctl gateway service:', err);
+  }
+}
+
+export async function reconcileGatewayRuntimeForEmbeddedMode(port: number): Promise<void> {
+  await unloadLaunchctlGatewayService();
+
+  const listenerPids = await getGatewayListenerProcessIds(port);
+  if (listenerPids.length === 0) {
+    return;
+  }
+
+  const residualGatewayPids = await getGatewayRelatedResidualPids(listenerPids);
+  if (residualGatewayPids.length === 0) {
+    logger.info(
+      `Port ${port} is occupied by non-GeeClaw listener(s) (${listenerPids.join(', ')}); leaving them untouched during embedded reconciliation`,
+    );
+    return;
+  }
+
+  logger.info(
+    `Reconciling embedded gateway runtime by reclaiming listener(s) on port ${port} (PIDs: ${residualGatewayPids.join(', ')})`,
+  );
+  await terminateOrphanedProcessIds(port, residualGatewayPids);
+  await waitForPortFree(port, 10000);
 }
 
 export async function waitForPortFree(port: number, timeoutMs = 30000, signal?: AbortSignal): Promise<void> {
@@ -297,7 +372,12 @@ async function getProcessCommandLine(pid: string): Promise<string> {
 }
 
 function isLikelyGatewayRelatedCommand(commandLine: string): boolean {
-  return /(openclaw|geeclaw|clawx|claw-x)/i.test(commandLine);
+  return [
+    new RegExp(`--profile\\s+${MANAGED_OPENCLAW_PROFILE}\\b`, 'i'),
+    new RegExp(`\\bai\\.openclaw\\.${MANAGED_OPENCLAW_PROFILE}\\b`, 'i'),
+    /(^|[\\/])\.openclaw-geeclaw([\\/ ]|$)/i,
+    /\bOPENCLAW_STATE_DIR=.+\.openclaw-geeclaw\b/i,
+  ].some((pattern) => pattern.test(commandLine));
 }
 
 async function getGatewayRelatedResidualPids(pids: string[]): Promise<string[]> {

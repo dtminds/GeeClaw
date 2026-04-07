@@ -33,6 +33,7 @@ import { connectGatewaySocket, waitForGatewayReady } from './ws-client';
 import {
   findExistingGatewayProcess,
   getGatewayListenerProcessIds,
+  reconcileGatewayRuntimeForEmbeddedMode,
   runOpenClawDoctorRepair,
   terminateGatewayListenersOnPort,
   terminateOwnedGatewayProcess,
@@ -241,6 +242,8 @@ export class GatewayManager extends EventEmitter {
     this.isAutoReconnectStart = false;
     this.setStatus({ state: 'starting', reconnectAttempts: this.reconnectAttempts });
 
+    await reconcileGatewayRuntimeForEmbeddedMode(this.status.port);
+
     // Check if Python environment is ready (self-healing) asynchronously.
     // Fire-and-forget: only needs to run once, not on every retry.
     warmupManagedPythonReadiness();
@@ -293,7 +296,13 @@ export class GatewayManager extends EventEmitter {
           this.startHealthCheck();
           logger.debug('Gateway started successfully');
         },
-        runDoctorRepair: async () => await runOpenClawDoctorRepair(),
+        runDoctorRepair: async () => {
+          const repaired = await runOpenClawDoctorRepair();
+          if (repaired) {
+            await reconcileGatewayRuntimeForEmbeddedMode(this.status.port);
+          }
+          return repaired;
+        },
         onDoctorRepairSuccess: () => {
           this.setStatus({ state: 'starting', error: undefined, reconnectAttempts: 0 });
         },
@@ -438,6 +447,7 @@ export class GatewayManager extends EventEmitter {
           );
         }
       }
+      await reconcileGatewayRuntimeForEmbeddedMode(stopPort);
     }
 
     clearPendingGatewayRequests(this.pendingRequests, new Error('Gateway stopped'));
@@ -468,6 +478,7 @@ export class GatewayManager extends EventEmitter {
         `Forced Gateway quit cleanup left listener(s) on port ${this.status.port}: ${remainingListeners.join(', ')}`,
       );
     }
+    await reconcileGatewayRuntimeForEmbeddedMode(this.status.port);
     this.setStatus({ pid: undefined });
     return true;
   }
@@ -771,12 +782,15 @@ export class GatewayManager extends EventEmitter {
    * Connect WebSocket to Gateway
    */
   private async connect(port: number, _externalToken?: string): Promise<void> {
+    const { getSetting } = await import('../utils/store');
+    const gatewayToken = await getSetting('gatewayToken');
+
     this.ws = await connectGatewaySocket({
       port,
+      token: gatewayToken,
       deviceIdentity: this.deviceIdentity,
       platform: process.platform,
       pendingRequests: this.pendingRequests,
-      getToken: async () => await import('../utils/store').then(({ getSetting }) => getSetting('gatewayToken')),
       onHandshakeComplete: (ws) => {
         this.ws = ws;
         ws.on('pong', () => {

@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runGatewayStartupSequenceMock = vi.hoisted(() => vi.fn(async () => {}));
 const findExistingGatewayProcessMock = vi.hoisted(() => vi.fn(async () => null));
+const reconcileGatewayRuntimeForEmbeddedModeMock = vi.hoisted(() => vi.fn(async () => {}));
+const runOpenClawDoctorRepairMock = vi.hoisted(() => vi.fn(async () => false));
+const getSettingMock = vi.hoisted(() => vi.fn(async () => 'test-gateway-token'));
 const prepareGatewayLaunchContextMock = vi.hoisted(() => vi.fn(async () => ({})));
 const waitForGatewayReadyMock = vi.hoisted(() => vi.fn(async () => {}));
 const connectGatewaySocketMock = vi.hoisted(() => vi.fn());
@@ -41,6 +44,10 @@ vi.mock('@electron/gateway/process-launcher', () => ({
   launchGatewayProcess: launchGatewayProcessMock,
 }));
 
+vi.mock('@electron/utils/store', () => ({
+  getSetting: getSettingMock,
+}));
+
 vi.mock('@electron/utils/device-identity', () => ({
   loadOrCreateDeviceIdentity: vi.fn(async () => ({
     deviceId: 'device-id',
@@ -54,6 +61,8 @@ vi.mock('@electron/gateway/supervisor', async () => {
   return {
     ...actual,
     findExistingGatewayProcess: findExistingGatewayProcessMock,
+    reconcileGatewayRuntimeForEmbeddedMode: reconcileGatewayRuntimeForEmbeddedModeMock,
+    runOpenClawDoctorRepair: runOpenClawDoctorRepairMock,
     warmupManagedPythonReadiness: vi.fn(),
     unloadLaunchctlGatewayService: vi.fn(async () => {}),
   };
@@ -94,6 +103,24 @@ describe('GatewayManager auto reconnect', () => {
       port: 28788,
       reconnectAttempts: 2,
     });
+    expect(reconcileGatewayRuntimeForEmbeddedModeMock).toHaveBeenCalledWith(28788);
+  });
+
+  it('reconciles embedded mode again after doctor repair succeeds', async () => {
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    await manager.start();
+
+    const startupHooks = runGatewayStartupSequenceMock.mock.calls[0]?.[0];
+    expect(startupHooks).toBeDefined();
+
+    reconcileGatewayRuntimeForEmbeddedModeMock.mockClear();
+    runOpenClawDoctorRepairMock.mockResolvedValueOnce(true);
+
+    await expect(startupHooks.runDoctorRepair()).resolves.toBe(true);
+
+    expect(reconcileGatewayRuntimeForEmbeddedModeMock).toHaveBeenCalledWith(28788);
   });
 
   it('stays connected when the spawned child exits after the websocket is already running', async () => {
@@ -132,6 +159,12 @@ describe('GatewayManager auto reconnect', () => {
     const manager = new GatewayManager();
 
     await manager.start();
+
+    expect(getSettingMock).toHaveBeenCalledWith('gatewayToken');
+    expect(connectGatewaySocketMock).toHaveBeenCalledWith(expect.objectContaining({
+      token: 'test-gateway-token',
+    }));
+    expect(connectGatewaySocketMock.mock.calls[0]?.[0]).not.toHaveProperty('getToken');
 
     expect(manager.getStatus()).toMatchObject({
       state: 'running',

@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 import { LifecycleSupersededError } from './lifecycle-controller';
-import { getGatewayStartupRecoveryAction } from './startup-recovery';
+import { getGatewayStartupRecoveryAction, isTransientGatewayStartError } from './startup-recovery';
 
 export interface ExistingGatewayInfo {
   port: number;
@@ -26,12 +26,16 @@ type StartupHooks = {
   onDoctorRepairSuccess: () => void;
   delay: (ms: number) => Promise<void>;
   terminateOwnedProcess?: () => Promise<void>;
+  existingGatewayRetryAttempts?: number;
+  existingGatewayRetryDelayMs?: number;
 };
 
 export async function runGatewayStartupSequence(hooks: StartupHooks): Promise<void> {
   let configRepairAttempted = false;
   let startAttempts = 0;
   const maxStartAttempts = hooks.maxStartAttempts ?? 3;
+  const existingGatewayRetryAttempts = hooks.existingGatewayRetryAttempts ?? 2;
+  const existingGatewayRetryDelayMs = hooks.existingGatewayRetryDelayMs ?? 2000;
 
   while (true) {
     startAttempts++;
@@ -98,6 +102,40 @@ export async function runGatewayStartupSequence(hooks: StartupHooks): Promise<vo
       if (recoveryAction === 'retry') {
         logger.warn(`Transient start error: ${String(error)}. Retrying... (${startAttempts}/${maxStartAttempts})`);
         await hooks.delay(1000);
+
+        if (isTransientGatewayStartError(error) && existingGatewayRetryAttempts > 0) {
+          for (let attempt = 1; attempt <= existingGatewayRetryAttempts; attempt++) {
+            await hooks.delay(existingGatewayRetryDelayMs);
+            hooks.assertLifecycle(`start/retry-existing-delay-${attempt}`);
+
+            const existing = await hooks.findExistingGateway(hooks.port);
+            hooks.assertLifecycle(`start/retry-existing-find-${attempt}`);
+            if (!existing) {
+              break;
+            }
+
+            try {
+              logger.warn(
+                `Retrying Gateway attach against existing listener before restart (${attempt}/${existingGatewayRetryAttempts})`,
+              );
+              await hooks.connect(existing.port, existing.externalToken);
+              hooks.assertLifecycle(`start/retry-existing-connect-${attempt}`);
+              hooks.onConnectedToExistingGateway();
+              return;
+            } catch (attachError) {
+              if (attachError instanceof LifecycleSupersededError) {
+                throw attachError;
+              }
+              logger.warn(
+                `Existing Gateway attach retry failed (${attempt}/${existingGatewayRetryAttempts}): ${String(attachError)}`,
+              );
+              if (!isTransientGatewayStartError(attachError)) {
+                break;
+              }
+            }
+          }
+        }
+
         if (hooks.terminateOwnedProcess) {
           await hooks.terminateOwnedProcess().catch((terminateError) => {
             logger.warn('Failed to terminate owned process before retry:', terminateError);
