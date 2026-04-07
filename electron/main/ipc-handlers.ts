@@ -40,6 +40,7 @@ import {
   validateChannelCredentials,
 } from '../utils/channel-config';
 import { checkUvInstalled, installUv, setupManagedPython } from '../utils/uv-setup';
+import { buildCronUpdatePatch, normalizeCronDelivery, toUiCronDelivery, type GatewayCronDelivery } from '../utils/cron-delivery';
 import { updateSkillConfig, getSkillConfig, getAllSkillConfigs } from '../utils/skill-config';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { weComLoginManager } from '../utils/wecom-login';
@@ -513,13 +514,13 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
           }
           if (request.action === 'create') {
             const payload = request.payload as
-              | { input?: { name: string; message: string; schedule: string; enabled?: boolean } }
-              | [{ name: string; message: string; schedule: string; enabled?: boolean }]
-              | { name: string; message: string; schedule: string; enabled?: boolean }
+              | { input?: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }
+              | [{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }]
+              | { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }
               | undefined;
             const input = Array.isArray(payload)
               ? payload[0]
-              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: string; enabled?: boolean } }).input : payload);
+              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }).input : payload);
             if (!input) throw new Error('Invalid cron.create payload');
             const gatewayInput = {
               name: input.name,
@@ -528,7 +529,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
               enabled: input.enabled ?? true,
               wakeMode: 'next-heartbeat',
               sessionTarget: 'isolated',
-              delivery: { mode: 'none' },
+              delivery: normalizeCronDelivery(input.delivery),
             };
             const created = await gatewayManager.rpc('cron.add', gatewayInput);
             data = created && typeof created === 'object' ? transformCronJob(created as GatewayCronJob) : created;
@@ -542,12 +543,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
             const id = Array.isArray(payload) ? payload[0] : payload?.id;
             const input = Array.isArray(payload) ? payload[1] : payload?.input;
             if (!id || !input) throw new Error('Invalid cron.update payload');
-            const patch = { ...input };
-            if (typeof patch.schedule === 'string') patch.schedule = { kind: 'cron', expr: patch.schedule };
-            if (typeof patch.message === 'string') {
-              patch.payload = { kind: 'agentTurn', message: patch.message };
-              delete patch.message;
-            }
+            const patch = buildCronUpdatePatch(input);
             data = await gatewayManager.rpc('cron.update', { id, patch });
             break;
           }
@@ -734,7 +730,7 @@ interface GatewayCronJob {
   updatedAtMs: number;
   schedule: { kind: string; expr?: string; everyMs?: number; at?: string; tz?: string };
   payload: { kind: string; message?: string; text?: string };
-  delivery?: { mode: string; channel?: string; to?: string };
+  delivery?: GatewayCronDelivery;
   sessionTarget?: string;
   state: {
     nextRunAtMs?: number;
@@ -751,11 +747,12 @@ interface GatewayCronJob {
 function transformCronJob(job: GatewayCronJob) {
   // Extract message from payload
   const message = job.payload?.message || job.payload?.text || '';
+  const delivery = toUiCronDelivery(job.delivery);
 
   // Build target from delivery info — only if a delivery channel is specified
-  const channelType = job.delivery?.channel;
+  const channelType = delivery?.channel;
   const target = channelType
-    ? { channelType, channelId: channelType, channelName: channelType }
+    ? { channelType, channelId: delivery?.accountId || channelType, channelName: channelType }
     : undefined;
 
   // Build lastRun from state
@@ -778,6 +775,7 @@ function transformCronJob(job: GatewayCronJob) {
     name: job.name,
     message,
     schedule: job.schedule, // Pass the object through; frontend parseCronSchedule handles it
+    delivery,
     target,
     enabled: job.enabled,
     createdAt: new Date(job.createdAtMs).toISOString(),
@@ -849,6 +847,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
     name: string;
     message: string;
     schedule: string;
+    delivery?: GatewayCronDelivery;
     enabled?: boolean;
   }) => {
     try {
@@ -859,11 +858,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',
         sessionTarget: 'isolated',
-        // UI-created jobs deliver results via GeeClaw WebSocket chat events,
-        // not external messaging channels.  Setting mode='none' prevents
-        // the Gateway from attempting channel delivery (which would fail
-        // with "Channel is required" when no channels are configured).
-        delivery: { mode: 'none' },
+        delivery: normalizeCronDelivery(input.delivery),
       };
       const result = await gatewayManager.rpc('cron.add', gatewayInput);
       // Transform the returned job to frontend format
@@ -880,18 +875,9 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   // Update an existing cron job
   ipcMain.handle('cron:update', async (_, id: string, input: Record<string, unknown>) => {
     try {
-      // Transform schedule string to CronSchedule object if present
-      const patch = { ...input };
-      if (typeof patch.schedule === 'string') {
-        patch.schedule = { kind: 'cron', expr: patch.schedule };
-      }
-      // Transform message to payload format if present
-      if (typeof patch.message === 'string') {
-        patch.payload = { kind: 'agentTurn', message: patch.message };
-        delete patch.message;
-      }
+      const patch = buildCronUpdatePatch(input);
       const result = await gatewayManager.rpc('cron.update', { id, patch });
-      return result;
+      return result && typeof result === 'object' ? transformCronJob(result as GatewayCronJob) : result;
     } catch (error) {
       console.error('Failed to update cron job:', error);
       throw error;

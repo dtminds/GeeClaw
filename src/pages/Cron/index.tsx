@@ -216,9 +216,12 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const [enabled, setEnabled] = useState(job?.enabled ?? true);
   const [deliveryMode, setDeliveryMode] = useState<CronDeliveryMode>(job?.delivery?.mode ?? 'none');
   const [deliveryChannel, setDeliveryChannel] = useState(job?.delivery?.channel ?? '');
+  const [deliveryAccountId, setDeliveryAccountId] = useState(job?.delivery?.accountId ?? '');
   const [deliveryTo, setDeliveryTo] = useState(job?.delivery?.to ?? '');
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   const toContainerRef = useRef<HTMLDivElement>(null);
+  const selectedDeliveryChannel = channels.find((channel) => channel.type === deliveryChannel);
+  const deliveryAccounts = (selectedDeliveryChannel?.accounts ?? []).filter((account) => account.enabled);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -241,6 +244,28 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       .catch(() => setSessions([]));
   }, [agentId, deliveryMode]);
 
+  useEffect(() => {
+    if (deliveryMode !== 'announce' || !deliveryChannel) {
+      setDeliveryAccountId('');
+      return;
+    }
+
+    if (deliveryAccounts.length === 0) {
+      setDeliveryAccountId('');
+      return;
+    }
+
+    if (deliveryAccounts.some((account) => account.accountId === deliveryAccountId)) {
+      return;
+    }
+
+    const defaultAccountId = selectedDeliveryChannel?.defaultAccountId;
+    const nextAccountId = deliveryAccounts.find((account) => account.accountId === defaultAccountId)?.accountId
+      || deliveryAccounts[0]?.accountId
+      || '';
+    setDeliveryAccountId(nextAccountId);
+  }, [deliveryMode, deliveryChannel, deliveryAccountId, deliveryAccounts, selectedDeliveryChannel?.defaultAccountId]);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error(t('toast.nameRequired'));
@@ -262,8 +287,18 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       return;
     }
 
+    if (deliveryMode === 'announce' && deliveryAccounts.length > 0 && !deliveryAccountId) {
+      toast.error(t('toast.channelRequired'));
+      return;
+    }
+
     const delivery = deliveryMode === 'announce'
-      ? { mode: 'announce' as const, channel: deliveryChannel, to: deliveryTo || undefined }
+      ? {
+        mode: 'announce' as const,
+        channel: deliveryChannel,
+        to: deliveryTo || undefined,
+        accountId: deliveryAccountId || undefined,
+      }
       : { mode: 'none' as const };
 
     setSaving(true);
@@ -429,7 +464,11 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                       <Label className="text-[13px] text-foreground/70">{t('dialog.deliveryChannel')}</Label>
                       <select
                         value={deliveryChannel}
-                        onChange={(e) => { setDeliveryChannel(e.target.value); setDeliveryTo(''); }}
+                        onChange={(e) => {
+                          setDeliveryChannel(e.target.value);
+                          setDeliveryAccountId('');
+                          setDeliveryTo('');
+                        }}
                         className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
                       >
                         <option value="">{t('dialog.deliveryChannelPlaceholder')}</option>
@@ -440,6 +479,26 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         ))}
                       </select>
                     </div>
+                    {deliveryAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-[13px] text-foreground/70">{t('channels:dialog.accountId', '账号')}</Label>
+                        <select
+                          value={deliveryAccountId}
+                          onChange={(e) => {
+                            setDeliveryAccountId(e.target.value);
+                            setDeliveryTo('');
+                          }}
+                          className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
+                        >
+                          {deliveryAccounts.map((account) => (
+                            <option key={account.accountId} value={account.accountId}>
+                              {account.name || account.accountId}
+                              {account.isDefault ? ` (${t('common:labels.default', 'Default')})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label className="text-[13px] text-foreground/70">{t('dialog.deliveryTo')}</Label>
                       <div className="relative" ref={toContainerRef}>
@@ -453,6 +512,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         {showToSuggestions && (() => {
                           const filtered = sessions.filter((s) =>
                             (!deliveryChannel || s.channel === deliveryChannel) &&
+                            (!deliveryAccountId || s.accountId === deliveryAccountId) &&
                             (!deliveryTo || s.to.includes(deliveryTo) || s.label.includes(deliveryTo))
                           );
                           return filtered.length > 0 ? (

@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { join } from 'node:path';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
+import { buildCronUpdatePatch, normalizeCronDelivery, toUiCronDelivery, type GatewayCronDelivery } from '../../utils/cron-delivery';
 import { getOpenClawConfigDir } from '../../utils/paths';
 
 interface GatewayCronJob {
@@ -15,7 +16,7 @@ interface GatewayCronJob {
   updatedAtMs: number;
   schedule: { kind: string; expr?: string; everyMs?: number; at?: string; tz?: string };
   payload: { kind: string; message?: string; text?: string };
-  delivery?: { mode: string; channel?: string; to?: string; accountId?: string; bestEffort?: boolean };
+  delivery?: GatewayCronDelivery;
   sessionTarget?: string;
   state: {
     nextRunAtMs?: number;
@@ -223,9 +224,10 @@ async function readCronRunLog(jobId: string): Promise<CronRunLogEntry[]> {
 
 function transformCronJob(job: GatewayCronJob) {
   const message = job.payload?.message || job.payload?.text || '';
-  const channelType = job.delivery?.channel;
+  const delivery = toUiCronDelivery(job.delivery);
+  const channelType = delivery?.channel;
   const target = channelType && channelType !== 'last'
-    ? { channelType, channelId: channelType, channelName: channelType }
+    ? { channelType, channelId: delivery?.accountId || channelType, channelName: channelType }
     : undefined;
   const lastRun = job.state?.lastRunAtMs
     ? {
@@ -238,10 +240,6 @@ function transformCronJob(job: GatewayCronJob) {
   const nextRun = job.state?.nextRunAtMs
     ? new Date(job.state.nextRunAtMs).toISOString()
     : undefined;
-  const delivery = job.delivery
-    ? { mode: job.delivery.mode, channel: job.delivery.channel, to: job.delivery.to }
-    : undefined;
-
   return {
     id: job.id,
     name: job.name,
@@ -419,10 +417,8 @@ export async function handleCronRoutes(
 
   if (url.pathname === '/api/cron/jobs' && req.method === 'POST') {
     try {
-      const input = await parseJsonBody<{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: { mode: string; channel?: string; to?: string }; agentId?: string }>(req);
-      const delivery = input.delivery?.mode === 'announce'
-        ? { mode: 'announce', channel: input.delivery.channel, to: input.delivery.to }
-        : { mode: 'none' };
+      const input = await parseJsonBody<{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery; agentId?: string }>(req);
+      const delivery = normalizeCronDelivery(input.delivery);
       const result = await ctx.gatewayManager.rpc('cron.add', {
         name: input.name,
         schedule: { kind: 'cron', expr: input.schedule },
@@ -444,21 +440,9 @@ export async function handleCronRoutes(
     try {
       const id = decodeURIComponent(url.pathname.slice('/api/cron/jobs/'.length));
       const input = await parseJsonBody<Record<string, unknown>>(req);
-      const patch: Record<string, unknown> = { ...input };
-      if (typeof patch.schedule === 'string') {
-        patch.schedule = { kind: 'cron', expr: patch.schedule };
-      }
-      if (typeof patch.message === 'string') {
-        patch.payload = { kind: 'agentTurn', message: patch.message };
-        delete patch.message;
-      }
-      if (patch.delivery && typeof patch.delivery === 'object') {
-        const d = patch.delivery as { mode?: string; channel?: string; to?: string };
-        patch.delivery = d.mode === 'announce'
-          ? { mode: 'announce', channel: d.channel, to: d.to }
-          : { mode: 'none' };
-      }
-      sendJson(res, 200, await ctx.gatewayManager.rpc('cron.update', { id, patch }));
+      const patch = buildCronUpdatePatch(input);
+      const result = await ctx.gatewayManager.rpc('cron.update', { id, patch });
+      sendJson(res, 200, result && typeof result === 'object' ? transformCronJob(result as GatewayCronJob) : result);
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }
