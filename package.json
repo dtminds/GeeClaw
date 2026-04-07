@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.9.11-test.1",
+    "version": "0.9.12-test.1",
     "description": "GeeClaw - Graphical AI Assistant based on OpenClaw",
     "keywords": [
         "electron",
