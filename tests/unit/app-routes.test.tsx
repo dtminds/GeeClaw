@@ -78,6 +78,10 @@ vi.mock('@/components/update/UpdateAnnouncementDialog', () => ({
   UpdateAnnouncementDialog: () => null,
 }));
 
+vi.mock('@/components/approval/ApprovalDialogRoot', () => ({
+  ApprovalDialogRoot: () => <div>Approval Dialog Root</div>,
+}));
+
 vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -122,6 +126,7 @@ describe('App routes', () => {
     settingsState.init.mockReset().mockResolvedValue(undefined);
     updateState.init.mockReset().mockResolvedValue(undefined);
     bootstrapState.init.mockReset().mockResolvedValue(undefined);
+    bootstrapState.phase = 'ready';
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -156,5 +161,32 @@ describe('App routes', () => {
 
     expect(await screen.findByText('Dashboard Page')).toBeInTheDocument();
     expect(screen.queryByText('Agents Page')).not.toBeInTheDocument();
+  });
+
+  it('renders the approval dialog root while the app is ready', async () => {
+    bootstrapState.phase = 'ready';
+    const { default: App } = await import('@/App');
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Approval Dialog Root')).toBeInTheDocument();
+  });
+
+  it('renders the approval dialog root during startup flow', async () => {
+    bootstrapState.phase = 'checking_session';
+    const { default: App } = await import('@/App');
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Startup Page')).toBeInTheDocument();
+    expect(screen.getByText('Approval Dialog Root')).toBeInTheDocument();
   });
 });

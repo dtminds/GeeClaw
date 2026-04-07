@@ -67,6 +67,36 @@
         "notRunningDesc": "The OpenClaw Gateway needs to be running to use this feature. It will start automatically, or you can start it from Settings.",
         "warning": "Gateway is not running."
     },
+    "approvalDialog": {
+        "titles": {
+            "exec": "Exec approval needed",
+            "pluginFallback": "Plugin approval needed"
+        },
+        "description": "A request is waiting for your decision.",
+        "expiresIn": "expires in {{time}}",
+        "expired": "expired",
+        "queueCount": "{{count}} pending",
+        "execLabel": "Command",
+        "pluginDescriptionLabel": "Plugin description",
+        "errorTitle": "Failed to send decision",
+        "clearError": "Dismiss",
+        "metadata": {
+            "cwd": "CWD",
+            "agentId": "Agent",
+            "sessionKey": "Session",
+            "host": "Host",
+            "security": "Security",
+            "ask": "Ask",
+            "resolvedPath": "Resolved",
+            "pluginId": "Plugin",
+            "pluginSeverity": "Severity"
+        },
+        "decisions": {
+            "allowOnce": "Allow once",
+            "allowAlways": "Always allow",
+            "deny": "Deny"
+        }
+    },
     "tray": {
         "tooltipRunning": "GeeClaw - Gateway Running",
         "tooltipStopped": "GeeClaw - Gateway Stopped",

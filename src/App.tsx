@@ -20,6 +20,7 @@ import { Setup } from './pages/Setup';
 import { Startup } from './pages/Startup';
 import { GatewaySessions } from './pages/GatewaySessions';
 import { GatewayRecoveryOverlay } from '@/components/gateway/GatewayRecoveryOverlay';
+import { ApprovalDialogRoot } from '@/components/approval/ApprovalDialogRoot';
 import { useSettingsStore } from './stores/settings';
 import { useUpdateStore } from './stores/update';
 import { useBootstrapStore } from './stores/bootstrap';
@@ -207,6 +208,7 @@ function App() {
       <ErrorBoundary>
         <TooltipProvider delayDuration={300}>
           <Startup />
+          <ApprovalDialogRoot />
           <Toaster
             position="bottom-right"
             richColors
@@ -247,6 +249,7 @@ function App() {
 
         {showSettingsOverlay && <Settings />}
         <GatewayRecoveryOverlay />
+        <ApprovalDialogRoot />
 
         {/* Global toast notifications */}
         <Toaster

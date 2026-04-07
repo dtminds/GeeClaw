@@ -69,6 +69,9 @@ Move from launch to your first AI interaction through a simplified sign-in-first
 ### 💬 Intelligent Chat Interface
 Communicate with AI agents through a modern chat experience. The sidebar now follows OpenClaw's native session model by listing agents and entering each agent's canonical main chat (`agent:{agentId}:main`) directly, while each chat page includes a left-side session panel for that agent's main session and temporary chats, with temporary chats created inline from the panel. GeeClaw still keeps desktop-managed chat entries separate from the raw Gateway session registry and offers an additional read-only view for browsing all Gateway sessions and transcripts. Multi-agent setups are supported, and you can route the next message directly into another agent's main session with `@agent-id` from the main composer. The composer model switcher is now built from each provider's configured model catalog, while the agent primary model and fallback chain are managed separately in Settings. Codex-style `/` skill search with keyboard navigation, filtering, and inline skill tokens for enabled skills is also supported.
 
+### ✅ Global Approval Prompts
+When OpenClaw asks for exec or plugin approval, GeeClaw now shows a blocking in-app approval dialog above every page, including startup and settings overlays. Decisions are sent back through the existing Gateway RPC channel, and the dialog stays visible until Gateway emits the corresponding resolved event or the request expires.
+
 ### 🧠 Official Agent Marketplace
 Browse a curated set of official agents from the Plaza and install them on demand from packaged downloads instead of shipping every agent inside the desktop bundle. The current catalog is still bundled with the app, but each install/update fetches the agent package separately and applies only the managed `files` and `skills` content for that agent.
 Updating an installed marketplace agent now overwrites only its managed content after confirmation. GeeClaw does not reinitialize the workspace and does not touch existing chat history. After every successful install or update, GeeClaw shows a completion dialog and can prefill a plain-text follow-up message in the chat composer when the package provides one.
@@ -234,6 +237,7 @@ GeeClaw employs a **dual-process architecture** with a unified host API layer. T
 - **Process Isolation**: The AI runtime operates in a separate process, ensuring UI responsiveness even during heavy computation
 - **Single Entry for Frontend Calls**: Renderer requests go through host-api/api-client; protocol details are hidden behind a stable interface
 - **Main-Process Transport Ownership**: Electron Main controls WS/HTTP usage and fallback to IPC for reliability
+- **Single Approval Transport**: OpenClaw approval requests and resolutions ride over the generic Gateway notification stream, and approval decisions return through `gateway:rpc` instead of a second approval-specific bridge
 - **Graceful Recovery**: Built-in reconnect, timeout, and backoff logic handles transient failures automatically
 - **Secure Storage**: API keys and sensitive data leverage the operating system's native secure storage mechanisms
 - **CORS-Safe by Design**: Local HTTP access is proxied by Main, preventing renderer-side CORS issues
