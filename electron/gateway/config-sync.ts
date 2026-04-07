@@ -93,7 +93,7 @@ function ensureExtensionDepsResolvable(openclawDir: string): void {
       }
 
       for (const packageEntry of readdirSync(extensionNodeModulesDir, { withFileTypes: true })) {
-        if (packageEntry.name === '.bin') {
+        if (!packageEntry.isDirectory() || packageEntry.name === '.bin') {
           continue;
         }
 
@@ -703,7 +703,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   await syncGatewayConfigBeforeLaunch(appSettings, port);
 
-  ensureExtensionDepsResolvable(openclawDir);
+  if (runtime.source === 'bundled') {
+    ensureExtensionDepsResolvable(openclawDir);
+  }
 
   const gatewayArgs = buildManagedOpenClawArgs('gateway', [
     '--port',
