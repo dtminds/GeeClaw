@@ -47,6 +47,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
 import { getCronDeliveryChannelOptions } from './delivery-channels';
+import { filterCronSessionSuggestions, resolveCronDeliveryAccountId } from './session-suggestions';
 
 // Common cron schedule presets
 const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
@@ -249,22 +250,11 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       setDeliveryAccountId('');
       return;
     }
-
-    if (deliveryAccounts.length === 0) {
-      setDeliveryAccountId('');
-      return;
+    const nextAccountId = resolveCronDeliveryAccountId(deliveryAccounts, deliveryAccountId);
+    if (nextAccountId !== deliveryAccountId) {
+      setDeliveryAccountId(nextAccountId);
     }
-
-    if (deliveryAccounts.some((account) => account.accountId === deliveryAccountId)) {
-      return;
-    }
-
-    const defaultAccountId = selectedDeliveryChannel?.defaultAccountId;
-    const nextAccountId = deliveryAccounts.find((account) => account.accountId === defaultAccountId)?.accountId
-      || deliveryAccounts[0]?.accountId
-      || '';
-    setDeliveryAccountId(nextAccountId);
-  }, [deliveryMode, deliveryChannel, deliveryAccountId, deliveryAccounts, selectedDeliveryChannel?.defaultAccountId]);
+  }, [deliveryMode, deliveryChannel, deliveryAccountId, deliveryAccounts]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -510,11 +500,11 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input px-3 font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus:outline-none"
                         />
                         {showToSuggestions && (() => {
-                          const filtered = sessions.filter((s) =>
-                            (!deliveryChannel || s.channel === deliveryChannel) &&
-                            (!deliveryAccountId || s.accountId === deliveryAccountId) &&
-                            (!deliveryTo || s.to.includes(deliveryTo) || s.label.includes(deliveryTo))
-                          );
+                          const filtered = filterCronSessionSuggestions(sessions, {
+                            deliveryChannel,
+                            deliveryAccountId,
+                            query: deliveryTo,
+                          });
                           return filtered.length > 0 ? (
                             <div className="absolute z-20 w-full mt-1 bg-popover border border-input rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                               {filtered.map((s) => (
