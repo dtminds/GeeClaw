@@ -100,6 +100,29 @@ describe('assistant-display', () => {
     });
   });
 
+  it('keeps think/final segmentation stable when code fences contain closing-tag text', () => {
+    const message = {
+      role: 'assistant',
+      content: '<think>```html\n</think>\n<div>still reasoning</div>\n```\nreal reasoning</think><final>Visible answer</final>',
+    } as unknown as RawMessage;
+
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: 'Visible answer',
+      parts: [{ type: 'text', text: 'Visible answer' }],
+    });
+
+    expect(extractAssistantDisplaySegments(message, { showThinking: true })).toMatchObject({
+      visibleText: 'Visible answer',
+      parts: [
+        {
+          type: 'thinking',
+          text: '```html\n</think>\n<div>still reasoning</div>\n```\nreal reasoning',
+        },
+        { type: 'text', text: 'Visible answer' },
+      ],
+    });
+  });
+
   it('flattens remote markdown images to alt text and extracts data images separately', () => {
     const message = {
       role: 'assistant',
@@ -109,6 +132,18 @@ describe('assistant-display', () => {
     expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
       visibleText: 'Before diagram after image',
       markdownImages: [{ mimeType: 'image/png', data: 'AAA=', alt: 'inline' }],
+    });
+  });
+
+  it('parses markdown images whose alt text and urls contain brackets or parentheses', () => {
+    const message = {
+      role: 'assistant',
+      content: 'Before ![diagram [v2]](https://example.com/image(1).png) and ![inline [v1]](data:image/png;base64,AAA=) after',
+    } as unknown as RawMessage;
+
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: 'Before diagram [v2] and  after',
+      markdownImages: [{ mimeType: 'image/png', data: 'AAA=', alt: 'inline [v1]' }],
     });
   });
 

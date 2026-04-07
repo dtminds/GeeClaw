@@ -93,29 +93,94 @@ function shouldIncludeResolvedTextBlock(block: ResolvedTextBlock, resolvedBlocks
   return block.resolvedPhase === undefined && Boolean(block.text);
 }
 
+function matchFenceMarker(text: string, index: number): { char: '`' | '~'; length: number } | null {
+  let cursor = index;
+  let leadingSpaces = 0;
+  while (text[cursor] === ' ' && leadingSpaces < 3) {
+    cursor += 1;
+    leadingSpaces += 1;
+  }
+
+  const char = text[cursor];
+  if (char !== '`' && char !== '~') {
+    return null;
+  }
+
+  let length = 0;
+  while (text[cursor + length] === char) {
+    length += 1;
+  }
+
+  return length >= 3 ? { char, length } : null;
+}
+
+function startsWithIgnoreCase(text: string, pattern: string, index: number): boolean {
+  return text.slice(index, index + pattern.length).toLowerCase() === pattern.toLowerCase();
+}
+
+function findClosingAssistantTagIndex(text: string, tag: 'think' | 'final', startIndex: number): number {
+  let inFence = false;
+  let fenceChar: '`' | '~' | null = null;
+  let fenceLength = 0;
+  let atLineStart = true;
+
+  for (let index = startIndex; index < text.length; index += 1) {
+    if (atLineStart) {
+      const fence = matchFenceMarker(text, index);
+      if (fence) {
+        if (!inFence) {
+          inFence = true;
+          fenceChar = fence.char;
+          fenceLength = fence.length;
+        } else if (fence.char === fenceChar && fence.length >= fenceLength) {
+          inFence = false;
+          fenceChar = null;
+          fenceLength = 0;
+        }
+      }
+    }
+
+    if (!inFence && startsWithIgnoreCase(text, `</${tag}>`, index)) {
+      return index;
+    }
+
+    atLineStart = text[index] === '\n';
+  }
+
+  return -1;
+}
+
 function parseTaggedAssistantText(text: string): Array<{ type: 'text' | 'thinking'; text: string }> {
-  const pattern = /<(think|final)>([\s\S]*?)<\/\1>/gi;
   const parts: Array<{ type: 'text' | 'thinking'; text: string }> = [];
   let cursor = 0;
   let matched = false;
+  const openingTagPattern = /<(think|final)>/gi;
+  let match: RegExpExecArray | null;
 
-  for (const match of text.matchAll(pattern)) {
+  while ((match = openingTagPattern.exec(text)) !== null) {
     matched = true;
     const index = match.index ?? 0;
-    const [fullMatch, rawTag, rawBody = ''] = match;
+    const rawTag = (match[1] || '').toLowerCase() as 'think' | 'final';
     const leadingText = text.slice(cursor, index);
     if (leadingText.trim()) {
       parts.push({ type: 'text', text: leadingText });
     }
 
-    const body = rawBody.trim();
+    const bodyStart = index + match[0].length;
+    const bodyEnd = findClosingAssistantTagIndex(text, rawTag, bodyStart);
+    if (bodyEnd === -1) {
+      return text.trim() ? [{ type: 'text', text }] : [];
+    }
+
+    const body = text.slice(bodyStart, bodyEnd).trim();
     if (body) {
       parts.push({
-        type: rawTag.toLowerCase() === 'think' ? 'thinking' : 'text',
+        type: rawTag === 'think' ? 'thinking' : 'text',
         text: body,
       });
     }
-    cursor = index + fullMatch.length;
+    cursor = bodyEnd + rawTag.length + 3;
+    openingTagPattern.lastIndex = cursor;
   }
 
   if (!matched) {
@@ -128,6 +193,109 @@ function parseTaggedAssistantText(text: string): Array<{ type: 'text' | 'thinkin
   }
 
   return parts;
+}
+
+function parseBalancedMarkdownSection(
+  text: string,
+  startIndex: number,
+  openChar: '[' | '(',
+  closeChar: ']' | ')',
+): { value: string; endIndex: number } | null {
+  if (text[startIndex] !== openChar) {
+    return null;
+  }
+
+  let depth = 0;
+  let value = '';
+  for (let index = startIndex; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (char === '\\' && index + 1 < text.length) {
+      if (depth > 0) {
+        value += text.slice(index, index + 2);
+      }
+      index += 1;
+      continue;
+    }
+
+    if (char === openChar) {
+      depth += 1;
+      if (depth > 1) {
+        value += char;
+      }
+      continue;
+    }
+
+    if (char === closeChar) {
+      depth -= 1;
+      if (depth === 0) {
+        return { value, endIndex: index + 1 };
+      }
+      if (depth < 0) {
+        return null;
+      }
+      value += char;
+      continue;
+    }
+
+    if (depth > 0) {
+      value += char;
+    }
+  }
+
+  return null;
+}
+
+function flattenMarkdownImages(text: string): {
+  text: string;
+  markdownImages: AssistantMarkdownImage[];
+} {
+  const markdownImages: AssistantMarkdownImage[] = [];
+  let flattened = '';
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== '!' || text[index + 1] !== '[') {
+      flattened += text[index];
+      continue;
+    }
+
+    const alt = parseBalancedMarkdownSection(text, index + 1, '[', ']');
+    if (!alt || text[alt.endIndex] !== '(') {
+      flattened += text[index];
+      continue;
+    }
+
+    const src = parseBalancedMarkdownSection(text, alt.endIndex, '(', ')');
+    if (!src) {
+      flattened += text[index];
+      continue;
+    }
+
+    const original = text.slice(index, src.endIndex);
+    const normalizedAlt = alt.value.trim();
+    const normalizedSrc = src.value.trim();
+    const dataMatch = normalizedSrc.match(DATA_IMAGE_RE);
+    if (dataMatch) {
+      markdownImages.push({
+        alt: normalizedAlt || 'image',
+        mimeType: dataMatch[1],
+        data: dataMatch[2],
+      });
+      index = src.endIndex - 1;
+      continue;
+    }
+
+    if (/^https?:\/\//i.test(normalizedSrc)) {
+      flattened += normalizedAlt || 'image';
+      index = src.endIndex - 1;
+      continue;
+    }
+
+    flattened += original;
+    index = src.endIndex - 1;
+  }
+
+  return { text: flattened, markdownImages };
 }
 
 function preprocessAssistantMarkdown(text: string): {
@@ -150,30 +318,11 @@ function preprocessAssistantMarkdown(text: string): {
     return { text: '', markdownImages: [] };
   }
 
-  const markdownImages: AssistantMarkdownImage[] = [];
-  const flattened = sanitizedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_full, rawAlt: string, rawSrc: string) => {
-    const alt = rawAlt.trim();
-    const src = rawSrc.trim();
-    const dataMatch = src.match(DATA_IMAGE_RE);
-    if (dataMatch) {
-      markdownImages.push({
-        alt: alt || 'image',
-        mimeType: dataMatch[1],
-        data: dataMatch[2],
-      });
-      return '';
-    }
-
-    if (/^https?:\/\//i.test(src)) {
-      return alt || 'image';
-    }
-
-    return _full;
-  });
+  const flattened = flattenMarkdownImages(sanitizedText);
 
   return {
-    text: normalizeDisplayText(flattened),
-    markdownImages,
+    text: normalizeDisplayText(flattened.text),
+    markdownImages: flattened.markdownImages,
   };
 }
 

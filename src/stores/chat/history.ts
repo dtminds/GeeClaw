@@ -340,9 +340,18 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
 
       const updates = collectToolUpdates(msg, 'final');
       let matchedAnyUpdate = false;
+      let sawMatchableUpdate = false;
+      let matchedAllMatchableUpdates = true;
       for (const update of updates) {
+        if (!update.toolCallId) {
+          continue;
+        }
+        sawMatchableUpdate = true;
         const targetIndex = findPreviousAssistantToolMessageIndex(next, index, update);
-        if (targetIndex === -1) continue;
+        if (targetIndex === -1) {
+          matchedAllMatchableUpdates = false;
+          continue;
+        }
         const target = next[targetIndex];
         matchedAnyUpdate = true;
         next[targetIndex] = {
@@ -351,7 +360,7 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
         };
       }
 
-      if (matchedAnyUpdate) {
+      if (matchedAnyUpdate && (!sawMatchableUpdate || matchedAllMatchableUpdates)) {
         next[index] = {
           ...msg,
           _toolResultMatched: true,

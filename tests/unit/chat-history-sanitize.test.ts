@@ -109,4 +109,51 @@ describe('prepareHistoryMessagesForDisplay', () => {
       content: 'orphan tool result',
     });
   });
+
+  it('keeps partially matched standalone tool_result messages visible', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'toolCall',
+            id: 'call-1',
+            name: 'bash',
+            arguments: { command: 'pwd' },
+          },
+        ],
+      },
+      {
+        role: 'toolresult',
+        timestamp: 2,
+        content: [
+          {
+            type: 'toolResult',
+            id: 'call-1',
+            name: 'bash',
+            text: 'matched result',
+            status: 'completed',
+          },
+          {
+            type: 'toolResult',
+            id: 'call-2',
+            name: 'bash',
+            text: 'unmatched result',
+            status: 'completed',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?._toolStatuses).toEqual([
+      expect.objectContaining({
+        toolCallId: 'call-1',
+        result: 'matched result',
+      }),
+    ]);
+    expect(messages[1]).toMatchObject({ role: 'toolresult' });
+    expect(messages[1]).not.toHaveProperty('_toolResultMatched');
+  });
 });
