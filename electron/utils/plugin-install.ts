@@ -23,8 +23,7 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'openclaw-weixin', npmName: '@tencent-weixin/openclaw-weixin', displayName: '微信' },
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
   { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
-  { pluginId: 'qmemory', npmName: 'qmemory', displayName: 'QMemory' },
-  { pluginId: 'cron-delivery-guard', npmName: 'cron-delivery-guard', displayName: 'Cron 投递降级守卫' },
+  { pluginId: 'geeclaw-plugin', npmName: 'geeclaw-plugin', displayName: 'geeclaw-plugin' },
 ];
 
 const BUNDLED_PLUGIN_SPECS_BY_ID = Object.fromEntries(
@@ -38,7 +37,7 @@ const MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL: Record<string, string> = {
   feishu: 'openclaw-lark',
 };
 
-export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'qmemory', 'cron-delivery-guard'] as const;
+export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'geeclaw-plugin'] as const;
 
 const ALWAYS_ENABLED_BUNDLED_PLUGIN_POLICIES: Record<string, {
   allowedConfigKeys?: string[];

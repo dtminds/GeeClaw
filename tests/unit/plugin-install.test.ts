@@ -30,8 +30,7 @@ function createBundledPluginMirrorFixture(rootDir: string): { appRoot: string; b
     { pluginId: 'openclaw-weixin', packageName: '@tencent-weixin/openclaw-weixin' },
     { pluginId: 'openclaw-lark', packageName: '@larksuite/openclaw-lark' },
     { pluginId: 'lossless-claw', packageName: '@martian-engineering/lossless-claw' },
-    { pluginId: 'qmemory', packageName: 'qmemory' },
-    { pluginId: 'cron-delivery-guard', packageName: 'cron-delivery-guard' },
+    { pluginId: 'geeclaw-plugin', packageName: 'geeclaw-plugin' },
   ];
 
   for (const plugin of pluginDefs) {
@@ -247,8 +246,8 @@ describe('reconcileBundledPluginLoadPaths', () => {
         getAlwaysEnabledBundledPluginIds,
       } = await import('@electron/utils/plugin-install');
 
-      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'qmemory', 'cron-delivery-guard']);
-      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'qmemory', 'cron-delivery-guard']);
+      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'geeclaw-plugin']);
+      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'geeclaw-plugin']);
 
       const result = await ensureAlwaysEnabledBundledPluginsConfigured();
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
@@ -272,9 +271,9 @@ describe('reconcileBundledPluginLoadPaths', () => {
 
       expect(result).toEqual({
         success: true,
-        updated: ['lossless-claw', 'qmemory', 'cron-delivery-guard'],
+        updated: ['lossless-claw', 'geeclaw-plugin'],
       });
-      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'qmemory', 'cron-delivery-guard']);
+      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'geeclaw-plugin']);
       expect(config.plugins?.entries).toEqual({
         'lossless-claw': {
           enabled: true,
@@ -292,10 +291,7 @@ describe('reconcileBundledPluginLoadPaths', () => {
             skipStatelessSessions: true,
           },
         },
-        qmemory: {
-          enabled: true,
-        },
-        'cron-delivery-guard': {
+        'geeclaw-plugin': {
           enabled: true,
         },
       });
@@ -315,10 +311,7 @@ describe('reconcileBundledPluginLoadPaths', () => {
           skipStatelessSessions: true,
         },
       });
-      expect(config.plugins?.entries?.qmemory).toEqual({
-        enabled: true,
-      });
-      expect(config.plugins?.entries?.['cron-delivery-guard']).toEqual({
+      expect(config.plugins?.entries?.['geeclaw-plugin']).toEqual({
         enabled: true,
       });
     } finally {
