@@ -122,13 +122,20 @@ async function syncOpenClawExecApprovals(securityPolicy: SecurityPolicy): Promis
   await mkdir(configDir, { recursive: true });
 
   let document: Record<string, unknown> = {};
+  let initialized = false;
   try {
     const raw = await readFile(approvalsPath, 'utf8');
     const parsed = JSON.parse(raw) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       document = { ...(parsed as Record<string, unknown>) };
+    } else {
+      initialized = true;
     }
   } catch {
+    initialized = true;
+  }
+
+  if (initialized) {
     document.version = 1;
   }
 

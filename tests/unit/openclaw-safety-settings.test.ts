@@ -166,4 +166,26 @@ describe('syncOpenClawSafetySettings', () => {
       },
     });
   });
+
+  it('initializes version when exec approvals exists but parses to a non-object value', async () => {
+    await mkdir(systemOpenclawConfigDir, { recursive: true });
+    await writeFile(join(systemOpenclawConfigDir, 'exec-approvals.json'), 'null', 'utf8');
+
+    const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
+
+    await syncOpenClawSafetySettings({
+      workspaceOnly: false,
+      securityPolicy: 'moderate',
+    });
+
+    expect(await readExecApprovalsJson()).toEqual({
+      version: 1,
+      defaults: {
+        security: 'full',
+        ask: 'off',
+        askFallback: 'full',
+        autoAllowSkills: true,
+      },
+    });
+  });
 });
