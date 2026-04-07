@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
 
 const forkMock = vi.fn();
 const spawnMock = vi.fn();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
+let openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
 
 vi.mock('electron', () => ({
   app: {
@@ -58,8 +59,8 @@ vi.mock('@electron/utils/openclaw-runtime', () => ({
     source: 'bundled',
     packageExists: true,
     isBuilt: true,
-    dir: join(process.cwd(), 'node_modules/openclaw'),
-    entryPath: join(process.cwd(), 'node_modules/openclaw/openclaw.mjs'),
+    dir: openclawRuntimeDir,
+    entryPath: join(openclawRuntimeDir, 'openclaw.mjs'),
     commandPath: null,
     displayName: 'Bundled OpenClaw',
   })),
@@ -144,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   openclawConfigDir = '/Users/test/.openclaw-geeclaw';
   homeDir = '/Users/test';
+  openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
 });
 
 describe('buildGatewayForkEnv', () => {
@@ -213,6 +215,99 @@ describe('buildGatewayForkEnv', () => {
 });
 
 describe('prepareGatewayLaunchContext', () => {
+  it('patches doctor bundled runtime-deps repair to respect disabled bundled plugins', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    openclawRuntimeDir = mkdtempSync(join(tmpdir(), 'geeclaw-openclaw-'));
+
+    const entryPath = join(openclawRuntimeDir, 'openclaw.mjs');
+    const topLevelNodeModules = join(openclawRuntimeDir, 'node_modules');
+    const doctorPatchTarget = join(openclawRuntimeDir, 'dist', 'prompt-select-styled-D0g6OJfd.js');
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
+
+    mkdirSync(topLevelNodeModules, { recursive: true });
+    mkdirSync(join(openclawRuntimeDir, 'dist'), { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
+    mkdirSync(managedWorkspaceDir, { recursive: true });
+    writeFileSync(entryPath, 'export {};', 'utf-8');
+    writeFileSync(
+      doctorPatchTarget,
+      [
+        'async function maybeRepairBundledPluginRuntimeDeps(params) {',
+        '\tconst packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({',
+        '\t\targv1: process.argv[1],',
+        '\t\tcwd: process.cwd(),',
+        '\t\tmoduleUrl: import.meta.url',
+        '\t});',
+        '\tif (!packageRoot) return;',
+        '}',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    vi.resetModules();
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    try {
+      await prepareGatewayLaunchContext(28788);
+
+      const patchedDoctorSource = readFileSync(doctorPatchTarget, 'utf-8');
+      expect(patchedDoctorSource).toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS');
+      expect(patchedDoctorSource).toContain(
+        'if (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;',
+      );
+    } finally {
+      rmSync(openclawRuntimeDir, { recursive: true, force: true });
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('links extension-only packages into top-level node_modules before launch', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    openclawRuntimeDir = mkdtempSync(join(tmpdir(), 'geeclaw-openclaw-'));
+
+    const entryPath = join(openclawRuntimeDir, 'openclaw.mjs');
+    const topLevelNodeModules = join(openclawRuntimeDir, 'node_modules');
+    const grammyDir = join(openclawRuntimeDir, 'dist', 'extensions', 'telegram', 'node_modules', 'grammy');
+    const scopedCoreDir = join(openclawRuntimeDir, 'dist', 'extensions', 'telegram', 'node_modules', '@grammyjs', 'core');
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
+
+    mkdirSync(topLevelNodeModules, { recursive: true });
+    mkdirSync(grammyDir, { recursive: true });
+    mkdirSync(scopedCoreDir, { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
+    mkdirSync(managedWorkspaceDir, { recursive: true });
+    writeFileSync(entryPath, 'export {};', 'utf-8');
+    writeFileSync(join(grammyDir, 'package.json'), '{"name":"grammy","version":"1.0.0"}', 'utf-8');
+    writeFileSync(join(scopedCoreDir, 'package.json'), '{"name":"@grammyjs/core","version":"1.0.0"}', 'utf-8');
+
+    vi.resetModules();
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    try {
+      await prepareGatewayLaunchContext(28788);
+
+      const linkedGrammyDir = join(topLevelNodeModules, 'grammy');
+      const linkedScopedCoreDir = join(topLevelNodeModules, '@grammyjs', 'core');
+
+      expect(existsSync(linkedGrammyDir)).toBe(true);
+      expect(existsSync(linkedScopedCoreDir)).toBe(true);
+      expect(lstatSync(linkedGrammyDir).isSymbolicLink()).toBe(true);
+      expect(lstatSync(linkedScopedCoreDir).isSymbolicLink()).toBe(true);
+      expect(realpathSync(linkedGrammyDir)).toBe(realpathSync(grammyDir));
+      expect(realpathSync(linkedScopedCoreDir)).toBe(realpathSync(scopedCoreDir));
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      rmSync(openclawRuntimeDir, { recursive: true, force: true });
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it('rewrites managed agent defaults into the managed state dir before rerunning setup', async () => {
     homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
