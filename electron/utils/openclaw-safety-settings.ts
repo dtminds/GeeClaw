@@ -1,5 +1,6 @@
+import { mkdir, readFile, writeFile } from 'fs/promises';
 import type { AppSettings } from './store';
-import { getOpenClawConfigDir } from './paths';
+import { getOpenClawConfigDir, getOpenClawExecApprovalsPath, getSystemOpenClawConfigDir } from './paths';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 
 export type SecurityPolicy = AppSettings['securityPolicy'];
@@ -12,6 +13,13 @@ export interface OpenClawSafetySettings {
 
 const DEFAULT_WORKSPACE_ONLY = false;
 const DEFAULT_SECURITY_POLICY: SecurityPolicy = 'moderate';
+
+interface ExecApprovalsDefaults {
+  security: 'full' | 'allowlist';
+  ask: 'off' | 'on-miss';
+  askFallback: 'full' | 'allowlist';
+  autoAllowSkills: boolean;
+}
 
 function ensureMutableRecord(
   parent: Record<string, unknown>,
@@ -34,6 +42,24 @@ export function normalizeSecurityPolicy(value: unknown): SecurityPolicy {
   return DEFAULT_SECURITY_POLICY;
 }
 
+function buildExecApprovalsDefaults(securityPolicy: SecurityPolicy): ExecApprovalsDefaults {
+  if (securityPolicy === 'strict') {
+    return {
+      security: 'allowlist',
+      ask: 'on-miss',
+      askFallback: 'allowlist',
+      autoAllowSkills: true,
+    };
+  }
+
+  return {
+    security: 'full',
+    ask: 'off',
+    askFallback: 'full',
+    autoAllowSkills: true,
+  };
+}
+
 export function isSecurityPolicy(value: unknown): value is SecurityPolicy {
   return value === 'moderate' || value === 'strict' || value === 'fullAccess';
 }
@@ -53,29 +79,68 @@ function syncElevatedDisabled(tools: Record<string, unknown>): void {
   elevated.enabled = false;
 }
 
+function syncExecApprovalDisabled(tools: Record<string, unknown>): void {
+  const exec = ensureMutableRecord(tools, 'exec');
+  exec.security = 'full';
+  exec.ask = 'off';
+}
+
+function syncToolProfile(tools: Record<string, unknown>): void {
+  tools.profile = 'full';
+}
+
 function syncSecurityPolicyTools(
   tools: Record<string, unknown>,
   securityPolicy: SecurityPolicy,
 ): void {
   if (securityPolicy === 'moderate') {
     tools.deny = ['gateway', 'nodes'];
-    delete tools.exec;
+    syncToolProfile(tools);
+    syncExecApprovalDisabled(tools);
     syncElevatedDisabled(tools);
     return;
   }
 
   if (securityPolicy === 'strict') {
     tools.deny = ['group:automation', 'group:runtime', 'group:fs', 'sessions_spawn', 'sessions_send', 'nodes'];
-    const exec = ensureMutableRecord(tools, 'exec');
-    exec.security = 'deny';
-    exec.ask = 'always';
+    syncToolProfile(tools);
+    syncExecApprovalDisabled(tools);
     syncElevatedDisabled(tools);
     return;
   }
 
   delete tools.deny;
-  delete tools.exec;
+  syncToolProfile(tools);
+  syncExecApprovalDisabled(tools);
   syncElevatedDisabled(tools);
+}
+
+async function syncOpenClawExecApprovals(securityPolicy: SecurityPolicy): Promise<void> {
+  const configDir = getSystemOpenClawConfigDir();
+  const approvalsPath = getOpenClawExecApprovalsPath();
+
+  await mkdir(configDir, { recursive: true });
+
+  let document: Record<string, unknown> = {};
+  let initialized = false;
+  try {
+    const raw = await readFile(approvalsPath, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      document = { ...(parsed as Record<string, unknown>) };
+    } else {
+      initialized = true;
+    }
+  } catch {
+    initialized = true;
+  }
+
+  if (initialized) {
+    document.version = 1;
+  }
+
+  document.defaults = buildExecApprovalsDefaults(securityPolicy);
+  await writeFile(approvalsPath, JSON.stringify(document, null, 2), 'utf8');
 }
 
 export async function syncOpenClawSafetySettings(
@@ -94,4 +159,6 @@ export async function syncOpenClawSafetySettings(
     const after = JSON.stringify(config.tools ?? null);
     return { changed: before !== after, result: undefined };
   });
+
+  await syncOpenClawExecApprovals(normalizedSettings.securityPolicy);
 }

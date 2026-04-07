@@ -31,7 +31,7 @@ Important properties of the coordinator:
 
 - it serializes writes through an in-memory queue
 - each mutation reads the latest file, applies a targeted patch, then writes back once
-- it always ensures `commands.restart = true` on write
+- it always ensures `commands.restart = false` on write
 
 Do not add new startup logic that directly does its own `readFile(openclaw.json) -> mutate -> writeFile(openclaw.json)` flow.
 
@@ -52,17 +52,19 @@ Current order:
 2. `syncAllAgentConfigToOpenClaw()`
 3. `syncProxyConfigToOpenClaw(appSettings)`
 4. `sanitizeOpenClawConfig()`
-5. `syncBundledPluginLoadPathsToOpenClaw()`
-6. `ensureAlwaysEnabledBundledPluginsConfigured()`
-7. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
-8. `syncBrowserConfigToOpenClaw()`
-9. `ensureAlwaysEnabledSkillsConfigured()`
-10. `syncAllProviderRuntimeConfigToOpenClaw()`
+5. `syncOpenClawSafetySettings(appSettings)`
+6. `syncBundledPluginLoadPathsToOpenClaw()`
+7. `ensureAlwaysEnabledBundledPluginsConfigured()`
+8. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
+9. `syncBrowserConfigToOpenClaw()`
+10. `ensureAlwaysEnabledSkillsConfigured()`
+11. `syncAllProviderRuntimeConfigToOpenClaw()`
 
 Why this order matters:
 
 - `channels` and `agents` run first because their source of truth lives in GeeClaw stores; if they were deleted from `openclaw.json`, they must be restored before later startup patches touch the file
 - `sanitize` runs after the store-backed sections are restored, so it repairs the latest config shape
+- `safety` runs after sanitize so GeeClaw can restore runtime-required tool policy defaults without clobbering sibling `tools.*` config
 - bundled plugin load paths run after sanitize so GeeClaw can rewrite the current app-resource plugin roots in one place
 - always-enabled bundled plugin policy runs after load-path sync so protected plugin ids are already discoverable
 - `skills` policy cleanup happens before Gateway launch, so policy skills start in the correct implicit-enable state
@@ -177,7 +179,7 @@ Responsibilities:
 - restore `agents.defaults.maxConcurrent`
 - remove invalid `skills.enabled` or `skills.disabled` root keys
 - remove stale plugin load paths
-- ensure `commands.restart = true`
+- ensure `commands.restart = false`
 - mirror default channel account credentials to top-level channel config when required
 - remove stale Moonshot/Kimi nested API key config
 
@@ -260,6 +262,25 @@ Responsibilities:
 Source of truth:
 
 - GeeClaw provider store and secure storage
+
+### Safety Settings
+
+Main file:
+
+- `electron/utils/openclaw-safety-settings.ts`
+
+Responsibilities:
+
+- sync GeeClaw safety settings into `tools.fs.workspaceOnly`
+- disable `tools.elevated.enabled`
+- enforce `tools.profile = "full"` for GeeClaw-managed OpenClaw profiles
+- enforce `tools.exec.security = "full"` and `tools.exec.ask = "off"` so GeeClaw-managed OpenClaw profiles do not fall back to upstream approval prompts for every `exec`
+- sync upstream `~/.openclaw/exec-approvals.json` defaults from GeeClaw safety policy without overwriting unrelated top-level fields; initialize `version: 1` only when creating the file
+- patch only owned `tools.*` nodes and preserve unrelated siblings such as `tools.web`
+
+Source of truth:
+
+- GeeClaw app settings plus GeeClaw runtime compatibility requirements
 
 ## Non-Startup Mutation Paths
 

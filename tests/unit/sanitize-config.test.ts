@@ -176,6 +176,17 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
     }
   }
 
+  const commands = (
+    config.commands && typeof config.commands === 'object'
+      ? { ...(config.commands as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+  if (commands.restart !== false) {
+    commands.restart = false;
+    config.commands = commands;
+    modified = true;
+  }
+
   // Mirror: remove stale tools.web.search.kimi.apiKey when moonshot provider exists.
   const providers = ((config.models as Record<string, unknown> | undefined)?.providers as Record<string, unknown> | undefined) || {};
   if (providers.moonshot) {
@@ -277,6 +288,9 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
 
   it('does nothing when config is already valid', async () => {
     const original = {
+      commands: {
+        restart: false,
+      },
       skills: {
         entries: { 'my-skill': { enabled: true } },
         allowBundled: ['web-search'],
@@ -295,6 +309,9 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     // If OpenClaw adds new valid keys to skills in the future,
     // the blocklist approach should NOT strip them.
     const original = {
+      commands: {
+        restart: false,
+      },
       skills: {
         entries: { 'x': { enabled: true } },
         allowBundled: ['web-search'],
@@ -314,7 +331,12 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   });
 
   it('handles config with no skills section', async () => {
-    const original = { gateway: { mode: 'local' } };
+    const original = {
+      commands: {
+        restart: false,
+      },
+      gateway: { mode: 'local' },
+    };
     await writeConfig(original);
 
     const modified = await sanitizeConfig(configPath);
@@ -325,7 +347,14 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     await writeConfig({});
 
     const modified = await sanitizeConfig(configPath);
-    expect(modified).toBe(false);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result).toEqual({
+      commands: {
+        restart: false,
+      },
+    });
   });
 
   it('returns false for missing config file', async () => {
@@ -335,7 +364,12 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
 
   it('handles skills being an array (no-op, no crash)', async () => {
     // Edge case: skills is not an object
-    await writeConfig({ skills: ['something'] });
+    await writeConfig({
+      commands: {
+        restart: false,
+      },
+      skills: ['something'],
+    });
 
     const modified = await sanitizeConfig(configPath);
     expect(modified).toBe(false);
@@ -429,6 +463,9 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
 
   it('keeps tools.web.search.kimi.apiKey when moonshot provider is absent', async () => {
     const original = {
+      commands: {
+        restart: false,
+      },
       models: {
         providers: {
           openrouter: { baseUrl: 'https://openrouter.ai/api/v1', api: 'openai-completions' },
@@ -614,6 +651,24 @@ describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
     expect(defaults.maxConcurrent).toBe(MANAGED_MAX_CONCURRENT);
     expect(defaults.heartbeat).toEqual({ every: MANAGED_HEARTBEAT_EVERY });
     expect(result.gateway).toEqual({ mode: 'local' });
+  });
+
+  it('forces commands.restart to false', async () => {
+    await writeConfig({
+      commands: {
+        restart: true,
+        retained: 'value',
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.commands).toEqual({
+      restart: false,
+      retained: 'value',
+    });
   });
 
   it('does nothing when managed agent defaults are already correct', async () => {

@@ -101,6 +101,11 @@ describe('saveChannelConfig', () => {
         entries?: Record<string, { enabled?: boolean }>;
       };
     }).plugins?.entries?.['wecom-openclaw-plugin']?.enabled).toBe(true);
+    expect((config as {
+      commands?: {
+        restart?: boolean;
+      };
+    }).commands?.restart).toBe(false);
   });
 
   it('does not synthesize a duplicate default account from mirrored top-level credentials', async () => {

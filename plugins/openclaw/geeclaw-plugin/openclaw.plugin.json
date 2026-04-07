@@ -1,0 +1,10 @@
+{
+"id": "geeclaw-plugin",
+  "name": "GeeClaw 主插件",
+  "description": "通过统一的 Hook 代理和 Fetch 中间件链协调执行。",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

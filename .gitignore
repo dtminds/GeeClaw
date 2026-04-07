@@ -5,6 +5,8 @@ node_modules/
 
 # Build outputs
 dist/
+!plugins/openclaw/**/dist/
+!plugins/openclaw/**/dist/**
 dist-electron/
 release/
 *.local

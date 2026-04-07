@@ -41,6 +41,20 @@ export function getOpenClawConfigDir(): string {
 }
 
 /**
+ * Get the system OpenClaw config directory used by upstream OpenClaw.
+ */
+export function getSystemOpenClawConfigDir(): string {
+  return join(homedir(), '.openclaw');
+}
+
+/**
+ * Get the upstream OpenClaw exec approvals file path.
+ */
+export function getOpenClawExecApprovalsPath(): string {
+  return join(getSystemOpenClawConfigDir(), 'exec-approvals.json');
+}
+
+/**
  * Get OpenClaw skills directory
  */
 export function getOpenClawSkillsDir(): string {
