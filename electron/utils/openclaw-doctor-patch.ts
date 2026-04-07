@@ -41,7 +41,12 @@ export function ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir: string)
     return false;
   }
 
-  writeFileSync(targetPath, result.source, 'utf-8');
-  logger.info(`[openclaw-patch] Patched bundled-plugin doctor deps guard in ${targetPath}`);
-  return true;
+  try {
+    writeFileSync(targetPath, result.source, 'utf-8');
+    logger.info(`[openclaw-patch] Patched bundled-plugin doctor deps guard in ${targetPath}`);
+    return true;
+  } catch (error) {
+    logger.warn(`[openclaw-patch] Failed to patch doctor deps in ${targetPath}:`, error);
+    return false;
+  }
 }

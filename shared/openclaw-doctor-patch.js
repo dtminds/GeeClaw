@@ -2,7 +2,7 @@ export const OPENCLAW_DOCTOR_PATCH_TARGET_NAME_RE = /^prompt-select-styled(?:-[^
 export const OPENCLAW_DOCTOR_PATCH_SENTINEL = 'bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true"';
 
 const DOCTOR_PATCH_TARGET_RE =
-  /(async function maybeRepairBundledPluginRuntimeDeps\(params\)\s*\{\r?\n)([ \t]*)const packageRoot = params\.packageRoot \?\? resolveOpenClawPackageRootSync\(\{/m;
+  /(async\s+function\s+maybeRepairBundledPluginRuntimeDeps\s*\(\s*params\s*\)\s*\{\r?\n)([ \t]*)const\s+packageRoot\s*=\s*params\.packageRoot\s*\?\?\s*resolveOpenClawPackageRootSync\s*\(\s*\{/m;
 
 export function patchOpenClawDoctorBundledRuntimeDepsSource(source) {
   if (source.includes(OPENCLAW_DOCTOR_PATCH_SENTINEL)) {
