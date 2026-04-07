@@ -245,21 +245,7 @@ describe('saveChannelConfig', () => {
         dmScope?: string;
         reset?: {
           mode?: string;
-          atHour?: number;
-        };
-        resetByType?: {
-          direct?: {
-            mode?: string;
-            idleMinutes?: number;
-          };
-          group?: {
-            mode?: string;
-            idleMinutes?: number;
-          };
-          thread?: {
-            mode?: string;
-            atHour?: number;
-          };
+          idleMinutes?: number;
         };
         maintenance?: {
           mode?: string;
@@ -284,22 +270,8 @@ describe('saveChannelConfig', () => {
     expect(config.session).toEqual({
       dmScope: 'per-channel-peer',
       reset: {
-        mode: 'daily',
-        atHour: 4,
-      },
-      resetByType: {
-        direct: {
-          mode: 'idle',
-          idleMinutes: 960,
-        },
-        group: {
-          mode: 'idle',
-          idleMinutes: 240,
-        },
-        thread: {
-          mode: 'daily',
-          atHour: 4,
-        },
+        mode: 'idle',
+        idleMinutes: 10080,
       },
       maintenance: {
         mode: 'enforce',

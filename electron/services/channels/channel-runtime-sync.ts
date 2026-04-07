@@ -7,14 +7,8 @@ const MANAGED_PLUGIN_ENTRY_IDS = ['dingtalk', 'wecom-openclaw-plugin', 'openclaw
 const MANAGED_PLUGIN_ENTRY_ID_SET = new Set(MANAGED_PLUGIN_ENTRY_IDS);
 
 const MANAGED_SESSION_DM_SCOPE = 'per-channel-peer';
-const MANAGED_SESSION_RESET_MODE = 'daily';
-const MANAGED_SESSION_RESET_AT_HOUR = 4;
-const MANAGED_SESSION_DIRECT_RESET_MODE = 'idle';
-const MANAGED_SESSION_DIRECT_IDLE_MINUTES = 960;
-const MANAGED_SESSION_GROUP_RESET_MODE = 'idle';
-const MANAGED_SESSION_GROUP_IDLE_MINUTES = 240;
-const MANAGED_SESSION_THREAD_RESET_MODE = 'daily';
-const MANAGED_SESSION_THREAD_AT_HOUR = 4;
+const MANAGED_SESSION_RESET_MODE = 'idle';
+const MANAGED_SESSION_IDLE_MINUTES = 10080;
 const MANAGED_SESSION_MAINTENANCE_MODE = 'enforce';
 const MANAGED_SESSION_PRUNE_AFTER = '30d';
 const MANAGED_SESSION_MAX_ENTRIES = 500;
@@ -45,72 +39,18 @@ function reconcileManagedSessionConfig(config: OpenClawConfig): boolean {
     modified = true;
   }
 
-  const reset = (
-    session.reset && typeof session.reset === 'object'
-      ? { ...(session.reset as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-  if (reset.mode !== MANAGED_SESSION_RESET_MODE) {
-    reset.mode = MANAGED_SESSION_RESET_MODE;
+  const reset = {
+    mode: MANAGED_SESSION_RESET_MODE,
+    idleMinutes: MANAGED_SESSION_IDLE_MINUTES,
+  };
+  if (!isDeepStrictEqual(session.reset, reset)) {
+    session.reset = reset;
     modified = true;
   }
-  if (reset.atHour !== MANAGED_SESSION_RESET_AT_HOUR) {
-    reset.atHour = MANAGED_SESSION_RESET_AT_HOUR;
+  if ('resetByType' in session) {
+    delete session.resetByType;
     modified = true;
   }
-  session.reset = reset;
-
-  const resetByType = (
-    session.resetByType && typeof session.resetByType === 'object'
-      ? { ...(session.resetByType as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-
-  const directReset = (
-    resetByType.direct && typeof resetByType.direct === 'object'
-      ? { ...(resetByType.direct as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-  if (directReset.mode !== MANAGED_SESSION_DIRECT_RESET_MODE) {
-    directReset.mode = MANAGED_SESSION_DIRECT_RESET_MODE;
-    modified = true;
-  }
-  if (directReset.idleMinutes !== MANAGED_SESSION_DIRECT_IDLE_MINUTES) {
-    directReset.idleMinutes = MANAGED_SESSION_DIRECT_IDLE_MINUTES;
-    modified = true;
-  }
-  resetByType.direct = directReset;
-
-  const groupReset = (
-    resetByType.group && typeof resetByType.group === 'object'
-      ? { ...(resetByType.group as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-  if (groupReset.mode !== MANAGED_SESSION_GROUP_RESET_MODE) {
-    groupReset.mode = MANAGED_SESSION_GROUP_RESET_MODE;
-    modified = true;
-  }
-  if (groupReset.idleMinutes !== MANAGED_SESSION_GROUP_IDLE_MINUTES) {
-    groupReset.idleMinutes = MANAGED_SESSION_GROUP_IDLE_MINUTES;
-    modified = true;
-  }
-  resetByType.group = groupReset;
-
-  const threadReset = (
-    resetByType.thread && typeof resetByType.thread === 'object'
-      ? { ...(resetByType.thread as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-  if (threadReset.mode !== MANAGED_SESSION_THREAD_RESET_MODE) {
-    threadReset.mode = MANAGED_SESSION_THREAD_RESET_MODE;
-    modified = true;
-  }
-  if (threadReset.atHour !== MANAGED_SESSION_THREAD_AT_HOUR) {
-    threadReset.atHour = MANAGED_SESSION_THREAD_AT_HOUR;
-    modified = true;
-  }
-  resetByType.thread = threadReset;
-  session.resetByType = resetByType;
 
   const maintenance = (
     session.maintenance && typeof session.maintenance === 'object'
