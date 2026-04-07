@@ -80,6 +80,7 @@
         "pluginDescriptionLabel": "Plugin description",
         "errorTitle": "Failed to send decision",
         "clearError": "Dismiss",
+        "submitting": "Waiting for OpenClaw to confirm your decision…",
         "metadata": {
             "cwd": "CWD",
             "agentId": "Agent",

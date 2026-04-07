@@ -19,6 +19,7 @@ type ApprovalStoreState = {
   queue: ApprovalRequest[];
   busy: boolean;
   error: string | null;
+  pendingDecisionId: string | null;
   isInitialized: boolean;
   init: () => Promise<void>;
   resolveActive: (decision: ApprovalDecision) => Promise<void>;
@@ -42,6 +43,7 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
   queue: [],
   busy: false,
   error: null,
+  pendingDecisionId: null,
   isInitialized: false,
 
   init: async () => {
@@ -72,6 +74,8 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
 
           set((state) => ({
             queue: removeApproval(state.queue, parsed.resolved.id),
+            busy: state.pendingDecisionId === parsed.resolved.id ? false : state.busy,
+            pendingDecisionId: state.pendingDecisionId === parsed.resolved.id ? null : state.pendingDecisionId,
           }));
         });
       }
@@ -94,6 +98,19 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
       return;
     }
 
+    if (get().busy || get().pendingDecisionId === active.id) {
+      return;
+    }
+
+    if (active.expiresAtMs <= Date.now()) {
+      set((state) => ({
+        queue: pruneApprovals(state.queue),
+        busy: false,
+        pendingDecisionId: null,
+      }));
+      return;
+    }
+
     set({ busy: true, error: null });
 
     try {
@@ -105,10 +122,16 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
         },
         10_000,
       );
+      set({
+        busy: true,
+        pendingDecisionId: active.id,
+      });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
-    } finally {
-      set({ busy: false });
+      set({
+        busy: false,
+        pendingDecisionId: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   },
 

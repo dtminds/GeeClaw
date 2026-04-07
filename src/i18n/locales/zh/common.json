@@ -80,6 +80,7 @@
         "pluginDescriptionLabel": "插件说明",
         "errorTitle": "发送决策失败",
         "clearError": "关闭错误",
+        "submitting": "正在等待 OpenClaw 确认您的决策……",
         "metadata": {
             "cwd": "工作目录",
             "agentId": "智能体",

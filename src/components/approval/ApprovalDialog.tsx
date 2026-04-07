@@ -82,6 +82,7 @@ export function ApprovalDialog() {
   const queue = useApprovalStore((state) => state.queue);
   const busy = useApprovalStore((state) => state.busy);
   const error = useApprovalStore((state) => state.error);
+  const pendingDecisionId = useApprovalStore((state) => state.pendingDecisionId);
   const resolveActive = useApprovalStore((state) => state.resolveActive);
   const clearError = useApprovalStore((state) => state.clearError);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -116,6 +117,9 @@ export function ApprovalDialog() {
   const title = active.kind === 'plugin'
     ? (hasDisplayValue(active.pluginTitle) ? toDisplayText(active.pluginTitle) : t('approvalDialog.titles.pluginFallback'))
     : t('approvalDialog.titles.exec');
+  const isExpired = active.expiresAtMs <= nowMs;
+  const isAwaitingResolution = pendingDecisionId === active.id;
+  const decisionDisabled = busy || isExpired || isAwaitingResolution;
 
   const requestedDecisions = active.allowedDecisions;
   const decisionSet = Array.isArray(requestedDecisions) && requestedDecisions.length > 0
@@ -164,7 +168,7 @@ export function ApprovalDialog() {
   ].filter((row) => hasDisplayValue(row.value));
 
   const handleDecision = (decision: ApprovalDecision) => {
-    if (busy) return;
+    if (decisionDisabled) return;
     void resolveActive(decision);
   };
 
@@ -247,6 +251,12 @@ export function ApprovalDialog() {
                 </Button>
               </div>
             )}
+
+            {isAwaitingResolution && (
+              <div className="mt-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2">
+                <p className="text-xs text-muted-foreground">{t('approvalDialog.submitting')}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -258,7 +268,7 @@ export function ApprovalDialog() {
               variant={option.variant}
               className={option.value === 'deny' ? 'modal-secondary-button' : 'modal-primary-button'}
               onClick={() => handleDecision(option.value)}
-              disabled={busy}
+              disabled={decisionDisabled}
             >
               {t(option.labelKey)}
             </Button>

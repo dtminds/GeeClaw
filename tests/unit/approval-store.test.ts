@@ -126,8 +126,75 @@ describe('approval store', () => {
       decision: 'deny',
     }, 10_000);
     expect(useApprovalStore.getState().queue.map((entry) => entry.id)).toEqual(['plugin:1']);
-    expect(useApprovalStore.getState().busy).toBe(false);
+    expect(useApprovalStore.getState().busy).toBe(true);
+    expect(useApprovalStore.getState().pendingDecisionId).toBe('plugin:1');
     expect(useApprovalStore.getState().error).toBeNull();
+  });
+
+  it('ignores duplicate submissions while waiting for the resolved event', async () => {
+    const { useGatewayStore } = await import('@/stores/gateway');
+    const rpcMock = vi.spyOn(useGatewayStore.getState(), 'rpc').mockResolvedValue(undefined);
+
+    const { useApprovalStore } = await import('@/stores/approval');
+    useApprovalStore.setState({
+      ...useApprovalStore.getState(),
+      queue: [{
+        id: 'exec-duplicate',
+        kind: 'exec',
+        createdAtMs: 1,
+        expiresAtMs: Date.now() + 60_000,
+        request: { command: 'echo hello' },
+        allowedDecisions: ['allow-once', 'deny'],
+      }],
+      busy: false,
+      error: null,
+      pendingDecisionId: null,
+      isInitialized: true,
+    });
+
+    await act(async () => {
+      await useApprovalStore.getState().resolveActive('allow-once');
+      await useApprovalStore.getState().resolveActive('deny');
+    });
+
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledWith('exec.approval.resolve', {
+      id: 'exec-duplicate',
+      decision: 'allow-once',
+    }, 10_000);
+    expect(useApprovalStore.getState().pendingDecisionId).toBe('exec-duplicate');
+    expect(useApprovalStore.getState().busy).toBe(true);
+  });
+
+  it('does not submit expired approvals and prunes them locally first', async () => {
+    const { useGatewayStore } = await import('@/stores/gateway');
+    const rpcMock = vi.spyOn(useGatewayStore.getState(), 'rpc').mockResolvedValue(undefined);
+
+    const { useApprovalStore } = await import('@/stores/approval');
+    useApprovalStore.setState({
+      ...useApprovalStore.getState(),
+      queue: [{
+        id: 'exec-expired',
+        kind: 'exec',
+        createdAtMs: 1,
+        expiresAtMs: Date.now() - 1,
+        request: { command: 'echo expired' },
+        allowedDecisions: ['allow-once', 'deny'],
+      }],
+      busy: false,
+      error: null,
+      pendingDecisionId: null,
+      isInitialized: true,
+    });
+
+    await act(async () => {
+      await useApprovalStore.getState().resolveActive('deny');
+    });
+
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(useApprovalStore.getState().queue).toEqual([]);
+    expect(useApprovalStore.getState().busy).toBe(false);
+    expect(useApprovalStore.getState().pendingDecisionId).toBeNull();
   });
 
   it('surfaces rpc failures and does not clear the queue', async () => {

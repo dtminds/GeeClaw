@@ -27,6 +27,7 @@ const translations: Record<string, string> = {
   'approvalDialog.pluginDescriptionLabel': 'Plugin description',
   'approvalDialog.errorTitle': 'Failed to send decision',
   'approvalDialog.clearError': 'Dismiss',
+  'approvalDialog.submitting': 'Waiting for OpenClaw to confirm your decision…',
   'approvalDialog.metadata.cwd': 'Working directory',
   'approvalDialog.metadata.agentId': 'Agent',
   'approvalDialog.metadata.sessionKey': 'Session',
@@ -47,6 +48,7 @@ const approvalState = vi.hoisted(() => ({
   queue: [] as ApprovalEntry[],
   busy: false,
   error: null as string | null,
+  pendingDecisionId: null as string | null,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -81,6 +83,7 @@ function setApprovalState(next: Partial<typeof approvalState>) {
   if (next.queue) approvalState.queue = next.queue;
   if (typeof next.busy === 'boolean') approvalState.busy = next.busy;
   if (next.error !== undefined) approvalState.error = next.error;
+  if (next.pendingDecisionId !== undefined) approvalState.pendingDecisionId = next.pendingDecisionId;
 }
 
 afterEach(() => {
@@ -128,6 +131,7 @@ describe('ApprovalDialog', () => {
       queue: [],
       busy: false,
       error: null,
+      pendingDecisionId: null,
     });
   });
 
@@ -239,6 +243,7 @@ describe('ApprovalDialog', () => {
       }],
       busy: true,
       error: 'gateway offline',
+      pendingDecisionId: 'exec-2',
     });
 
     const view = render(<ApprovalDialog />);
@@ -248,15 +253,62 @@ describe('ApprovalDialog', () => {
 
     expect(allowOnceButton).toBeDisabled();
     expect(denyButton).toBeDisabled();
+    expect(screen.getByText('Waiting for OpenClaw to confirm your decision…')).toBeInTheDocument();
     expect(screen.getByText('Failed to send decision')).toBeInTheDocument();
     expect(screen.getByText('gateway offline')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(clearErrorMock).toHaveBeenCalledOnce();
 
-    setApprovalState({ busy: false });
+    setApprovalState({ busy: false, pendingDecisionId: null });
     view.rerender(<ApprovalDialog />);
     fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
     expect(resolveActiveMock).toHaveBeenCalledWith('allow-once');
+  });
+
+  it('disables decisions for expired approvals and does not submit again while waiting for resolution', async () => {
+    const { ApprovalDialog } = await import('@/components/approval/ApprovalDialog');
+    setApprovalState({
+      queue: [{
+        id: 'exec-expired',
+        kind: 'exec',
+        createdAtMs: 1,
+        expiresAtMs: Date.now() - 1,
+        request: {
+          command: 'echo hello',
+        },
+      }],
+      busy: false,
+      error: null,
+      pendingDecisionId: null,
+    });
+
+    const view = render(<ApprovalDialog />);
+
+    expect(screen.getByText('expired')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Allow once' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
+    expect(resolveActiveMock).not.toHaveBeenCalled();
+
+    setApprovalState({
+      queue: [{
+        id: 'exec-pending',
+        kind: 'exec',
+        createdAtMs: 2,
+        expiresAtMs: Date.now() + 60_000,
+        request: {
+          command: 'echo queued',
+        },
+      }],
+      busy: true,
+      pendingDecisionId: 'exec-pending',
+    });
+    view.rerender(<ApprovalDialog />);
+
+    expect(screen.getByText('Waiting for OpenClaw to confirm your decision…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Allow once' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
   });
 });
