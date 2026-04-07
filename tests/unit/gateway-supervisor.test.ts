@@ -247,7 +247,7 @@ describe('gateway supervisor process cleanup', () => {
     expect(mockCreateServer).toHaveBeenCalled();
   });
 
-  it('reclaims likely stale GeeClaw or OpenClaw listeners before startup fails', async () => {
+  it('reconciles managed gateway listeners back to embedded mode', async () => {
     setPlatform('darwin');
     const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
 
@@ -265,7 +265,74 @@ describe('gateway supervisor process cleanup', () => {
       const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
       void options;
       if (cmd === 'ps' && argv.join(' ') === '-o command= -p 4321') {
-        callback(null, '/usr/bin/node /tmp/openclaw gateway.js\n');
+        callback(null, '/usr/bin/node /tmp/openclaw.mjs --profile geeclaw gateway\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+
+    const { reconcileGatewayRuntimeForEmbeddedMode } = await import('@electron/gateway/supervisor');
+
+    await expect(reconcileGatewayRuntimeForEmbeddedMode(28788)).resolves.toBeUndefined();
+
+    expect(processKillSpy).toHaveBeenCalledWith(4321, 'SIGTERM');
+    expect(mockCreateServer).toHaveBeenCalled();
+  });
+
+  it('unloads the managed geeclaw launchctl service label during embedded reconciliation', async () => {
+    setPlatform('darwin');
+    const uid = process.getuid?.();
+    if (uid === undefined) {
+      return;
+    }
+
+    mockExec.mockImplementation((...args: unknown[]) => {
+      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === `launchctl print gui/${uid}/ai.openclaw.geeclaw`) {
+        callback(null, 'service loaded');
+        return {} as never;
+      }
+      callback(new Error('not loaded'), '');
+      return {} as never;
+    });
+
+    const { unloadLaunchctlGatewayService } = await import('@electron/gateway/supervisor');
+
+    await expect(unloadLaunchctlGatewayService()).resolves.toBeUndefined();
+
+    expect(mockExec).toHaveBeenCalledWith(
+      `launchctl bootout gui/${uid}/ai.openclaw.geeclaw`,
+      expect.objectContaining({ timeout: 10000 }),
+      expect.any(Function),
+    );
+    expect(mockExec).not.toHaveBeenCalledWith(
+      `launchctl bootout gui/${uid}/ai.openclaw.gateway`,
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
+  it('reclaims only managed geeclaw-profile listeners before startup fails', async () => {
+    setPlatform('darwin');
+    const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
+
+    mockExec.mockImplementation((...args: unknown[]) => {
+      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'lsof -i :28788 -sTCP:LISTEN -t') {
+        callback(null, '4321\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+    mockExecFile.mockImplementation((...args: unknown[]) => {
+      const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'ps' && argv.join(' ') === '-o command= -p 4321') {
+        callback(null, '/usr/bin/node /tmp/openclaw.mjs --profile geeclaw gateway\n');
         return {} as never;
       }
       callback(null, '');
@@ -283,6 +350,44 @@ describe('gateway supervisor process cleanup', () => {
 
     expect(result).toBeNull();
     expect(processKillSpy).toHaveBeenCalledWith(4321, 'SIGTERM');
+  });
+
+  it('does not reclaim a system-wide openclaw listener when it is not the geeclaw managed profile', async () => {
+    setPlatform('darwin');
+    mockWebSocketState.mode = 'open';
+    const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
+
+    mockExec.mockImplementation((...args: unknown[]) => {
+      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'lsof -i :28788 -sTCP:LISTEN -t') {
+        callback(null, '4321\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+    mockExecFile.mockImplementation((...args: unknown[]) => {
+      const [cmd, argv, options, callback] = args as [string, string[], object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'ps' && argv.join(' ') === '-o command= -p 4321') {
+        callback(null, '/usr/bin/node /tmp/openclaw.mjs gateway\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+
+    const { findExistingGatewayProcess } = await import('@electron/gateway/supervisor');
+
+    await expect(findExistingGatewayProcess({
+      port: 28788,
+      terminateForeignProcess: false,
+      rejectForeignProcess: true,
+      reclaimLikelyGatewayResidue: true,
+    })).rejects.toThrow('already in use by another OpenClaw-compatible process');
+
+    expect(processKillSpy).not.toHaveBeenCalledWith(4321, 'SIGTERM');
   });
 
   it('ignores non-numeric listener ids when checking process command lines', async () => {

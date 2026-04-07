@@ -164,10 +164,10 @@ export function buildGatewayConnectFrame(options: {
 
 export async function connectGatewaySocket(options: {
   port: number;
+  token: string;
   deviceIdentity: DeviceIdentity | null;
   platform: string;
   pendingRequests: Map<string, PendingGatewayRequest>;
-  getToken: () => Promise<string>;
   onHandshakeComplete: (ws: WebSocket) => void;
   onMessage: (message: unknown) => void;
   onCloseAfterHandshake: (code: number) => void;
@@ -217,18 +217,16 @@ export async function connectGatewaySocket(options: {
     };
 
     const sendConnectHandshake = async (challengeNonce: string) => {
-      logger.debug('Sending connect handshake with challenge nonce');
-
-      const currentToken = await options.getToken();
       const connectPayload = buildGatewayConnectFrame({
         challengeNonce,
-        token: currentToken,
+        token: options.token,
         deviceIdentity: options.deviceIdentity,
         platform: options.platform,
       });
       connectId = connectPayload.connectId;
 
       ws.send(JSON.stringify(connectPayload.frame));
+      logger.debug('Sent connect handshake with challenge nonce');
 
       const requestTimeout = setTimeout(() => {
         if (!handshakeComplete) {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const terminateOwnedGatewayProcessMock = vi.hoisted(() => vi.fn(async () => {}));
 const terminateGatewayListenersOnPortMock = vi.hoisted(() => vi.fn(async () => [] as string[]));
 const getGatewayListenerProcessIdsMock = vi.hoisted(() => vi.fn(async () => [] as string[]));
+const reconcileGatewayRuntimeForEmbeddedModeMock = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('electron', () => ({
   app: {
@@ -30,6 +31,7 @@ vi.mock('@electron/gateway/supervisor', async () => {
     terminateOwnedGatewayProcess: terminateOwnedGatewayProcessMock,
     terminateGatewayListenersOnPort: terminateGatewayListenersOnPortMock,
     getGatewayListenerProcessIds: getGatewayListenerProcessIdsMock,
+    reconcileGatewayRuntimeForEmbeddedMode: reconcileGatewayRuntimeForEmbeddedModeMock,
     findExistingGatewayProcess: vi.fn(async () => null),
     runOpenClawDoctorRepair: vi.fn(async () => false),
     unloadLaunchctlGatewayService: vi.fn(async () => {}),
@@ -72,6 +74,7 @@ describe('GatewayManager stop cleanup', () => {
 
     expect(terminateOwnedGatewayProcessMock).toHaveBeenCalledWith(child);
     expect(terminateGatewayListenersOnPortMock).toHaveBeenCalledWith(28788);
+    expect(reconcileGatewayRuntimeForEmbeddedModeMock).toHaveBeenCalledWith(28788);
     expect(getGatewayListenerProcessIdsMock).not.toHaveBeenCalled();
   });
 });
