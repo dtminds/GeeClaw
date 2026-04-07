@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
-import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { getAllSettings } from '../utils/store';
@@ -117,8 +117,11 @@ function ensureExtensionDepsResolvable(openclawDir: string): void {
             }
 
             try {
-              mkdirSync(path.join(topLevelNodeModulesDir, packageEntry.name), { recursive: true });
-              symlinkSync(path.join(scopeDir, scopedEntry.name), destination);
+              mkdirSync(path.dirname(destination), { recursive: true });
+              if (pathExistsButBroken(destination)) {
+                rmSync(destination, { recursive: true, force: true });
+              }
+              symlinkSync(path.join(scopeDir, scopedEntry.name), destination, getDirectorySymlinkType());
               linkedCount++;
             } catch {
               // Non-fatal: best-effort for extension-only dependencies.
@@ -134,8 +137,11 @@ function ensureExtensionDepsResolvable(openclawDir: string): void {
         }
 
         try {
-          mkdirSync(topLevelNodeModulesDir, { recursive: true });
-          symlinkSync(path.join(extensionNodeModulesDir, packageEntry.name), destination);
+          mkdirSync(path.dirname(destination), { recursive: true });
+          if (pathExistsButBroken(destination)) {
+            rmSync(destination, { recursive: true, force: true });
+          }
+          symlinkSync(path.join(extensionNodeModulesDir, packageEntry.name), destination, getDirectorySymlinkType());
           linkedCount++;
         } catch {
           // Non-fatal: best-effort for extension-only dependencies.
@@ -149,6 +155,23 @@ function ensureExtensionDepsResolvable(openclawDir: string): void {
   if (linkedCount > 0) {
     logger.info(`[extension-deps] Linked ${linkedCount} extension packages into ${topLevelNodeModulesDir}`);
   }
+}
+
+function pathExistsButBroken(targetPath: string): boolean {
+  if (existsSync(targetPath)) {
+    return false;
+  }
+
+  try {
+    lstatSync(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getDirectorySymlinkType(): 'dir' | 'junction' {
+  return process.platform === 'win32' ? 'junction' : 'dir';
 }
 
 export interface GatewayLaunchContext {
@@ -650,7 +673,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     throw new Error(`OpenClaw entry script not found at: ${entryScript}`);
   }
 
-  ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir);
+  if (runtime.source === 'bundled') {
+    ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir);
+  }
 
   const mode = app.isPackaged ? 'packaged' : 'dev';
 

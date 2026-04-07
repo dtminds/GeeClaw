@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
-import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 
 const forkMock = vi.fn();
 const spawnMock = vi.fn();
@@ -284,6 +284,9 @@ describe('prepareGatewayLaunchContext', () => {
     writeFileSync(entryPath, 'export {};', 'utf-8');
     writeFileSync(join(grammyDir, 'package.json'), '{"name":"grammy","version":"1.0.0"}', 'utf-8');
     writeFileSync(join(scopedCoreDir, 'package.json'), '{"name":"@grammyjs/core","version":"1.0.0"}', 'utf-8');
+    symlinkSync(join(openclawRuntimeDir, 'missing-grammy'), join(topLevelNodeModules, 'grammy'));
+    mkdirSync(join(topLevelNodeModules, '@grammyjs'), { recursive: true });
+    symlinkSync(join(openclawRuntimeDir, 'missing-core'), join(topLevelNodeModules, '@grammyjs', 'core'));
 
     vi.resetModules();
     const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');

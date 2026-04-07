@@ -18,6 +18,10 @@
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import {
+  findOpenClawDoctorPatchRelativePath,
+  patchOpenClawDoctorBundledRuntimeDepsSource,
+} from '../shared/openclaw-doctor-patch.js';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -858,34 +862,31 @@ function patchBundledRuntime(outputDir) {
     echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
   }
 
-  const doctorTarget = path.join(outputDir, 'dist', 'prompt-select-styled-D0g6OJfd.js');
-  if (!fs.existsSync(doctorTarget)) {
+  const distDir = path.join(outputDir, 'dist');
+  const doctorRelativePath = findOpenClawDoctorPatchRelativePath(
+    fs.existsSync(distDir)
+      ? fs.readdirSync(distDir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name)
+      : [],
+    (candidateName) => fs.readFileSync(path.join(distDir, candidateName), 'utf8'),
+  );
+  if (!doctorRelativePath) {
+    echo`   ⚠️  Skipped doctor deps patch: target file not found`;
     return;
   }
 
-  const doctorSearch = [
-    'async function maybeRepairBundledPluginRuntimeDeps(params) {',
-    '\tconst packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({',
-  ].join('\n');
-  const doctorReplace = [
-    'async function maybeRepairBundledPluginRuntimeDeps(params) {',
-    '\tconst bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim().toLowerCase();',
-    '\tif (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;',
-    '\tconst packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({',
-  ].join('\n');
-  const doctorSentinel = 'bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true"';
+  const doctorTarget = path.join(distDir, doctorRelativePath);
   const current = fs.readFileSync(doctorTarget, 'utf8');
-
-  if (current.includes(doctorSentinel)) {
-    return;
-  }
-
-  if (!current.includes(doctorSearch)) {
+  const result = patchOpenClawDoctorBundledRuntimeDepsSource(current);
+  if (!result.matched) {
     echo`   ⚠️  Skipped doctor deps patch: expected source snippet not found`;
     return;
   }
 
-  fs.writeFileSync(doctorTarget, current.replace(doctorSearch, doctorReplace), 'utf8');
+  if (!result.changed) {
+    return;
+  }
+
+  fs.writeFileSync(doctorTarget, result.source, 'utf8');
   echo`   🩹 Patched bundled doctor deps guard`;
 }
 

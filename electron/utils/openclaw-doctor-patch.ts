@@ -1,46 +1,34 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { Dirent, existsSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import {
+  findOpenClawDoctorPatchRelativePath,
+  patchOpenClawDoctorBundledRuntimeDepsSource,
+} from '../../shared/openclaw-doctor-patch.js';
 import { logger } from './logger';
 
-const DOCTOR_PATCH_RELATIVE_PATH = join('dist', 'prompt-select-styled-D0g6OJfd.js');
-const DOCTOR_PATCH_SEARCH = [
-  'async function maybeRepairBundledPluginRuntimeDeps(params) {',
-  '\tconst packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({',
-].join('\n');
-const DOCTOR_PATCH_REPLACE = [
-  'async function maybeRepairBundledPluginRuntimeDeps(params) {',
-  '\tconst bundledPluginsDisabledRaw = (params.env ?? process.env).OPENCLAW_DISABLE_BUNDLED_PLUGINS?.trim().toLowerCase();',
-  '\tif (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;',
-  '\tconst packageRoot = params.packageRoot ?? resolveOpenClawPackageRootSync({',
-].join('\n');
-const DOCTOR_PATCH_SENTINEL = 'bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true"';
-
-export function patchOpenClawDoctorBundledRuntimeDepsSource(source: string): {
-  changed: boolean;
-  matched: boolean;
-  source: string;
-} {
-  if (source.includes(DOCTOR_PATCH_SENTINEL)) {
-    return { changed: false, matched: true, source };
+function listDistFileNames(distDir: string): string[] {
+  if (!existsSync(distDir)) {
+    return [];
   }
 
-  if (!source.includes(DOCTOR_PATCH_SEARCH)) {
-    return { changed: false, matched: false, source };
-  }
-
-  return {
-    changed: true,
-    matched: true,
-    source: source.replace(DOCTOR_PATCH_SEARCH, DOCTOR_PATCH_REPLACE),
-  };
+  return readdirSync(distDir, { withFileTypes: true })
+    .filter((entry: Dirent) => entry.isFile())
+    .map((entry) => entry.name);
 }
 
 export function ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir: string): boolean {
-  const targetPath = join(openclawDir, DOCTOR_PATCH_RELATIVE_PATH);
-  if (!existsSync(targetPath)) {
+  const distDir = join(openclawDir, 'dist');
+  const relativePath = findOpenClawDoctorPatchRelativePath(
+    listDistFileNames(distDir),
+    (candidateName) => readFileSync(join(distDir, candidateName), 'utf-8'),
+  );
+
+  if (!relativePath) {
+    logger.warn(`[openclaw-patch] Doctor deps patch skipped: target file not found under ${distDir}`);
     return false;
   }
 
+  const targetPath = join(distDir, relativePath);
   const current = readFileSync(targetPath, 'utf-8');
   const result = patchOpenClawDoctorBundledRuntimeDepsSource(current);
 
