@@ -448,7 +448,7 @@ export function formatToolResultText(text: string | undefined, toolName?: string
     return '';
   }
 
-  if (!/^[\[{]/.test(trimmed)) {
+  if (!/^[[{]/.test(trimmed)) {
     return trimmed;
   }
 
