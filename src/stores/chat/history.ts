@@ -340,13 +340,11 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
 
       const updates = collectToolUpdates(msg, 'final');
       let matchedAnyUpdate = false;
-      let sawMatchableUpdate = false;
       let matchedAllMatchableUpdates = true;
       for (const update of updates) {
         if (!update.toolCallId) {
           continue;
         }
-        sawMatchableUpdate = true;
         const targetIndex = findPreviousAssistantToolMessageIndex(next, index, update);
         if (targetIndex === -1) {
           matchedAllMatchableUpdates = false;
