@@ -47,6 +47,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
 import { getCronDeliveryChannelOptions } from './delivery-channels';
+import { filterCronSessionSuggestions, resolveCronDeliveryAccountId } from './session-suggestions';
 
 // Common cron schedule presets
 const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
@@ -216,9 +217,12 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const [enabled, setEnabled] = useState(job?.enabled ?? true);
   const [deliveryMode, setDeliveryMode] = useState<CronDeliveryMode>(job?.delivery?.mode ?? 'none');
   const [deliveryChannel, setDeliveryChannel] = useState(job?.delivery?.channel ?? '');
+  const [deliveryAccountId, setDeliveryAccountId] = useState(job?.delivery?.accountId ?? '');
   const [deliveryTo, setDeliveryTo] = useState(job?.delivery?.to ?? '');
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   const toContainerRef = useRef<HTMLDivElement>(null);
+  const selectedDeliveryChannel = channels.find((channel) => channel.type === deliveryChannel);
+  const deliveryAccounts = (selectedDeliveryChannel?.accounts ?? []).filter((account) => account.enabled);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -241,6 +245,17 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       .catch(() => setSessions([]));
   }, [agentId, deliveryMode]);
 
+  useEffect(() => {
+    if (deliveryMode !== 'announce' || !deliveryChannel) {
+      setDeliveryAccountId('');
+      return;
+    }
+    const nextAccountId = resolveCronDeliveryAccountId(deliveryAccounts, deliveryAccountId);
+    if (nextAccountId !== deliveryAccountId) {
+      setDeliveryAccountId(nextAccountId);
+    }
+  }, [deliveryMode, deliveryChannel, deliveryAccountId, deliveryAccounts]);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error(t('toast.nameRequired'));
@@ -262,8 +277,18 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       return;
     }
 
+    if (deliveryMode === 'announce' && deliveryAccounts.length > 0 && !deliveryAccountId) {
+      toast.error(t('toast.channelRequired'));
+      return;
+    }
+
     const delivery = deliveryMode === 'announce'
-      ? { mode: 'announce' as const, channel: deliveryChannel, to: deliveryTo || undefined }
+      ? {
+        mode: 'announce' as const,
+        channel: deliveryChannel,
+        to: deliveryTo || undefined,
+        accountId: deliveryAccountId || undefined,
+      }
       : { mode: 'none' as const };
 
     setSaving(true);
@@ -429,7 +454,11 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                       <Label className="text-[13px] text-foreground/70">{t('dialog.deliveryChannel')}</Label>
                       <select
                         value={deliveryChannel}
-                        onChange={(e) => { setDeliveryChannel(e.target.value); setDeliveryTo(''); }}
+                        onChange={(e) => {
+                          setDeliveryChannel(e.target.value);
+                          setDeliveryAccountId('');
+                          setDeliveryTo('');
+                        }}
                         className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
                       >
                         <option value="">{t('dialog.deliveryChannelPlaceholder')}</option>
@@ -440,6 +469,26 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         ))}
                       </select>
                     </div>
+                    {deliveryAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-[13px] text-foreground/70">{t('channels:dialog.accountId', '账号')}</Label>
+                        <select
+                          value={deliveryAccountId}
+                          onChange={(e) => {
+                            setDeliveryAccountId(e.target.value);
+                            setDeliveryTo('');
+                          }}
+                          className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
+                        >
+                          {deliveryAccounts.map((account) => (
+                            <option key={account.accountId} value={account.accountId}>
+                              {account.name || account.accountId}
+                              {account.isDefault ? ` (${t('common:labels.default', 'Default')})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label className="text-[13px] text-foreground/70">{t('dialog.deliveryTo')}</Label>
                       <div className="relative" ref={toContainerRef}>
@@ -451,10 +500,11 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input px-3 font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus:outline-none"
                         />
                         {showToSuggestions && (() => {
-                          const filtered = sessions.filter((s) =>
-                            (!deliveryChannel || s.channel === deliveryChannel) &&
-                            (!deliveryTo || s.to.includes(deliveryTo) || s.label.includes(deliveryTo))
-                          );
+                          const filtered = filterCronSessionSuggestions(sessions, {
+                            deliveryChannel,
+                            deliveryAccountId,
+                            query: deliveryTo,
+                          });
                           return filtered.length > 0 ? (
                             <div className="absolute z-20 w-full mt-1 bg-popover border border-input rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                               {filtered.map((s) => (

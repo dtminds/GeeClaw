@@ -4,7 +4,7 @@ import { getCronDeliveryChannelOptions } from '@/pages/Cron/delivery-channels';
 import type { ChannelGroup } from '@/types/channel';
 
 describe('getCronDeliveryChannelOptions', () => {
-  it('keeps enabled weixin visible but disabled in cron delivery options', () => {
+  it('keeps enabled weixin visible and selectable in cron delivery options', () => {
     const channels: Pick<ChannelGroup, 'id' | 'type' | 'name' | 'accounts'>[] = [
       {
         id: 'openclaw-weixin',
@@ -47,7 +47,7 @@ describe('getCronDeliveryChannelOptions', () => {
         id: 'openclaw-weixin',
         type: 'openclaw-weixin',
         name: '微信',
-        disabled: true,
+        disabled: false,
       },
       {
         id: 'wecom',

@@ -80,6 +80,7 @@ export interface CronDeliveryConfig {
   mode: CronDeliveryMode;
   channel?: string;
   to?: string;
+  accountId?: string;
 }
 
 /**
