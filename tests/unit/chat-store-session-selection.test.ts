@@ -269,4 +269,121 @@ describe('chat store session selection', () => {
       expect.objectContaining({ id: 'main-msg', content: 'main session' }),
     ]);
   });
+
+  it('shows chat history before session token info refresh completes', async () => {
+    const tokenInfoDeferred = createDeferred<{ sessions: [] }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/desktop-sessions/')) {
+        return { success: true, session: writerSession };
+      }
+      return { sessions: [] };
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 1 }],
+          };
+        }
+        if (method === 'sessions.list') {
+          return tokenInfoDeferred.promise;
+        }
+        return {};
+      }),
+    });
+
+    const loadPromise = useChatStore.getState().loadHistory();
+    await Promise.resolve();
+
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
+    ]);
+
+    tokenInfoDeferred.resolve({ sessions: [] });
+    await loadPromise;
+  });
+
+  it('shows chat history before attachment preview hydration completes', async () => {
+    const thumbnailsDeferred = createDeferred<Record<string, { exists: boolean; preview: string | null; fileSize: number }>>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/files/thumbnails') {
+        return thumbnailsDeferred.promise;
+      }
+      if (path.startsWith('/api/desktop-sessions/')) {
+        return { success: true, session: writerSession };
+      }
+      return { sessions: [] };
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [{
+              id: 'writer-msg',
+              role: 'assistant',
+              content: 'image response',
+              timestamp: 1,
+              _attachedFiles: [
+                {
+                  fileName: 'image.png',
+                  mimeType: 'image/png',
+                  fileSize: 0,
+                  preview: null,
+                  filePath: '/tmp/image.png',
+                },
+              ],
+            }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    const loadPromise = useChatStore.getState().loadHistory();
+    await Promise.resolve();
+
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'image response' }),
+    ]);
+
+    thumbnailsDeferred.resolve({
+      '/tmp/image.png': {
+        exists: true,
+        preview: 'data:image/png;base64,preview',
+        fileSize: 42,
+      },
+    });
+    await loadPromise;
+  });
 });

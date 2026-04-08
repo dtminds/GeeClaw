@@ -853,28 +853,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     try {
-      const [data, tokenInfoResult] = await Promise.all([
-        useGatewayStore.getState().rpc<Record<string, unknown>>(
-          'chat.history',
-          { sessionKey: currentSessionKey, limit: 200 },
-        ),
-        fetchSessionTokenInfoByKey()
-          .then((sessionTokenInfoByKey) => ({ success: true as const, sessionTokenInfoByKey }))
-          .catch((error) => ({ success: false as const, error })),
-      ]);
+      const tokenInfoPromise = fetchSessionTokenInfoByKey()
+        .then((sessionTokenInfoByKey) => ({ success: true as const, sessionTokenInfoByKey }))
+        .catch((error) => ({ success: false as const, error }));
+      const data = await useGatewayStore.getState().rpc<Record<string, unknown>>(
+        'chat.history',
+        { sessionKey: currentSessionKey, limit: 200 },
+      );
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
 
         // Before filtering: attach images/files from tool_result messages to the next assistant message
-          const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages);
-          const enrichedMessages = filteredMessages;
+        const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages);
+        const enrichedMessages = filteredMessages;
         const thinkingLevel = data.thinkingLevel ? String(data.thinkingLevel) : null;
-        const nextSessionTokenInfoByKey = tokenInfoResult.success
-          ? tokenInfoResult.sessionTokenInfoByKey
-          : get().sessionTokenInfoByKey;
-        if (!tokenInfoResult.success) {
-          console.warn('Failed to refresh gateway session token info during history load:', tokenInfoResult.error);
-        }
 
         // Preserve the optimistic user message during an active send.
         // The Gateway may not include the user's message in chat.history
@@ -897,24 +889,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }
 
-        const previewsLoaded = await loadMissingPreviews(finalMessages);
-        const displayMessages = previewsLoaded
-          ? finalMessages.map(msg =>
-              msg._attachedFiles
-                ? { ...msg, _attachedFiles: msg._attachedFiles.map(f => ({ ...f })) }
-                : msg
-            )
-          : finalMessages;
-
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
-        set({ messages: displayMessages, thinkingLevel, loading: false, sessionTokenInfoByKey: nextSessionTokenInfoByKey });
+        set({ messages: finalMessages, thinkingLevel, loading: false });
+
+        void tokenInfoPromise.then((tokenInfoResult) => {
+          if (!isSameHistoryRequest(request, get())) {
+            return;
+          }
+          if (!tokenInfoResult.success) {
+            console.warn('Failed to refresh gateway session token info during history load:', tokenInfoResult.error);
+            return;
+          }
+          set({ sessionTokenInfoByKey: tokenInfoResult.sessionTokenInfoByKey });
+        });
+
+        void loadMissingPreviews(finalMessages)
+          .then((previewsLoaded) => {
+            if (!previewsLoaded || !isSameHistoryRequest(request, get())) {
+              return;
+            }
+            set({
+              messages: finalMessages.map((msg) =>
+                msg._attachedFiles
+                  ? { ...msg, _attachedFiles: msg._attachedFiles.map((file) => ({ ...file })) }
+                  : msg
+              ),
+            });
+          })
+          .catch((error) => {
+            console.warn('[loadHistory] Failed to hydrate file previews:', error);
+          });
 
         const currentDesktopSession = get().desktopSessions.find((session) => session.id === currentDesktopSessionId);
         let nextTitle = currentDesktopSession?.title ?? '';
-        const nextLastMessagePreview = getLatestMessagePreview(displayMessages);
-        const firstUserMsg = displayMessages.find((m) => m.role === 'user');
+        const nextLastMessagePreview = getLatestMessagePreview(finalMessages);
+        const firstUserMsg = finalMessages.find((m) => m.role === 'user');
         if (firstUserMsg && !nextTitle.trim()) {
           const labelText = renderSkillMarkersAsPlainText(cleanUserMessageText(getMessageText(firstUserMsg.content)));
           if (labelText) {
@@ -922,7 +933,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }
 
-        const lastMsg = displayMessages[displayMessages.length - 1];
+        const lastMsg = finalMessages[finalMessages.length - 1];
         const lastAt = lastMsg?.timestamp ? toMs(lastMsg.timestamp) : undefined;
         if (currentDesktopSessionId && currentDesktopSession) {
           const needsTitleUpdate = nextTitle !== currentDesktopSession.title;

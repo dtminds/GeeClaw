@@ -157,15 +157,20 @@ export function Chat() {
         skipNextAutoLoadRef.current = false;
         return;
       }
-      await fetchAgents();
+      const fetchAgentsPromise = fetchAgents();
       if (cancelled) return;
       if (requestedAgentId) {
         await openAgentMainSession(requestedAgentId);
         if (cancelled) return;
+        void fetchAgentsPromise.catch((error) => {
+          console.warn('Failed to refresh agents while opening requested agent session:', error);
+        });
         skipNextAutoLoadRef.current = true;
         navigate(location.pathname, { replace: true });
         return;
       }
+      await fetchAgentsPromise;
+      if (cancelled) return;
       await loadSessions();
       if (cancelled) return;
       await loadHistory(hasExistingMessages);
