@@ -78,6 +78,7 @@ Updating an installed marketplace agent now overwrites only its managed content 
 
 ### 📡 Multi-Channel Management
 Configure and monitor multiple AI channels from the dedicated Channels workspace in the sidebar. Each channel can now host multiple accounts, and every account can be routed to a different agent with an explicit default account per channel type. The desktop app includes bundled plugin support for DingTalk, WeCom, Weixin, QQ Bot, and the official Feishu/Lark OpenClaw plugin.
+Custom channel account IDs now enforce a canonical OpenClaw-compatible format: lowercase letters, numbers, hyphens, and underscores only, starting with a letter or number, up to 64 characters.
 
 ### ⏰ Cron-Based Automation
 Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock without manual intervention.

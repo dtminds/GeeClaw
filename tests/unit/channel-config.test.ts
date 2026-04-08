@@ -191,6 +191,38 @@ describe('saveChannelConfig', () => {
     expect(config.session).toBeUndefined();
   });
 
+  it('rejects non-canonical account IDs', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { saveChannelConfig } = await import('@electron/utils/channel-config');
+
+    await expect(saveChannelConfig('wecom', {
+      botId: 'bot-1',
+      secret: 'secret-1',
+      enabled: true,
+    }, 'Ops Bot')).rejects.toThrow('Invalid accountId format');
+  });
+
   it('reconciles managed session config during startup channel sync', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);

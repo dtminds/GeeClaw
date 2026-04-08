@@ -70,6 +70,8 @@
         "viewDocs": "View Documentation",
         "accountId": "Account ID",
         "accountIdPlaceholder": "e.g. default / ops-bot",
+        "accountIdHint": "Use lowercase letters, numbers, hyphens, or underscores only. IDs must start with a letter or number and be at most 64 characters.",
+        "accountIdInvalid": "Account ID must use lowercase letters, numbers, hyphens, or underscores only, start with a letter or number, and be at most 64 characters.",
         "channelName": "Channel Name",
         "channelNamePlaceholder": "My {{name}}",
         "enableChannel": "Enable Channel",

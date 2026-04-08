@@ -70,6 +70,8 @@
         "viewDocs": "查看文档",
         "accountId": "账号 ID",
         "accountIdPlaceholder": "例如 default / ops-bot",
+        "accountIdHint": "仅支持小写字母、数字、连字符和下划线；必须以字母或数字开头，且最长 64 个字符。",
+        "accountIdInvalid": "账号 ID 仅支持小写字母、数字、连字符和下划线；必须以字母或数字开头，且最长 64 个字符。",
         "channelName": "频道名称",
         "channelNamePlaceholder": "我的 {{name}}",
         "enableChannel": "启用频道",

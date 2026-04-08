@@ -39,6 +39,12 @@ import feishuIcon from '@/assets/channels/feishu.svg';
 import wecomIcon from '@/assets/channels/wecom.svg';
 import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
+import { cn } from '@/lib/utils';
+import {
+  isCanonicalChannelAccountId,
+  normalizeOptionalChannelAccountId,
+  resolveChannelAccountId,
+} from '@/lib/channel-account-id';
 
 interface ChannelConfigModalProps {
   configuredTypes?: string[];
@@ -90,6 +96,7 @@ export function ChannelConfigModal({
   const [selectedType, setSelectedType] = useState<ChannelType | null>(fixedType);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [editableAccountId, setEditableAccountId] = useState(accountId || '');
+  const [accountIdError, setAccountIdError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -98,7 +105,7 @@ export function ChannelConfigModal({
   const [isExistingConfig, setIsExistingConfig] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const resolvedAccountId = accountId || editableAccountId.trim() || 'default';
+  const resolvedAccountId = resolveChannelAccountId(accountId ?? editableAccountId, 'default');
   const meta: ChannelMeta | null = selectedType ? CHANNEL_META[selectedType] : null;
   const selectableTypes = useMemo(
     () => getPrimaryChannels().filter((type) => !configuredTypes.includes(type)),
@@ -113,6 +120,7 @@ export function ChannelConfigModal({
     if (accountId) {
       setEditableAccountId(accountId);
     }
+    setAccountIdError(null);
   }, [accountId]);
 
   useEffect(() => {
@@ -122,6 +130,7 @@ export function ChannelConfigModal({
       setIsExistingConfig(false);
       setQrCode(null);
       setValidationResult(null);
+      setAccountIdError(null);
       void hostApiFetch('/api/channels/whatsapp/cancel', { method: 'POST' }).catch(() => {});
       void hostApiFetch('/api/channels/wecom/cancel', { method: 'POST' }).catch(() => {});
       void hostApiFetch('/api/channels/openclaw-weixin/cancel', { method: 'POST' }).catch(() => {});
@@ -383,6 +392,25 @@ export function ChannelConfigModal({
     window.open(url, '_blank');
   }, [meta, t]);
 
+  const validateAccountId = useCallback((value: string | null | undefined, options?: { allowEmpty?: boolean }): boolean => {
+    const normalized = normalizeOptionalChannelAccountId(value);
+    if (!normalized && options?.allowEmpty) {
+      setAccountIdError(null);
+      return true;
+    }
+
+    const candidate = normalized ?? resolveChannelAccountId(value, 'default');
+    if (!isCanonicalChannelAccountId(candidate)) {
+      const message = t('dialog.accountIdInvalid');
+      setAccountIdError(message);
+      toast.error(message);
+      return false;
+    }
+
+    setAccountIdError(null);
+    return true;
+  }, [t]);
+
   const handleValidate = useCallback(async () => {
     if (!selectedType) return;
 
@@ -427,6 +455,11 @@ export function ChannelConfigModal({
 
   const handleConnect = useCallback(async () => {
     if (!selectedType || !meta) return;
+
+    const shouldAllowEmptyAccountId = selectedType === 'openclaw-weixin' && !accountId;
+    if (!validateAccountId(accountId ?? editableAccountId, { allowEmpty: shouldAllowEmptyAccountId })) {
+      return;
+    }
 
     setConnecting(true);
     setValidationResult(null);
@@ -514,9 +547,13 @@ export function ChannelConfigModal({
     }
 
     setConnecting(false);
-  }, [accountId, configValues, meta, onChannelSaved, onClose, resolvedAccountId, selectedType, t]);
+  }, [accountId, configValues, editableAccountId, meta, onChannelSaved, onClose, resolvedAccountId, selectedType, t, validateAccountId]);
 
   const handleStartWeComScan = useCallback(async () => {
+    if (!validateAccountId(resolvedAccountId)) {
+      return;
+    }
+
     setConnecting(true);
     setValidationResult(null);
     setQrCode(null);
@@ -530,7 +567,7 @@ export function ChannelConfigModal({
       toast.error(t('toast.wecomScanFailed', { error: String(error) }));
       setConnecting(false);
     }
-  }, [resolvedAccountId, t]);
+  }, [resolvedAccountId, t, validateAccountId]);
 
   const handleRefreshCode = useCallback(async () => {
     setQrCode(null);
@@ -672,9 +709,20 @@ export function ChannelConfigModal({
                     id="account-id"
                     placeholder={t('dialog.accountIdPlaceholder', 'default')}
                     value={editableAccountId}
-                    onChange={(event) => setEditableAccountId(event.target.value)}
-                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40"
+                    onChange={(event) => {
+                      setEditableAccountId(event.target.value);
+                      if (accountIdError) {
+                        setAccountIdError(null);
+                      }
+                    }}
+                    className={cn(
+                      'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40',
+                      accountIdError && 'border-destructive/60 focus-visible:ring-destructive/30',
+                    )}
                   />
+                  <p className={cn('text-[12px]', accountIdError ? 'text-destructive' : 'text-muted-foreground')}>
+                    {accountIdError || t('dialog.accountIdHint')}
+                  </p>
                 </div>
               )}
 

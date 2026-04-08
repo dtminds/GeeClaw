@@ -20,11 +20,34 @@ import { weixinLoginManager } from '../../utils/weixin-login';
 import {
   ensureManagedChannelPluginInstalled,
 } from '../../utils/plugin-install';
+import {
+  isCanonicalChannelAccountId,
+  normalizeOptionalChannelAccountId,
+  resolveChannelAccountId,
+} from '../../utils/channel-account-id';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 
 function scheduleGatewayChannelRestart(ctx: HostApiContext, reason: string): void {
   refreshGatewayAfterConfigChange(ctx.gatewayManager, reason);
+}
+
+function getInvalidAccountIdError(): string {
+  return 'Invalid accountId format. Use lowercase letters, numbers, hyphens, or underscores only (max 64 chars, must start with a letter or number).';
+}
+
+function validateCanonicalAccountId(accountId: string | null | undefined, options?: { allowEmpty?: boolean }): string | null {
+  const normalized = normalizeOptionalChannelAccountId(accountId);
+  if (!normalized && options?.allowEmpty) {
+    return null;
+  }
+
+  const candidate = normalized ?? resolveChannelAccountId(accountId, 'default');
+  if (!isCanonicalChannelAccountId(candidate)) {
+    return getInvalidAccountIdError();
+  }
+
+  return null;
 }
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
@@ -75,7 +98,12 @@ export async function handleChannelRoutes(
   if (url.pathname === '/api/channels/whatsapp/start' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ accountId: string }>(req);
-      await whatsAppLoginManager.start(body.accountId);
+      const accountIdError = validateCanonicalAccountId(body.accountId);
+      if (accountIdError) {
+        sendJson(res, 400, { success: false, error: accountIdError });
+        return true;
+      }
+      await whatsAppLoginManager.start(resolveChannelAccountId(body.accountId, 'default'));
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -96,13 +124,18 @@ export async function handleChannelRoutes(
   if (url.pathname === '/api/channels/wecom/start' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ accountId?: string }>(req);
+      const accountIdError = validateCanonicalAccountId(body.accountId, { allowEmpty: true });
+      if (accountIdError) {
+        sendJson(res, 400, { success: false, error: accountIdError });
+        return true;
+      }
       const installError = getManagedChannelPluginInstallError('wecom');
       if (installError) {
         sendJson(res, 500, { success: false, error: installError });
         return true;
       }
       await cleanupDanglingManagedChannelPluginState('wecom');
-      await weComLoginManager.start(body.accountId || 'default');
+      await weComLoginManager.start(resolveChannelAccountId(body.accountId, 'default'));
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -123,13 +156,18 @@ export async function handleChannelRoutes(
   if (url.pathname === '/api/channels/openclaw-weixin/start' && req.method === 'POST') {
     try {
       const body = await parseJsonBody<{ accountId?: string }>(req);
+      const accountIdError = validateCanonicalAccountId(body.accountId, { allowEmpty: true });
+      if (accountIdError) {
+        sendJson(res, 400, { success: false, error: accountIdError });
+        return true;
+      }
       const installError = getManagedChannelPluginInstallError('openclaw-weixin');
       if (installError) {
         sendJson(res, 500, { success: false, error: installError });
         return true;
       }
       await cleanupDanglingManagedChannelPluginState('openclaw-weixin');
-      await weixinLoginManager.start(body.accountId);
+      await weixinLoginManager.start(normalizeOptionalChannelAccountId(body.accountId));
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -154,12 +192,17 @@ export async function handleChannelRoutes(
         config: Record<string, unknown>;
         accountId?: string;
       }>(req);
+      const accountIdError = validateCanonicalAccountId(body.accountId, { allowEmpty: true });
+      if (accountIdError) {
+        sendJson(res, 400, { success: false, error: accountIdError });
+        return true;
+      }
       const installError = getManagedChannelPluginInstallError(body.channelType);
       if (installError) {
         sendJson(res, 500, { success: false, error: installError });
         return true;
       }
-      await saveChannelConfig(body.channelType, body.config, body.accountId);
+      await saveChannelConfig(body.channelType, body.config, resolveChannelAccountId(body.accountId, 'default'));
       scheduleGatewayChannelRestart(ctx, `channel:saveConfig:${body.channelType}`);
       sendJson(res, 200, { success: true });
     } catch (error) {
@@ -208,6 +251,11 @@ export async function handleChannelRoutes(
       try {
         const channelType = decodeURIComponent(parts[0]);
         const body = await parseJsonBody<{ accountId: string }>(req);
+        const accountIdError = validateCanonicalAccountId(body.accountId);
+        if (accountIdError) {
+          sendJson(res, 400, { success: false, error: accountIdError });
+          return true;
+        }
         await setDefaultChannelAccount(channelType, body.accountId);
         scheduleGatewayChannelRestart(ctx, `channel:setDefaultAccount:${channelType}:${body.accountId}`);
         sendJson(res, 200, { success: true });
@@ -221,6 +269,11 @@ export async function handleChannelRoutes(
       try {
         const channelType = decodeURIComponent(parts[0]);
         const accountId = decodeURIComponent(parts[2]);
+        const accountIdError = validateCanonicalAccountId(accountId);
+        if (accountIdError) {
+          sendJson(res, 400, { success: false, error: accountIdError });
+          return true;
+        }
         const body = await parseJsonBody<{ agentId?: string | null }>(req);
         if (body.agentId) {
           const snapshot = await assignChannelAccountToAgent(body.agentId, channelType, accountId);
@@ -246,6 +299,11 @@ export async function handleChannelRoutes(
       try {
         const channelType = decodeURIComponent(parts[0]);
         const accountId = decodeURIComponent(parts[2]);
+        const accountIdError = validateCanonicalAccountId(accountId);
+        if (accountIdError) {
+          sendJson(res, 400, { success: false, error: accountIdError });
+          return true;
+        }
         await deleteChannelAccountConfig(channelType, accountId);
         await clearChannelBinding(channelType, accountId);
         scheduleGatewayChannelRestart(ctx, `channel:deleteAccount:${channelType}:${accountId}`);
