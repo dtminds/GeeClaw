@@ -218,6 +218,15 @@ describe('Cron schedule editor integration', () => {
         updatedAt: '2026-04-08T00:00:00.000Z',
       },
       {
+        id: 'job-every-fractional',
+        name: 'Fractional job',
+        message: 'Run every one and a half hours',
+        schedule: { kind: 'every', everyMs: 90 * 60_000 },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+      {
         id: 'job-once',
         name: 'Once job',
         message: 'Run once',
@@ -258,6 +267,7 @@ describe('Cron schedule editor integration', () => {
     render(<Cron />);
 
     expect(screen.getByText('Every 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText('Every 1.5 hours')).toBeInTheDocument();
     expect(screen.getByText((content) => content.startsWith('Once at '))).toBeInTheDocument();
     expect(screen.getByText('Daily at 7:30')).toBeInTheDocument();
     expect(screen.getByText('Weekly on Monday at 7:30')).toBeInTheDocument();

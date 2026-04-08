@@ -83,11 +83,7 @@ function parseCronSchedule(schedule: unknown, t: TFunction<'cron'>): string {
       return parseCronExpr(s.expr, t);
     }
     if (s.kind === 'every' && typeof s.everyMs === 'number') {
-      const ms = s.everyMs;
-      if (ms < 60_000) return t('schedule.everySeconds', { count: Math.round(ms / 1000) });
-      if (ms < 3_600_000) return t('schedule.everyMinutes', { count: Math.round(ms / 60_000) });
-      if (ms < 86_400_000) return t('schedule.everyHours', { count: Math.round(ms / 3_600_000) });
-      return t('schedule.everyDays', { count: Math.round(ms / 86_400_000) });
+      return formatEverySchedule(s.everyMs, t);
     }
     if (s.kind === 'at' && typeof s.at === 'string') {
       try {
@@ -105,6 +101,92 @@ function parseCronSchedule(schedule: unknown, t: TFunction<'cron'>): string {
   }
 
   return String(schedule ?? t('schedule.unknown'));
+}
+
+const everyScheduleUnits: Array<{ unitMs: number; label: 'schedule.everyDays' | 'schedule.everyHours' | 'schedule.everyMinutes' | 'schedule.everySeconds' }> = [
+  { unitMs: 86_400_000, label: 'schedule.everyDays' },
+  { unitMs: 3_600_000, label: 'schedule.everyHours' },
+  { unitMs: 60_000, label: 'schedule.everyMinutes' },
+  { unitMs: 1_000, label: 'schedule.everySeconds' },
+];
+
+function formatEverySchedule(ms: number, t: TFunction<'cron'>): string {
+  for (const unit of everyScheduleUnits) {
+    if (ms < unit.unitMs) {
+      continue;
+    }
+
+    const count = formatExactIntervalCount(ms, unit.unitMs);
+    if (count !== null) {
+      return t(unit.label, { count: Number(count) });
+    }
+  }
+
+  const secondsCount = formatExactIntervalCount(ms, 1_000);
+  return secondsCount === null
+    ? String(ms)
+    : t('schedule.everySeconds', { count: Number(secondsCount) });
+}
+
+function formatExactIntervalCount(ms: number, unitMs: number): string | null {
+  if (!Number.isFinite(ms) || !Number.isInteger(ms) || ms <= 0) {
+    return null;
+  }
+
+  return formatTerminatingDecimal(BigInt(ms), BigInt(unitMs));
+}
+
+function formatTerminatingDecimal(numerator: bigint, denominator: bigint): string | null {
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  let reducedNumerator = numerator / divisor;
+  let reducedDenominator = denominator / divisor;
+  let twos = 0;
+  let fives = 0;
+
+  while (reducedDenominator % 2n === 0n) {
+    reducedDenominator /= 2n;
+    twos += 1;
+  }
+
+  while (reducedDenominator % 5n === 0n) {
+    reducedDenominator /= 5n;
+    fives += 1;
+  }
+
+  if (reducedDenominator !== 1n) {
+    return null;
+  }
+
+  const scale = Math.max(twos, fives);
+  for (let index = 0; index < scale - twos; index += 1) {
+    reducedNumerator *= 2n;
+  }
+  for (let index = 0; index < scale - fives; index += 1) {
+    reducedNumerator *= 5n;
+  }
+
+  if (scale === 0) {
+    return reducedNumerator.toString();
+  }
+
+  const digits = reducedNumerator.toString().padStart(scale + 1, '0');
+  const whole = digits.slice(0, -scale);
+  const fraction = digits.slice(-scale).replace(/0+$/, '');
+
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+function greatestCommonDivisor(left: bigint, right: bigint): bigint {
+  let a = left;
+  let b = right;
+
+  while (b !== 0n) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+
+  return a;
 }
 
 // Parse a plain cron expression string to human-readable text
