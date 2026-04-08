@@ -91,9 +91,10 @@ export function ApprovalDialog() {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const active = queue[0] as ApprovalEntry | undefined;
+  const activeId = active?.id;
 
   useEffect(() => {
-    if (!active) {
+    if (!activeId) {
       return undefined;
     }
 
@@ -104,7 +105,7 @@ export function ApprovalDialog() {
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [active?.kind, active?.createdAtMs, active?.expiresAtMs]);
+  }, [activeId]);
 
   if (!active) {
     return null;
@@ -171,10 +172,6 @@ export function ApprovalDialog() {
       label: t('approvalDialog.metadata.pluginId'),
       value: active.kind === 'plugin' ? (active.pluginId ?? request.pluginId) : null,
     },
-    {
-      label: t('approvalDialog.metadata.pluginSeverity'),
-      value: null,
-    },
   ].filter((row) => hasDisplayValue(row.value));
 
   const handleDecision = (decision: ApprovalDecision) => {
@@ -219,7 +216,7 @@ export function ApprovalDialog() {
               </div>
             )}
 
-            {command && (
+            {active.kind === 'exec' && command && (
               <div className="mb-3">
                 <pre className="modal-field-surface mt-1 whitespace-pre-wrap break-words rounded-xl border px-3 py-2 text-xs leading-5 text-foreground">
                   {command}

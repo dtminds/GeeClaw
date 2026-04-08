@@ -227,6 +227,7 @@ describe('ApprovalDialog', () => {
     expect(screen.getByText('Needs install permission')).toBeInTheDocument();
     expect(screen.getByText('Plugin severity')).toBeInTheDocument();
     expect(screen.getByText('high')).toBeInTheDocument();
+    expect(screen.queryByText('Install plugin capability')).not.toBeInTheDocument();
     expect(screen.getByText('Plugin ID')).not.toBeVisible();
     expect(screen.getByText('market/foo')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
