@@ -33,6 +33,16 @@ const writerSession: DesktopSessionSummary = {
   updatedAt: 2,
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('chat store session selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -169,5 +179,94 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().currentSessionKey).toBe('');
     expect(useChatStore.getState().currentDesktopSessionId).toBe('');
     expect(useChatStore.getState().currentAgentId).toBe('main');
+  });
+
+  it('marks the chat as loading while opening an existing agent main session history', async () => {
+    const historyDeferred = createDeferred<{ messages: [] }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession, mainSession],
+      currentDesktopSessionId: mainSession.id,
+      currentSessionKey: mainSession.gatewaySessionKey,
+      currentAgentId: 'main',
+      loading: false,
+      messages: [{ id: 'old', role: 'assistant', content: 'stale' }],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history') {
+          return historyDeferred.promise;
+        }
+        return {};
+      }),
+    });
+
+    const openPromise = useChatStore.getState().openAgentMainSession('writer');
+
+    expect(useChatStore.getState().currentSessionKey).toBe(writerSession.gatewaySessionKey);
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().loading).toBe(true);
+
+    historyDeferred.resolve({ messages: [] });
+    await openPromise;
+
+    expect(useChatStore.getState().loading).toBe(false);
+  });
+
+  it('ignores stale history responses after the selected session changes', async () => {
+    const historyDeferred = createDeferred<{ messages: Array<{ id: string; role: 'assistant'; content: string; timestamp: number }> }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession, mainSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history') {
+          if (params?.sessionKey === writerSession.gatewaySessionKey) {
+            return historyDeferred.promise;
+          }
+          return { messages: [] };
+        }
+        return {};
+      }),
+    });
+
+    const initialLoadPromise = useChatStore.getState().loadHistory(true);
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentDesktopSessionId: mainSession.id,
+      currentSessionKey: mainSession.gatewaySessionKey,
+      currentAgentId: 'main',
+      messages: [{ id: 'main-msg', role: 'assistant', content: 'main session', timestamp: 2 }],
+    });
+
+    historyDeferred.resolve({
+      messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 1 }],
+    });
+
+    await initialLoadPromise;
+
+    expect(useChatStore.getState().currentSessionKey).toBe(mainSession.gatewaySessionKey);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'main-msg', content: 'main session' }),
+    ]);
   });
 });

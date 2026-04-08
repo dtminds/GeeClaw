@@ -245,6 +245,23 @@ function clearHistoryPoll(): void {
   }
 }
 
+function isSameHistoryRequest(
+  request: {
+    sessionKey: string;
+    desktopSessionId: string;
+    viewMode: ChatViewMode;
+    cronRunId: string;
+  },
+  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun'>,
+): boolean {
+  return (
+    state.currentSessionKey === request.sessionKey
+    && state.currentDesktopSessionId === request.desktopSessionId
+    && state.currentViewMode === request.viewMode
+    && (state.selectedCronRun?.id ?? '') === request.cronRunId
+  );
+}
+
 const DESKTOP_SESSIONS_API = '/api/desktop-sessions';
 
 type DesktopSessionsListResponse = {
@@ -578,6 +595,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentAgentId: normalizedAgentId,
         currentViewMode: 'session',
         selectedCronRun: null,
+        loading: true,
         messages: [],
         ...createEmptyToolRuntimeState(),
         activeRunId: null,
@@ -601,6 +619,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentAgentId: normalizedAgentId,
         currentViewMode: 'session',
         selectedCronRun: null,
+        loading: true,
         messages: [],
         ...createEmptyToolRuntimeState(),
         activeRunId: null,
@@ -782,6 +801,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!quiet) set({ loading: false });
       return;
     }
+    const request = {
+      sessionKey: currentSessionKey,
+      desktopSessionId: currentDesktopSessionId,
+      viewMode: currentViewMode,
+      cronRunId: selectedCronRun?.id ?? '',
+    };
     if (!quiet) set({ loading: true, error: null });
 
     if (currentViewMode === 'cron' && selectedCronRun) {
@@ -808,6 +833,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages);
+        if (!isSameHistoryRequest(request, get())) {
+          return;
+        }
         set({
           messages: displayMessages,
           thinkingLevel: null,
@@ -816,6 +844,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       } catch (err) {
         console.warn('Failed to load cron run history:', err);
+        if (!isSameHistoryRequest(request, get())) {
+          return;
+        }
         set({ messages: [], loading: false, error: String(err) });
       }
       return;
@@ -875,6 +906,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             )
           : finalMessages;
 
+        if (!isSameHistoryRequest(request, get())) {
+          return;
+        }
         set({ messages: displayMessages, thinkingLevel, loading: false, sessionTokenInfoByKey: nextSessionTokenInfoByKey });
 
         const currentDesktopSession = get().desktopSessions.find((session) => session.id === currentDesktopSessionId);
@@ -957,10 +991,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }
       } else {
+        if (!isSameHistoryRequest(request, get())) {
+          return;
+        }
         set({ messages: [], loading: false });
       }
     } catch (err) {
       console.warn('Failed to load chat history:', err);
+      if (!isSameHistoryRequest(request, get())) {
+        return;
+      }
       set({ messages: [], loading: false });
     }
   },
