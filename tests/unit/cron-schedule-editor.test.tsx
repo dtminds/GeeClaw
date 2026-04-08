@@ -53,8 +53,10 @@ const translations: Record<string, string> = {
   'dialog.scheduleModeEvery': 'Every',
   'dialog.scheduleModeFixed': 'Fixed Time',
   'dialog.scheduleModeCron': 'Cron',
+  'dialog.scheduleFixedDaily': 'Daily',
   'dialog.scheduleFixedWeekly': 'Weekly',
   'dialog.scheduleWeekday': 'Weekday',
+  'dialog.scheduleWeekday0': 'Sunday',
   'dialog.scheduleWeekday2': 'Tuesday',
   'dialog.scheduleWeekday5': 'Friday',
   'dialog.scheduleTime': 'Time',
@@ -174,7 +176,8 @@ describe('Cron schedule editor integration', () => {
       target: { value: 'hours' },
     });
 
-    expect(screen.getByText('Next: Every 2 hours')).toBeInTheDocument();
+    expect(screen.getByText(/^Next:/)).toBeInTheDocument();
+    expect(screen.queryByText('Next: Preview unavailable')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
 
@@ -259,6 +262,113 @@ describe('Cron schedule editor integration', () => {
         schedule: {
           kind: 'cron',
           expr: '30 7 * * 0',
+        },
+        enabled: true,
+        delivery: { mode: 'none' },
+        agentId: undefined,
+      });
+    });
+  });
+
+  it('preserves timezone when editing a raw cron expression', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-cron-tz',
+      name: 'TZ cron',
+      message: 'Keep timezone',
+      schedule: { kind: 'cron', expr: '*/10 * * * *', tz: 'Asia/Shanghai' },
+      enabled: true,
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByDisplayValue('*/10 * * * *'), {
+      target: { value: '*/15 * * * *' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateJobMock).toHaveBeenCalledWith('job-cron-tz', {
+        name: 'TZ cron',
+        message: 'Keep timezone',
+        schedule: {
+          kind: 'cron',
+          expr: '*/15 * * * *',
+          tz: 'Asia/Shanghai',
+        },
+        enabled: true,
+        delivery: { mode: 'none' },
+        agentId: undefined,
+      });
+    });
+  });
+
+  it('preserves the equivalent cron expression and timezone when switching from fixed schedule to cron mode', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-fixed-to-cron',
+      name: 'Daily digest',
+      message: 'Inspect cron mode',
+      schedule: { kind: 'cron', expr: '15 8 * * *', tz: 'Asia/Shanghai' },
+      enabled: true,
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cron' }));
+
+    expect(screen.getByDisplayValue('15 8 * * *')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateJobMock).toHaveBeenCalledWith('job-fixed-to-cron', {
+        name: 'Daily digest',
+        message: 'Inspect cron mode',
+        schedule: {
+          kind: 'cron',
+          expr: '15 8 * * *',
+          tz: 'Asia/Shanghai',
+        },
+        enabled: true,
+        delivery: { mode: 'none' },
+        agentId: undefined,
+      });
+    });
+  });
+
+  it('does not rewrite existing everyMs intervals unless the user edits them', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-every-exact',
+      name: 'Exact interval',
+      message: 'Keep precise interval',
+      schedule: { kind: 'every', everyMs: 90_000, anchorMs: 12_345 },
+      enabled: true,
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Interval')).toHaveValue(1.5);
+    expect(screen.getByLabelText('Unit')).toHaveValue('minutes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateJobMock).toHaveBeenCalledWith('job-every-exact', {
+        name: 'Exact interval',
+        message: 'Keep precise interval',
+        schedule: {
+          kind: 'every',
+          everyMs: 90_000,
+          anchorMs: 12_345,
         },
         enabled: true,
         delivery: { mode: 'none' },

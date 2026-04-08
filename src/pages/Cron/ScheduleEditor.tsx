@@ -1,10 +1,13 @@
+import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import {
+  buildScheduleFromEditor,
   createDefaultScheduleEditorState,
+  inferScheduleEditorState,
   type FixedScheduleSubtype,
   type ScheduleEditorMode,
   type ScheduleEditorState,
@@ -16,6 +19,11 @@ interface ScheduleEditorProps {
 }
 
 type EveryUnit = 'minutes' | 'hours' | 'days';
+type RememberedScheduleStates = {
+  every?: Extract<ScheduleEditorState, { mode: 'every' }>;
+  fixed?: Extract<ScheduleEditorState, { mode: 'fixed' }>;
+  cron?: Extract<ScheduleEditorState, { mode: 'cron' }>;
+};
 
 const everyUnits: EveryUnit[] = ['minutes', 'hours', 'days'];
 const weekdays = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -23,8 +31,21 @@ const fixedSubtypes: FixedScheduleSubtype[] = ['once', 'daily', 'weekly', 'month
 
 export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
   const { t } = useTranslation('cron');
+  const rememberedStatesRef = useRef<RememberedScheduleStates>({});
   const everyValue = getEveryValue(value);
   const everyUnit = getEveryUnit(value);
+
+  useEffect(() => {
+    if (value.mode === 'every') {
+      rememberedStatesRef.current.every = value;
+      return;
+    }
+    if (value.mode === 'fixed') {
+      rememberedStatesRef.current.fixed = value;
+      return;
+    }
+    rememberedStatesRef.current.cron = value;
+  }, [value]);
 
   return (
     <div className="modal-section-surface space-y-4 rounded-2xl border p-4 shadow-sm">
@@ -35,7 +56,7 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
             type="button"
             variant={value.mode === mode ? 'default' : 'outline'}
             size="sm"
-            onClick={() => onChange(switchMode(value, mode))}
+            onClick={() => onChange(switchMode(value, mode, rememberedStatesRef.current))}
             className={cn(
               'justify-start h-10 rounded-xl font-medium text-[13px] transition-all',
               value.mode === mode
@@ -57,11 +78,11 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
             <Input
               id="cron-schedule-every-value"
               type="number"
-              min={1}
-              step={1}
+              min="0.000001"
+              step="any"
               value={everyValue}
               onChange={(event) => {
-                const nextValue = clampPositiveInteger(event.target.value);
+                const nextValue = clampPositiveNumber(event.target.value);
                 onChange({
                   mode: 'every',
                   everyMs: toEveryMs(nextValue, everyUnit),
@@ -223,7 +244,11 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
             id="cron-schedule-expr"
             placeholder={t('dialog.cronPlaceholder')}
             value={value.expr}
-            onChange={(event) => onChange({ mode: 'cron', expr: event.target.value })}
+            onChange={(event) => onChange({
+              mode: 'cron',
+              expr: event.target.value,
+              tz: value.tz,
+            })}
             className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40"
           />
         </div>
@@ -232,27 +257,43 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
   );
 }
 
-function switchMode(current: ScheduleEditorState, mode: ScheduleEditorMode): ScheduleEditorState {
+function switchMode(
+  current: ScheduleEditorState,
+  mode: ScheduleEditorMode,
+  rememberedStates: RememberedScheduleStates,
+): ScheduleEditorState {
   if (current.mode === mode) {
     return current;
   }
 
+  const remembered = rememberedStates[mode];
+  if (remembered) {
+    return remembered;
+  }
+
   if (mode === 'every') {
-    if (current.mode === 'every') {
-      return current;
-    }
     return { mode: 'every', everyMs: 60 * 60 * 1000 };
   }
 
   if (mode === 'cron') {
-    if (current.mode === 'cron') {
-      return current;
+    if (current.mode === 'fixed' && current.subtype !== 'once') {
+      const nextSchedule = buildScheduleFromEditor(current);
+      if (nextSchedule.kind === 'cron') {
+        return nextSchedule.tz === undefined
+          ? { mode: 'cron', expr: nextSchedule.expr }
+          : { mode: 'cron', expr: nextSchedule.expr, tz: nextSchedule.tz };
+      }
     }
     return { mode: 'cron', expr: '' };
   }
 
-  if (current.mode === 'fixed') {
-    return current;
+  if (current.mode === 'cron') {
+    const inferred = inferScheduleEditorState(
+      current.tz === undefined ? current.expr : { kind: 'cron', expr: current.expr, tz: current.tz },
+    );
+    if (inferred.mode === 'fixed') {
+      return inferred;
+    }
   }
 
   return createDefaultScheduleEditorState();
@@ -318,14 +359,14 @@ function getEveryValue(value: ScheduleEditorState): number {
   }
 
   if (value.everyMs % (24 * 60 * 60 * 1000) === 0) {
-    return Math.max(1, value.everyMs / (24 * 60 * 60 * 1000));
+    return normalizeDecimal(value.everyMs / (24 * 60 * 60 * 1000));
   }
 
   if (value.everyMs % (60 * 60 * 1000) === 0) {
-    return Math.max(1, value.everyMs / (60 * 60 * 1000));
+    return normalizeDecimal(value.everyMs / (60 * 60 * 1000));
   }
 
-  return Math.max(1, Math.round(value.everyMs / (60 * 1000)));
+  return normalizeDecimal(value.everyMs / (60 * 1000));
 }
 
 function getEveryUnit(value: ScheduleEditorState): EveryUnit {
@@ -346,18 +387,18 @@ function getEveryUnit(value: ScheduleEditorState): EveryUnit {
 
 function toEveryMs(value: number, unit: EveryUnit): number {
   if (unit === 'days') {
-    return value * 24 * 60 * 60 * 1000;
+    return Math.round(value * 24 * 60 * 60 * 1000);
   }
 
   if (unit === 'hours') {
-    return value * 60 * 60 * 1000;
+    return Math.round(value * 60 * 60 * 1000);
   }
 
-  return value * 60 * 1000;
+  return Math.round(value * 60 * 1000);
 }
 
-function clampPositiveInteger(value: string): number {
-  const parsed = Number.parseInt(value, 10);
+function clampPositiveNumber(value: string): number {
+  const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
@@ -432,6 +473,10 @@ function clampBetween(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDecimal(value: number): number {
+  return Number.parseFloat(value.toFixed(6));
 }
 
 function capitalize(value: string): string {

@@ -178,7 +178,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   }, []);
   const schedulePreview = previewLabelForSchedule(
     buildScheduleFromEditor(scheduleEditor),
-    createSchedulePreviewFormatters(t),
+    createSchedulePreviewFormatters(),
   );
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
@@ -465,47 +465,21 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   );
 }
 
-function createSchedulePreviewFormatters(t: TFunction<'cron'>): SchedulePreviewFormatters {
+function createSchedulePreviewFormatters(): SchedulePreviewFormatters {
   return {
-    every: (state) => {
-      if (state.everyMs % 86_400_000 === 0) {
-        return t('schedule.everyDays', { count: state.everyMs / 86_400_000 });
-      }
-      if (state.everyMs % 3_600_000 === 0) {
-        return t('schedule.everyHours', { count: state.everyMs / 3_600_000 });
-      }
-      if (state.everyMs % 60_000 === 0) {
-        return t('schedule.everyMinutes', { count: state.everyMs / 60_000 });
-      }
-      return t('schedule.everySeconds', { count: Math.max(1, Math.round(state.everyMs / 1000)) });
-    },
+    every: (state) => formatPreviewDate(estimateNextEveryOccurrence(state)),
     fixed: (state) => {
       if (state.subtype === 'once') {
-        if (!state.at.trim()) {
-          return null;
-        }
-        const parsed = new Date(state.at);
-        return t('schedule.onceAt', {
-          time: Number.isNaN(parsed.getTime()) ? state.at : parsed.toLocaleString(),
-        });
+        return formatPreviewDate(estimateNextOnceOccurrence(state.at));
       }
 
-      const time = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
-      if (state.subtype === 'daily') {
-        return t('schedule.dailyAt', { time });
+      if (state.tz !== undefined) {
+        return null;
       }
-      if (state.subtype === 'weekly') {
-        return t('schedule.weeklyAt', {
-          day: t(`dialog.scheduleWeekday${state.dayOfWeek}`),
-          time,
-        });
-      }
-      return t('schedule.monthlyAtDay', {
-        day: state.dayOfMonth,
-        time,
-      });
+
+      return formatPreviewDate(estimateNextRecurringFixedOccurrence(state));
     },
-    cron: (state) => state.expr.trim() || null,
+    cron: () => null,
   };
 }
 
@@ -523,6 +497,109 @@ function isScheduleEditorIncomplete(scheduleEditor: ScheduleEditorState): boolea
   }
 
   return false;
+}
+
+function estimateNextEveryOccurrence(state: Extract<ScheduleEditorState, { mode: 'every' }>): Date | null {
+  if (!Number.isFinite(state.everyMs) || state.everyMs <= 0) {
+    return null;
+  }
+
+  const nowMs = Date.now();
+  if (state.anchorMs !== undefined && Number.isFinite(state.anchorMs)) {
+    if (state.anchorMs > nowMs) {
+      return new Date(state.anchorMs);
+    }
+    const steps = Math.floor((nowMs - state.anchorMs) / state.everyMs) + 1;
+    return new Date(state.anchorMs + steps * state.everyMs);
+  }
+
+  return new Date(nowMs + state.everyMs);
+}
+
+function estimateNextOnceOccurrence(value: string): Date | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const candidate = new Date(value);
+  if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function estimateNextRecurringFixedOccurrence(
+  state: Exclude<Extract<ScheduleEditorState, { mode: 'fixed' }>, { subtype: 'once' }>,
+): Date | null {
+  if (state.subtype === 'daily') {
+    return estimateNextDailyOccurrence(state.hour, state.minute);
+  }
+
+  if (state.subtype === 'weekly') {
+    return estimateNextWeeklyOccurrence(state.dayOfWeek, state.hour, state.minute);
+  }
+
+  return estimateNextMonthlyOccurrence(state.dayOfMonth, state.hour, state.minute);
+}
+
+function estimateNextDailyOccurrence(hour: number, minute: number): Date {
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setSeconds(0, 0);
+  candidate.setHours(hour, minute, 0, 0);
+  if (candidate.getTime() <= now.getTime()) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
+
+function estimateNextWeeklyOccurrence(dayOfWeek: number, hour: number, minute: number): Date {
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setSeconds(0, 0);
+  candidate.setHours(hour, minute, 0, 0);
+
+  const currentDay = candidate.getDay();
+  let dayOffset = (dayOfWeek - currentDay + 7) % 7;
+  if (dayOffset === 0 && candidate.getTime() <= now.getTime()) {
+    dayOffset = 7;
+  }
+  candidate.setDate(candidate.getDate() + dayOffset);
+  return candidate;
+}
+
+function estimateNextMonthlyOccurrence(dayOfMonth: number, hour: number, minute: number): Date | null {
+  const now = new Date();
+  for (let monthOffset = 0; monthOffset < 24; monthOffset += 1) {
+    const candidate = new Date(
+      now.getFullYear(),
+      now.getMonth() + monthOffset,
+      dayOfMonth,
+      hour,
+      minute,
+      0,
+      0,
+    );
+
+    if (candidate.getDate() !== dayOfMonth) {
+      continue;
+    }
+
+    if (candidate.getTime() > now.getTime()) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function formatPreviewDate(value: Date | null): string | null {
+  if (!value || Number.isNaN(value.getTime())) {
+    return null;
+  }
+
+  return value.toLocaleString();
 }
 
 // Job Card Component
