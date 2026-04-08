@@ -287,6 +287,9 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
     buildScheduleFromEditor(scheduleEditor),
     createSchedulePreviewFormatters(),
   );
+  const monthlyHint = scheduleEditor.mode === 'fixed' && scheduleEditor.subtype === 'monthly'
+    ? ` ${t('dialog.scheduleMonthDayHint')}`
+    : '';
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
   useEffect(() => { fetchAgents(); }, [fetchAgents]);
@@ -435,7 +438,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                 <Label className="text-[14px] text-foreground/80 font-bold">{t('dialog.schedule')}</Label>
                 <ScheduleEditor value={scheduleEditor} onChange={setScheduleEditor} />
                 <p className="text-[12px] text-muted-foreground/80 font-medium px-1">
-                  {t('card.next')}: {schedulePreview ?? t('dialog.schedulePreviewUnavailable')}
+                  {t('card.next')}: {schedulePreview ?? t('dialog.schedulePreviewUnavailable')}{monthlyHint}
                 </p>
               </div>
 
@@ -529,11 +532,18 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                                     setDeliveryTo(s.to);
                                     setShowToSuggestions(false);
                                   }}
-                                  className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-accent flex items-center gap-2 transition-colors"
+                                  className="flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-accent"
                                 >
-                                  <span>{CHANNEL_ICONS[s.channel as ChannelType] || ''}</span>
-                                  <span className="font-mono text-foreground">{s.to}</span>
-                                  <span className="text-muted-foreground text-[12px] ml-auto">{s.label}</span>
+                                  <span className="shrink-0">{CHANNEL_ICONS[s.channel as ChannelType] || ''}</span>
+                                  <span className="min-w-0 flex-1 truncate font-mono text-foreground" title={s.to}>
+                                    {s.to}
+                                  </span>
+                                  <span
+                                    className="max-w-[45%] shrink-0 truncate text-[12px] text-muted-foreground"
+                                    title={s.label}
+                                  >
+                                    {s.label}
+                                  </span>
                                 </button>
                               ))}
                             </div>

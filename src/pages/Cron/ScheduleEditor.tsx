@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import {
@@ -48,26 +50,18 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
   }, [value]);
 
   return (
-    <div className="modal-section-surface space-y-4 rounded-2xl border p-4 shadow-sm">
-      <div className="grid grid-cols-3 gap-2">
-        {(['every', 'fixed', 'cron'] as ScheduleEditorMode[]).map((mode) => (
-          <Button
-            key={mode}
-            type="button"
-            variant={value.mode === mode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => onChange(switchMode(value, mode, rememberedStatesRef.current))}
-            className={cn(
-              'justify-start h-10 rounded-xl font-medium text-[13px] transition-all',
-              value.mode === mode
-                ? 'border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
-                : 'modal-field-surface surface-hover text-foreground/80',
-            )}
-          >
-            {t(`dialog.scheduleMode${capitalize(mode)}`)}
-          </Button>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <SegmentedControl<ScheduleEditorMode>
+        ariaLabel={t('dialog.scheduleModeLabel')}
+        value={value.mode}
+        onValueChange={(mode) => onChange(switchMode(value, mode, rememberedStatesRef.current))}
+        options={[
+          { value: 'every', label: t('dialog.scheduleModeEvery') },
+          { value: 'fixed', label: t('dialog.scheduleModeFixed') },
+          { value: 'cron', label: t('dialog.scheduleModeCron') },
+        ]}
+        fullWidth
+      />
 
       {value.mode === 'every' && (
         <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3">
@@ -96,7 +90,7 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
             <Label htmlFor="cron-schedule-every-unit" className="text-[13px] text-foreground/70">
               {t('dialog.scheduleEveryUnit')}
             </Label>
-            <select
+            <Select
               id="cron-schedule-every-unit"
               value={everyUnit}
               onChange={(event) => {
@@ -107,14 +101,14 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
                   anchorMs: value.anchorMs,
                 });
               }}
-              className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
+              className="modal-field-surface field-focus-ring h-[44px] rounded-xl border border-input bg-transparent text-[13px] shadow-sm transition-all"
             >
               {everyUnits.map((unit) => (
                 <option key={unit} value={unit}>
                   {t(`dialog.scheduleEveryUnit${capitalize(unit)}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       )}
@@ -162,74 +156,98 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
             </div>
           ) : (
             <>
-              {value.subtype === 'weekly' && (
-                <div className="space-y-2">
-                  <Label htmlFor="cron-schedule-weekday" className="text-[13px] text-foreground/70">
-                    {t('dialog.scheduleWeekday')}
-                  </Label>
-                  <select
-                    id="cron-schedule-weekday"
-                    value={value.dayOfWeek}
-                    onChange={(event) => {
-                      onChange({
-                        ...value,
-                        dayOfWeek: Number(event.target.value),
-                      });
-                    }}
-                    className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input bg-transparent px-3 text-[13px] text-foreground shadow-sm transition-all focus:outline-none"
-                  >
-                    {weekdays.map((weekday) => (
-                      <option key={weekday} value={weekday}>
-                        {t(`dialog.scheduleWeekday${weekday}`)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {(value.subtype === 'weekly' || value.subtype === 'monthly') ? (
+                <div
+                  data-testid="cron-schedule-fixed-row"
+                  className="grid grid-cols-2 gap-3 items-start"
+                >
+                  {value.subtype === 'weekly' ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="cron-schedule-weekday" className="text-[13px] text-foreground/70">
+                        {t('dialog.scheduleWeekday')}
+                      </Label>
+                      <Select
+                        id="cron-schedule-weekday"
+                        value={value.dayOfWeek}
+                        onChange={(event) => {
+                          onChange({
+                            ...value,
+                            dayOfWeek: Number(event.target.value),
+                          });
+                        }}
+                        className="modal-field-surface field-focus-ring h-[44px] rounded-xl border border-input bg-transparent text-[13px] shadow-sm transition-all"
+                      >
+                        {weekdays.map((weekday) => (
+                          <option key={weekday} value={weekday}>
+                            {t(`dialog.scheduleWeekday${weekday}`)}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="cron-schedule-day-of-month" className="text-[13px] text-foreground/70">
+                        {t('dialog.scheduleMonthDay')}
+                      </Label>
+                      <Input
+                        id="cron-schedule-day-of-month"
+                        type="number"
+                        min={1}
+                        max={31}
+                        step={1}
+                        value={value.dayOfMonth}
+                        onChange={(event) => {
+                          onChange({
+                            ...value,
+                            dayOfMonth: clampDayOfMonth(event.target.value),
+                          });
+                        }}
+                        className="modal-field-surface field-focus-ring h-[44px] rounded-xl text-[13px] shadow-sm transition-all"
+                      />
+                    </div>
+                  )}
 
-              {value.subtype === 'monthly' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="cron-schedule-time" className="text-[13px] text-foreground/70">
+                      {t('dialog.scheduleTime')}
+                    </Label>
+                    <Input
+                      id="cron-schedule-time"
+                      type="time"
+                      value={formatTimeValue(value.hour, value.minute)}
+                      onChange={(event) => {
+                        const nextTime = parseTimeValue(event.target.value);
+                        onChange({
+                          ...value,
+                          hour: nextTime.hour,
+                          minute: nextTime.minute,
+                        });
+                      }}
+                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl text-[13px] shadow-sm transition-all"
+                    />
+                  </div>
+                </div>
+              ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="cron-schedule-day-of-month" className="text-[13px] text-foreground/70">
-                    {t('dialog.scheduleMonthDay')}
+                  <Label htmlFor="cron-schedule-time" className="text-[13px] text-foreground/70">
+                    {t('dialog.scheduleTime')}
                   </Label>
                   <Input
-                    id="cron-schedule-day-of-month"
-                    type="number"
-                    min={1}
-                    max={31}
-                    step={1}
-                    value={value.dayOfMonth}
+                    id="cron-schedule-time"
+                    type="time"
+                    value={formatTimeValue(value.hour, value.minute)}
                     onChange={(event) => {
+                      const nextTime = parseTimeValue(event.target.value);
                       onChange({
                         ...value,
-                        dayOfMonth: clampDayOfMonth(event.target.value),
+                        hour: nextTime.hour,
+                        minute: nextTime.minute,
                       });
                     }}
                     className="modal-field-surface field-focus-ring h-[44px] rounded-xl text-[13px] shadow-sm transition-all"
                   />
-                  <p className="text-[12px] text-muted-foreground">{t('dialog.scheduleMonthDayHint')}</p>
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="cron-schedule-time" className="text-[13px] text-foreground/70">
-                  {t('dialog.scheduleTime')}
-                </Label>
-                <Input
-                  id="cron-schedule-time"
-                  type="time"
-                  value={formatTimeValue(value.hour, value.minute)}
-                  onChange={(event) => {
-                    const nextTime = parseTimeValue(event.target.value);
-                    onChange({
-                      ...value,
-                      hour: nextTime.hour,
-                      minute: nextTime.minute,
-                    });
-                  }}
-                  className="modal-field-surface field-focus-ring h-[44px] rounded-xl text-[13px] shadow-sm transition-all"
-                />
-              </div>
             </>
           )}
         </div>

@@ -58,6 +58,7 @@
         "message": "Message / Prompt",
         "messagePlaceholder": "What should the AI do? e.g., Give me a summary of today's news and weather",
         "schedule": "Schedule",
+        "scheduleModeLabel": "Schedule mode",
         "scheduleModeEvery": "Every",
         "scheduleModeFixed": "Fixed Time",
         "scheduleModeCron": "Cron",

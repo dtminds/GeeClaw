@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Cron } from '@/pages/Cron';
 import type { CronJob } from '@/types/cron';
@@ -12,6 +12,22 @@ const triggerJobMock = vi.fn();
 const fetchChannelsMock = vi.fn();
 const fetchAgentsMock = vi.fn();
 const hostApiFetchMock = vi.fn();
+const channelsStoreState = {
+  channels: [] as Array<{
+    type: string;
+    name?: string;
+    accounts?: Array<{
+      accountId: string;
+      enabled: boolean;
+      isDefault?: boolean;
+      name?: string;
+    }>;
+  }>,
+};
+const agentsStoreState = {
+  agents: [] as Array<{ id: string; name?: string }>,
+  defaultAgentId: '',
+};
 const cronStoreState = {
   jobs: [] as CronJob[],
   loading: false,
@@ -53,9 +69,14 @@ const translations: Record<string, string> = {
   'dialog.scheduleModeEvery': 'Every',
   'dialog.scheduleModeFixed': 'Fixed Time',
   'dialog.scheduleModeCron': 'Cron',
+  'dialog.scheduleModeLabel': 'Schedule mode',
+  'dialog.scheduleFixedOnce': 'Once',
   'dialog.scheduleFixedDaily': 'Daily',
   'dialog.scheduleFixedWeekly': 'Weekly',
+  'dialog.scheduleFixedMonthly': 'Monthly',
   'dialog.scheduleWeekday': 'Weekday',
+  'dialog.scheduleMonthDay': 'Day of month',
+  'dialog.scheduleMonthDayHint': 'Months without this date are skipped.',
   'dialog.scheduleTime': 'Time',
   'dialog.scheduleEveryValue': 'Interval',
   'dialog.scheduleEveryUnit': 'Unit',
@@ -117,15 +138,15 @@ vi.mock('@/stores/gateway', () => ({
 
 vi.mock('@/stores/channels', () => ({
   useChannelsStore: () => ({
-    channels: [],
+    channels: channelsStoreState.channels,
     fetchChannels: fetchChannelsMock,
   }),
 }));
 
 vi.mock('@/stores/agents', () => ({
   useAgentsStore: () => ({
-    agents: [],
-    defaultAgentId: '',
+    agents: agentsStoreState.agents,
+    defaultAgentId: agentsStoreState.defaultAgentId,
     fetchAgents: fetchAgentsMock,
   }),
 }));
@@ -163,6 +184,9 @@ describe('Cron schedule editor integration', () => {
     toggleJobMock.mockResolvedValue(undefined);
     deleteJobMock.mockResolvedValue(undefined);
     triggerJobMock.mockResolvedValue(undefined);
+    channelsStoreState.channels = [];
+    agentsStoreState.agents = [];
+    agentsStoreState.defaultAgentId = '';
     hostApiFetchMock.mockResolvedValue({ success: true, sessions: [] });
   });
 
@@ -170,6 +194,11 @@ describe('Cron schedule editor integration', () => {
     render(<Cron />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+
+    const scheduleModeGroup = screen.getByRole('group', { name: 'Schedule mode' });
+    expect(scheduleModeGroup).toBeInTheDocument();
+    expect(scheduleModeGroup.parentElement?.className).not.toContain('modal-section-surface');
+    expect(scheduleModeGroup.parentElement?.className).not.toContain('border');
 
     fireEvent.change(screen.getByLabelText('Task Name'), {
       target: { value: 'Hourly digest' },
@@ -204,6 +233,96 @@ describe('Cron schedule editor integration', () => {
         agentId: undefined,
       });
     });
+  });
+
+  it('keeps weekly and monthly fixed controls on a single row', () => {
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+
+    const weeklyRow = screen.getByTestId('cron-schedule-fixed-row');
+    expect(weeklyRow.className).toContain('grid-cols-2');
+    const weeklySelect = within(weeklyRow).getByLabelText('Weekday');
+    expect(weeklySelect).toBeInTheDocument();
+    expect(weeklySelect.className).toContain('appearance-none');
+    expect(weeklySelect.className).toContain('pr-10');
+    expect(within(weeklyRow).getByLabelText('Time')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+
+    const monthlyRow = screen.getByTestId('cron-schedule-fixed-row');
+    expect(monthlyRow.className).toContain('grid-cols-2');
+    expect(within(monthlyRow).getByLabelText('Day of month')).toBeInTheDocument();
+    expect(within(monthlyRow).getByLabelText('Time')).toBeInTheDocument();
+  });
+
+  it('moves the monthly skip hint into the next-run line', () => {
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+
+    expect(screen.getByText((content, node) => (
+      node?.tagName === 'P'
+      && content.includes('Next:')
+      && content.includes('Months without this date are skipped.')
+    ))).toBeInTheDocument();
+  });
+
+  it('constrains recipient suggestion content so long values do not break the row layout', async () => {
+    channelsStoreState.channels = [{
+      id: 'channel-openclaw-weixin',
+      type: 'openclaw-weixin',
+      name: 'Weixin',
+      accounts: [{
+        accountId: 'bot-default',
+        enabled: true,
+        isDefault: true,
+        name: 'bot-default (Default)',
+      }],
+    }];
+    agentsStoreState.defaultAgentId = 'agent-1';
+    agentsStoreState.agents = [{ id: 'agent-1', name: 'Default agent' }];
+    hostApiFetchMock.mockResolvedValue({
+      success: true,
+      sessions: [{
+        sessionKey: 'session-1',
+        channel: 'openclaw-weixin',
+        accountId: 'bot-default',
+        to: 'o9cq808lz_P1rLNz-7IWpij7Buxk@im.wechat',
+        label: 'Very long auxiliary recipient label for layout pressure',
+      }],
+    });
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to channel' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByDisplayValue('Select a channel'), {
+      target: { value: 'openclaw-weixin' },
+    });
+
+    const deliveryToInput = screen.getByPlaceholderText('e.g., user ID, group ID (optional)');
+    fireEvent.focus(deliveryToInput);
+
+    const suggestionLabel = await screen.findByText('Very long auxiliary recipient label for layout pressure');
+    const suggestionRow = suggestionLabel.closest('button');
+    expect(suggestionRow).toBeTruthy();
+
+    const spans = suggestionRow?.querySelectorAll('span') ?? [];
+    expect(spans).toHaveLength(3);
+    expect(spans[1]?.className).toContain('min-w-0');
+    expect(spans[1]?.className).toContain('flex-1');
+    expect(spans[1]?.className).toContain('truncate');
+    expect(spans[2]?.className).toContain('shrink-0');
+    expect(spans[2]?.className).toContain('truncate');
   });
 
   it('renders structured schedules with human-readable labels in task cards', async () => {
