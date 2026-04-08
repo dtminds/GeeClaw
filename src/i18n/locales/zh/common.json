@@ -67,6 +67,38 @@
         "notRunningDesc": "OpenClaw 服务需要运行才能使用此功能，您可以从设置中启动",
         "warning": "OpenClaw 服务未运行"
     },
+    "approvalDialog": {
+        "titles": {
+            "exec": "命令执行审批",
+            "pluginFallback": "需要插件审批"
+        },
+        "description": "有一个请求正在等待您的决定",
+        "expiresIn": "{{time}} 后过期",
+        "expired": "已过期",
+        "queueCount": "还有 {{count}} 个待处理",
+        "execLabel": "命令",
+        "pluginDescriptionLabel": "插件说明",
+        "details": "更多详情",
+        "errorTitle": "发送决策失败",
+        "clearError": "关闭错误",
+        "submitting": "正在等待 OpenClaw 确认您的决策……",
+        "metadata": {
+            "cwd": "工作目录",
+            "agentId": "智能体",
+            "sessionKey": "会话",
+            "host": "主机",
+            "security": "安全策略",
+            "ask": "询问方式",
+            "resolvedPath": "解析路径",
+            "pluginId": "插件",
+            "pluginSeverity": "风险等级"
+        },
+        "decisions": {
+            "allowOnce": "本次允许",
+            "allowAlways": "始终允许",
+            "deny": "拒绝"
+        }
+    },
     "tray": {
         "tooltipRunning": "GeeClaw - 网关运行中",
         "tooltipStopped": "GeeClaw - 网关已停止",

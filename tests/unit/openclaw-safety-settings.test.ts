@@ -73,7 +73,7 @@ describe('syncOpenClawSafetySettings', () => {
     await rm(systemOpenclawConfigDir, { recursive: true, force: true });
   });
 
-  it('forces exec approval off without overwriting sibling tool config', async () => {
+  it('maps tool permission and approval policy without overwriting sibling tool config', async () => {
     await writeOpenClawJson({
       tools: {
         web: {
@@ -93,8 +93,8 @@ describe('syncOpenClawSafetySettings', () => {
     const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
 
     await syncOpenClawSafetySettings({
-      workspaceOnly: true,
-      securityPolicy: 'strict',
+      toolPermission: 'strict',
+      approvalPolicy: 'allowlist',
     });
 
     const config = await readOpenClawJson();
@@ -109,16 +109,13 @@ describe('syncOpenClawSafetySettings', () => {
       },
       exec: {
         timeoutMs: 90000,
-        security: 'full',
-        ask: 'off',
-      },
-      fs: {
-        workspaceOnly: false,
+        security: 'allowlist',
+        ask: 'on-miss',
       },
       elevated: {
         enabled: false,
       },
-      deny: ['group:automation', 'group:runtime', 'group:fs', 'sessions_spawn', 'sessions_send', 'nodes'],
+      deny: ['group:automation', 'group:runtime', 'group:fs', 'sessions_spawn', 'sessions_send'],
     });
 
     expect(await readExecApprovalsJson()).toEqual({
@@ -149,8 +146,8 @@ describe('syncOpenClawSafetySettings', () => {
     const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
 
     await syncOpenClawSafetySettings({
-      workspaceOnly: false,
-      securityPolicy: 'moderate',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
     });
 
     expect(await readExecApprovalsJson()).toEqual({
@@ -167,6 +164,38 @@ describe('syncOpenClawSafetySettings', () => {
     });
   });
 
+  it('removes the deny list when tool permission is full', async () => {
+    await writeOpenClawJson({
+      tools: {
+        deny: ['group:automation'],
+        exec: {
+          security: 'allowlist',
+          ask: 'on-miss',
+        },
+      },
+    });
+
+    const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
+
+    await syncOpenClawSafetySettings({
+      toolPermission: 'full',
+      approvalPolicy: 'full',
+    });
+
+    const config = await readOpenClawJson();
+
+    expect(config.tools).toEqual({
+      profile: 'full',
+      exec: {
+        security: 'full',
+        ask: 'off',
+      },
+      elevated: {
+        enabled: false,
+      },
+    });
+  });
+
   it('initializes version when exec approvals exists but parses to a non-object value', async () => {
     await mkdir(systemOpenclawConfigDir, { recursive: true });
     await writeFile(join(systemOpenclawConfigDir, 'exec-approvals.json'), 'null', 'utf8');
@@ -174,8 +203,8 @@ describe('syncOpenClawSafetySettings', () => {
     const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
 
     await syncOpenClawSafetySettings({
-      workspaceOnly: false,
-      securityPolicy: 'moderate',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
     });
 
     expect(await readExecApprovalsJson()).toEqual({

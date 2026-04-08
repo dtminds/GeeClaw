@@ -1,9 +1,28 @@
 import type { ReactNode } from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const dialogContentPropsSpy = vi.fn();
+const hostApiFetchMock = vi.fn();
+
+vi.mock('@/lib/host-api', () => ({
+  hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
+}));
+
+vi.mock('@/lib/api-client', () => ({
+  getGatewayWsDiagnosticEnabled: vi.fn(async () => false),
+  invokeIpc: vi.fn(async () => undefined),
+  setGatewayWsDiagnosticEnabled: vi.fn(async () => undefined),
+  toUserMessage: vi.fn((value: unknown) => String(value ?? '')),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -53,6 +72,17 @@ vi.mock('@/components/ui/dialog', () => ({
 describe('Settings dialog', () => {
   beforeEach(() => {
     dialogContentPropsSpy.mockClear();
+    hostApiFetchMock.mockReset();
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/settings/safety') {
+        return {
+          toolPermission: 'default',
+          approvalPolicy: 'full',
+        };
+      }
+
+      return {};
+    });
   });
 
   it('prevents dismissal when interacting outside the dialog', async () => {
@@ -89,5 +119,33 @@ describe('Settings dialog', () => {
     props?.onInteractOutside?.({ preventDefault });
 
     expect(preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('renders split safety settings and removes the directory row', async () => {
+    const { Settings } = await import('@/pages/Settings');
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/settings/safety',
+            state: {
+              backgroundLocation: {
+                pathname: '/dashboard',
+              },
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings/*" element={<Settings />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('safety.toolPermission.title')).toBeInTheDocument();
+    expect(screen.getByText('safety.approvalPolicy.title')).toBeInTheDocument();
+    expect(screen.queryByText('safety.directory.title')).not.toBeInTheDocument();
   });
 });

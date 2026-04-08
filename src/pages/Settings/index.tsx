@@ -3,12 +3,12 @@
  * Application configuration
  */
 import { useEffect, useMemo, useState } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Sun,
   Moon,
   Monitor,
   Palette,
-  FolderOpen,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -31,9 +31,6 @@ import {
   ShutDownIcon,
   File02Icon,
   AiSecurity02Icon,
-  CheckmarkCircle02Icon,
-  ChatLockIcon,
-  FireIcon,
   ComputerTerminal01Icon,
   AiProgrammingIcon,
 } from '@hugeicons/core-free-icons';
@@ -45,7 +42,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useSettingsStore, type SecurityPolicy } from '@/stores/settings';
+import { useSettingsStore, type ApprovalPolicy, type ToolPermission } from '@/stores/settings';
 import { useGatewayStore } from '@/stores/gateway';
 import { useUpdateStore } from '@/stores/update';
 import { UpdateSettings } from '@/components/settings/UpdateSettings';
@@ -97,13 +94,79 @@ type OpenClawRuntimeInfo = {
 };
 
 type SafetySettingsInfo = {
-  configDir: string;
-  workspaceOnly: boolean;
-  securityPolicy: SecurityPolicy;
+  toolPermission: ToolPermission;
+  approvalPolicy: ApprovalPolicy;
 };
 
 interface SettingsProps {
   embedded?: boolean;
+}
+
+type SafetySelectOption<T extends string> = {
+  value: T;
+  title: string;
+  description: string;
+};
+
+function SafetyDropdownSelect<T extends string>({
+  ariaLabel,
+  value,
+  options,
+  disabled,
+  onSelect,
+}: {
+  ariaLabel: string;
+  value: T;
+  options: SafetySelectOption<T>[];
+  disabled?: boolean;
+  onSelect: (value: T) => void;
+}) {
+  const currentOption = options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          disabled={disabled}
+          className="flex w-full items-center justify-between gap-4 rounded-[22px] bg-accent/65 px-5 py-4 text-left transition-colors hover:bg-accent/45 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold text-foreground">{currentOption.title}</div>
+            <div className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
+              {currentOption.description}
+            </div>
+          </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          className="z-[130] w-[min(30rem,calc(100vw-3rem))] overflow-hidden rounded-[22px] border border-black/10 bg-white p-2 text-popover-foreground shadow-[0_18px_44px_rgba(15,23,42,0.12)] outline-none dark:border-white/10 dark:bg-card"
+        >
+          {options.map((option) => (
+            <DropdownMenu.Item
+              key={option.value}
+              onSelect={() => onSelect(option.value)}
+              className="flex cursor-default items-start justify-between gap-4 rounded-2xl px-4 py-3 outline-none transition-colors focus:bg-accent/55"
+            >
+              <div className="min-w-0">
+                <div className="text-[15px] font-semibold text-foreground">{option.title}</div>
+                <div className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</div>
+              </div>
+              {option.value === value && (
+                <Check className="mt-1 h-4 w-4 shrink-0 text-foreground" />
+              )}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
 }
 
 function getCliCommandDisplayPath(command: string): string {
@@ -1180,33 +1243,21 @@ function SafetySettingsPanel() {
   const [safetySettings, setSafetySettings] = useState<SafetySettingsInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingSafety, setSavingSafety] = useState(false);
-  const [openingDirectory, setOpeningDirectory] = useState(false);
 
-  const policyOptions: Array<{
-    value: SecurityPolicy;
-    title: string;
-    description: string;
-    icon: typeof CheckmarkCircle02Icon;
-  }> = [
-    {
-      value: 'moderate',
-      title: t('safety.policy.options.moderate.title'),
-      description: t('safety.policy.options.moderate.description'),
-      icon: CheckmarkCircle02Icon,
-    },
-    {
-      value: 'strict',
-      title: t('safety.policy.options.strict.title'),
-      description: t('safety.policy.options.strict.description'),
-      icon: ChatLockIcon,
-    },
-    {
-      value: 'fullAccess',
-      title: t('safety.policy.options.fullAccess.title'),
-      description: t('safety.policy.options.fullAccess.description'),
-      icon: FireIcon,
-    },
-  ];
+  const toolPermissionOptions: ToolPermission[] = ['default', 'strict', 'full'];
+  const approvalPolicyOptions: ApprovalPolicy[] = ['allowlist', 'full'];
+  const currentToolPermission = safetySettings?.toolPermission ?? 'default';
+  const currentApprovalPolicy = safetySettings?.approvalPolicy ?? 'full';
+  const toolPermissionSelectOptions: Array<SafetySelectOption<ToolPermission>> = toolPermissionOptions.map((option) => ({
+    value: option,
+    title: t(`safety.toolPermission.options.${option}.title`),
+    description: t(`safety.toolPermission.options.${option}.description`),
+  }));
+  const approvalPolicySelectOptions: Array<SafetySelectOption<ApprovalPolicy>> = approvalPolicyOptions.map((option) => ({
+    value: option,
+    title: t(`safety.approvalPolicy.options.${option}.title`),
+    description: t(`safety.approvalPolicy.options.${option}.description`),
+  }));
 
   useEffect(() => {
     let cancelled = false;
@@ -1231,24 +1282,8 @@ function SafetySettingsPanel() {
     return () => { cancelled = true; };
   }, [t]);
 
-  const handleOpenWorkspaceDir = async () => {
-    if (!safetySettings?.configDir) return;
-    setOpeningDirectory(true);
-    try {
-      const result = await invokeIpc<string>('shell:openPath', safetySettings.configDir);
-      if (typeof result === 'string' && result.trim()) {
-        throw new Error(result);
-      }
-    } catch (error) {
-      toast.error(`${t('safety.openDirFailed')}: ${toUserMessage(error)}`);
-    } finally {
-      setOpeningDirectory(false);
-    }
-  };
-
   const saveSafetyPatch = async (
-    patch: Partial<Pick<SafetySettingsInfo, 'securityPolicy'>>,
-    onSuccessMessage: string,
+    patch: Partial<SafetySettingsInfo>,
     rollbackState: SafetySettingsInfo,
   ) => {
     setSavingSafety(true);
@@ -1261,7 +1296,7 @@ function SafetySettingsPanel() {
         body: JSON.stringify(patch),
       });
       setSafetySettings(response.settings);
-      toast.success(onSuccessMessage);
+      toast.success(t('safety.saved'));
     } catch (error) {
       setSafetySettings(rollbackState);
       toast.error(`${t('safety.saveFailed')}: ${toUserMessage(error)}`);
@@ -1270,19 +1305,21 @@ function SafetySettingsPanel() {
     }
   };
 
-  const handleSecurityPolicyChange = async (nextValue: SecurityPolicy) => {
-    if (!safetySettings || savingSafety || safetySettings.securityPolicy === nextValue) return;
-    const nextState = { ...safetySettings, securityPolicy: nextValue };
+  const handleToolPermissionChange = async (nextValue: ToolPermission) => {
+    if (!safetySettings || savingSafety || safetySettings.toolPermission === nextValue) return;
+    const nextState = { ...safetySettings, toolPermission: nextValue };
 
     setSafetySettings(nextState);
-    await saveSafetyPatch(
-      { securityPolicy: nextValue },
-      t('safety.policy.saved'),
-      safetySettings,
-    );
+    await saveSafetyPatch({ toolPermission: nextValue }, safetySettings);
   };
 
-  const configDir = safetySettings?.configDir ?? '';
+  const handleApprovalPolicyChange = async (nextValue: ApprovalPolicy) => {
+    if (!safetySettings || savingSafety || safetySettings.approvalPolicy === nextValue) return;
+    const nextState = { ...safetySettings, approvalPolicy: nextValue };
+
+    setSafetySettings(nextState);
+    await saveSafetyPatch({ approvalPolicy: nextValue }, safetySettings);
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -1295,71 +1332,41 @@ function SafetySettingsPanel() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="space-y-2">
-          <CardTitle>{t('safety.policy.title')}</CardTitle>
-          <CardDescription>{t('safety.policy.description')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {policyOptions.map((option) => {
-            const active = safetySettings?.securityPolicy === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => void handleSecurityPolicyChange(option.value)}
-                disabled={loading || savingSafety}
-                className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${
-                  active
-                    ? 'border-primary bg-accent/40'
-                    : 'border-border/60 bg-background hover:bg-accent/20'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                      active ? 'bg-primary/12 text-primary' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      <HugeiconsIcon icon={option.icon} size={18} strokeWidth={1.9} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{option.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</p>
-                    </div>
-                  </div>
-                  <div className={`h-3 w-3 shrink-0 rounded-full ${active ? 'bg-primary' : 'bg-border'}`} />
-                </div>
-              </button>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="space-y-2">
-          <CardTitle>{t('safety.directory.title')}</CardTitle>
-          <CardDescription>{t('safety.directory.description')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 md:flex-row">
-            <Input
-              readOnly
-              value={loading ? t('common:status.loading') : configDir}
-              className="font-mono"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="md:min-w-28"
-              onClick={handleOpenWorkspaceDir}
-              disabled={loading || !configDir || openingDirectory}
-            >
-              <FolderOpen className="mr-2 h-4 w-4" />
-              {openingDirectory ? t('safety.directory.opening') : t('safety.directory.browse')}
-            </Button>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+        <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:gap-6 md:p-6">
+          <div className="min-w-0 space-y-1">
+            <h3 className="text-base font-semibold text-foreground">{t('safety.toolPermission.title')}</h3>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{t('safety.toolPermission.description')}</p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="w-full md:w-[27rem]">
+            <SafetyDropdownSelect
+              ariaLabel={t('safety.toolPermission.title')}
+              disabled={loading || savingSafety}
+              value={currentToolPermission}
+              options={toolPermissionSelectOptions}
+              onSelect={(value) => { void handleToolPermissionChange(value); }}
+            />
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:gap-6 md:p-6">
+          <div className="min-w-0 space-y-1">
+            <h3 className="text-base font-semibold text-foreground">{t('safety.approvalPolicy.title')}</h3>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{t('safety.approvalPolicy.description')}</p>
+          </div>
+          <div className="w-full md:w-[27rem]">
+            <SafetyDropdownSelect
+              ariaLabel={t('safety.approvalPolicy.title')}
+              disabled={loading || savingSafety}
+              value={currentApprovalPolicy}
+              options={approvalPolicySelectOptions}
+              onSelect={(value) => { void handleApprovalPolicyChange(value); }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

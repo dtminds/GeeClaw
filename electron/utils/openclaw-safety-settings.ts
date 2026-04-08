@@ -1,18 +1,18 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import type { AppSettings } from './store';
-import { getOpenClawConfigDir, getOpenClawExecApprovalsPath, getSystemOpenClawConfigDir } from './paths';
+import { getOpenClawExecApprovalsPath, getSystemOpenClawConfigDir } from './paths';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 
-export type SecurityPolicy = AppSettings['securityPolicy'];
+export type ToolPermission = AppSettings['toolPermission'];
+export type ApprovalPolicy = AppSettings['approvalPolicy'];
 
 export interface OpenClawSafetySettings {
-  configDir: string;
-  workspaceOnly: boolean;
-  securityPolicy: SecurityPolicy;
+  toolPermission: ToolPermission;
+  approvalPolicy: ApprovalPolicy;
 }
 
-const DEFAULT_WORKSPACE_ONLY = false;
-const DEFAULT_SECURITY_POLICY: SecurityPolicy = 'moderate';
+const DEFAULT_TOOL_PERMISSION: ToolPermission = 'default';
+const DEFAULT_APPROVAL_POLICY: ApprovalPolicy = 'full';
 
 interface ExecApprovalsDefaults {
   security: 'full' | 'allowlist';
@@ -35,15 +35,24 @@ function ensureMutableRecord(
   return next;
 }
 
-export function normalizeSecurityPolicy(value: unknown): SecurityPolicy {
-  if (value === 'strict' || value === 'fullAccess') {
-    return value;
-  }
-  return DEFAULT_SECURITY_POLICY;
+export function isToolPermission(value: unknown): value is ToolPermission {
+  return value === 'default' || value === 'strict' || value === 'full';
 }
 
-function buildExecApprovalsDefaults(securityPolicy: SecurityPolicy): ExecApprovalsDefaults {
-  if (securityPolicy === 'strict') {
+export function isApprovalPolicy(value: unknown): value is ApprovalPolicy {
+  return value === 'allowlist' || value === 'full';
+}
+
+function normalizeToolPermission(value: unknown): ToolPermission {
+  return isToolPermission(value) ? value : DEFAULT_TOOL_PERMISSION;
+}
+
+function normalizeApprovalPolicy(value: unknown): ApprovalPolicy {
+  return isApprovalPolicy(value) ? value : DEFAULT_APPROVAL_POLICY;
+}
+
+function buildExecApprovalsDefaults(approvalPolicy: ApprovalPolicy): ExecApprovalsDefaults {
+  if (approvalPolicy === 'allowlist') {
     return {
       security: 'allowlist',
       ask: 'on-miss',
@@ -60,17 +69,12 @@ function buildExecApprovalsDefaults(securityPolicy: SecurityPolicy): ExecApprova
   };
 }
 
-export function isSecurityPolicy(value: unknown): value is SecurityPolicy {
-  return value === 'moderate' || value === 'strict' || value === 'fullAccess';
-}
-
 export function buildOpenClawSafetySettings(
-  appSettings: Pick<AppSettings, 'workspaceOnly' | 'securityPolicy'>,
+  appSettings: Pick<AppSettings, 'toolPermission' | 'approvalPolicy'>,
 ): OpenClawSafetySettings {
   return {
-    configDir: getOpenClawConfigDir(),
-    workspaceOnly: DEFAULT_WORKSPACE_ONLY,
-    securityPolicy: normalizeSecurityPolicy(appSettings.securityPolicy),
+    toolPermission: normalizeToolPermission(appSettings.toolPermission),
+    approvalPolicy: normalizeApprovalPolicy(appSettings.approvalPolicy),
   };
 }
 
@@ -79,43 +83,34 @@ function syncElevatedDisabled(tools: Record<string, unknown>): void {
   elevated.enabled = false;
 }
 
-function syncExecApprovalDisabled(tools: Record<string, unknown>): void {
+function syncExecApprovalSettings(tools: Record<string, unknown>, approvalPolicy: ApprovalPolicy): void {
   const exec = ensureMutableRecord(tools, 'exec');
-  exec.security = 'full';
-  exec.ask = 'off';
+  exec.security = approvalPolicy === 'allowlist' ? 'allowlist' : 'full';
+  exec.ask = approvalPolicy === 'allowlist' ? 'on-miss' : 'off';
 }
 
 function syncToolProfile(tools: Record<string, unknown>): void {
   tools.profile = 'full';
 }
 
-function syncSecurityPolicyTools(
+function syncToolPermission(
   tools: Record<string, unknown>,
-  securityPolicy: SecurityPolicy,
+  toolPermission: ToolPermission,
 ): void {
-  if (securityPolicy === 'moderate') {
-    tools.deny = ['gateway', 'nodes'];
-    syncToolProfile(tools);
-    syncExecApprovalDisabled(tools);
-    syncElevatedDisabled(tools);
+  if (toolPermission === 'default') {
+    tools.deny = ['group:automation'];
     return;
   }
 
-  if (securityPolicy === 'strict') {
-    tools.deny = ['group:automation', 'group:runtime', 'group:fs', 'sessions_spawn', 'sessions_send', 'nodes'];
-    syncToolProfile(tools);
-    syncExecApprovalDisabled(tools);
-    syncElevatedDisabled(tools);
+  if (toolPermission === 'strict') {
+    tools.deny = ['group:automation', 'group:runtime', 'group:fs', 'sessions_spawn', 'sessions_send'];
     return;
   }
 
   delete tools.deny;
-  syncToolProfile(tools);
-  syncExecApprovalDisabled(tools);
-  syncElevatedDisabled(tools);
 }
 
-async function syncOpenClawExecApprovals(securityPolicy: SecurityPolicy): Promise<void> {
+async function syncOpenClawExecApprovals(approvalPolicy: ApprovalPolicy): Promise<void> {
   const configDir = getSystemOpenClawConfigDir();
   const approvalsPath = getOpenClawExecApprovalsPath();
 
@@ -139,26 +134,27 @@ async function syncOpenClawExecApprovals(securityPolicy: SecurityPolicy): Promis
     document.version = 1;
   }
 
-  document.defaults = buildExecApprovalsDefaults(securityPolicy);
+  document.defaults = buildExecApprovalsDefaults(approvalPolicy);
   await writeFile(approvalsPath, JSON.stringify(document, null, 2), 'utf8');
 }
 
 export async function syncOpenClawSafetySettings(
-  appSettings: Pick<AppSettings, 'workspaceOnly' | 'securityPolicy'>,
+  appSettings: Pick<AppSettings, 'toolPermission' | 'approvalPolicy'>,
 ): Promise<void> {
   const normalizedSettings = buildOpenClawSafetySettings(appSettings);
 
   await mutateOpenClawConfigDocument<void>((config) => {
-    const before = JSON.stringify(config.tools ?? null);
     const tools = ensureMutableRecord(config, 'tools');
-    const fsConfig = ensureMutableRecord(tools, 'fs');
+    const before = JSON.stringify(tools);
 
-    fsConfig.workspaceOnly = normalizedSettings.workspaceOnly;
-    syncSecurityPolicyTools(tools, normalizedSettings.securityPolicy);
+    syncToolProfile(tools);
+    syncToolPermission(tools, normalizedSettings.toolPermission);
+    syncExecApprovalSettings(tools, normalizedSettings.approvalPolicy);
+    syncElevatedDisabled(tools);
 
-    const after = JSON.stringify(config.tools ?? null);
+    const after = JSON.stringify(tools);
     return { changed: before !== after, result: undefined };
   });
 
-  await syncOpenClawExecApprovals(normalizedSettings.securityPolicy);
+  await syncOpenClawExecApprovals(normalizedSettings.approvalPolicy);
 }

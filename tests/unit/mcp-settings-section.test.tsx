@@ -84,7 +84,6 @@ describe('McpSettingsSection', () => {
     render(<McpSettingsSection />);
 
     expect(await screen.findByText('mcporter健康检测')).toBeInTheDocument();
-    expect(screen.getByText('系统')).toBeInTheDocument();
     expect(screen.getAllByText('版本')).toHaveLength(1);
     expect(screen.getAllByText('路径')).toHaveLength(1);
     expect(screen.queryByText('GeeClaw预置')).not.toBeInTheDocument();

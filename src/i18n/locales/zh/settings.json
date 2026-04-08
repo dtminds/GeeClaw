@@ -112,40 +112,39 @@
   "safety": {
     "navTitle": "安全",
     "title": "安全",
-    "description": "在这里管理安全级别，并查看 GeeClaw 当前使用的托管目录",
+    "description": "管理 Agent 运行时的工具限制和审批策略",
     "loadFailed": "加载安全配置失败",
     "saveFailed": "保存安全配置失败",
-    "openDirFailed": "打开目录失败",
-    "workspaceOnlyEnabled": "已开启限制文件访问范围",
-    "workspaceOnlyDisabled": "已关闭限制文件访问范围",
-    "directory": {
-      "title": "默认项目目录",
-      "description": "GeeClaw 项目和文件的工作目录",
-      "browse": "浏览",
-      "opening": "打开中..."
-    },
-    "workspaceOnly": {
-      "title": "限制文件访问范围",
-      "description": "决定 AI 是否只能访问当前工作目录里的文件",
-      "help": "推荐开启。开启后，AI 只能在当前工作目录内读取和修改文件；关闭后，可访问更大范围，误操作风险也会更高",
-      "note": "无论是否开启，都建议提前备份重要文件。由于技术限制，我们无法保证完全阻止目录外操作，请根据自己的使用场景谨慎设置"
-    },
-    "policy": {
-      "title": "安全策略",
-      "description": "选择 AI 可以使用的功能范围",
-      "saved": "安全策略已更新",
+    "saved": "安全设置已更新",
+    "toolPermission": {
+      "title": "工具权限",
+      "description": "选择 Agent 运行时开放的工具能力范围",
       "options": {
-        "moderate": {
+        "default": {
           "title": "默认",
-          "description": "适合大多数人。保留常用能力，同时限制少量高风险操作，兼顾易用性和安全性"
+          "description": "保留常用助手能力，同时禁止自动化控制类能力"
         },
         "strict": {
           "title": "严格",
-          "description": "接近纯聊天模式。AI 将不再具备文件读写、自动化等能力，适合你只想安全地对话交流"
+          "description": "仅允许低风险查询和对话，不可执行命令或读写文件"
         },
-        "fullAccess": {
-          "title": "疯狂模式",
-          "description": "限制最少。AI 可使用更多能力，但也更容易因误操作带来影响，只建议在你明确了解风险时使用"
+        "full": {
+          "title": "完全",
+          "description": "不额外限制工具能力，请在知悉风险的情况下使用"
+        }
+      }
+    },
+    "approvalPolicy": {
+      "title": "审批策略",
+      "description": "选择命令在什么情况下需要人工确认",
+      "options": {
+        "allowlist": {
+          "title": "allow-list",
+          "description": "只有命中安全规则的命令可直接运行，其余命令需要人工确认"
+        },
+        "full": {
+          "title": "不受限制",
+          "description": "所有命令默认放行，无需人工审批"
         }
       }
     }

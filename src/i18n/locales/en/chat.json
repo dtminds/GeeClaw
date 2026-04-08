@@ -220,27 +220,32 @@
         "gatewayDisconnectedPlaceholder": "Gateway not connected...",
         "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
         "safety": {
-            "accessRange": "File Access",
-            "workspaceOnly": "Workspace",
-            "unrestricted": "Unlimited",
-            "policy": "Permissions",
+            "title": "Safety",
+            "toolPermission": "Tool Permission",
+            "approvalPolicy": "Approval Policy",
             "saveFailed": "Failed to save safety settings",
-            "descriptions": {
-                "workspaceOnly": "Only access files in the current working directory",
-                "unrestricted": "Broader access, with higher risk"
-            },
-            "policyOptions": {
-                "moderate": {
+            "toolPermissionOptions": {
+                "default": {
                     "label": "Default",
-                    "description": "Keeps common abilities for most people"
+                    "description": "Allow common assistant actions while blocking automation and control-oriented capabilities"
                 },
                 "strict": {
                     "label": "Strict",
-                    "description": "Close to chat-only, without file access or automation"
+                    "description": "Only allow low-risk querying and conversation, with no command execution or file access"
                 },
-                "fullAccess": {
-                    "label": "Chaos Mode",
-                    "description": "Fewest limits, with the highest mistake risk"
+                "full": {
+                    "label": "Full",
+                    "description": "Do not apply extra tool-deny restrictions"
+                }
+            },
+            "approvalPolicyOptions": {
+                "allowlist": {
+                    "label": "allow-list",
+                    "description": "Only commands that match approved safety rules run directly. Everything else requires confirmation"
+                },
+                "full": {
+                    "label": "Unrestricted",
+                    "description": "All commands are allowed by default without manual approval"
                 }
             }
         },

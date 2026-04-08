@@ -28,8 +28,8 @@ export interface AppSettings {
   launchAtStartup: boolean;
 
   // Safety
-  workspaceOnly: boolean;
-  securityPolicy: 'moderate' | 'strict' | 'fullAccess';
+  toolPermission: 'default' | 'strict' | 'full';
+  approvalPolicy: 'allowlist' | 'full';
   
   // Gateway
   gatewayAutoStart: boolean;
@@ -70,8 +70,8 @@ const defaults: AppSettings = {
   launchAtStartup: false,
 
   // Safety
-  workspaceOnly: false,
-  securityPolicy: 'moderate',
+  toolPermission: 'default',
+  approvalPolicy: 'full',
   
   // Gateway
   gatewayAutoStart: true,
@@ -111,9 +111,6 @@ async function getSettingsStore() {
       defaults,
     });
     settingsStoreInstance.delete?.('openclawRuntimeSource');
-    if (settingsStoreInstance.get('workspaceOnly') !== false) {
-      settingsStoreInstance.set('workspaceOnly', false);
-    }
   }
   return settingsStoreInstance;
 }
@@ -134,10 +131,6 @@ export async function setSetting<K extends keyof AppSettings>(
   value: AppSettings[K]
 ): Promise<void> {
   const store = await getSettingsStore();
-  if (key === 'workspaceOnly') {
-    store.set(key, false as AppSettings[K]);
-    return;
-  }
   store.set(key, value);
 }
 

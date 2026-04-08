@@ -41,4 +41,26 @@ describe('gateway event dispatch', () => {
       }),
     });
   });
+
+  it('forwards approval notifications unchanged through the generic notification channel', () => {
+    const emit = vi.fn();
+
+    dispatchProtocolEvent({ emit }, 'exec.approval.requested', {
+      id: 'exec-1',
+      createdAtMs: 10,
+      expiresAtMs: 1_000,
+      request: { command: 'mcporter --version' },
+    });
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith('notification', {
+      method: 'exec.approval.requested',
+      params: {
+        id: 'exec-1',
+        createdAtMs: 10,
+        expiresAtMs: 1_000,
+        request: { command: 'mcporter --version' },
+      },
+    });
+  });
 });

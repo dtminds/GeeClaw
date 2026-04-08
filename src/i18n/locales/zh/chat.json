@@ -220,27 +220,32 @@
         "gatewayDisconnectedPlaceholder": "网关未连接...",
         "cronFallbackPlaceholder": "这条定时任务记录没有可继续对话的实时会话。",
         "safety": {
-            "accessRange": "文件访问",
-            "workspaceOnly": "工作目录",
-            "unrestricted": "不限",
-            "policy": "权限设置",
+            "title": "权限",
+            "toolPermission": "工具权限",
+            "approvalPolicy": "审批策略",
             "saveFailed": "保存安全设置失败",
-            "descriptions": {
-                "workspaceOnly": "只允许访问当前工作目录内的文件",
-                "unrestricted": "可访问更大范围，风险更高"
-            },
-            "policyOptions": {
-                "moderate": {
+            "toolPermissionOptions": {
+                "default": {
                     "label": "默认",
-                    "description": "保留常用能力，适合大多数人"
+                    "description": "保留常用助手能力，同时禁止自动化控制类能力"
                 },
                 "strict": {
                     "label": "严格",
-                    "description": "接近纯聊天，不具备文件读写和自动化能力"
+                    "description": "仅允许低风险查询和对话，不可执行命令或读写文件"
                 },
-                "fullAccess": {
-                    "label": "疯狂模式",
-                    "description": "限制最少，但误操作风险也最高"
+                "full": {
+                    "label": "完全",
+                    "description": "不额外限制工具能力，请在知悉风险的情况下使用"
+                }
+            },
+            "approvalPolicyOptions": {
+                "allowlist": {
+                    "label": "allow-list",
+                    "description": "只有命中安全规则的命令可直接运行，其余命令需要人工确认"
+                },
+                "full": {
+                    "label": "不受限制",
+                    "description": "所有命令默认放行，无需人工审批"
                 }
             }
         },
