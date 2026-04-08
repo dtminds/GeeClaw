@@ -212,7 +212,7 @@ export function ApprovalDialog() {
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
-          <div className="modal-section-surface rounded-[20px]">
+          <div>
             {active.kind === 'plugin' && hasDisplayValue(active.pluginDescription) && (
               <div className="mb-3">
                 <p className="mt-1 text-sm text-foreground">{toDisplayText(active.pluginDescription)}</p>
