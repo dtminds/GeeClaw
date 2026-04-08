@@ -101,6 +101,18 @@ describe('cron schedule helpers', () => {
       mode: 'cron',
       expr: '*/5 * * * *',
     });
+    expect(inferScheduleEditorState('99 99 * * *')).toEqual({
+      mode: 'cron',
+      expr: '99 99 * * *',
+    });
+    expect(inferScheduleEditorState('15 8 * * 9')).toEqual({
+      mode: 'cron',
+      expr: '15 8 * * 9',
+    });
+    expect(inferScheduleEditorState('15 8 99 * *')).toEqual({
+      mode: 'cron',
+      expr: '15 8 99 * *',
+    });
   });
 
   it('returns preview labels for supported schedules', () => {
@@ -109,5 +121,6 @@ describe('cron schedule helpers', () => {
     expect(previewLabelForSchedule({ kind: 'cron', expr: '15 8 * * *' })).toBe('Daily at 08:15');
     expect(previewLabelForSchedule({ kind: 'cron', expr: '45 6 * * 1' })).toBe('Weekly at 06:45 on Monday');
     expect(previewLabelForSchedule({ kind: 'cron', expr: '30 7 12 * *' })).toBe('Monthly at 07:30 on day 12');
+    expect(previewLabelForSchedule('99 99 * * *')).toBe('99 99 * * *');
   });
 });

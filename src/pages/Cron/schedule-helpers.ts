@@ -97,7 +97,7 @@ export function previewLabelForSchedule(schedule: CronSchedule | string): string
     return `Monthly at ${timeLabel} on day ${inferred.dayOfMonth}`;
   }
 
-  return null;
+  return typeof schedule === 'string' ? schedule : schedule.expr;
 }
 
 function inferFromCronExpr(expr: string): ScheduleEditorState | null {
@@ -108,7 +108,13 @@ function inferFromCronExpr(expr: string): ScheduleEditorState | null {
 
   const [minutePart, hourPart, dayOfMonthPart, monthPart, dayOfWeekPart] = parts;
 
-  if (isNumberToken(minutePart) && isNumberToken(hourPart) && monthPart === '*' && dayOfMonthPart === '*' && dayOfWeekPart === '*') {
+  if (
+    isValidMinute(minutePart)
+    && isValidHour(hourPart)
+    && monthPart === '*'
+    && dayOfMonthPart === '*'
+    && dayOfWeekPart === '*'
+  ) {
     return {
       mode: 'fixed',
       subtype: 'daily',
@@ -117,7 +123,13 @@ function inferFromCronExpr(expr: string): ScheduleEditorState | null {
     };
   }
 
-  if (isNumberToken(minutePart) && isNumberToken(hourPart) && dayOfMonthPart === '*' && monthPart === '*' && isNumberToken(dayOfWeekPart)) {
+  if (
+    isValidMinute(minutePart)
+    && isValidHour(hourPart)
+    && dayOfMonthPart === '*'
+    && monthPart === '*'
+    && isValidDayOfWeek(dayOfWeekPart)
+  ) {
     return {
       mode: 'fixed',
       subtype: 'weekly',
@@ -127,7 +139,13 @@ function inferFromCronExpr(expr: string): ScheduleEditorState | null {
     };
   }
 
-  if (isNumberToken(minutePart) && isNumberToken(hourPart) && isNumberToken(dayOfMonthPart) && monthPart === '*' && dayOfWeekPart === '*') {
+  if (
+    isValidMinute(minutePart)
+    && isValidHour(hourPart)
+    && isValidDayOfMonth(dayOfMonthPart)
+    && monthPart === '*'
+    && dayOfWeekPart === '*'
+  ) {
     return {
       mode: 'fixed',
       subtype: 'monthly',
@@ -150,6 +168,22 @@ function normalizeCronPart(value: number): number {
 
 function isNumberToken(value: string): boolean {
   return /^\d+$/.test(value);
+}
+
+function isValidMinute(value: string): boolean {
+  return isNumberToken(value) && inRange(toNumber(value), 0, 59);
+}
+
+function isValidHour(value: string): boolean {
+  return isNumberToken(value) && inRange(toNumber(value), 0, 23);
+}
+
+function isValidDayOfWeek(value: string): boolean {
+  return isNumberToken(value) && inRange(toNumber(value), 0, 7);
+}
+
+function isValidDayOfMonth(value: string): boolean {
+  return isNumberToken(value) && inRange(toNumber(value), 1, 31);
 }
 
 function toNumber(value: string): number {
@@ -191,14 +225,17 @@ function formatDateTimeLabel(iso: string): string {
 }
 
 function formatTimeLabel(hour: number, minute: number): string {
-  const normalizedHour = ((Math.trunc(hour) % 24) + 24) % 24;
-  const normalizedMinute = ((Math.trunc(minute) % 60) + 60) % 60;
+  const normalizedHour = Math.trunc(hour);
+  const normalizedMinute = Math.trunc(minute);
   return `${String(normalizedHour).padStart(2, '0')}:${String(normalizedMinute).padStart(2, '0')}`;
 }
 
 function dayName(dayOfWeek: number): string {
-  const normalized = ((Math.trunc(dayOfWeek) % 7) + 7) % 7;
-  return DAY_NAMES[normalized];
+  const normalized = Math.trunc(dayOfWeek);
+  if (normalized === 7) {
+    return DAY_NAMES[0];
+  }
+  return DAY_NAMES[normalized] ?? String(normalized);
 }
 
 function formatNumber(value: number): string {
@@ -207,4 +244,8 @@ function formatNumber(value: number): string {
 
 function roundToSingleDecimal(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+function inRange(value: number, min: number, max: number): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
 }
