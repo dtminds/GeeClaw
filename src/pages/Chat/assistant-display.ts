@@ -2,6 +2,7 @@ import {
   stripEnvelope,
   stripInboundMetadata,
   stripMessageIdHints,
+  stripOpenClawInternalContextBlocks,
 } from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { ContentBlock, RawMessage } from '@/stores/chat';
@@ -307,7 +308,9 @@ function preprocessAssistantMarkdown(text: string): {
       splitMediaFromOutput(
         stripMessageIdHints(
           stripEnvelope(
-            stripInboundMetadata(text),
+            stripOpenClawInternalContextBlocks(
+              stripInboundMetadata(text),
+            ),
           ),
         ),
       ).text,
@@ -465,7 +468,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   const resolvedBlocks = resolveTextBlocks(message);
   const visibleParts = resolvedBlocks
     .filter((block) => shouldIncludeResolvedTextBlock(block, resolvedBlocks))
-    .map((block) => block.text)
+    .map((block) => preprocessAssistantMarkdown(block.text).text)
     .filter(Boolean);
 
   if (visibleParts.length === 0) {

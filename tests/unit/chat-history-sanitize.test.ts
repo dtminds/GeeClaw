@@ -61,6 +61,28 @@ describe('prepareHistoryMessagesForDisplay', () => {
     expect(messages[0]?.content).toBe('The gateway replied with NO_REPLY earlier, but this is still a real answer.');
   });
 
+  it('drops assistant history messages that only contain truncated OpenClaw internal context', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'text',
+            text: [
+              '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+              'OpenClaw runtime context (internal):',
+              'A completed subagent task is ready for user delivery.',
+              '...(truncated)...',
+            ].join('\n'),
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(0);
+  });
+
   it('drops commentary-only assistant history messages', () => {
     const messages = prepareHistoryMessagesForDisplay([
       {

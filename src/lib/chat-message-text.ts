@@ -2,6 +2,9 @@ const GATEWAY_TIMESTAMP_PREFIX_RE = /^\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-
 const EMBEDDED_GATEWAY_TIMESTAMP_RE = /(?:^|\n+)\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[^\]]+\]\s*/gi;
 const SKILL_MARKER_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]/g;
 const RUNTIME_CHANNEL_TAG_RE = /<\/?(?:analysis|commentary|final)\b[^>]*>/gi;
+const OPENCLAW_INTERNAL_CONTEXT_BEGIN = '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>';
+const OPENCLAW_INTERNAL_CONTEXT_END = '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>';
+const OPENCLAW_INTERNAL_CONTEXT_TRUNCATED = '...(truncated)...';
 const ENVELOPE_PREFIX_RE = /^\[([^\]]+)\]\s*/;
 const MESSAGE_ID_LINE_RE = /^\s*\[message_id:\s*[^\]]+\]\s*$/i;
 const INBOUND_META_SENTINELS = [
@@ -215,10 +218,47 @@ export function extractInboundSenderLabel(text: string): string | null {
 }
 
 function sanitizeMessageText(text: string, stripUserEnvelope: boolean): string {
-  const inboundStripped = stripInboundMetadata(text);
+  const inboundStripped = stripOpenClawInternalContextBlocks(stripInboundMetadata(text));
   return stripUserEnvelope
     ? stripMessageIdHints(stripEnvelope(inboundStripped))
     : inboundStripped;
+}
+
+export function stripOpenClawInternalContextBlocks(text: string): string {
+  if (!text || !text.includes(OPENCLAW_INTERNAL_CONTEXT_BEGIN)) {
+    return text;
+  }
+
+  let result = '';
+  let searchFrom = 0;
+
+  while (searchFrom < text.length) {
+    const start = text.indexOf(OPENCLAW_INTERNAL_CONTEXT_BEGIN, searchFrom);
+    if (start === -1) {
+      result += text.slice(searchFrom);
+      break;
+    }
+
+    result += text.slice(searchFrom, start);
+    const end = text.indexOf(OPENCLAW_INTERNAL_CONTEXT_END, start + OPENCLAW_INTERNAL_CONTEXT_BEGIN.length);
+    const truncated = text.indexOf(OPENCLAW_INTERNAL_CONTEXT_TRUNCATED, start + OPENCLAW_INTERNAL_CONTEXT_BEGIN.length);
+    const hasEnd = end !== -1;
+    const hasTruncated = truncated !== -1;
+
+    if (!hasEnd && !hasTruncated) {
+      result += text.slice(start);
+      break;
+    }
+
+    if (hasTruncated && (!hasEnd || truncated < end)) {
+      searchFrom = truncated + OPENCLAW_INTERNAL_CONTEXT_TRUNCATED.length;
+      continue;
+    }
+
+    searchFrom = end + OPENCLAW_INTERNAL_CONTEXT_END.length;
+  }
+
+  return result.replace(/\n{3,}/g, '\n\n');
 }
 
 function extractSenderLabelFromMessage(entry: Record<string, unknown>): string | null {

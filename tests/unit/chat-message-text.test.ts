@@ -12,6 +12,49 @@ describe('cleanUserMessageText', () => {
     expect(cleanUserMessageText('[Fri 2026-03-13 17:11 GMT+8] 提取文案金句')).toBe('提取文案金句');
   });
 
+  it('strips OpenClaw internal context wrapper blocks from user-visible text', () => {
+    const polluted = [
+      '请帮我看一下这个任务状态',
+      '',
+      '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+      'OpenClaw runtime context (internal):',
+      'This context is runtime-generated, not user-authored. Keep internal details private.',
+      '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>',
+      '',
+      '这是最终需要给用户的回复',
+    ].join('\n');
+
+    expect(cleanUserMessageText(polluted)).toBe('请帮我看一下这个任务状态\n\n这是最终需要给用户的回复');
+  });
+
+  it('strips truncated OpenClaw internal context blocks from user-visible text', () => {
+    const polluted = [
+      '请帮我看一下这个任务状态',
+      '',
+      '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+      'OpenClaw runtime context (internal):',
+      'This context is runtime-generated, not user-authored. Keep internal details private.',
+      '...(truncated)...',
+      '',
+      '这是最终需要给用户的回复',
+    ].join('\n');
+
+    expect(cleanUserMessageText(polluted)).toBe('请帮我看一下这个任务状态\n\n这是最终需要给用户的回复');
+  });
+
+  it('keeps unmatched OpenClaw internal context markers when no valid closing sentinel exists', () => {
+    const polluted = [
+      '请帮我看一下这个任务状态',
+      '',
+      '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+      'OpenClaw runtime context (internal):',
+      'This context is runtime-generated, not user-authored. Keep internal details private.',
+      'incomplete tail without sentinel',
+    ].join('\n');
+
+    expect(cleanUserMessageText(polluted)).toBe(polluted);
+  });
+
   it('keeps only the latest user turn when exec logs bleed into the message body', () => {
     const polluted = [
       'System: [2026-03-13 17:08:53 GMT+8] Exec completed (plaid-sa, code 2) :: [0m [2K',
