@@ -7,25 +7,27 @@ type FixedScheduleBase = {
   mode: 'fixed';
   minute: number;
   hour: number;
+  tz?: string;
 };
 
 export type ScheduleEditorState =
-  | { mode: 'every'; everyMs: number }
+  | { mode: 'every'; everyMs: number; anchorMs?: number }
   | ({ mode: 'fixed'; subtype: 'once'; at: string })
   | (FixedScheduleBase & { subtype: 'daily' })
   | (FixedScheduleBase & { subtype: 'weekly'; dayOfWeek: number })
   | (FixedScheduleBase & { subtype: 'monthly'; dayOfMonth: number })
-  | { mode: 'cron'; expr: string };
+  | { mode: 'cron'; expr: string; tz?: string };
 
-const DAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
+export interface SchedulePreviewFormatters {
+  every: (state: Extract<ScheduleEditorState, { mode: 'every' }>) => string | null;
+  fixed: (state: Extract<ScheduleEditorState, { mode: 'fixed' }>) => string | null;
+  cron: (state: Extract<ScheduleEditorState, { mode: 'cron' }>) => string | null;
+}
+
+type RecognizedCronFixedEditorState =
+  | (FixedScheduleBase & { subtype: 'daily' })
+  | (FixedScheduleBase & { subtype: 'weekly'; dayOfWeek: number })
+  | (FixedScheduleBase & { subtype: 'monthly'; dayOfMonth: number });
 
 export function createDefaultScheduleEditorState(): ScheduleEditorState {
   return {
@@ -38,25 +40,31 @@ export function createDefaultScheduleEditorState(): ScheduleEditorState {
 
 export function buildScheduleFromEditor(state: ScheduleEditorState): CronSchedule {
   if (state.mode === 'every') {
-    return { kind: 'every', everyMs: state.everyMs };
+    return state.anchorMs === undefined
+      ? { kind: 'every', everyMs: state.everyMs }
+      : { kind: 'every', everyMs: state.everyMs, anchorMs: state.anchorMs };
   }
 
   if (state.mode === 'cron') {
-    return { kind: 'cron', expr: state.expr };
+    return state.tz === undefined
+      ? { kind: 'cron', expr: state.expr }
+      : { kind: 'cron', expr: state.expr, tz: state.tz };
   }
 
   if (state.subtype === 'once') {
     return { kind: 'at', at: state.at };
   }
 
-  const expr = `${normalizeCronPart(state.minute)} ${normalizeCronPart(state.hour)}${
-    state.subtype === 'monthly' ? ` ${normalizeCronPart(state.dayOfMonth)} * *`
+  const expr = `${state.minute} ${state.hour}${
+    state.subtype === 'monthly' ? ` ${state.dayOfMonth} * *`
       : state.subtype === 'weekly'
-        ? ` * * ${normalizeCronPart(state.dayOfWeek)}`
+        ? ` * * ${state.dayOfWeek}`
         : ' * * *'
   }`;
 
-  return { kind: 'cron', expr };
+  return state.tz === undefined
+    ? { kind: 'cron', expr }
+    : { kind: 'cron', expr, tz: state.tz };
 }
 
 export function inferScheduleEditorState(schedule: CronSchedule | string): ScheduleEditorState {
@@ -65,42 +73,46 @@ export function inferScheduleEditorState(schedule: CronSchedule | string): Sched
   }
 
   if (schedule.kind === 'every') {
-    return { mode: 'every', everyMs: schedule.everyMs };
+    return schedule.anchorMs === undefined
+      ? { mode: 'every', everyMs: schedule.everyMs }
+      : { mode: 'every', everyMs: schedule.everyMs, anchorMs: schedule.anchorMs };
   }
 
   if (schedule.kind === 'at') {
     return { mode: 'fixed', subtype: 'once', at: schedule.at };
   }
 
-  return inferFromCronExpr(schedule.expr) ?? { mode: 'cron', expr: schedule.expr };
+  const inferred = inferFromCronExpr(schedule.expr);
+  if (inferred) {
+    if (inferred.mode === 'fixed' && schedule.tz !== undefined) {
+      return { ...inferred, tz: schedule.tz };
+    }
+    return inferred;
+  }
+
+  return schedule.tz === undefined
+    ? { mode: 'cron', expr: schedule.expr }
+    : { mode: 'cron', expr: schedule.expr, tz: schedule.tz };
 }
 
-export function previewLabelForSchedule(schedule: CronSchedule | string): string | null {
+export function previewLabelForSchedule(
+  schedule: CronSchedule | string,
+  formatters: SchedulePreviewFormatters,
+): string | null {
   const inferred = inferScheduleEditorState(schedule);
 
   if (inferred.mode === 'every') {
-    return formatEveryLabel(inferred.everyMs);
+    return formatters.every(inferred);
   }
 
   if (inferred.mode === 'fixed') {
-    if (inferred.subtype === 'once') {
-      return `Once at ${formatDateTimeLabel(inferred.at)}`;
-    }
-
-    const timeLabel = formatTimeLabel(inferred.hour, inferred.minute);
-    if (inferred.subtype === 'daily') {
-      return `Daily at ${timeLabel}`;
-    }
-    if (inferred.subtype === 'weekly') {
-      return `Weekly at ${timeLabel} on ${dayName(inferred.dayOfWeek)}`;
-    }
-    return `Monthly at ${timeLabel} on day ${inferred.dayOfMonth}`;
+    return formatters.fixed(inferred);
   }
 
-  return typeof schedule === 'string' ? schedule : schedule.expr;
+  return formatters.cron(inferred);
 }
 
-function inferFromCronExpr(expr: string): ScheduleEditorState | null {
+function inferFromCronExpr(expr: string): RecognizedCronFixedEditorState | null {
   const parts = expr.trim().split(/\s+/);
   if (parts.length !== 5) {
     return null;
@@ -158,14 +170,6 @@ function inferFromCronExpr(expr: string): ScheduleEditorState | null {
   return null;
 }
 
-function normalizeCronPart(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.trunc(value);
-}
-
 function isNumberToken(value: string): boolean {
   return /^\d+$/.test(value);
 }
@@ -188,62 +192,6 @@ function isValidDayOfMonth(value: string): boolean {
 
 function toNumber(value: string): number {
   return Number.parseInt(value, 10);
-}
-
-function formatEveryLabel(everyMs: number): string {
-  if (!Number.isFinite(everyMs) || everyMs <= 0) {
-    return 'Every interval';
-  }
-
-  const units: Array<[number, string, string]> = [
-    [86_400_000, 'day', 'days'],
-    [3_600_000, 'hour', 'hours'],
-    [60_000, 'minute', 'minutes'],
-    [1_000, 'second', 'seconds'],
-  ];
-
-  for (const [unitMs, singular, plural] of units) {
-    if (everyMs >= unitMs) {
-      const count = roundToSingleDecimal(everyMs / unitMs);
-      return `Every ${formatNumber(count)} ${count === 1 ? singular : plural}`;
-    }
-  }
-
-  return `Every ${everyMs} ms`;
-}
-
-function formatDateTimeLabel(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
-}
-
-function formatTimeLabel(hour: number, minute: number): string {
-  const normalizedHour = Math.trunc(hour);
-  const normalizedMinute = Math.trunc(minute);
-  return `${String(normalizedHour).padStart(2, '0')}:${String(normalizedMinute).padStart(2, '0')}`;
-}
-
-function dayName(dayOfWeek: number): string {
-  const normalized = Math.trunc(dayOfWeek);
-  if (normalized === 7) {
-    return DAY_NAMES[0];
-  }
-  return DAY_NAMES[normalized] ?? String(normalized);
-}
-
-function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
-}
-
-function roundToSingleDecimal(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 function inRange(value: number, min: number, max: number): boolean {
