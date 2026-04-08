@@ -341,6 +341,48 @@ describe('Cron schedule editor integration', () => {
     });
   });
 
+  it('prefers the current edited cron when switching back to fixed mode', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-cron-backfill-current',
+      name: 'Backfill current cron',
+      message: 'Prefer edited cron over stale fixed draft',
+      schedule: { kind: 'cron', expr: '15 8 * * *', tz: 'Asia/Shanghai' },
+      enabled: true,
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cron' }));
+    fireEvent.change(screen.getByDisplayValue('15 8 * * *'), {
+      target: { value: '45 6 * * 2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Fixed Time' }));
+
+    expect(screen.getByRole('button', { name: 'Weekly' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Weekday')).toHaveValue('2');
+    expect(screen.getByLabelText('Time')).toHaveValue('06:45');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateJobMock).toHaveBeenCalledWith('job-cron-backfill-current', {
+        name: 'Backfill current cron',
+        message: 'Prefer edited cron over stale fixed draft',
+        schedule: {
+          kind: 'cron',
+          expr: '45 6 * * 2',
+          tz: 'Asia/Shanghai',
+        },
+        enabled: true,
+        delivery: { mode: 'none' },
+        agentId: undefined,
+      });
+    });
+  });
+
   it('does not rewrite existing everyMs intervals unless the user edits them', async () => {
     cronStoreState.jobs = [{
       id: 'job-every-exact',

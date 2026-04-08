@@ -266,16 +266,19 @@ function switchMode(
     return current;
   }
 
-  const remembered = rememberedStates[mode];
-  if (remembered) {
-    return remembered;
-  }
-
   if (mode === 'every') {
+    const remembered = rememberedStates.every;
+    if (remembered) {
+      return remembered;
+    }
     return { mode: 'every', everyMs: 60 * 60 * 1000 };
   }
 
   if (mode === 'cron') {
+    const remembered = rememberedStates.cron;
+    if (remembered) {
+      return remembered;
+    }
     if (current.mode === 'fixed' && current.subtype !== 'once') {
       const nextSchedule = buildScheduleFromEditor(current);
       if (nextSchedule.kind === 'cron') {
@@ -294,6 +297,11 @@ function switchMode(
     if (inferred.mode === 'fixed') {
       return inferred;
     }
+  }
+
+  const remembered = rememberedStates.fixed;
+  if (remembered) {
+    return remembered;
   }
 
   return createDefaultScheduleEditorState();
