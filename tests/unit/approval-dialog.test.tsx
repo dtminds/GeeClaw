@@ -23,8 +23,6 @@ const translations: Record<string, string> = {
   'approvalDialog.expiresIn': 'expires in {{time}}',
   'approvalDialog.expired': 'expired',
   'approvalDialog.queueCount': '{{count}} pending',
-  'approvalDialog.execLabel': 'Command',
-  'approvalDialog.pluginDescriptionLabel': 'Plugin description',
   'approvalDialog.details': 'More details',
   'approvalDialog.errorTitle': 'Failed to send decision',
   'approvalDialog.clearError': 'Dismiss',
@@ -226,7 +224,6 @@ describe('ApprovalDialog', () => {
     expect(screen.getByRole('heading', { name: 'Plugin approval needed' })).toBeInTheDocument();
     expect(screen.getByText('2 pending')).toBeInTheDocument();
     expect(screen.getByText('A request is waiting for your decision.')).toBeInTheDocument();
-    expect(screen.getByText('Plugin description')).toBeInTheDocument();
     expect(screen.getByText('Needs install permission')).toBeInTheDocument();
     expect(screen.getByText('Plugin severity')).toBeInTheDocument();
     expect(screen.getByText('high')).toBeInTheDocument();
