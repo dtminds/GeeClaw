@@ -68,6 +68,7 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
+import type { CronSchedule } from '../../src/types/cron';
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -514,17 +515,17 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
           }
           if (request.action === 'create') {
             const payload = request.payload as
-              | { input?: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }
-              | [{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }]
-              | { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }
+              | { input?: { name: string; message: string; schedule: CronSchedule; enabled?: boolean; delivery?: GatewayCronDelivery } }
+              | [{ name: string; message: string; schedule: CronSchedule; enabled?: boolean; delivery?: GatewayCronDelivery }]
+              | { name: string; message: string; schedule: CronSchedule; enabled?: boolean; delivery?: GatewayCronDelivery }
               | undefined;
             const input = Array.isArray(payload)
               ? payload[0]
-              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }).input : payload);
+              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: CronSchedule; enabled?: boolean; delivery?: GatewayCronDelivery } }).input : payload);
             if (!input) throw new Error('Invalid cron.create payload');
             const gatewayInput = {
               name: input.name,
-              schedule: { kind: 'cron', expr: input.schedule },
+              schedule: input.schedule,
               payload: { kind: 'agentTurn', message: input.message },
               enabled: input.enabled ?? true,
               wakeMode: 'next-heartbeat',
@@ -846,14 +847,14 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   ipcMain.handle('cron:create', async (_, input: {
     name: string;
     message: string;
-    schedule: string;
+    schedule: CronSchedule;
     delivery?: GatewayCronDelivery;
     enabled?: boolean;
   }) => {
     try {
       const gatewayInput = {
         name: input.name,
-        schedule: { kind: 'cron', expr: input.schedule },
+        schedule: input.schedule,
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',

@@ -296,7 +296,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       await onSave({
         name: name.trim(),
         message: message.trim(),
-        schedule: finalSchedule,
+        schedule: { kind: 'cron', expr: finalSchedule },
         enabled,
         delivery,
         agentId: agentId || undefined,

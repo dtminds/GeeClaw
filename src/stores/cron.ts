@@ -39,9 +39,10 @@ export const useCronStore = create<CronState>((set) => ({
   
   createJob: async (input) => {
     try {
+      const body = JSON.stringify(input);
       const job = await hostApiFetch<CronJob>('/api/cron/jobs', {
         method: 'POST',
-        body: JSON.stringify(input),
+        body,
       });
       set((state) => ({ jobs: [...state.jobs, job] }));
       return job;
@@ -53,9 +54,10 @@ export const useCronStore = create<CronState>((set) => ({
   
   updateJob: async (id, input) => {
     try {
+      const body = JSON.stringify(input);
       await hostApiFetch(`/api/cron/jobs/${encodeURIComponent(id)}`, {
         method: 'PUT',
-        body: JSON.stringify(input),
+        body,
       });
       set((state) => ({
         jobs: state.jobs.map((job) =>

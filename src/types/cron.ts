@@ -89,7 +89,7 @@ export interface CronDeliveryConfig {
 export interface CronJobCreateInput {
   name: string;
   message: string;
-  schedule: string;
+  schedule: CronSchedule;
   enabled?: boolean;
   delivery?: CronDeliveryConfig;
   agentId?: string;
@@ -101,7 +101,7 @@ export interface CronJobCreateInput {
 export interface CronJobUpdateInput {
   name?: string;
   message?: string;
-  schedule?: string;
+  schedule?: CronSchedule;
   enabled?: boolean;
   delivery?: CronDeliveryConfig;
   agentId?: string;

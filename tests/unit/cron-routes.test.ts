@@ -72,6 +72,40 @@ describe('handleCronRoutes', () => {
     );
   });
 
+  it('passes structured schedule objects through create requests unchanged', async () => {
+    const schedule = { kind: 'every', everyMs: 15 * 60 * 1000, anchorMs: 1_700_000_000_000 };
+    parseJsonBodyMock.mockResolvedValue({
+      name: 'Structured schedule',
+      message: 'Send update',
+      schedule,
+      enabled: true,
+    });
+
+    const rpc = vi.fn().mockResolvedValue({
+      id: 'job-structured',
+      name: 'Structured schedule',
+      enabled: true,
+      createdAtMs: 1,
+      updatedAtMs: 2,
+      schedule,
+      payload: { kind: 'agentTurn', message: 'Send update' },
+      state: {},
+    });
+
+    const { handleCronRoutes } = await import('@electron/api/routes/cron');
+    const handled = await handleCronRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:3210/api/cron/jobs'),
+      { gatewayManager: { rpc } } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('cron.add', expect.objectContaining({
+      schedule,
+    }));
+  });
+
   it('updates cron jobs with normalized delivery patch fields', async () => {
     parseJsonBodyMock.mockResolvedValue({
       message: 'Updated prompt',

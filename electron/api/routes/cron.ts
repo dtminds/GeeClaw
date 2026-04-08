@@ -5,6 +5,7 @@ import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 import { buildCronUpdatePatch, normalizeCronDelivery, toUiCronDelivery, type GatewayCronDelivery } from '../../utils/cron-delivery';
 import { getOpenClawConfigDir } from '../../utils/paths';
+import type { CronSchedule } from '../../../src/types/cron';
 
 interface GatewayCronJob {
   id: string;
@@ -417,11 +418,18 @@ export async function handleCronRoutes(
 
   if (url.pathname === '/api/cron/jobs' && req.method === 'POST') {
     try {
-      const input = await parseJsonBody<{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery; agentId?: string }>(req);
+      const input = await parseJsonBody<{
+        name: string;
+        message: string;
+        schedule: CronSchedule;
+        enabled?: boolean;
+        delivery?: GatewayCronDelivery;
+        agentId?: string;
+      }>(req);
       const delivery = normalizeCronDelivery(input.delivery);
       const result = await ctx.gatewayManager.rpc('cron.add', {
         name: input.name,
-        schedule: { kind: 'cron', expr: input.schedule },
+        schedule: input.schedule,
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',

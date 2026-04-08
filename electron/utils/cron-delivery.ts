@@ -80,8 +80,9 @@ export function normalizeCronDeliveryPatch(rawDelivery: unknown): Record<string,
 export function buildCronUpdatePatch(input: Record<string, unknown>): Record<string, unknown> {
   const patch = { ...input };
 
-  if (typeof patch.schedule === 'string') {
-    patch.schedule = { kind: 'cron', expr: patch.schedule };
+  const schedule = patch.schedule;
+  if (typeof schedule === 'string') {
+    patch.schedule = { kind: 'cron', expr: schedule };
   }
 
   if (typeof patch.message === 'string') {
