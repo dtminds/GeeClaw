@@ -2,6 +2,7 @@ import {
   stripEnvelope,
   stripInboundMetadata,
   stripMessageIdHints,
+  stripOpenClawInternalContextBlocks,
 } from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { ContentBlock, RawMessage } from '@/stores/chat';
@@ -307,7 +308,9 @@ function preprocessAssistantMarkdown(text: string): {
       splitMediaFromOutput(
         stripMessageIdHints(
           stripEnvelope(
-            stripInboundMetadata(text),
+            stripOpenClawInternalContextBlocks(
+              stripInboundMetadata(text),
+            ),
           ),
         ),
       ).text,
@@ -324,6 +327,18 @@ function preprocessAssistantMarkdown(text: string): {
     text: normalizeDisplayText(flattened.text),
     markdownImages: flattened.markdownImages,
   };
+}
+
+function sanitizeAssistantVisibilityText(text: string): string {
+  return stripAssistantDirectiveTags(
+    stripMessageIdHints(
+      stripEnvelope(
+        stripOpenClawInternalContextBlocks(
+          stripInboundMetadata(text),
+        ),
+      ),
+    ),
+  ).trim();
 }
 
 function appendProcessedSegments(
@@ -451,7 +466,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   }
 
   if (!Array.isArray(entry.content)) {
-    const text = getFallbackAssistantText(message).trim();
+    const text = sanitizeAssistantVisibilityText(getFallbackAssistantText(message));
     if (!text) {
       return undefined;
     }
@@ -465,7 +480,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   const resolvedBlocks = resolveTextBlocks(message);
   const visibleParts = resolvedBlocks
     .filter((block) => shouldIncludeResolvedTextBlock(block, resolvedBlocks))
-    .map((block) => block.text)
+    .map((block) => sanitizeAssistantVisibilityText(block.text))
     .filter(Boolean);
 
   if (visibleParts.length === 0) {

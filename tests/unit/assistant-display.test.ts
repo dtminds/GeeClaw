@@ -63,6 +63,47 @@ describe('assistant-display', () => {
     expect(extractAssistantVisibleText(message)).toBe('Legacy answer');
   });
 
+  it('hides truncated OpenClaw internal context from assistant text blocks', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'text',
+          text: [
+            '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+            'OpenClaw runtime context (internal):',
+            'A completed subagent task is ready for user delivery.',
+            '...(truncated)...',
+          ].join('\n'),
+        },
+      ],
+    } as unknown as RawMessage;
+
+    expect(extractAssistantVisibleText(message)).toBeUndefined();
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: '',
+      parts: [],
+    });
+  });
+
+  it('keeps media-only assistant text blocks visible for history filtering', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'text',
+          text: 'MEDIA:https://example.com/report.png',
+        },
+      ],
+    } as unknown as RawMessage;
+
+    expect(extractAssistantVisibleText(message)).toBe('MEDIA:https://example.com/report.png');
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: '',
+      parts: [],
+    });
+  });
+
   it('parses think/final tags with trace-aware visibility', () => {
     const message = {
       role: 'assistant',
