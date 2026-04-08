@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useApprovalStore } from '@/stores/approval';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Clock04Icon, DocumentValidationIcon } from '@hugeicons/core-free-icons';
 
 type ApprovalDecision = 'allow-once' | 'allow-always' | 'deny';
 
@@ -110,7 +112,7 @@ export function ApprovalDialog() {
 
   const request = active.request ?? {};
   const command = hasDisplayValue(request.command) ? toDisplayText(request.command) : null;
-  const subtitle = active.expiresAtMs <= nowMs
+  const expiryLabel = active.expiresAtMs <= nowMs
       ? t('approvalDialog.expired')
       : t('approvalDialog.expiresIn', {
           time: formatRemainingTime(active.expiresAtMs - nowMs),
@@ -189,16 +191,16 @@ export function ApprovalDialog() {
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
-        className="modal-card-surface w-[min(760px,calc(100vw-2rem))] max-w-[760px] rounded-[24px] border p-0"
+        className="modal-card-surface w-[min(760px,calc(100vw-2rem))] max-w-[620px] rounded-[24px] border p-0"
       >
         <div className="px-6 py-6 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <DialogHeader className="pr-2">
-              <DialogTitle className="modal-title">
-                {title}
+              <DialogTitle className="modal-title flex items-center gap-2">
+                <HugeiconsIcon icon={DocumentValidationIcon} /> {title}
               </DialogTitle>
               <DialogDescription className="modal-description mt-2">
-                {subtitle || t('approvalDialog.description')}
+                {t('approvalDialog.description')}
               </DialogDescription>
             </DialogHeader>
             {queue.length > 1 && (
@@ -210,21 +212,15 @@ export function ApprovalDialog() {
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
-          <div className="modal-section-surface rounded-[20px] border p-4">
+          <div className="modal-section-surface rounded-[20px]">
             {active.kind === 'plugin' && hasDisplayValue(active.pluginDescription) && (
               <div className="mb-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  {t('approvalDialog.pluginDescriptionLabel')}
-                </p>
                 <p className="mt-1 text-sm text-foreground">{toDisplayText(active.pluginDescription)}</p>
               </div>
             )}
 
             {command && (
               <div className="mb-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  {t('approvalDialog.execLabel')}
-                </p>
                 <pre className="modal-field-surface mt-1 whitespace-pre-wrap break-words rounded-xl border px-3 py-2 text-xs leading-5 text-foreground">
                   {command}
                 </pre>
@@ -287,19 +283,26 @@ export function ApprovalDialog() {
           </div>
         </div>
 
-        <div className="modal-footer border-t border-black/6 px-6 py-5 dark:border-white/10 sm:px-7">
-          {decisions.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={option.variant}
-              className={option.value === 'deny' ? 'modal-secondary-button' : 'modal-primary-button'}
-              onClick={() => handleDecision(option.value)}
-              disabled={decisionDisabled}
-            >
-              {t(option.labelKey)}
-            </Button>
-          ))}
+        <div className="modal-footer px-6 py-5 sm:px-7">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <HugeiconsIcon icon={Clock04Icon} size={16} />
+              {expiryLabel}
+            </p>
+            <div className="flex flex-wrap justify-end gap-3">
+              {decisions.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={option.variant}
+                  onClick={() => handleDecision(option.value)}
+                  disabled={decisionDisabled}
+                >
+                  {t(option.labelKey)}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -161,6 +161,7 @@ describe('ApprovalDialog', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Exec approval needed')).toBeInTheDocument();
+    expect(screen.getByText('A request is waiting for your decision.')).toBeInTheDocument();
     expect(screen.getByText('expires in 29m')).toBeInTheDocument();
     expect(screen.getByText('mcporter --version')).toBeInTheDocument();
     expect(screen.getByText('More details')).toBeInTheDocument();
@@ -224,6 +225,7 @@ describe('ApprovalDialog', () => {
 
     expect(screen.getByRole('heading', { name: 'Plugin approval needed' })).toBeInTheDocument();
     expect(screen.getByText('2 pending')).toBeInTheDocument();
+    expect(screen.getByText('A request is waiting for your decision.')).toBeInTheDocument();
     expect(screen.getByText('Plugin description')).toBeInTheDocument();
     expect(screen.getByText('Needs install permission')).toBeInTheDocument();
     expect(screen.getByText('Plugin severity')).toBeInTheDocument();

@@ -754,7 +754,7 @@ return (
 ```json
 // src/i18n/locales/zh/common.json
 "approvalDialog": {
-  "execTitle": "需要执行审批",
+  "execTitle": "需要审批当前指令",
   "pluginFallbackTitle": "需要插件审批",
   "expiresIn": "{{time}}后过期",
   "expired": "已过期",

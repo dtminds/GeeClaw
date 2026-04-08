@@ -14,6 +14,7 @@ import { useGatewayStore } from '@/stores/gateway';
 let approvalInitPromise: Promise<void> | null = null;
 let approvalNotificationUnsubscribe: (() => void) | null = null;
 let approvalPruneTimer: ReturnType<typeof setInterval> | null = null;
+const DEBUG_APPROVAL_ID_PREFIX = 'debug-approval:';
 
 type ApprovalStoreState = {
   queue: ApprovalRequest[];
@@ -25,7 +26,51 @@ type ApprovalStoreState = {
   resolveActive: (decision: ApprovalDecision) => Promise<void>;
   clearError: () => void;
   pruneExpired: () => void;
+  showDebugApproval: (kind?: ApprovalRequest['kind']) => void;
+  clearDebugApprovals: () => void;
 };
+
+function isDebugApproval(id: string): boolean {
+  return id.startsWith(DEBUG_APPROVAL_ID_PREFIX);
+}
+
+function buildDebugApproval(kind: ApprovalRequest['kind']): ApprovalRequest {
+  const nowMs = Date.now();
+  if (kind === 'plugin') {
+    return {
+      id: `${DEBUG_APPROVAL_ID_PREFIX}plugin`,
+      kind: 'plugin',
+      createdAtMs: nowMs,
+      expiresAtMs: nowMs + 24 * 60 * 60 * 1000,
+      request: {
+        command: 'Install demo plugin capability',
+        agentId: 'debug-agent',
+        sessionKey: 'agent:debug:main',
+      },
+      pluginTitle: 'Plugin approval needed',
+      pluginDescription: 'This plugin wants permission to install and run inside GeeClaw.',
+      pluginSeverity: 'medium',
+      pluginId: 'debug/demo-plugin',
+      allowedDecisions: ['allow-once', 'allow-always', 'deny'],
+    };
+  }
+
+  return {
+    id: `${DEBUG_APPROVAL_ID_PREFIX}exec`,
+    kind: 'exec',
+    createdAtMs: nowMs,
+    expiresAtMs: nowMs + 24 * 60 * 60 * 1000,
+    request: {
+      command: 'npm run build',
+      cwd: '/Users/demo/workspace/project',
+      agentId: 'debug-agent',
+      sessionKey: 'agent:debug:main',
+      security: 'workspace-write',
+      resolvedPath: '/opt/homebrew/bin/npm',
+    },
+    allowedDecisions: ['allow-once', 'allow-always', 'deny'],
+  };
+}
 
 function ensurePruneTimer(): void {
   if (approvalPruneTimer !== null) {
@@ -98,6 +143,16 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
       return;
     }
 
+    if (isDebugApproval(active.id)) {
+      set((state) => ({
+        queue: state.queue.filter((entry) => !isDebugApproval(entry.id) || entry.id !== active.id),
+        busy: false,
+        error: null,
+        pendingDecisionId: null,
+      }));
+      return;
+    }
+
     if (get().busy || get().pendingDecisionId === active.id) {
       return;
     }
@@ -139,5 +194,19 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
 
   pruneExpired: () => set((state) => ({
     queue: pruneApprovals(state.queue),
+  })),
+
+  showDebugApproval: (kind = 'exec') => set((state) => ({
+    queue: addApproval(state.queue, buildDebugApproval(kind)),
+    busy: false,
+    error: null,
+    pendingDecisionId: null,
+  })),
+
+  clearDebugApprovals: () => set((state) => ({
+    queue: state.queue.filter((entry) => !isDebugApproval(entry.id)),
+    busy: state.pendingDecisionId && isDebugApproval(state.pendingDecisionId) ? false : state.busy,
+    error: null,
+    pendingDecisionId: state.pendingDecisionId && isDebugApproval(state.pendingDecisionId) ? null : state.pendingDecisionId,
   })),
 }));

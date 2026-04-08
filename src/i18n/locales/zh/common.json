@@ -69,11 +69,11 @@
     },
     "approvalDialog": {
         "titles": {
-            "exec": "需要执行审批",
+            "exec": "命令执行审批",
             "pluginFallback": "需要插件审批"
         },
-        "description": "有一个请求正在等待您的决定。",
-        "expiresIn": "{{time}}后过期",
+        "description": "有一个请求正在等待您的决定",
+        "expiresIn": "{{time}} 后过期",
         "expired": "已过期",
         "queueCount": "还有 {{count}} 个待处理",
         "execLabel": "命令",

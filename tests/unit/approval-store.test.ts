@@ -229,4 +229,57 @@ describe('approval store', () => {
     expect(useApprovalStore.getState().error).toContain('gateway offline');
     expect(useApprovalStore.getState().busy).toBe(false);
   });
+
+  it('adds and clears debug approvals for local styling work', async () => {
+    const { useApprovalStore } = await import('@/stores/approval');
+    useApprovalStore.setState({
+      ...useApprovalStore.getState(),
+      queue: [],
+      busy: false,
+      error: null,
+      pendingDecisionId: null,
+      isInitialized: true,
+    });
+
+    useApprovalStore.getState().showDebugApproval('exec');
+    useApprovalStore.getState().showDebugApproval('plugin');
+
+    expect(useApprovalStore.getState().queue.map((entry) => entry.id)).toEqual([
+      'debug-approval:exec',
+      'debug-approval:plugin',
+    ]);
+
+    useApprovalStore.getState().clearDebugApprovals();
+
+    expect(useApprovalStore.getState().queue).toEqual([]);
+  });
+
+  it('resolves debug approvals locally without sending gateway rpc', async () => {
+    const { useGatewayStore } = await import('@/stores/gateway');
+    const rpcMock = vi.spyOn(useGatewayStore.getState(), 'rpc').mockResolvedValue(undefined);
+
+    const { useApprovalStore } = await import('@/stores/approval');
+    useApprovalStore.setState({
+      ...useApprovalStore.getState(),
+      queue: [{
+        id: 'debug-approval:exec',
+        kind: 'exec',
+        createdAtMs: 1,
+        expiresAtMs: Date.now() + 60_000,
+        request: { command: 'echo debug approval' },
+        allowedDecisions: ['allow-once', 'allow-always', 'deny'],
+      }],
+      busy: false,
+      error: null,
+      pendingDecisionId: null,
+      isInitialized: true,
+    });
+
+    await act(async () => {
+      await useApprovalStore.getState().resolveActive('allow-once');
+    });
+
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(useApprovalStore.getState().queue).toEqual([]);
+  });
 });
