@@ -12,7 +12,8 @@ import { useGatewayStore } from './gateway';
 
 type Theme = 'light' | 'dark' | 'system';
 type UpdateChannel = 'stable' | 'beta' | 'dev';
-export type SecurityPolicy = 'moderate' | 'strict' | 'fullAccess';
+export type ToolPermission = 'default' | 'strict' | 'full';
+export type ApprovalPolicy = 'allowlist' | 'full';
 export type { ColorTheme } from '@/theme/color-themes';
 
 interface SettingsState {
@@ -24,8 +25,8 @@ interface SettingsState {
   launchAtStartup: boolean;
 
   // Safety
-  workspaceOnly: boolean;
-  securityPolicy: SecurityPolicy;
+  toolPermission: ToolPermission;
+  approvalPolicy: ApprovalPolicy;
 
   // Gateway
   gatewayAutoStart: boolean;
@@ -58,8 +59,8 @@ interface SettingsState {
   setLanguage: (language: string) => void;
   setStartMinimized: (value: boolean) => void;
   setLaunchAtStartup: (value: boolean) => void;
-  setWorkspaceOnly: (value: boolean) => void;
-  setSecurityPolicy: (value: SecurityPolicy) => void;
+  setToolPermission: (value: ToolPermission) => void;
+  setApprovalPolicy: (value: ApprovalPolicy) => void;
   setGatewayAutoStart: (value: boolean) => void;
   setGatewayPort: (port: number) => void;
   setProxyEnabled: (value: boolean) => void;
@@ -85,8 +86,8 @@ const defaultSettings = {
   language: 'zh',
   startMinimized: false,
   launchAtStartup: false,
-  workspaceOnly: false,
-  securityPolicy: 'moderate' as SecurityPolicy,
+  toolPermission: 'default' as ToolPermission,
+  approvalPolicy: 'full' as ApprovalPolicy,
   gatewayAutoStart: true,
   gatewayPort: 28788,
   proxyEnabled: false,
@@ -209,8 +210,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setStartMinimized: (startMinimized) => set({ startMinimized }),
       setLaunchAtStartup: (launchAtStartup) => set({ launchAtStartup }),
-      setWorkspaceOnly: (_workspaceOnly) => set({ workspaceOnly: false }),
-      setSecurityPolicy: (securityPolicy) => set({ securityPolicy }),
+      setToolPermission: (toolPermission) => set({ toolPermission }),
+      setApprovalPolicy: (approvalPolicy) => set({ approvalPolicy }),
       setGatewayAutoStart: (gatewayAutoStart) => {
         set({ gatewayAutoStart });
         void hostApiFetch('/api/settings/gatewayAutoStart', {
@@ -261,7 +262,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'geeclaw-settings',
-      version: 7,
+      version: 8,
       migrate: (persistedState, version) => {
         if (!persistedState || typeof persistedState !== 'object') {
           return persistedState;
@@ -274,8 +275,8 @@ export const useSettingsStore = create<SettingsState>()(
           nextState.colorTheme = DEFAULT_COLOR_THEME_ID;
         }
         if (version < 5) {
-          nextState.workspaceOnly = false;
-          nextState.securityPolicy = 'moderate';
+          nextState.toolPermission = 'default';
+          nextState.approvalPolicy = 'full';
         }
         if (version < 6) {
           nextState.chatSessionsPanelCollapsed = false;
@@ -283,8 +284,28 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 7) {
           nextState.sidebarWidth = 224;
         }
-        if (nextState.workspaceOnly !== false) {
-          nextState.workspaceOnly = false;
+        if (version < 8) {
+          const securityPolicy = nextState.securityPolicy as string | undefined;
+          nextState.toolPermission = (
+            securityPolicy === 'strict'
+              ? 'strict'
+              : securityPolicy === 'fullAccess'
+                ? 'full'
+                : 'default'
+          );
+          nextState.approvalPolicy = (
+            nextState.approvalPolicy === 'allowlist'
+              ? 'allowlist'
+              : 'full'
+          );
+          delete nextState.workspaceOnly;
+          delete nextState.securityPolicy;
+        }
+        if (nextState.toolPermission !== 'default' && nextState.toolPermission !== 'strict' && nextState.toolPermission !== 'full') {
+          nextState.toolPermission = 'default';
+        }
+        if (nextState.approvalPolicy !== 'allowlist' && nextState.approvalPolicy !== 'full') {
+          nextState.approvalPolicy = 'full';
         }
         return nextState;
       },

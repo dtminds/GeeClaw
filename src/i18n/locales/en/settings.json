@@ -112,40 +112,39 @@
   "safety": {
     "navTitle": "Safety",
     "title": "Safety",
-    "description": "Manage safety levels here and review the managed directory GeeClaw is using.",
+    "description": "Manage tool restrictions and approval behavior for the managed OpenClaw runtime.",
     "loadFailed": "Failed to load safety settings",
     "saveFailed": "Failed to save safety settings",
-    "openDirFailed": "Failed to open directory",
-    "workspaceOnlyEnabled": "Restricted file access enabled",
-    "workspaceOnlyDisabled": "Restricted file access disabled",
-    "directory": {
-      "title": "Default Project Directory",
-      "description": "Where GeeClaw projects and context files are stored.",
-      "browse": "Browse",
-      "opening": "Opening..."
-    },
-    "workspaceOnly": {
-      "title": "Restrict File Access Range",
-      "description": "Choose whether AI can only access files inside the current working directory",
-      "help": "Recommended. When enabled, AI can only read and change files inside the current working directory. Turning it off gives broader access and increases the risk of mistakes.",
-      "note": "Back up important files before changing this setting. Due to technical limitations, we cannot guarantee that all out-of-directory actions are fully blocked, so please choose carefully based on your situation."
-    },
-    "policy": {
-      "title": "Safety Policy",
-      "description": "Choose how much access AI should have.",
-      "saved": "Safety policy updated",
+    "saved": "Safety settings updated",
+    "toolPermission": {
+      "title": "Tool Permission",
+      "description": "Choose which tool capabilities are available to the agent runtime.",
       "options": {
-        "moderate": {
+        "default": {
           "title": "Default",
-          "description": "Best for most people. Keeps common features available while limiting a small set of higher-risk actions."
+          "description": "Allow common assistant actions while blocking automation and control-oriented capabilities."
         },
         "strict": {
           "title": "Strict",
-          "description": "Close to chat-only mode. AI will no longer have abilities like file access or automation, which is best if you only want a safer conversation experience."
+          "description": "Allow only low-risk querying and conversation. Command execution and file access stay disabled."
         },
-        "fullAccess": {
-          "title": "Chaos Mode",
-          "description": "Fewest limits. AI can use more capabilities, but mistakes may have a bigger impact, so only use this if you understand the risk."
+        "full": {
+          "title": "Full",
+          "description": "Do not apply extra tool-deny restrictions. Use this only if you understand the risk."
+        }
+      }
+    },
+    "approvalPolicy": {
+      "title": "Approval Policy",
+      "description": "Choose when commands need manual confirmation before they run.",
+      "options": {
+        "allowlist": {
+          "title": "allow-list",
+          "description": "Only commands that match approved safety rules run directly. Everything else requires manual confirmation."
+        },
+        "full": {
+          "title": "Unrestricted",
+          "description": "All commands are allowed by default without manual approval."
         }
       }
     }

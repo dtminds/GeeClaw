@@ -22,6 +22,8 @@ describe('Settings Store', () => {
       theme: 'system',
       colorTheme: 'standard',
       language: 'en',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
       sidebarCollapsed: false,
       sidebarWidth: 224,
       devModeUnlocked: false,
@@ -42,6 +44,8 @@ describe('Settings Store', () => {
     expect(state.sidebarCollapsed).toBe(false);
     expect(state.sidebarWidth).toBe(224);
     expect(state.gatewayAutoStart).toBe(true);
+    expect(state.toolPermission).toBe('default');
+    expect(state.approvalPolicy).toBe('full');
   });
   
   it('should update theme', () => {
@@ -76,6 +80,8 @@ describe('Settings Store', () => {
       theme: 'dark',
       colorTheme: 'ocean',
       language: 'en',
+      toolPermission: 'strict',
+      approvalPolicy: 'allowlist',
       sidebarCollapsed: false,
       sidebarWidth: 280,
       devModeUnlocked: false,
@@ -93,6 +99,8 @@ describe('Settings Store', () => {
     expect(useSettingsStore.getState().theme).toBe('dark');
     expect(useSettingsStore.getState().colorTheme).toBe('ocean');
     expect(useSettingsStore.getState().sidebarWidth).toBe(280);
+    expect(useSettingsStore.getState().toolPermission).toBe('strict');
+    expect(useSettingsStore.getState().approvalPolicy).toBe('allowlist');
     expect(hostApiFetchMock).toHaveBeenNthCalledWith(1, '/api/settings');
     expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/theme', {
       method: 'PUT',

@@ -147,7 +147,7 @@ export function registerIpcHandlers(
 }
 
 function isSafetyKey(key: keyof AppSettings): boolean {
-  return key === 'workspaceOnly' || key === 'securityPolicy';
+  return key === 'toolPermission' || key === 'approvalPolicy';
 }
 
 function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {

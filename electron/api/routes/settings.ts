@@ -21,7 +21,8 @@ import {
 } from '../../utils/openclaw-config-coordinator';
 import {
   buildOpenClawSafetySettings,
-  isSecurityPolicy,
+  isApprovalPolicy,
+  isToolPermission,
   syncOpenClawSafetySettings,
 } from '../../utils/openclaw-safety-settings';
 import type { HostApiContext } from '../context';
@@ -48,8 +49,8 @@ function patchTouchesProxy(patch: Partial<AppSettings>): boolean {
 
 function patchTouchesSafety(patch: Partial<AppSettings>): boolean {
   return Object.keys(patch).some((key) => (
-    key === 'workspaceOnly' ||
-    key === 'securityPolicy'
+    key === 'toolPermission' ||
+    key === 'approvalPolicy'
   ));
 }
 
@@ -75,23 +76,23 @@ export async function handleSettingsRoutes(
 
   if (url.pathname === '/api/settings/safety' && req.method === 'PUT') {
     try {
-      const body = await parseJsonBody<Partial<Pick<AppSettings, 'workspaceOnly' | 'securityPolicy'>>>(req);
-      const patch: Partial<Pick<AppSettings, 'workspaceOnly' | 'securityPolicy'>> = {};
+      const body = await parseJsonBody<Partial<Pick<AppSettings, 'toolPermission' | 'approvalPolicy'>>>(req);
+      const patch: Partial<Pick<AppSettings, 'toolPermission' | 'approvalPolicy'>> = {};
 
-      if ('workspaceOnly' in body) {
-        if (typeof body.workspaceOnly !== 'boolean') {
-          sendJson(res, 400, { success: false, error: 'workspaceOnly must be a boolean' });
+      if ('toolPermission' in body) {
+        if (!isToolPermission(body.toolPermission)) {
+          sendJson(res, 400, { success: false, error: 'toolPermission is invalid' });
           return true;
         }
-        patch.workspaceOnly = false;
+        patch.toolPermission = body.toolPermission;
       }
 
-      if ('securityPolicy' in body) {
-        if (!isSecurityPolicy(body.securityPolicy)) {
-          sendJson(res, 400, { success: false, error: 'securityPolicy is invalid' });
+      if ('approvalPolicy' in body) {
+        if (!isApprovalPolicy(body.approvalPolicy)) {
+          sendJson(res, 400, { success: false, error: 'approvalPolicy is invalid' });
           return true;
         }
-        patch.securityPolicy = body.securityPolicy;
+        patch.approvalPolicy = body.approvalPolicy;
       }
 
       if (Object.keys(patch).length === 0) {
@@ -99,11 +100,11 @@ export async function handleSettingsRoutes(
         return true;
       }
 
-      if (typeof patch.workspaceOnly === 'boolean') {
-        await setSetting('workspaceOnly', patch.workspaceOnly);
+      if (patch.toolPermission) {
+        await setSetting('toolPermission', patch.toolPermission);
       }
-      if (patch.securityPolicy) {
-        await setSetting('securityPolicy', patch.securityPolicy);
+      if (patch.approvalPolicy) {
+        await setSetting('approvalPolicy', patch.approvalPolicy);
       }
 
       await handleSafetySettingsChange(ctx);

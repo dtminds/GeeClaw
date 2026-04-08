@@ -7,7 +7,8 @@ const getSettingMock = vi.fn();
 const resetSettingsMock = vi.fn();
 const setSettingMock = vi.fn();
 const buildOpenClawSafetySettingsMock = vi.fn();
-const isSecurityPolicyMock = vi.fn();
+const isToolPermissionMock = vi.fn();
+const isApprovalPolicyMock = vi.fn();
 const syncOpenClawSafetySettingsMock = vi.fn();
 const getManagedAppEnvironmentEntriesMock = vi.fn();
 const replaceManagedAppEnvironmentEntriesMock = vi.fn();
@@ -36,7 +37,8 @@ vi.mock('@electron/utils/store', () => ({
 
 vi.mock('@electron/utils/openclaw-safety-settings', () => ({
   buildOpenClawSafetySettings: (...args: unknown[]) => buildOpenClawSafetySettingsMock(...args),
-  isSecurityPolicy: (...args: unknown[]) => isSecurityPolicyMock(...args),
+  isToolPermission: (...args: unknown[]) => isToolPermissionMock(...args),
+  isApprovalPolicy: (...args: unknown[]) => isApprovalPolicyMock(...args),
   syncOpenClawSafetySettings: (...args: unknown[]) => syncOpenClawSafetySettingsMock(...args),
 }));
 
@@ -72,16 +74,18 @@ describe('handleSettingsRoutes', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getAllSettingsMock.mockResolvedValue({
-      workspaceOnly: false,
-      securityPolicy: 'moderate',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
     });
     buildOpenClawSafetySettingsMock.mockReturnValue({
-      configDir: '/Users/test/.openclaw-geeclaw',
-      workspaceOnly: false,
-      securityPolicy: 'moderate',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
     });
-    isSecurityPolicyMock.mockImplementation((value: unknown) => (
-      value === 'moderate' || value === 'strict' || value === 'fullAccess'
+    isToolPermissionMock.mockImplementation((value: unknown) => (
+      value === 'default' || value === 'strict' || value === 'full'
+    ));
+    isApprovalPolicyMock.mockImplementation((value: unknown) => (
+      value === 'allowlist' || value === 'full'
     ));
     getManagedAppEnvironmentEntriesMock.mockResolvedValue([]);
     resolveGeeClawAppEnvironmentMock.mockResolvedValue({});
@@ -107,7 +111,7 @@ describe('handleSettingsRoutes', () => {
   });
 
   it('debounces a gateway reload after saving safety settings while running', async () => {
-    parseJsonBodyMock.mockResolvedValueOnce({ workspaceOnly: true });
+    parseJsonBodyMock.mockResolvedValueOnce({ toolPermission: 'strict', approvalPolicy: 'allowlist' });
     const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
 
     const debouncedReload = vi.fn();
@@ -126,10 +130,11 @@ describe('handleSettingsRoutes', () => {
     );
 
     expect(handled).toBe(true);
-    expect(setSettingMock).toHaveBeenCalledWith('workspaceOnly', false);
+    expect(setSettingMock).toHaveBeenCalledWith('toolPermission', 'strict');
+    expect(setSettingMock).toHaveBeenCalledWith('approvalPolicy', 'allowlist');
     expect(syncOpenClawSafetySettingsMock).toHaveBeenCalledWith({
-      workspaceOnly: false,
-      securityPolicy: 'moderate',
+      toolPermission: 'default',
+      approvalPolicy: 'full',
     });
     expect(debouncedReload).toHaveBeenCalledTimes(1);
     expect(restart).not.toHaveBeenCalled();
@@ -141,15 +146,14 @@ describe('handleSettingsRoutes', () => {
   });
 
   it('persists safety settings without scheduling reload when gateway is stopped', async () => {
-    parseJsonBodyMock.mockResolvedValueOnce({ securityPolicy: 'strict' });
+    parseJsonBodyMock.mockResolvedValueOnce({ approvalPolicy: 'allowlist' });
     getAllSettingsMock.mockResolvedValue({
-      workspaceOnly: false,
-      securityPolicy: 'strict',
+      toolPermission: 'default',
+      approvalPolicy: 'allowlist',
     });
     buildOpenClawSafetySettingsMock.mockReturnValue({
-      configDir: '/Users/test/.openclaw-geeclaw',
-      workspaceOnly: false,
-      securityPolicy: 'strict',
+      toolPermission: 'default',
+      approvalPolicy: 'allowlist',
     });
     const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
 
@@ -168,10 +172,10 @@ describe('handleSettingsRoutes', () => {
       } as never,
     );
 
-    expect(setSettingMock).toHaveBeenCalledWith('securityPolicy', 'strict');
+    expect(setSettingMock).toHaveBeenCalledWith('approvalPolicy', 'allowlist');
     expect(syncOpenClawSafetySettingsMock).toHaveBeenCalledWith({
-      workspaceOnly: false,
-      securityPolicy: 'strict',
+      toolPermission: 'default',
+      approvalPolicy: 'allowlist',
     });
     expect(debouncedReload).not.toHaveBeenCalled();
     expect(restart).not.toHaveBeenCalled();

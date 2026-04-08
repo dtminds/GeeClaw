@@ -177,9 +177,8 @@ describe('ChatInput preset agent skills loading', () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/settings/safety') {
         return {
-          workspaceOnly: false,
-          securityPolicy: 'moderate',
-          configDir: '/tmp/geeclaw-test',
+          toolPermission: 'default',
+          approvalPolicy: 'full',
         };
       }
 
@@ -291,5 +290,21 @@ describe('ChatInput preset agent skills loading', () => {
       { type: 'text', text: ' ' },
     ]);
     expect(editorRunMock).toHaveBeenCalled();
+  });
+
+  it('shows split safety controls in the composer footer menu', async () => {
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    const safetyButton = screen.getByRole('button', { name: /composer\.safety\./ });
+    fireEvent.pointerDown(safetyButton);
+
+    expect(await screen.findByText('composer.safety.toolPermission')).toBeInTheDocument();
+    expect(screen.getByText('composer.safety.approvalPolicy')).toBeInTheDocument();
   });
 });

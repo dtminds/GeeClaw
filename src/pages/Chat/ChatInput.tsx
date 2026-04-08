@@ -29,7 +29,7 @@ import {
   isModelMenuItemSelected,
   pendingModelSelectionMatchesSession,
 } from './model-selection';
-import type { SecurityPolicy } from '@/stores/settings';
+import type { ApprovalPolicy, ToolPermission } from '@/stores/settings';
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -112,8 +112,8 @@ interface ProviderModelMenuGroup {
 }
 
 interface SafetyComposerSettings {
-  workspaceOnly: boolean;
-  securityPolicy: SecurityPolicy;
+  toolPermission: ToolPermission;
+  approvalPolicy: ApprovalPolicy;
 }
 
 const SLASH_COMMANDS: SlashCommandOption[] = [
@@ -651,7 +651,8 @@ export const ChatInput = memo(function ChatInput({
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const pendingComposerSeed = useChatStore((s) => s.pendingComposerSeed);
   const consumePendingComposerSeed = useChatStore((s) => s.consumePendingComposerSeed);
-  const currentSecurityPolicy = safetySettings?.securityPolicy ?? 'moderate';
+  const currentToolPermission = safetySettings?.toolPermission ?? 'default';
+  const currentApprovalPolicy = safetySettings?.approvalPolicy ?? 'full';
 
   useEffect(() => {
     tRef.current = t;
@@ -1026,12 +1027,9 @@ export const ChatInput = memo(function ChatInput({
 
     (async () => {
       try {
-        const result = await hostApiFetch<SafetyComposerSettings & { configDir: string }>('/api/settings/safety');
+        const result = await hostApiFetch<SafetyComposerSettings>('/api/settings/safety');
         if (!cancelled) {
-          setSafetySettings({
-            workspaceOnly: result.workspaceOnly,
-            securityPolicy: result.securityPolicy,
-          });
+          setSafetySettings(result);
         }
       } catch {
         // Keep chat usable even if the safety snapshot is temporarily unavailable.
@@ -1404,26 +1402,29 @@ export const ChatInput = memo(function ChatInput({
   }, [stageBufferFiles]);
 
   const editorIsEmpty = editorText.trim().length === 0;
-  const policyLabelMap: Record<SecurityPolicy, string> = {
-    moderate: t('composer.safety.policyOptions.moderate.label'),
-    strict: t('composer.safety.policyOptions.strict.label'),
-    fullAccess: t('composer.safety.policyOptions.fullAccess.label'),
+  const toolPermissionOptions: ToolPermission[] = ['default', 'strict', 'full'];
+  const approvalPolicyOptions: ApprovalPolicy[] = ['allowlist', 'full'];
+  const toolPermissionLabelMap: Record<ToolPermission, string> = {
+    default: t('composer.safety.toolPermissionOptions.default.label'),
+    strict: t('composer.safety.toolPermissionOptions.strict.label'),
+    full: t('composer.safety.toolPermissionOptions.full.label'),
+  };
+  const approvalPolicyLabelMap: Record<ApprovalPolicy, string> = {
+    allowlist: t('composer.safety.approvalPolicyOptions.allowlist.label'),
+    full: t('composer.safety.approvalPolicyOptions.full.label'),
   };
 
   const saveSafetySettings = useCallback(async (patch: Partial<SafetyComposerSettings>) => {
     setSavingSafety(true);
     try {
-      const response = await hostApiFetch<{ settings: SafetyComposerSettings & { configDir: string } }>('/api/settings/safety', {
+      const response = await hostApiFetch<{ settings: SafetyComposerSettings }>('/api/settings/safety', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(patch),
       });
-      setSafetySettings({
-        workspaceOnly: false,
-        securityPolicy: response.settings.securityPolicy,
-      });
+      setSafetySettings(response.settings);
     } catch (error) {
       toast.error(`${t('composer.safety.saveFailed')}: ${toUserMessage(error)}`);
       throw error;
@@ -1432,19 +1433,33 @@ export const ChatInput = memo(function ChatInput({
     }
   }, [t]);
 
-  const handleSecurityPolicyChange = useCallback(async (securityPolicy: SecurityPolicy) => {
-    if (savingSafety || currentSecurityPolicy === securityPolicy) return;
+  const handleToolPermissionChange = useCallback(async (toolPermission: ToolPermission) => {
+    if (savingSafety || currentToolPermission === toolPermission) return;
     const previous = safetySettings;
     setSafetySettings((state) => ({
-      workspaceOnly: state?.workspaceOnly ?? false,
-      securityPolicy,
+      toolPermission,
+      approvalPolicy: state?.approvalPolicy ?? 'full',
     }));
     try {
-      await saveSafetySettings({ securityPolicy });
+      await saveSafetySettings({ toolPermission });
     } catch {
       setSafetySettings(previous);
     }
-  }, [currentSecurityPolicy, safetySettings, saveSafetySettings, savingSafety]);
+  }, [currentToolPermission, safetySettings, saveSafetySettings, savingSafety]);
+
+  const handleApprovalPolicyChange = useCallback(async (approvalPolicy: ApprovalPolicy) => {
+    if (savingSafety || currentApprovalPolicy === approvalPolicy) return;
+    const previous = safetySettings;
+    setSafetySettings((state) => ({
+      toolPermission: state?.toolPermission ?? 'default',
+      approvalPolicy,
+    }));
+    try {
+      await saveSafetySettings({ approvalPolicy });
+    } catch {
+      setSafetySettings(previous);
+    }
+  }, [currentApprovalPolicy, safetySettings, saveSafetySettings, savingSafety]);
 
   useEffect(() => {
     handleSendRef.current = handleSend;
@@ -1790,10 +1805,10 @@ export const ChatInput = memo(function ChatInput({
                     type="button"
                     disabled={disabled || savingSafety}
                     className="inline-flex items-center gap-1.5 px-0.5 py-1 text-[11px] font-medium text-muted-foreground/75 transition-colors hover:text-foreground disabled:opacity-50"
-                    aria-label={t('composer.safety.policy')}
+                    aria-label={t('composer.safety.title')}
                   >
                     <Shield className="h-3.5 w-3.5" />
-                    <span>{t('composer.safety.policy')} · {policyLabelMap[currentSecurityPolicy]}</span>
+                    <span>{t('composer.safety.title')}</span>
                     <ChevronDown className="h-3 w-3 opacity-50" />
                   </button>
                 </DropdownMenu.Trigger>
@@ -1802,21 +1817,45 @@ export const ChatInput = memo(function ChatInput({
                     side="top"
                     align="end"
                     sideOffset={8}
-                    className="z-50 min-w-[168px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none dark:border-white/10 dark:bg-card"
+                    className="z-50 min-w-[248px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none dark:border-white/10 dark:bg-card"
                   >
-                    {(['moderate', 'strict', 'fullAccess'] as SecurityPolicy[]).map((policy) => (
+                    <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+                      {t('composer.safety.toolPermission')}
+                    </div>
+                    {toolPermissionOptions.map((toolPermission) => (
                       <DropdownMenu.Item
-                        key={policy}
-                        onSelect={() => { void handleSecurityPolicyChange(policy); }}
+                        key={toolPermission}
+                        onSelect={() => { void handleToolPermissionChange(toolPermission); }}
                         className="mx-1 flex cursor-default items-start justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                       >
                         <div className="min-w-0">
-                          <div className="font-medium text-foreground">{policyLabelMap[policy]}</div>
+                          <div className="font-medium text-foreground">{toolPermissionLabelMap[toolPermission]}</div>
                           <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                            {t(`composer.safety.policyOptions.${policy}.description`)}
+                            {t(`composer.safety.toolPermissionOptions.${toolPermission}.description`)}
                           </div>
                         </div>
-                        {currentSecurityPolicy === policy && (
+                        {currentToolPermission === toolPermission && (
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        )}
+                      </DropdownMenu.Item>
+                    ))}
+                    <DropdownMenu.Separator className="my-1 h-px bg-border/70" />
+                    <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+                      {t('composer.safety.approvalPolicy')}
+                    </div>
+                    {approvalPolicyOptions.map((approvalPolicy) => (
+                      <DropdownMenu.Item
+                        key={approvalPolicy}
+                        onSelect={() => { void handleApprovalPolicyChange(approvalPolicy); }}
+                        className="mx-1 flex cursor-default items-start justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground">{approvalPolicyLabelMap[approvalPolicy]}</div>
+                          <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                            {t(`composer.safety.approvalPolicyOptions.${approvalPolicy}.description`)}
+                          </div>
+                        </div>
+                        {currentApprovalPolicy === approvalPolicy && (
                           <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         )}
                       </DropdownMenu.Item>
