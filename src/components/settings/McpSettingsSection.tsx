@@ -150,40 +150,33 @@ export function McpSettingsSection() {
         </Button>
       </div>
 
-      <section className="modal-section-surface rounded-3xl border p-5">
-        <div className="flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">{t('mcp.health.title')}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t('mcp.health.description')}</p>
-          </div>
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-4">
+          <div className="modal-field-surface rounded-2xl border p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h4 className="text-base font-semibold text-foreground">{t('mcp.health.title')}</h4>
+              <StatusBadge
+                status={systemInstalled}
+                trueLabel={t('mcp.system.present')}
+                falseLabel={t('mcp.system.missing')}
+                unknownLabel={t('opencli.status.checking')}
+              />
+            </div>
 
-          <div className="grid gap-4">
-            <div className="modal-field-surface rounded-2xl border p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h4 className="text-base font-semibold text-foreground">{t('mcp.system.title')}</h4>
-                <StatusBadge
-                  status={systemInstalled}
-                  trueLabel={t('mcp.system.present')}
-                  falseLabel={t('mcp.system.missing')}
-                  unknownLabel={t('opencli.status.checking')}
-                />
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <ValueCard
-                  label={t('mcp.system.version')}
-                  value={loading ? t('common:status.loading') : (status?.system.version || t('mcp.system.unknown'))}
-                />
-                <ValueCard
-                  label={t('mcp.system.path')}
-                  value={loading ? t('common:status.loading') : (status?.system.path || t('mcp.system.emptyPath'))}
-                  mono
-                />
-              </div>
+            <div className="mt-4 grid gap-3">
+              <ValueCard
+                label={t('mcp.system.version')}
+                value={loading ? t('common:status.loading') : (status?.system.version || t('mcp.system.unknown'))}
+              />
+              <ValueCard
+                label={t('mcp.system.path')}
+                value={loading ? t('common:status.loading') : (status?.system.path || t('mcp.system.emptyPath'))}
+                mono
+              />
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
       {!loading && !status?.system?.exists && (
         <section className="modal-section-surface rounded-3xl border p-5">

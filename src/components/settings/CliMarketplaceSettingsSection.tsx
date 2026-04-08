@@ -243,7 +243,7 @@ export function CliMarketplaceSettingsSection() {
           </Button>
         </div>
 
-        <section className="modal-section-surface">
+        <section>
           {loading ? (
             <div className="py-8 text-sm text-muted-foreground">{t('common:status.loading')}</div>
           ) : items.length === 0 ? (
