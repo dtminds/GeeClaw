@@ -93,6 +93,46 @@ describe('chat live rendering', () => {
     expect(markdownBlocks).toHaveLength(2);
   });
 
+  it('renders friendly process and session tool card labels in Chinese', () => {
+    render(
+      <div>
+        <ChatMessage
+          message={{
+            role: 'assistant',
+            id: 'assistant-tool-process',
+            timestamp: 1,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-process',
+                name: 'process',
+                arguments: { action: 'poll' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-spawn',
+                name: 'sessions_spawn',
+                arguments: { task: '整理日志' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-yield',
+                name: 'sessions_yield',
+                arguments: {},
+              },
+            ],
+          } as unknown as RawMessage}
+          showThinking
+          showToolCalls
+        />
+      </div>,
+    );
+
+    expect(screen.getByText('process 查看进程状态')).toBeInTheDocument();
+    expect(screen.getByText('启动子任务 整理日志')).toBeInTheDocument();
+    expect(screen.getByText('等待子任务结果')).toBeInTheDocument();
+  });
+
   it('renders file links as clickable actions that open local paths', () => {
     const message: RawMessage = {
       role: 'assistant',

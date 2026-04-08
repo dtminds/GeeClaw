@@ -28,4 +28,31 @@ describe('formatToolDisplaySummary', () => {
       paths: ['a', 'b', 'c', 'd'],
     }).detailLine).toBe('upload · a, b, c…');
   });
+
+  it('formats process and session tool actions with friendly Chinese verbs', () => {
+    expect(formatToolDisplaySummary('process', { action: 'poll' })).toMatchObject({
+      verb: '查看进程状态',
+      detailLine: '查看进程状态',
+      summaryLine: '🧩 process: 查看进程状态',
+    });
+
+    expect(formatToolDisplaySummary('process', { action: 'log' })).toMatchObject({
+      verb: '查看进程日志',
+      detailLine: '查看进程日志',
+      summaryLine: '🧩 process: 查看进程日志',
+    });
+
+    expect(formatToolDisplaySummary('sessions_spawn', { task: '整理日志' })).toMatchObject({
+      verb: '启动子任务',
+      detail: '整理日志',
+      detailLine: '启动子任务 · 整理日志',
+      summaryLine: '🧩 sessions_spawn: 启动子任务 · 整理日志',
+    });
+
+    expect(formatToolDisplaySummary('sessions_yield', {})).toMatchObject({
+      verb: '等待子任务结果',
+      detailLine: '等待子任务结果',
+      summaryLine: '🧩 sessions_yield: 等待子任务结果',
+    });
+  });
 });
