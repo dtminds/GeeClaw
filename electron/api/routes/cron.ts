@@ -127,6 +127,18 @@ function getCronRunSortTimestamp(run: Pick<CronRunSummary, 'finishedAt' | 'start
   return normalizeTimestampMs(run.finishedAt) ?? normalizeTimestampMs(run.startedAt) ?? 0;
 }
 
+function normalizeCronCreateSchedule(schedule: unknown): CronSchedule {
+  if (typeof schedule === 'string') {
+    return { kind: 'cron', expr: schedule };
+  }
+
+  if (schedule && typeof schedule === 'object' && !Array.isArray(schedule)) {
+    return schedule as CronSchedule;
+  }
+
+  throw new Error('Invalid cron.create schedule payload');
+}
+
 function buildCronRunMessage(
   entry: CronRunLogEntry | undefined,
   index: number,
@@ -421,7 +433,7 @@ export async function handleCronRoutes(
       const input = await parseJsonBody<{
         name: string;
         message: string;
-        schedule: CronSchedule;
+        schedule: CronSchedule | string;
         enabled?: boolean;
         delivery?: GatewayCronDelivery;
         agentId?: string;
@@ -429,7 +441,7 @@ export async function handleCronRoutes(
       const delivery = normalizeCronDelivery(input.delivery);
       const result = await ctx.gatewayManager.rpc('cron.add', {
         name: input.name,
-        schedule: input.schedule,
+        schedule: normalizeCronCreateSchedule(input.schedule),
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',

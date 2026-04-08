@@ -50,6 +50,7 @@ describe('handleCronRoutes', () => {
 
     expect(handled).toBe(true);
     expect(rpc).toHaveBeenCalledWith('cron.add', expect.objectContaining({
+      schedule: { kind: 'cron', expr: '0 9 * * *' },
       delivery: {
         mode: 'announce',
         channel: 'openclaw-weixin',
