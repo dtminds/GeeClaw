@@ -137,6 +137,7 @@ interface ChatState {
   newSession: () => Promise<void>;
   newTemporarySession: (agentId?: string) => Promise<void>;
   deleteSession: (key: string) => Promise<void>;
+  renameSession: (desktopSessionId: string, title: string) => Promise<void>;
   cleanupEmptySession: () => Promise<void>;
   loadHistory: (quiet?: boolean) => Promise<void>;
   sendMessage: (
@@ -714,6 +715,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (currentDesktopSessionId === desktopSessionId && next?.gatewaySessionKey) {
       await get().loadHistory();
     }
+  },
+
+  renameSession: async (desktopSessionId: string, title: string) => {
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+
+    const session = get().desktopSessions.find((entry) => entry.id === desktopSessionId);
+    if (!session) return;
+
+    const updatedSession = await updateDesktopSessionRequest(desktopSessionId, {
+      title: nextTitle,
+      updatedAt: Date.now(),
+    });
+
+    set({
+      desktopSessions: get().desktopSessions.map((entry) => (
+        entry.id === desktopSessionId ? updatedSession : entry
+      )),
+    });
   },
 
   // ── New session ──
