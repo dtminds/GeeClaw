@@ -86,6 +86,24 @@ describe('assistant-display', () => {
     });
   });
 
+  it('keeps media-only assistant text blocks visible for history filtering', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'text',
+          text: 'MEDIA:https://example.com/report.png',
+        },
+      ],
+    } as unknown as RawMessage;
+
+    expect(extractAssistantVisibleText(message)).toBe('MEDIA:https://example.com/report.png');
+    expect(extractAssistantDisplaySegments(message, { showThinking: false })).toMatchObject({
+      visibleText: '',
+      parts: [],
+    });
+  });
+
   it('parses think/final tags with trace-aware visibility', () => {
     const message = {
       role: 'assistant',

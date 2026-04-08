@@ -329,6 +329,18 @@ function preprocessAssistantMarkdown(text: string): {
   };
 }
 
+function sanitizeAssistantVisibilityText(text: string): string {
+  return stripAssistantDirectiveTags(
+    stripMessageIdHints(
+      stripEnvelope(
+        stripOpenClawInternalContextBlocks(
+          stripInboundMetadata(text),
+        ),
+      ),
+    ),
+  ).trim();
+}
+
 function appendProcessedSegments(
   target: AssistantDisplaySegment[],
   markdownImages: AssistantMarkdownImage[],
@@ -454,7 +466,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   }
 
   if (!Array.isArray(entry.content)) {
-    const text = getFallbackAssistantText(message).trim();
+    const text = sanitizeAssistantVisibilityText(getFallbackAssistantText(message));
     if (!text) {
       return undefined;
     }
@@ -468,7 +480,7 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   const resolvedBlocks = resolveTextBlocks(message);
   const visibleParts = resolvedBlocks
     .filter((block) => shouldIncludeResolvedTextBlock(block, resolvedBlocks))
-    .map((block) => preprocessAssistantMarkdown(block.text).text)
+    .map((block) => sanitizeAssistantVisibilityText(block.text))
     .filter(Boolean);
 
   if (visibleParts.length === 0) {

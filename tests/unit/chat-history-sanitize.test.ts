@@ -83,6 +83,28 @@ describe('prepareHistoryMessagesForDisplay', () => {
     expect(messages).toHaveLength(0);
   });
 
+  it('keeps media-only assistant history messages so image attachments can be hydrated', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'text',
+            text: 'MEDIA:https://example.com/report.png',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?._attachedFiles).toEqual([
+      expect.objectContaining({
+        url: 'https://example.com/report.png',
+      }),
+    ]);
+  });
+
   it('drops commentary-only assistant history messages', () => {
     const messages = prepareHistoryMessagesForDisplay([
       {

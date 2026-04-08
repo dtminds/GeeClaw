@@ -42,11 +42,29 @@ describe('cleanUserMessageText', () => {
     expect(cleanUserMessageText(polluted)).toBe('请帮我看一下这个任务状态\n\n这是最终需要给用户的回复');
   });
 
+  it('prefers the explicit end sentinel over a truncation marker inside the same internal block', () => {
+    const polluted = [
+      '请帮我看一下这个任务状态',
+      '',
+      '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+      'OpenClaw runtime context (internal):',
+      '...(truncated)...',
+      'still internal',
+      '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>',
+      '',
+      '这是最终需要给用户的回复',
+    ].join('\n');
+
+    expect(cleanUserMessageText(polluted)).toBe('请帮我看一下这个任务状态\n\n这是最终需要给用户的回复');
+  });
+
   it('keeps unmatched OpenClaw internal context markers when no valid closing sentinel exists', () => {
     const polluted = [
       '请帮我看一下这个任务状态',
       '',
       '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>',
+      '',
+      '',
       'OpenClaw runtime context (internal):',
       'This context is runtime-generated, not user-authored. Keep internal details private.',
       'incomplete tail without sentinel',

@@ -231,6 +231,7 @@ export function stripOpenClawInternalContextBlocks(text: string): string {
 
   let result = '';
   let searchFrom = 0;
+  let removedAny = false;
 
   while (searchFrom < text.length) {
     const start = text.indexOf(OPENCLAW_INTERNAL_CONTEXT_BEGIN, searchFrom);
@@ -250,15 +251,17 @@ export function stripOpenClawInternalContextBlocks(text: string): string {
       break;
     }
 
-    if (hasTruncated && (!hasEnd || truncated < end)) {
-      searchFrom = truncated + OPENCLAW_INTERNAL_CONTEXT_TRUNCATED.length;
+    removedAny = true;
+
+    if (hasEnd) {
+      searchFrom = end + OPENCLAW_INTERNAL_CONTEXT_END.length;
       continue;
     }
 
-    searchFrom = end + OPENCLAW_INTERNAL_CONTEXT_END.length;
+    searchFrom = truncated + OPENCLAW_INTERNAL_CONTEXT_TRUNCATED.length;
   }
 
-  return result.replace(/\n{3,}/g, '\n\n');
+  return removedAny ? result.replace(/\n{3,}/g, '\n\n') : text;
 }
 
 function extractSenderLabelFromMessage(entry: Record<string, unknown>): string | null {
