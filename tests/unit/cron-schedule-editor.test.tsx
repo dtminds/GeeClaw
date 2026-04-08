@@ -56,9 +56,6 @@ const translations: Record<string, string> = {
   'dialog.scheduleFixedDaily': 'Daily',
   'dialog.scheduleFixedWeekly': 'Weekly',
   'dialog.scheduleWeekday': 'Weekday',
-  'dialog.scheduleWeekday0': 'Sunday',
-  'dialog.scheduleWeekday2': 'Tuesday',
-  'dialog.scheduleWeekday5': 'Friday',
   'dialog.scheduleTime': 'Time',
   'dialog.scheduleEveryValue': 'Interval',
   'dialog.scheduleEveryUnit': 'Unit',
@@ -68,9 +65,22 @@ const translations: Record<string, string> = {
   'dialog.schedulePreviewUnavailable': 'Preview unavailable',
   'dialog.saveChanges': 'Save Changes',
   'card.next': 'Next',
+  'dialog.scheduleWeekday0': 'Sunday',
+  'dialog.scheduleWeekday1': 'Monday',
+  'dialog.scheduleWeekday2': 'Tuesday',
+  'dialog.scheduleWeekday3': 'Wednesday',
+  'dialog.scheduleWeekday4': 'Thursday',
+  'dialog.scheduleWeekday5': 'Friday',
+  'dialog.scheduleWeekday6': 'Saturday',
+  'schedule.everySeconds': 'Every {{count}} seconds',
   'schedule.everyMinutes': 'Every {{count}} minutes',
   'schedule.everyHours': 'Every {{count}} hours',
   'schedule.everyDays': 'Every {{count}} days',
+  'schedule.onceAt': 'Once at {{time}}',
+  'schedule.weeklyAt': 'Weekly on {{day}} at {{time}}',
+  'schedule.monthlyAtDay': 'Monthly on day {{day}} at {{time}}',
+  'schedule.dailyAt': 'Daily at {{time}}',
+  'schedule.unknown': 'Unknown',
   'toast.created': 'Task created',
   'common:actions.cancel': 'Cancel',
   'common:status.saving': 'Saving...',
@@ -194,6 +204,64 @@ describe('Cron schedule editor integration', () => {
         agentId: undefined,
       });
     });
+  });
+
+  it('renders structured schedules with human-readable labels in task cards', async () => {
+    cronStoreState.jobs = [
+      {
+        id: 'job-every',
+        name: 'Every job',
+        message: 'Run frequently',
+        schedule: { kind: 'every', everyMs: 2 * 60_000 },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+      {
+        id: 'job-once',
+        name: 'Once job',
+        message: 'Run once',
+        schedule: { kind: 'at', at: '2026-04-08T10:11:12.000Z' },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+      {
+        id: 'job-daily',
+        name: 'Daily job',
+        message: 'Run daily',
+        schedule: { kind: 'cron', expr: '30 7 * * *' },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+      {
+        id: 'job-weekly',
+        name: 'Weekly job',
+        message: 'Run weekly',
+        schedule: { kind: 'cron', expr: '30 7 * * 1' },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+      {
+        id: 'job-monthly',
+        name: 'Monthly job',
+        message: 'Run monthly',
+        schedule: { kind: 'cron', expr: '30 7 12 * *' },
+        enabled: true,
+        createdAt: '2026-04-08T00:00:00.000Z',
+        updatedAt: '2026-04-08T00:00:00.000Z',
+      },
+    ];
+
+    render(<Cron />);
+
+    expect(screen.getByText('Every 2 minutes')).toBeInTheDocument();
+    expect(screen.getByText((content) => content.startsWith('Once at '))).toBeInTheDocument();
+    expect(screen.getByText('Daily at 7:30')).toBeInTheDocument();
+    expect(screen.getByText('Weekly on Monday at 7:30')).toBeInTheDocument();
+    expect(screen.getByText('Monthly on day 12 at 7:30')).toBeInTheDocument();
   });
 
   it('backfills supported cron expressions into the fixed-time editor when editing', async () => {

@@ -121,7 +121,10 @@ function parseCronExpr(cron: string, t: TFunction<'cron'>): string {
   if (minute.startsWith('*/')) return t('schedule.everyMinutes', { count: Number(minute.slice(2)) });
   if (hour === '*' && minute === '0') return t('presets.everyHour');
   if (dayOfWeek !== '*' && dayOfMonth === '*') {
-    return t('schedule.weeklyAt', { day: dayOfWeek, time: `${hour}:${minute.padStart(2, '0')}` });
+    return t('schedule.weeklyAt', {
+      day: formatWeekdayLabel(dayOfWeek, t),
+      time: `${hour}:${minute.padStart(2, '0')}`,
+    });
   }
   if (dayOfMonth !== '*') {
     return t('schedule.monthlyAtDay', { day: dayOfMonth, time: `${hour}:${minute.padStart(2, '0')}` });
@@ -131,6 +134,28 @@ function parseCronExpr(cron: string, t: TFunction<'cron'>): string {
   }
 
   return cron;
+}
+
+function formatWeekdayLabel(dayOfWeek: string, t: TFunction<'cron'>): string {
+  const normalized = normalizeWeekdayValue(dayOfWeek);
+  if (normalized === null) {
+    return dayOfWeek;
+  }
+
+  return t(`dialog.scheduleWeekday${normalized}` as const);
+}
+
+function normalizeWeekdayValue(dayOfWeek: string): number | null {
+  if (!/^\d+$/.test(dayOfWeek)) {
+    return null;
+  }
+
+  const value = Number.parseInt(dayOfWeek, 10);
+  if (value < 0 || value > 7) {
+    return null;
+  }
+
+  return value === 7 ? 0 : value;
 }
 
 // Create/Edit Task Dialog
