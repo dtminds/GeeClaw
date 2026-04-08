@@ -1430,7 +1430,7 @@ function ToolCard({
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
-  const summary = useMemo(() => formatToolDisplaySummary(name, input), [input, name]);
+  const summary = useMemo(() => formatToolDisplaySummary(name, input, undefined, preferZh), [input, name, preferZh]);
   const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
   const displaySummary = useMemo(

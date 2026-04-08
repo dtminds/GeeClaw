@@ -218,7 +218,12 @@ function firstValue(input: unknown, keys: string[]): string | undefined {
   return undefined;
 }
 
-export function formatToolDisplaySummary(name: string | undefined, input: unknown, meta?: string): ToolDisplaySummary {
+export function formatToolDisplaySummary(
+  name: string | undefined,
+  input: unknown,
+  meta?: string,
+  preferZh = false,
+): ToolDisplaySummary {
   const trimmedName = name?.trim() || 'tool';
   const key = trimmedName.toLowerCase();
   const spec = TOOL_DISPLAY_SPECS[key];
@@ -233,7 +238,8 @@ export function formatToolDisplaySummary(name: string | undefined, input: unknow
     : (!action && key === 'sessions_yield' ? 'yield' : '');
   const effectiveAction = action || inferredAction;
   const actionSpec = effectiveAction ? spec?.actions?.[effectiveAction] : undefined;
-  const verb = normalizeVerb(actionSpec?.label || (effectiveAction || undefined));
+  const localizedLabel = preferZh ? actionSpec?.label : undefined;
+  const verb = normalizeVerb(localizedLabel || (effectiveAction || undefined));
 
   let detail: string | undefined;
   if (key === 'read') {

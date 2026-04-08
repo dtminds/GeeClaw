@@ -8,6 +8,8 @@ const { invokeIpcMock } = vi.hoisted(() => ({
   invokeIpcMock: vi.fn(),
 }));
 
+let mockLanguage = 'zh-CN';
+
 vi.mock('@/lib/api-client', () => ({
   invokeIpc: invokeIpcMock,
 }));
@@ -19,8 +21,8 @@ vi.mock('react-i18next', async (importOriginal) => {
     useTranslation: () => ({
       t: (key: string, fallback?: string) => fallback ?? key,
       i18n: {
-        language: 'zh-CN',
-        resolvedLanguage: 'zh-CN',
+        language: mockLanguage,
+        resolvedLanguage: mockLanguage,
       },
     }),
   };
@@ -29,6 +31,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 describe('chat live rendering', () => {
   beforeEach(() => {
     invokeIpcMock.mockReset();
+    mockLanguage = 'zh-CN';
   });
 
   it('renders text-tool-text as three separate live items', () => {
@@ -131,6 +134,46 @@ describe('chat live rendering', () => {
     expect(screen.getByText('process 查看进程状态')).toBeInTheDocument();
     expect(screen.getByText('启动子任务 整理日志')).toBeInTheDocument();
     expect(screen.getByText('等待子任务结果')).toBeInTheDocument();
+  });
+
+  it('keeps process and session tool card labels in English outside Chinese locale', () => {
+    mockLanguage = 'en-US';
+
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-tool-english',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-process-en',
+              name: 'process',
+              arguments: { action: 'poll' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-spawn-en',
+              name: 'sessions_spawn',
+              arguments: { task: 'analyze logs' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-yield-en',
+              name: 'sessions_yield',
+              arguments: {},
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('process poll')).toBeInTheDocument();
+    expect(screen.getByText('sessions_spawn spawn · analyze logs')).toBeInTheDocument();
+    expect(screen.getByText('sessions_yield yield')).toBeInTheDocument();
   });
 
   it('renders file links as clickable actions that open local paths', () => {
