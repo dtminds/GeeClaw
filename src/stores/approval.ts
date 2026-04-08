@@ -72,15 +72,26 @@ function buildDebugApproval(kind: ApprovalRequest['kind']): ApprovalRequest {
   };
 }
 
+function pruneApprovalState(state: Pick<ApprovalStoreState, 'queue' | 'busy' | 'pendingDecisionId'>) {
+  const nextQueue = pruneApprovals(state.queue);
+  const pendingStillExists = state.pendingDecisionId
+    ? nextQueue.some((entry) => entry.id === state.pendingDecisionId)
+    : false;
+
+  return {
+    queue: nextQueue,
+    busy: pendingStillExists ? state.busy : false,
+    pendingDecisionId: pendingStillExists ? state.pendingDecisionId : null,
+  };
+}
+
 function ensurePruneTimer(): void {
   if (approvalPruneTimer !== null) {
     return;
   }
 
   approvalPruneTimer = globalThis.setInterval(() => {
-    useApprovalStore.setState((state) => ({
-      queue: pruneApprovals(state.queue),
-    }));
+    useApprovalStore.setState((state) => pruneApprovalState(state));
   }, 1000);
 }
 
@@ -128,7 +139,7 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
       ensurePruneTimer();
       set((state) => ({
         isInitialized: true,
-        queue: pruneApprovals(state.queue),
+        ...pruneApprovalState(state),
       }));
     })().finally(() => {
       approvalInitPromise = null;
@@ -192,9 +203,7 @@ export const useApprovalStore = create<ApprovalStoreState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  pruneExpired: () => set((state) => ({
-    queue: pruneApprovals(state.queue),
-  })),
+  pruneExpired: () => set((state) => pruneApprovalState(state)),
 
   showDebugApproval: (kind = 'exec') => set((state) => ({
     queue: addApproval(state.queue, buildDebugApproval(kind)),

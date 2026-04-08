@@ -197,6 +197,33 @@ describe('approval store', () => {
     expect(useApprovalStore.getState().pendingDecisionId).toBeNull();
   });
 
+  it('clears busy state when pruning the pending approval after expiry', async () => {
+    const { useApprovalStore } = await import('@/stores/approval');
+    useApprovalStore.setState({
+      ...useApprovalStore.getState(),
+      queue: [{
+        id: 'exec-stuck',
+        kind: 'exec',
+        createdAtMs: 1,
+        expiresAtMs: Date.now() - 1,
+        request: { command: 'echo stuck' },
+        allowedDecisions: ['allow-once', 'deny'],
+      }],
+      busy: true,
+      error: null,
+      pendingDecisionId: 'exec-stuck',
+      isInitialized: true,
+    });
+
+    act(() => {
+      useApprovalStore.getState().pruneExpired();
+    });
+
+    expect(useApprovalStore.getState().queue).toEqual([]);
+    expect(useApprovalStore.getState().busy).toBe(false);
+    expect(useApprovalStore.getState().pendingDecisionId).toBeNull();
+  });
+
   it('surfaces rpc failures and does not clear the queue', async () => {
     const { useGatewayStore } = await import('@/stores/gateway');
     vi.spyOn(useGatewayStore.getState(), 'rpc').mockRejectedValue(new Error('gateway offline'));
