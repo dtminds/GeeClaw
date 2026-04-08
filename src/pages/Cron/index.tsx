@@ -48,6 +48,15 @@ import type { TFunction } from 'i18next';
 import { useNavigate } from 'react-router-dom';
 import { getCronDeliveryChannelOptions } from './delivery-channels';
 import { filterCronSessionSuggestions, resolveCronDeliveryAccountId } from './session-suggestions';
+import {
+  buildScheduleFromEditor,
+  createDefaultScheduleEditorState,
+  inferScheduleEditorState,
+  previewLabelForSchedule,
+  type ScheduleEditorState,
+  type SchedulePreviewFormatters,
+} from './schedule-helpers';
+import { ScheduleEditor } from './ScheduleEditor';
 
 // Common cron schedule presets
 const schedulePresets: { key: string; value: string; type: ScheduleType }[] = [
@@ -74,11 +83,7 @@ function parseCronSchedule(schedule: unknown, t: TFunction<'cron'>): string {
       return parseCronExpr(s.expr, t);
     }
     if (s.kind === 'every' && typeof s.everyMs === 'number') {
-      const ms = s.everyMs;
-      if (ms < 60_000) return t('schedule.everySeconds', { count: Math.round(ms / 1000) });
-      if (ms < 3_600_000) return t('schedule.everyMinutes', { count: Math.round(ms / 60_000) });
-      if (ms < 86_400_000) return t('schedule.everyHours', { count: Math.round(ms / 3_600_000) });
-      return t('schedule.everyDays', { count: Math.round(ms / 86_400_000) });
+      return formatEverySchedule(s.everyMs, t);
     }
     if (s.kind === 'at' && typeof s.at === 'string') {
       try {
@@ -98,6 +103,92 @@ function parseCronSchedule(schedule: unknown, t: TFunction<'cron'>): string {
   return String(schedule ?? t('schedule.unknown'));
 }
 
+const everyScheduleUnits: Array<{ unitMs: number; label: 'schedule.everyDays' | 'schedule.everyHours' | 'schedule.everyMinutes' | 'schedule.everySeconds' }> = [
+  { unitMs: 86_400_000, label: 'schedule.everyDays' },
+  { unitMs: 3_600_000, label: 'schedule.everyHours' },
+  { unitMs: 60_000, label: 'schedule.everyMinutes' },
+  { unitMs: 1_000, label: 'schedule.everySeconds' },
+];
+
+function formatEverySchedule(ms: number, t: TFunction<'cron'>): string {
+  for (const unit of everyScheduleUnits) {
+    if (ms < unit.unitMs) {
+      continue;
+    }
+
+    const count = formatExactIntervalCount(ms, unit.unitMs);
+    if (count !== null) {
+      return t(unit.label, { count: Number(count) });
+    }
+  }
+
+  const secondsCount = formatExactIntervalCount(ms, 1_000);
+  return secondsCount === null
+    ? String(ms)
+    : t('schedule.everySeconds', { count: Number(secondsCount) });
+}
+
+function formatExactIntervalCount(ms: number, unitMs: number): string | null {
+  if (!Number.isFinite(ms) || !Number.isInteger(ms) || ms <= 0) {
+    return null;
+  }
+
+  return formatTerminatingDecimal(BigInt(ms), BigInt(unitMs));
+}
+
+function formatTerminatingDecimal(numerator: bigint, denominator: bigint): string | null {
+  const divisor = greatestCommonDivisor(numerator, denominator);
+  let reducedNumerator = numerator / divisor;
+  let reducedDenominator = denominator / divisor;
+  let twos = 0;
+  let fives = 0;
+
+  while (reducedDenominator % 2n === 0n) {
+    reducedDenominator /= 2n;
+    twos += 1;
+  }
+
+  while (reducedDenominator % 5n === 0n) {
+    reducedDenominator /= 5n;
+    fives += 1;
+  }
+
+  if (reducedDenominator !== 1n) {
+    return null;
+  }
+
+  const scale = Math.max(twos, fives);
+  for (let index = 0; index < scale - twos; index += 1) {
+    reducedNumerator *= 2n;
+  }
+  for (let index = 0; index < scale - fives; index += 1) {
+    reducedNumerator *= 5n;
+  }
+
+  if (scale === 0) {
+    return reducedNumerator.toString();
+  }
+
+  const digits = reducedNumerator.toString().padStart(scale + 1, '0');
+  const whole = digits.slice(0, -scale);
+  const fraction = digits.slice(-scale).replace(/0+$/, '');
+
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+function greatestCommonDivisor(left: bigint, right: bigint): bigint {
+  let a = left;
+  let b = right;
+
+  while (b !== 0n) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+
+  return a;
+}
+
 // Parse a plain cron expression string to human-readable text
 function parseCronExpr(cron: string, t: TFunction<'cron'>): string {
   const preset = schedulePresets.find((p) => p.value === cron);
@@ -112,7 +203,10 @@ function parseCronExpr(cron: string, t: TFunction<'cron'>): string {
   if (minute.startsWith('*/')) return t('schedule.everyMinutes', { count: Number(minute.slice(2)) });
   if (hour === '*' && minute === '0') return t('presets.everyHour');
   if (dayOfWeek !== '*' && dayOfMonth === '*') {
-    return t('schedule.weeklyAt', { day: dayOfWeek, time: `${hour}:${minute.padStart(2, '0')}` });
+    return t('schedule.weeklyAt', {
+      day: formatWeekdayLabel(dayOfWeek, t),
+      time: `${hour}:${minute.padStart(2, '0')}`,
+    });
   }
   if (dayOfMonth !== '*') {
     return t('schedule.monthlyAtDay', { day: dayOfMonth, time: `${hour}:${minute.padStart(2, '0')}` });
@@ -124,62 +218,26 @@ function parseCronExpr(cron: string, t: TFunction<'cron'>): string {
   return cron;
 }
 
-function estimateNextRun(scheduleExpr: string): string | null {
-  const now = new Date();
-  const next = new Date(now.getTime());
-
-  if (scheduleExpr === '* * * * *') {
-    next.setSeconds(0, 0);
-    next.setMinutes(next.getMinutes() + 1);
-    return next.toLocaleString();
+function formatWeekdayLabel(dayOfWeek: string, t: TFunction<'cron'>): string {
+  const normalized = normalizeWeekdayValue(dayOfWeek);
+  if (normalized === null) {
+    return dayOfWeek;
   }
 
-  if (scheduleExpr === '*/5 * * * *') {
-    const delta = 5 - (next.getMinutes() % 5 || 5);
-    next.setSeconds(0, 0);
-    next.setMinutes(next.getMinutes() + delta);
-    return next.toLocaleString();
+  return t(`dialog.scheduleWeekday${normalized}` as const);
+}
+
+function normalizeWeekdayValue(dayOfWeek: string): number | null {
+  if (!/^\d+$/.test(dayOfWeek)) {
+    return null;
   }
 
-  if (scheduleExpr === '*/15 * * * *') {
-    const delta = 15 - (next.getMinutes() % 15 || 15);
-    next.setSeconds(0, 0);
-    next.setMinutes(next.getMinutes() + delta);
-    return next.toLocaleString();
+  const value = Number.parseInt(dayOfWeek, 10);
+  if (value < 0 || value > 7) {
+    return null;
   }
 
-  if (scheduleExpr === '0 * * * *') {
-    next.setMinutes(0, 0, 0);
-    next.setHours(next.getHours() + 1);
-    return next.toLocaleString();
-  }
-
-  if (scheduleExpr === '0 9 * * *' || scheduleExpr === '0 18 * * *') {
-    const targetHour = scheduleExpr === '0 9 * * *' ? 9 : 18;
-    next.setSeconds(0, 0);
-    next.setHours(targetHour, 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    return next.toLocaleString();
-  }
-
-  if (scheduleExpr === '0 9 * * 1') {
-    next.setSeconds(0, 0);
-    next.setHours(9, 0, 0, 0);
-    const day = next.getDay();
-    const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7;
-    next.setDate(next.getDate() + daysUntilMonday);
-    return next.toLocaleString();
-  }
-
-  if (scheduleExpr === '0 9 1 * *') {
-    next.setSeconds(0, 0);
-    next.setDate(1);
-    next.setHours(9, 0, 0, 0);
-    if (next <= now) next.setMonth(next.getMonth() + 1);
-    return next.toLocaleString();
-  }
-
-  return null;
+  return value === 7 ? 0 : value;
 }
 
 // Create/Edit Task Dialog
@@ -202,18 +260,10 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const [name, setName] = useState(job?.name || '');
   const [message, setMessage] = useState(job?.message || '');
   const [agentId, setAgentId] = useState(job?.agentId ?? defaultAgentId);
-  const initialSchedule = (() => {
-    const s = job?.schedule;
-    if (!s) return '0 9 * * *';
-    if (typeof s === 'string') return s;
-    if (typeof s === 'object' && 'expr' in s && typeof (s as { expr: string }).expr === 'string') {
-      return (s as { expr: string }).expr;
-    }
-    return '0 9 * * *';
-  })();
-  const [schedule, setSchedule] = useState(initialSchedule);
-  const [customSchedule, setCustomSchedule] = useState('');
-  const [useCustom, setUseCustom] = useState(false);
+  const defaultSchedule = buildScheduleFromEditor(createDefaultScheduleEditorState());
+  const [scheduleEditor, setScheduleEditor] = useState<ScheduleEditorState>(() => (
+    inferScheduleEditorState(job?.schedule ?? defaultSchedule)
+  ));
   const [enabled, setEnabled] = useState(job?.enabled ?? true);
   const [deliveryMode, setDeliveryMode] = useState<CronDeliveryMode>(job?.delivery?.mode ?? 'none');
   const [deliveryChannel, setDeliveryChannel] = useState(job?.delivery?.channel ?? '');
@@ -233,7 +283,13 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  const schedulePreview = estimateNextRun(useCustom ? customSchedule : schedule);
+  const schedulePreview = previewLabelForSchedule(
+    buildScheduleFromEditor(scheduleEditor),
+    createSchedulePreviewFormatters(),
+  );
+  const monthlyHint = scheduleEditor.mode === 'fixed' && scheduleEditor.subtype === 'monthly'
+    ? ` ${t('dialog.scheduleMonthDayHint')}`
+    : '';
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
   useEffect(() => { fetchAgents(); }, [fetchAgents]);
@@ -266,8 +322,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       return;
     }
 
-    const finalSchedule = useCustom ? customSchedule : schedule;
-    if (!finalSchedule.trim()) {
+    if (isScheduleEditorIncomplete(scheduleEditor)) {
       toast.error(t('toast.scheduleRequired'));
       return;
     }
@@ -296,7 +351,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       await onSave({
         name: name.trim(),
         message: message.trim(),
-        schedule: finalSchedule,
+        schedule: buildScheduleFromEditor(scheduleEditor),
         enabled,
         delivery,
         agentId: agentId || undefined,
@@ -381,49 +436,10 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
               {/* Schedule */}
               <div className="space-y-2">
                 <Label className="text-[14px] text-foreground/80 font-bold">{t('dialog.schedule')}</Label>
-                {!useCustom ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {schedulePresets.map((preset) => (
-                      <Button
-                        key={preset.value}
-                        type="button"
-                        variant={schedule === preset.value ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSchedule(preset.value)}
-                        className={cn(
-                          "justify-start h-10 rounded-xl font-medium text-[13px] transition-all",
-                          schedule === preset.value
-                            ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                            : "modal-field-surface surface-hover text-foreground/80"
-                        )}
-                      >
-                        <Timer className="h-4 w-4 mr-2 opacity-70" />
-                        {t(`presets.${preset.key}` as const)}
-                      </Button>
-                    ))}
-                  </div>
-                ) : (
-                  <Input
-                    placeholder={t('dialog.cronPlaceholder')}
-                    value={customSchedule}
-                    onChange={(e) => setCustomSchedule(e.target.value)}
-                    className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40"
-                  />
-                )}
-                <div className="flex items-center justify-between">
-                  <p className="text-[12px] text-muted-foreground/80 font-medium">
-                    {schedulePreview ? `${t('card.next')}: ${schedulePreview}` : t('dialog.cronPlaceholder')}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setUseCustom(!useCustom)}
-                    className="surface-hover h-7 rounded-lg px-2 text-[12px] text-foreground/60"
-                  >
-                    {useCustom ? t('dialog.usePresets') : t('dialog.useCustomCron')}
-                  </Button>
-                </div>
+                <ScheduleEditor value={scheduleEditor} onChange={setScheduleEditor} />
+                <p className="text-[12px] text-muted-foreground/80 font-medium px-1">
+                  {t('card.next')}: {schedulePreview ?? t('dialog.schedulePreviewUnavailable')}{monthlyHint}
+                </p>
               </div>
 
               {/* Delivery */}
@@ -516,11 +532,18 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                                     setDeliveryTo(s.to);
                                     setShowToSuggestions(false);
                                   }}
-                                  className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-accent flex items-center gap-2 transition-colors"
+                                  className="flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-accent"
                                 >
-                                  <span>{CHANNEL_ICONS[s.channel as ChannelType] || ''}</span>
-                                  <span className="font-mono text-foreground">{s.to}</span>
-                                  <span className="text-muted-foreground text-[12px] ml-auto">{s.label}</span>
+                                  <span className="shrink-0">{CHANNEL_ICONS[s.channel as ChannelType] || ''}</span>
+                                  <span className="min-w-0 flex-1 truncate font-mono text-foreground" title={s.to}>
+                                    {s.to}
+                                  </span>
+                                  <span
+                                    className="max-w-[45%] shrink-0 truncate text-[12px] text-muted-foreground"
+                                    title={s.label}
+                                  >
+                                    {s.label}
+                                  </span>
                                 </button>
                               ))}
                             </div>
@@ -557,6 +580,143 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       </Card>
     </div>
   );
+}
+
+function createSchedulePreviewFormatters(): SchedulePreviewFormatters {
+  return {
+    every: (state) => formatPreviewDate(estimateNextEveryOccurrence(state)),
+    fixed: (state) => {
+      if (state.subtype === 'once') {
+        return formatPreviewDate(estimateNextOnceOccurrence(state.at));
+      }
+
+      if (state.tz !== undefined) {
+        return null;
+      }
+
+      return formatPreviewDate(estimateNextRecurringFixedOccurrence(state));
+    },
+    cron: () => null,
+  };
+}
+
+function isScheduleEditorIncomplete(scheduleEditor: ScheduleEditorState): boolean {
+  if (scheduleEditor.mode === 'cron') {
+    return scheduleEditor.expr.trim().length === 0;
+  }
+
+  if (scheduleEditor.mode === 'fixed' && scheduleEditor.subtype === 'once') {
+    return scheduleEditor.at.trim().length === 0;
+  }
+
+  if (scheduleEditor.mode === 'every') {
+    return !Number.isFinite(scheduleEditor.everyMs) || scheduleEditor.everyMs <= 0;
+  }
+
+  return false;
+}
+
+function estimateNextEveryOccurrence(state: Extract<ScheduleEditorState, { mode: 'every' }>): Date | null {
+  if (!Number.isFinite(state.everyMs) || state.everyMs <= 0) {
+    return null;
+  }
+
+  const nowMs = Date.now();
+  if (state.anchorMs !== undefined && Number.isFinite(state.anchorMs)) {
+    if (state.anchorMs > nowMs) {
+      return new Date(state.anchorMs);
+    }
+    const steps = Math.floor((nowMs - state.anchorMs) / state.everyMs) + 1;
+    return new Date(state.anchorMs + steps * state.everyMs);
+  }
+
+  return new Date(nowMs + state.everyMs);
+}
+
+function estimateNextOnceOccurrence(value: string): Date | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const candidate = new Date(value);
+  if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function estimateNextRecurringFixedOccurrence(
+  state: Exclude<Extract<ScheduleEditorState, { mode: 'fixed' }>, { subtype: 'once' }>,
+): Date | null {
+  if (state.subtype === 'daily') {
+    return estimateNextDailyOccurrence(state.hour, state.minute);
+  }
+
+  if (state.subtype === 'weekly') {
+    return estimateNextWeeklyOccurrence(state.dayOfWeek, state.hour, state.minute);
+  }
+
+  return estimateNextMonthlyOccurrence(state.dayOfMonth, state.hour, state.minute);
+}
+
+function estimateNextDailyOccurrence(hour: number, minute: number): Date {
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setSeconds(0, 0);
+  candidate.setHours(hour, minute, 0, 0);
+  if (candidate.getTime() <= now.getTime()) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
+
+function estimateNextWeeklyOccurrence(dayOfWeek: number, hour: number, minute: number): Date {
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setSeconds(0, 0);
+  candidate.setHours(hour, minute, 0, 0);
+
+  const currentDay = candidate.getDay();
+  let dayOffset = (dayOfWeek - currentDay + 7) % 7;
+  if (dayOffset === 0 && candidate.getTime() <= now.getTime()) {
+    dayOffset = 7;
+  }
+  candidate.setDate(candidate.getDate() + dayOffset);
+  return candidate;
+}
+
+function estimateNextMonthlyOccurrence(dayOfMonth: number, hour: number, minute: number): Date | null {
+  const now = new Date();
+  for (let monthOffset = 0; monthOffset < 24; monthOffset += 1) {
+    const candidate = new Date(
+      now.getFullYear(),
+      now.getMonth() + monthOffset,
+      dayOfMonth,
+      hour,
+      minute,
+      0,
+      0,
+    );
+
+    if (candidate.getDate() !== dayOfMonth) {
+      continue;
+    }
+
+    if (candidate.getTime() > now.getTime()) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function formatPreviewDate(value: Date | null): string | null {
+  if (!value || Number.isNaN(value.getTime())) {
+    return null;
+  }
+
+  return value.toLocaleString();
 }
 
 // Job Card Component

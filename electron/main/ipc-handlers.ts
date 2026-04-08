@@ -68,6 +68,7 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
+import type { CronSchedule } from '../../src/types/cron';
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -76,6 +77,18 @@ function getManagedChannelPluginInstallError(channelType: string): string | null
   }
 
   return installResult.warning || `Bundled plugin unavailable for channel "${channelType}"`;
+}
+
+function normalizeCronCreateSchedule(schedule: unknown): CronSchedule {
+  if (typeof schedule === 'string') {
+    return { kind: 'cron', expr: schedule };
+  }
+
+  if (schedule && typeof schedule === 'object' && !Array.isArray(schedule)) {
+    return schedule as CronSchedule;
+  }
+
+  throw new Error('Invalid cron.create schedule payload');
 }
 
 /**
@@ -514,17 +527,17 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
           }
           if (request.action === 'create') {
             const payload = request.payload as
-              | { input?: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }
-              | [{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }]
-              | { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery }
+              | { input?: { name: string; message: string; schedule: CronSchedule | string; enabled?: boolean; delivery?: GatewayCronDelivery } }
+              | [{ name: string; message: string; schedule: CronSchedule | string; enabled?: boolean; delivery?: GatewayCronDelivery }]
+              | { name: string; message: string; schedule: CronSchedule | string; enabled?: boolean; delivery?: GatewayCronDelivery }
               | undefined;
             const input = Array.isArray(payload)
               ? payload[0]
-              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery } }).input : payload);
+              : ('input' in (payload ?? {}) ? (payload as { input: { name: string; message: string; schedule: CronSchedule | string; enabled?: boolean; delivery?: GatewayCronDelivery } }).input : payload);
             if (!input) throw new Error('Invalid cron.create payload');
             const gatewayInput = {
               name: input.name,
-              schedule: { kind: 'cron', expr: input.schedule },
+              schedule: normalizeCronCreateSchedule(input.schedule),
               payload: { kind: 'agentTurn', message: input.message },
               enabled: input.enabled ?? true,
               wakeMode: 'next-heartbeat',
@@ -788,9 +801,8 @@ function transformCronJob(job: GatewayCronJob) {
 /**
  * Cron task IPC handlers
  * Proxies cron operations to the Gateway RPC service.
- * The frontend works with plain cron expression strings, but the Gateway
- * expects CronSchedule objects ({ kind: "cron", expr: "..." }).
- * These handlers bridge the two formats.
+ * Legacy callers may still send cron expression strings, but structured
+ * CronSchedule objects are forwarded through unchanged.
  */
 function registerCronHandlers(gatewayManager: GatewayManager): void {
   // List all cron jobs — transforms Gateway CronJob format to frontend CronJob format
@@ -839,21 +851,19 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
     }
   });
 
-  // Create a new cron job
-  // UI-created tasks have no delivery target — results go to the GeeClaw chat page.
-  // Tasks created via external channels (Feishu, Discord, etc.) are handled
-  // directly by the OpenClaw Gateway and do not pass through this IPC handler.
+  // Create a new cron job.
+  // Accept legacy cron strings for compatibility, but forward structured schedules unchanged.
   ipcMain.handle('cron:create', async (_, input: {
     name: string;
     message: string;
-    schedule: string;
+    schedule: CronSchedule | string;
     delivery?: GatewayCronDelivery;
     enabled?: boolean;
   }) => {
     try {
       const gatewayInput = {
         name: input.name,
-        schedule: { kind: 'cron', expr: input.schedule },
+        schedule: normalizeCronCreateSchedule(input.schedule),
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',

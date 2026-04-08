@@ -5,6 +5,7 @@ import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 import { buildCronUpdatePatch, normalizeCronDelivery, toUiCronDelivery, type GatewayCronDelivery } from '../../utils/cron-delivery';
 import { getOpenClawConfigDir } from '../../utils/paths';
+import type { CronSchedule } from '../../../src/types/cron';
 
 interface GatewayCronJob {
   id: string;
@@ -124,6 +125,18 @@ function transformCronRun(entry: CronRunLogEntry, index: number): CronRunSummary
 
 function getCronRunSortTimestamp(run: Pick<CronRunSummary, 'finishedAt' | 'startedAt'>): number {
   return normalizeTimestampMs(run.finishedAt) ?? normalizeTimestampMs(run.startedAt) ?? 0;
+}
+
+function normalizeCronCreateSchedule(schedule: unknown): CronSchedule {
+  if (typeof schedule === 'string') {
+    return { kind: 'cron', expr: schedule };
+  }
+
+  if (schedule && typeof schedule === 'object' && !Array.isArray(schedule)) {
+    return schedule as CronSchedule;
+  }
+
+  throw new Error('Invalid cron.create schedule payload');
 }
 
 function buildCronRunMessage(
@@ -417,11 +430,18 @@ export async function handleCronRoutes(
 
   if (url.pathname === '/api/cron/jobs' && req.method === 'POST') {
     try {
-      const input = await parseJsonBody<{ name: string; message: string; schedule: string; enabled?: boolean; delivery?: GatewayCronDelivery; agentId?: string }>(req);
+      const input = await parseJsonBody<{
+        name: string;
+        message: string;
+        schedule: CronSchedule | string;
+        enabled?: boolean;
+        delivery?: GatewayCronDelivery;
+        agentId?: string;
+      }>(req);
       const delivery = normalizeCronDelivery(input.delivery);
       const result = await ctx.gatewayManager.rpc('cron.add', {
         name: input.name,
-        schedule: { kind: 'cron', expr: input.schedule },
+        schedule: normalizeCronCreateSchedule(input.schedule),
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',

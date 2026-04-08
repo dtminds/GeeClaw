@@ -82,6 +82,7 @@ Configure and monitor multiple AI channels from the dedicated Channels workspace
 ### ⏰ Cron-Based Automation
 Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock without manual intervention.
 The Cron task form now supports choosing an external delivery channel, selecting the sending account for multi-account channels, and reusing known session targets as suggestions.
+It also offers three schedule editor modes: `Every`, `Fixed Time`, and `Cron`, with weekly schedules shown using weekday names in the task list for easier scanning.
 
 ### 🧩 Extensible Skill System
 Extend your AI agents with pre-built skills. Browse, install, and manage skills through the integrated skill panel—no package managers required.
