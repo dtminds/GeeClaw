@@ -232,6 +232,41 @@ describe('Cron schedule editor integration', () => {
     });
   });
 
+  it('normalizes weekly Sunday cron expressions to the editor Sunday option', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-sun',
+      name: 'Sunday digest',
+      message: 'Summarize Sunday changes',
+      schedule: { kind: 'cron', expr: '30 7 * * 7' },
+      enabled: true,
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Weekday')).toHaveValue('0');
+    expect(screen.getByLabelText('Time')).toHaveValue('07:30');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateJobMock).toHaveBeenCalledWith('job-sun', {
+        name: 'Sunday digest',
+        message: 'Summarize Sunday changes',
+        schedule: {
+          kind: 'cron',
+          expr: '30 7 * * 0',
+        },
+        enabled: true,
+        delivery: { mode: 'none' },
+        agentId: undefined,
+      });
+    });
+  });
+
   it('falls back to raw cron mode for unsupported expressions when editing', () => {
     cronStoreState.jobs = [{
       id: 'job-2',

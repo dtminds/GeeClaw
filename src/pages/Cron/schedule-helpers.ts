@@ -147,7 +147,7 @@ function inferFromCronExpr(expr: string): RecognizedCronFixedEditorState | null 
       subtype: 'weekly',
       minute: toNumber(minutePart),
       hour: toNumber(hourPart),
-      dayOfWeek: toNumber(dayOfWeekPart),
+      dayOfWeek: normalizeDayOfWeek(toNumber(dayOfWeekPart)),
     };
   }
 
@@ -196,4 +196,8 @@ function toNumber(value: string): number {
 
 function inRange(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
+}
+
+function normalizeDayOfWeek(value: number): number {
+  return value === 7 ? 0 : value;
 }
