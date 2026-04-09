@@ -40,4 +40,30 @@ describe('after-pack bundled runtime sync', () => {
     expect(lstatSync(packagedNpmLink).isSymbolicLink()).toBe(true);
     expect(readlinkSync(packagedNpmLink)).toBe('../lib/node_modules/npm/bin/npm-cli.js');
   });
+
+  it('copies deep directory trees while preserving symlinks', async () => {
+    const { copyPathPreservingLinks } = await import('../../scripts/after-pack.cjs');
+
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-copy-src-'));
+    const destRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-copy-dest-'));
+    tempDirs.push(sourceRoot, destRoot);
+
+    mkdirSync(join(sourceRoot, 'node_modules', 'shiki', 'dist', 'langs'), { recursive: true });
+    writeFileSync(
+      join(sourceRoot, 'node_modules', 'shiki', 'dist', 'langs', 'json5.d.mts'),
+      'export type Json5Grammar = string;\n',
+    );
+
+    mkdirSync(join(sourceRoot, 'node_modules', '.bin'), { recursive: true });
+    symlinkSync('../shiki/dist/langs/json5.d.mts', join(sourceRoot, 'node_modules', '.bin', 'shiki-json5'));
+
+    copyPathPreservingLinks(join(sourceRoot, 'node_modules'), join(destRoot, 'node_modules'));
+
+    const copiedTypeDef = join(destRoot, 'node_modules', 'shiki', 'dist', 'langs', 'json5.d.mts');
+    const copiedLink = join(destRoot, 'node_modules', '.bin', 'shiki-json5');
+
+    expect(existsSync(copiedTypeDef)).toBe(true);
+    expect(lstatSync(copiedLink).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(copiedLink)).toBe('../shiki/dist/langs/json5.d.mts');
+  });
 });

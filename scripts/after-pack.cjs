@@ -74,6 +74,8 @@ function copyPathPreservingLinks(sourcePath, destPath) {
   });
 }
 
+exports.copyPathPreservingLinks = copyPathPreservingLinks;
+
 // ── General cleanup ──────────────────────────────────────────────────────────
 
 function cleanupUnnecessaryFiles(dir) {
@@ -568,7 +570,10 @@ exports.default = async function afterPack(context) {
     .length;
 
   console.log(`[after-pack] Copying ${depCount} openclaw dependencies to ${dest} ...`);
-  cpSync(src, dest, { recursive: true });
+  rmSync(normWin(dest), { recursive: true, force: true });
+  // Avoid fs.cp recursive directory fan-out here: the bundled OpenClaw tree is
+  // large enough on CI runners to trip EMFILE while copying package resources.
+  copyPathPreservingLinks(src, dest);
   console.log('[after-pack] ✅ openclaw node_modules copied.');
 
   // Patch broken modules whose CJS transpiled output sets module.exports = undefined,
