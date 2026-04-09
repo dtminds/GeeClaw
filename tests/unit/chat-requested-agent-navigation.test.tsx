@@ -2,6 +2,16 @@ import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 const chatState = {
   messages: [],
   loading: false,
@@ -129,5 +139,25 @@ describe('Chat requested-agent navigation', () => {
       expect(chatState.openAgentMainSession).toHaveBeenCalledWith('writer');
       expect(chatState.loadDesktopSessionSummaries).not.toHaveBeenCalled();
     });
+  });
+
+  it('does not wait for fetchAgents before opening the requested agent main session', async () => {
+    const fetchAgentsDeferred = createDeferred<void>();
+    agentsState.fetchAgents = vi.fn(() => fetchAgentsDeferred.promise);
+
+    const { Chat } = await import('@/pages/Chat');
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/chat', state: { requestedAgentId: 'writer' } }]}>
+        <Chat />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(agentsState.fetchAgents).toHaveBeenCalled();
+      expect(chatState.openAgentMainSession).toHaveBeenCalledWith('writer');
+    });
+
+    fetchAgentsDeferred.resolve();
   });
 });
