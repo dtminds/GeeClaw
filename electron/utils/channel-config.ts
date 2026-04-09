@@ -24,7 +24,7 @@ import {
     listWeixinAccountIds,
     WEIXIN_CHANNEL_ID,
 } from './weixin-state';
-import { isCanonicalChannelAccountId, resolveChannelAccountId } from './channel-account-id';
+import { INVALID_CHANNEL_ACCOUNT_ID_ERROR, isCanonicalChannelAccountId, resolveChannelAccountId } from './channel-account-id';
 
 const OPENCLAW_DIR = getOpenClawConfigDir();
 const CONFIG_FILE = join(OPENCLAW_DIR, 'openclaw.json');
@@ -795,7 +795,7 @@ export async function saveChannelConfig(
     const currentConfig = await readOpenClawConfig();
     const resolvedAccountId = resolveChannelAccountId(accountId, DEFAULT_ACCOUNT_ID);
     if (!isCanonicalChannelAccountId(resolvedAccountId)) {
-        throw new Error('Invalid accountId format. Use lowercase letters, numbers, hyphens, or underscores only (max 64 chars, must start with a letter or number).');
+        throw new Error(INVALID_CHANNEL_ACCOUNT_ID_ERROR);
     }
     cleanupLegacyBuiltInChannelPluginRegistration(currentConfig, channelType);
 
@@ -976,7 +976,7 @@ export async function deleteChannelAccountConfig(channelType: string, accountId:
 
 export async function setDefaultChannelAccount(channelType: string, accountId: string): Promise<void> {
     if (!isCanonicalChannelAccountId(accountId)) {
-        throw new Error('Invalid accountId format. Use lowercase letters, numbers, hyphens, or underscores only (max 64 chars, must start with a letter or number).');
+        throw new Error(INVALID_CHANNEL_ACCOUNT_ID_ERROR);
     }
 
     const currentConfig = await readOpenClawConfig();

@@ -152,4 +152,31 @@ describe('channel API routes', () => {
       }),
     );
   });
+
+  it('rejects empty account IDs on routes that require an explicit account', async () => {
+    const { handleChannelRoutes } = await import('@electron/api/routes/channels');
+
+    parseJsonBodyMock.mockResolvedValue({});
+    await handleChannelRoutes(
+      { method: 'PUT' } as never,
+      {} as never,
+      new URL('http://127.0.0.1/api/channels/config/feishu/default-account'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(setDefaultChannelAccountMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      400,
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('Invalid accountId format'),
+      }),
+    );
+  });
 });

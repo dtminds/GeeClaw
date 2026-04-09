@@ -21,6 +21,7 @@ import {
   ensureManagedChannelPluginInstalled,
 } from '../../utils/plugin-install';
 import {
+  INVALID_CHANNEL_ACCOUNT_ID_ERROR,
   isCanonicalChannelAccountId,
   normalizeOptionalChannelAccountId,
   resolveChannelAccountId,
@@ -33,17 +34,16 @@ function scheduleGatewayChannelRestart(ctx: HostApiContext, reason: string): voi
 }
 
 function getInvalidAccountIdError(): string {
-  return 'Invalid accountId format. Use lowercase letters, numbers, hyphens, or underscores only (max 64 chars, must start with a letter or number).';
+  return INVALID_CHANNEL_ACCOUNT_ID_ERROR;
 }
 
 function validateCanonicalAccountId(accountId: string | null | undefined, options?: { allowEmpty?: boolean }): string | null {
   const normalized = normalizeOptionalChannelAccountId(accountId);
-  if (!normalized && options?.allowEmpty) {
-    return null;
+  if (!normalized) {
+    return options?.allowEmpty ? null : getInvalidAccountIdError();
   }
 
-  const candidate = normalized ?? resolveChannelAccountId(accountId, 'default');
-  if (!isCanonicalChannelAccountId(candidate)) {
+  if (!isCanonicalChannelAccountId(normalized)) {
     return getInvalidAccountIdError();
   }
 
