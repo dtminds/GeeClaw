@@ -290,6 +290,10 @@ async function updateDesktopSessionRequest(
   return response.session;
 }
 
+function isRecoverableChatSendTimeout(error: string): boolean {
+  return error.includes('RPC timeout: chat.send');
+}
+
 function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
   if (!agentId) return null;
   const agent = useAgentsStore.getState().agents.find((entry) => entry.id === agentId);
@@ -1215,14 +1219,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       if (!result.success) {
-        clearHistoryPoll();
-        set({ error: result.error || 'Failed to send message', sending: false, ...createEmptyToolRuntimeState() });
+        const errorMsg = result.error || 'Failed to send message';
+        if (isRecoverableChatSendTimeout(errorMsg)) {
+          console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
+          set({ error: errorMsg });
+        } else {
+          clearHistoryPoll();
+          set({ error: errorMsg, sending: false, ...createEmptyToolRuntimeState() });
+        }
       } else if (result.result?.runId) {
         set({ activeRunId: result.result.runId });
       }
     } catch (err) {
-      clearHistoryPoll();
-      set({ error: String(err), sending: false, ...createEmptyToolRuntimeState() });
+      const errStr = String(err);
+      if (isRecoverableChatSendTimeout(errStr)) {
+        console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
+        set({ error: errStr });
+      } else {
+        clearHistoryPoll();
+        set({ error: errStr, sending: false, ...createEmptyToolRuntimeState() });
+      }
     }
   },
 
@@ -1311,6 +1327,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'delta': {
         if (_errorRecoveryTimer) {
           clearErrorRecoveryTimer();
+        }
+        if (get().error) {
           set({ error: null });
         }
         const nextText = extractTextFromRuntimeMessage(event.message);
