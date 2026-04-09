@@ -443,7 +443,18 @@ function cleanupBundle(outputDir) {
     const NM_REMOVE_DIRS = new Set([
       'test', 'tests', '__tests__', '.github', 'docs', 'examples', 'example',
     ]);
-    const NM_REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+    const NM_REMOVE_FILE_EXTS = [
+      '.d.ts',
+      '.d.ts.map',
+      '.d.mts',
+      '.d.cts',
+      '.js.map',
+      '.mjs.map',
+      '.mts.map',
+      '.cts.map',
+      '.ts.map',
+      '.markdown',
+    ];
     const NM_REMOVE_FILE_NAMES = new Set([
       '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
       'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
@@ -497,7 +508,18 @@ function cleanupBundle(outputDir) {
     const REMOVE_DIRS = new Set([
       'test', 'tests', '__tests__', '.github', 'docs', 'examples', 'example',
     ]);
-    const REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+    const REMOVE_FILE_EXTS = [
+      '.d.ts',
+      '.d.ts.map',
+      '.d.mts',
+      '.d.cts',
+      '.js.map',
+      '.mjs.map',
+      '.mts.map',
+      '.cts.map',
+      '.ts.map',
+      '.markdown',
+    ];
     const REMOVE_FILE_NAMES = new Set([
       '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
       'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
