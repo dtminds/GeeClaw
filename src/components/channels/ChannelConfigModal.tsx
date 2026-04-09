@@ -593,7 +593,7 @@ export function ChannelConfigModal({
 
   return createPortal(
     <div className="overlay-backdrop fixed inset-0 z-[140] flex items-center justify-center p-6">
-      <Card className="modal-card-surface flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl">
+      <Card className="modal-card-surface flex max-h-[90vh] w-full max-w-[660px] flex-col overflow-hidden rounded-3xl border shadow-2xl">
         <CardHeader className="flex shrink-0 flex-row items-start justify-between pb-2">
           <div>
             <CardTitle className="modal-title">
@@ -782,8 +782,6 @@ export function ChannelConfigModal({
                   </div>
                 </div>
               )}
-
-              <Separator className="separator-subtle" />
 
               <div className="modal-footer">
                 <div className="flex gap-3">
