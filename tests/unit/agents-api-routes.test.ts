@@ -228,7 +228,7 @@ describe('agent API routes', () => {
 
     parseJsonBody.mockResolvedValueOnce({
       name: '股票助手 Pro',
-      avatarPresetId: 'chibi-analyst',
+      avatarPresetId: 'gradient-sunset',
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -250,7 +250,7 @@ describe('agent API routes', () => {
     expect(handled).toBe(true);
     expect(updateAgentSettings).toHaveBeenCalledWith('stockexpert', {
       name: '股票助手 Pro',
-      avatarPresetId: 'chibi-analyst',
+      avatarPresetId: 'gradient-sunset',
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -264,7 +264,7 @@ describe('agent API routes', () => {
     parseJsonBody.mockResolvedValueOnce({
       name: 'Research Helper',
       id: 'research-helper',
-      avatarPresetId: 'chibi-researcher',
+      avatarPresetId: 'gradient-sky',
     });
 
     const handled = await handleAgentRoutes(
@@ -280,7 +280,7 @@ describe('agent API routes', () => {
     );
 
     expect(handled).toBe(true);
-    expect(createAgent).toHaveBeenCalledWith('Research Helper', 'research-helper', 'chibi-researcher');
+    expect(createAgent).toHaveBeenCalledWith('Research Helper', 'research-helper', 'gradient-sky');
   });
 
   it('unmanages preset agents through the dedicated route', async () => {

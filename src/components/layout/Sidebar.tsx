@@ -290,11 +290,9 @@ export function Sidebar() {
                   >
                     <AgentAvatar
                       presetId={agent.avatarPresetId}
+                      label={agent.name}
                       size="compact"
-                      className={cn(
-                        'h-7 w-7',
-                        isActiveAgent ? 'ring-2 ring-primary/45' : 'opacity-90',
-                      )}
+                      className="h-7 w-7"
                     />
                   </button>
                 );
@@ -316,11 +314,9 @@ export function Sidebar() {
                   <div className="flex items-start gap-2.5">
                     <AgentAvatar
                       presetId={agent.avatarPresetId}
+                      label={agent.name}
                       size="full"
-                      className={cn(
-                        'mt-0.5 shrink-0',
-                        isActiveAgent ? 'ring-2 ring-primary/45' : '',
-                      )}
+                      className="mt-0.5 shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">

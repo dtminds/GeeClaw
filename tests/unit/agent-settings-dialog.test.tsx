@@ -133,7 +133,7 @@ describe('AgentSettingsDialog shell', () => {
     skillScope: { mode: 'default' },
     presetSkills: [],
     canUseDefaultSkillScope: true,
-    avatarPresetId: 'chibi-researcher',
+    avatarPresetId: 'gradient-sky',
     avatarSource: 'default',
   };
 
@@ -504,12 +504,12 @@ describe('AgentSettingsDialog shell', () => {
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Analyst/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Sunset/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        avatarPresetId: 'chibi-analyst',
+        avatarPresetId: 'gradient-sunset',
       });
     });
   });

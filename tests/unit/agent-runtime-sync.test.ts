@@ -125,6 +125,8 @@ describe('agent runtime sync', () => {
           default: true,
           workspace: '~/.openclaw-geeclaw/workspace-helper',
           agentDir: '~/.openclaw-geeclaw/agents/helper/agent',
+          avatarPresetId: 'gradient-rose',
+          avatarSource: 'user',
         },
         {
           id: 'stockexpert',
@@ -132,6 +134,8 @@ describe('agent runtime sync', () => {
           workspace: '~/.openclaw-geeclaw/workspace-stockexpert',
           agentDir: '~/.openclaw-geeclaw/agents/stockexpert/agent',
           skills: ['stock-analyzer'],
+          avatarPresetId: 'gradient-sunset',
+          avatarSource: 'default',
         },
       ],
     });
@@ -221,6 +225,10 @@ describe('agent runtime sync', () => {
     expect(config.agents?.list?.find((entry) => entry.id === 'main')).not.toHaveProperty('agentDir');
     expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('agentDir');
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('agentDir');
+    expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('avatarPresetId');
+    expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('avatarSource');
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('avatarPresetId');
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('avatarSource');
     expect(config.bindings).toEqual([
       {
         agentId: 'helper',

@@ -567,6 +567,8 @@ describe('managed agent config domain', () => {
           managed: true,
           managedFiles: ['AGENTS.md', 'SOUL.md'],
           presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+          avatarPresetId: 'gradient-sunset',
+          avatarSource: 'default',
         }),
       ]),
     });
@@ -966,13 +968,13 @@ describe('managed agent config domain', () => {
   });
 
   it('creates and deletes custom agents under the managed geeclaw workspace root', async () => {
-    const { homeDir, configDir, agentConfig, deleteDesktopSessionsForAgent } = await setupManagedPresetFixture();
+    const { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent } = await setupManagedPresetFixture();
 
-    const created = await agentConfig.createAgent('Research Helper', 'research-helper', 'chibi-researcher');
+    const created = await agentConfig.createAgent('Research Helper', 'research-helper', 'gradient-sky');
     expect(created.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
       workspace: '~/geeclaw/workspace-research-helper',
       agentDir: '~/.openclaw-geeclaw/agents/research-helper/agent',
-      avatarPresetId: 'chibi-researcher',
+      avatarPresetId: 'gradient-sky',
       avatarSource: 'user',
     });
     const configAfterCreate = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
@@ -985,6 +987,14 @@ describe('managed agent config domain', () => {
     expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'main')).not.toHaveProperty('workspace');
     expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'main')).not.toHaveProperty('agentDir');
     expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'research-helper')).not.toHaveProperty('agentDir');
+    expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'research-helper')).not.toHaveProperty('avatarPresetId');
+    expect(configAfterCreate.agents?.list?.find((agent) => agent.id === 'research-helper')).not.toHaveProperty('avatarSource');
+    expect(storeState.agentAvatars).toMatchObject({
+      'research-helper': {
+        avatarPresetId: 'gradient-sky',
+        avatarSource: 'user',
+      },
+    });
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
 
     const deletion = await agentConfig.deleteAgentConfig('research-helper');
@@ -992,12 +1002,13 @@ describe('managed agent config domain', () => {
       id: 'research-helper',
       workspace: '~/geeclaw/workspace-research-helper',
     });
+    expect(storeState.agentAvatars).toBeUndefined();
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
     expect(deleteDesktopSessionsForAgent).toHaveBeenCalledWith('research-helper');
   });
 
   it('keeps a user-selected avatar when a marketplace agent updates', async () => {
-    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
+    const { agentConfig, marketplaceState, configDir, storeState } = await setupManagedPresetFixture();
 
     await agentConfig.installMarketplaceAgent('stockexpert');
     await agentConfig.updateAgentSettings('stockexpert', {
@@ -1011,6 +1022,17 @@ describe('managed agent config domain', () => {
       avatarPresetId: 'gradient-rose',
       avatarSource: 'user',
     });
+    expect(storeState.agentAvatars).toMatchObject({
+      stockexpert: {
+        avatarPresetId: 'gradient-rose',
+        avatarSource: 'user',
+      },
+    });
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; avatarPresetId?: string; avatarSource?: string }> };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('avatarPresetId');
+    expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('avatarSource');
   });
 
   it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {

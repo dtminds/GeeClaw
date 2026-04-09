@@ -9,7 +9,7 @@ import {
 
 describe('agent avatar shared helpers', () => {
   it('uses the explicit marketplace mapping when available', () => {
-    expect(resolveMarketplaceAvatarPresetId('stockexpert')).toBe('chibi-analyst');
+    expect(resolveMarketplaceAvatarPresetId('stockexpert')).toBe('gradient-sunset');
   });
 
   it('falls back to a stable preset for unknown marketplace agent ids', () => {

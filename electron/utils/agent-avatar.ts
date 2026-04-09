@@ -1,10 +1,4 @@
 export const AGENT_AVATAR_PRESET_IDS = [
-  'chibi-researcher',
-  'chibi-coder',
-  'chibi-operator',
-  'chibi-designer',
-  'chibi-analyst',
-  'chibi-robot',
   'gradient-sky',
   'gradient-orchid',
   'gradient-sunset',
@@ -16,11 +10,11 @@ export const AGENT_AVATAR_PRESET_IDS = [
 export type AgentAvatarPresetId = typeof AGENT_AVATAR_PRESET_IDS[number];
 export type AgentAvatarSource = 'default' | 'user';
 
-export const DEFAULT_AGENT_AVATAR_PRESET_ID: AgentAvatarPresetId = 'chibi-researcher';
+export const DEFAULT_AGENT_AVATAR_PRESET_ID: AgentAvatarPresetId = 'gradient-sky';
 
 const PRESET_ID_SET = new Set<string>(AGENT_AVATAR_PRESET_IDS);
 const MARKETPLACE_AGENT_AVATAR_MAP: Partial<Record<string, AgentAvatarPresetId>> = {
-  stockexpert: 'chibi-analyst',
+  stockexpert: 'gradient-sunset',
 };
 
 export function normalizeAgentAvatarPresetId(value: unknown): AgentAvatarPresetId {

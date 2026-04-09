@@ -107,7 +107,7 @@ function AddAgentDialogBody({ onOpenChange }: Pick<AddAgentDialogProps, 'onOpenC
           <div className="space-y-1">
             <Label className={labelClasses}>{t('createDialog.avatarLabel', 'Avatar')}</Label>
             <p className="text-[12px] text-muted-foreground">
-              {t('createDialog.avatarDescription', 'Choose from chibi and gradient presets.')}
+              {t('createDialog.avatarDescription', 'Choose a preset avatar.')}
             </p>
           </div>
           <AgentAvatarPicker value={avatarPresetId} onChange={setAvatarPresetId} disabled={saving} />

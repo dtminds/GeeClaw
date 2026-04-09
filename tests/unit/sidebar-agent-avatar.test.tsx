@@ -42,7 +42,7 @@ const agentsState = {
       skillScope: { mode: 'default' },
       presetSkills: [],
       canUseDefaultSkillScope: true,
-      avatarPresetId: 'chibi-coder',
+      avatarPresetId: 'gradient-indigo',
       avatarSource: 'user',
     },
   ],
@@ -134,7 +134,8 @@ describe('Sidebar agent avatars', () => {
     const agentButton = screen.getByRole('button', { name: /Alpha/i });
     const avatar = within(agentButton).getByTestId('agent-avatar');
     expect(avatar).toHaveAttribute('data-avatar-size', 'full');
-    expect(avatar).toHaveAttribute('data-avatar-preset', 'chibi-coder');
+    expect(avatar).toHaveAttribute('data-avatar-preset', 'gradient-indigo');
+    expect(within(avatar).getByText('A')).toBeInTheDocument();
   });
 
   it('renders compact avatars in the collapsed sidebar', async () => {
@@ -149,6 +150,7 @@ describe('Sidebar agent avatars', () => {
 
     const avatar = within(screen.getByRole('button', { name: 'Switch to Alpha' })).getByTestId('agent-avatar');
     expect(avatar).toHaveAttribute('data-avatar-size', 'compact');
-    expect(avatar).toHaveAttribute('data-avatar-preset', 'chibi-coder');
+    expect(avatar).toHaveAttribute('data-avatar-preset', 'gradient-indigo');
+    expect(within(avatar).getByText('A')).toBeInTheDocument();
   });
 });

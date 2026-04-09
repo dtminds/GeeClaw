@@ -21,7 +21,7 @@ const translations: Record<string, string> = {
   'createDialog.idFormatError': 'Invalid format',
   'createDialog.idDuplicateError': 'Already exists',
   'createDialog.avatarLabel': 'Avatar',
-  'createDialog.avatarDescription': 'Choose from chibi and gradient presets.',
+  'createDialog.avatarDescription': 'Choose a preset avatar.',
   'toast.agentCreated': 'Agent created',
   'toast.agentCreateFailed': 'Create failed',
   'creating': 'Creating...',
@@ -69,13 +69,13 @@ describe('AddAgentDialog', () => {
 
     render(<AddAgentDialog open onOpenChange={onOpenChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Analyst/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Sunset/i }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Research Helper' } });
     fireEvent.change(screen.getByLabelText('Agent ID'), { target: { value: 'research-helper' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(createAgentMock).toHaveBeenCalledWith('Research Helper', 'research-helper', 'chibi-analyst');
+      expect(createAgentMock).toHaveBeenCalledWith('Research Helper', 'research-helper', 'gradient-sunset');
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });

@@ -56,6 +56,23 @@ function isRedundantDefaultAgentDir(agentId: string, agentDir: unknown): boolean
     === trimTrailingSeparators(normalize(expandPath(defaultValue)));
 }
 
+function sanitizeAgentListEntry(entry: Record<string, unknown>): Record<string, unknown> {
+  const nextEntry = cloneValue(entry);
+  delete nextEntry.avatarPresetId;
+  delete nextEntry.avatarSource;
+  return nextEntry;
+}
+
+function sanitizeStoredAgentsConfig(agents: Record<string, unknown>): Record<string, unknown> {
+  const nextAgents = cloneValue(agents);
+  if (Array.isArray(nextAgents.list)) {
+    nextAgents.list = nextAgents.list
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+      .map((entry) => sanitizeAgentListEntry(entry));
+  }
+  return nextAgents;
+}
+
 function normalizeAgentListWithMainEntry(
   entries: unknown,
   _defaults: Record<string, unknown>,
@@ -63,7 +80,7 @@ function normalizeAgentListWithMainEntry(
   const normalizedEntries = Array.isArray(entries)
     ? entries
       .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-      .map((entry) => cloneValue(entry))
+      .map((entry) => sanitizeAgentListEntry(entry))
     : [];
 
   const mainIndex = normalizedEntries.findIndex((entry) => entry.id === MAIN_AGENT_ID);
@@ -116,7 +133,7 @@ export async function readStoredAgentRuntimeConfig(): Promise<StoredAgentRuntime
   const bindings = store.get('bindings') as Array<Record<string, unknown>> | undefined;
 
   return {
-    agents: agents ? cloneValue(agents) : undefined,
+    agents: agents ? sanitizeStoredAgentsConfig(agents) : undefined,
     bindings: bindings ? cloneValue(bindings) : undefined,
   };
 }
@@ -128,7 +145,7 @@ export async function saveAgentRuntimeConfigToStore(config: {
   const store = await getGeeClawAgentStore();
 
   if (config.agents && typeof config.agents === 'object') {
-    store.set('agents', cloneValue(config.agents));
+    store.set('agents', sanitizeStoredAgentsConfig(config.agents as Record<string, unknown>));
   } else {
     store.delete('agents');
   }
@@ -245,7 +262,7 @@ async function migrateOpenClawConfigToStore(): Promise<void> {
   let migrated = false;
 
   if (config.agents && Object.keys(config.agents).length > 0) {
-    store.set('agents', JSON.parse(JSON.stringify(config.agents)));
+    store.set('agents', sanitizeStoredAgentsConfig(config.agents as Record<string, unknown>));
     migrated = true;
   }
 
