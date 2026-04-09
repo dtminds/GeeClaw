@@ -910,13 +910,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (!previewsLoaded || !isSameHistoryRequest(request, get())) {
               return;
             }
-            set({
-              messages: finalMessages.map((msg) =>
-                msg._attachedFiles
-                  ? { ...msg, _attachedFiles: msg._attachedFiles.map((file) => ({ ...file })) }
-                  : msg
-              ),
-            });
+            const hydratedFilesById = new Map<string, RawMessage['_attachedFiles']>();
+            const hydratedFilesByRef = new Map<RawMessage, RawMessage['_attachedFiles']>();
+            for (const msg of finalMessages) {
+              if (msg._attachedFiles === undefined) continue;
+              const hydratedFiles = msg._attachedFiles.map((file) => ({ ...file }));
+              hydratedFilesByRef.set(msg, hydratedFiles);
+              if (msg.id) {
+                hydratedFilesById.set(msg.id, hydratedFiles);
+              }
+            }
+
+            set((state) => ({
+              messages: state.messages.map((msg) => {
+                const hydratedFiles = msg.id && hydratedFilesById.has(msg.id)
+                  ? hydratedFilesById.get(msg.id)
+                  : hydratedFilesByRef.get(msg);
+                return hydratedFiles !== undefined
+                  ? { ...msg, _attachedFiles: hydratedFiles }
+                  : msg;
+              }),
+            }));
           })
           .catch((error) => {
             console.warn('[loadHistory] Failed to hydrate file previews:', error);

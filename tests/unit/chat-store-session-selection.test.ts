@@ -386,4 +386,89 @@ describe('chat store session selection', () => {
     });
     await loadPromise;
   });
+
+  it('preserves newer messages when attachment preview hydration finishes', async () => {
+    const thumbnailsDeferred = createDeferred<Record<string, { exists: boolean; preview: string | null; fileSize: number }>>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/files/thumbnails') {
+        return thumbnailsDeferred.promise;
+      }
+      if (path.startsWith('/api/desktop-sessions/')) {
+        return { success: true, session: writerSession };
+      }
+      return { sessions: [] };
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [{
+              id: 'writer-msg',
+              role: 'assistant',
+              content: 'image response',
+              timestamp: 1,
+              _attachedFiles: [
+                {
+                  fileName: 'image.png',
+                  mimeType: 'image/png',
+                  fileSize: 0,
+                  preview: null,
+                  filePath: '/tmp/image.png',
+                },
+              ],
+            }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory();
+
+    useChatStore.setState((state) => ({
+      ...state,
+      messages: [
+        ...state.messages,
+        {
+          id: 'new-msg',
+          role: 'user',
+          content: 'newer optimistic message',
+          timestamp: 2,
+        },
+      ],
+    }));
+
+    thumbnailsDeferred.resolve({
+      '/tmp/image.png': {
+        exists: true,
+        preview: 'data:image/png;base64,preview',
+        fileSize: 42,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.id)).toEqual(['writer-msg', 'new-msg']);
+    expect(messages[0]?._attachedFiles?.[0]?.preview).toBe('data:image/png;base64,preview');
+    expect(messages[0]?._attachedFiles?.[0]?.fileSize).toBe(42);
+    expect(messages[1]?.id).toBe('new-msg');
+    expect(messages[1]?.content).toBe('newer optimistic message');
+  });
 });
