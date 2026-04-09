@@ -294,6 +294,8 @@ const COMMON_TOOL_NAME_MAP_ZH: Record<string, string> = {
   command: '执行本地命令',
   sql: '执行数据库查询',
   query: '执行查询',
+  sessions_spawn: '启动子任务',
+  sessions_yield: '等待子任务结果',
 };
 
 function normalizeToolName(name: string): string {
@@ -1428,12 +1430,26 @@ function ToolCard({
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
-  const summary = useMemo(() => formatToolDisplaySummary(name, input), [input, name]);
+  const summary = useMemo(() => formatToolDisplaySummary(name, input, undefined, preferZh), [input, name, preferZh]);
   const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
   const displaySummary = useMemo(
-    () => (summary.detailLine ? `${displayName} ${summary.detailLine}` : displayName),
-    [displayName, summary.detailLine],
+    () => {
+      if (!summary.detailLine) {
+        return displayName;
+      }
+
+      const normalizedDisplayName = displayName.trim();
+      const normalizedVerb = (summary.verb || '').trim();
+      if (normalizedDisplayName && normalizedVerb && normalizedDisplayName === normalizedVerb) {
+        return summary.detail && summary.detail !== normalizedVerb
+          ? `${displayName} ${summary.detail}`
+          : displayName;
+      }
+
+      return `${displayName} ${summary.detailLine}`;
+    },
+    [displayName, summary.detail, summary.detailLine, summary.verb],
   );
   const formattedInput = useMemo(() => {
     if (!open || input == null) {

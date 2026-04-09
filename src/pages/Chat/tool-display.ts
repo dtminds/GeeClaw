@@ -99,6 +99,26 @@ const TOOL_DISPLAY_SPECS: Record<string, ToolDisplaySpec> = {
       act: { label: 'act', detailKeys: ['request.kind', 'request.ref', 'request.selector', 'request.text', 'request.value'] },
     },
   },
+  process: {
+    title: 'Process',
+    actions: {
+      poll: { label: '查看进程状态' },
+      log: { label: '查看进程日志' },
+    },
+  },
+  sessions_spawn: {
+    title: 'Sessions Spawn',
+    detailKeys: ['task'],
+    actions: {
+      spawn: { label: '启动子任务', detailKeys: ['task'] },
+    },
+  },
+  sessions_yield: {
+    title: 'Sessions Yield',
+    actions: {
+      yield: { label: '等待子任务结果' },
+    },
+  },
 };
 
 function titleFromName(name: string): string {
@@ -198,7 +218,12 @@ function firstValue(input: unknown, keys: string[]): string | undefined {
   return undefined;
 }
 
-export function formatToolDisplaySummary(name: string | undefined, input: unknown, meta?: string): ToolDisplaySummary {
+export function formatToolDisplaySummary(
+  name: string | undefined,
+  input: unknown,
+  meta?: string,
+  preferZh = false,
+): ToolDisplaySummary {
   const trimmedName = name?.trim() || 'tool';
   const key = trimmedName.toLowerCase();
   const spec = TOOL_DISPLAY_SPECS[key];
@@ -208,8 +233,13 @@ export function formatToolDisplaySummary(name: string | undefined, input: unknow
 
   const actionRaw = getValueByKeyPath(input, 'action');
   const action = typeof actionRaw === 'string' ? actionRaw.trim() : '';
-  const actionSpec = action ? spec?.actions?.[action] : undefined;
-  const verb = normalizeVerb(actionSpec?.label || (action || undefined));
+  const inferredAction = !action && key === 'sessions_spawn'
+    ? 'spawn'
+    : (!action && key === 'sessions_yield' ? 'yield' : '');
+  const effectiveAction = action || inferredAction;
+  const actionSpec = effectiveAction ? spec?.actions?.[effectiveAction] : undefined;
+  const localizedLabel = preferZh ? actionSpec?.label : undefined;
+  const verb = normalizeVerb(localizedLabel || (effectiveAction || undefined));
 
   let detail: string | undefined;
   if (key === 'read') {
