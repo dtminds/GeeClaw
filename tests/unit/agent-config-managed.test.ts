@@ -461,6 +461,40 @@ describe('managed agent config domain', () => {
     ]);
   });
 
+  it('marks marketplace agents as installed when config entries or runtime directories exist without management metadata', async () => {
+    const { agentConfig, configDir, homeDir, storeState } = await setupManagedPresetFixture();
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+    delete storeState.management;
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        installed: true,
+        installedVersion: undefined,
+        hasUpdate: false,
+      }),
+    ]);
+
+    rmSync(join(homeDir, '.openclaw-geeclaw', 'agents', 'stockexpert'), { recursive: true, force: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      agents: {
+        defaults: { workspace: getExpectedWorkspacePath(homeDir, 'main') },
+      },
+    }, null, 2), 'utf8');
+
+    await expect(agentConfig.listAgentPresetSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        source: 'marketplace',
+        agentId: 'stockexpert',
+        installed: false,
+        installedVersion: undefined,
+        hasUpdate: false,
+      }),
+    ]);
+  });
+
   it('reports installed marketplace versions and update availability from management state', async () => {
     const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
 

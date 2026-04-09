@@ -871,6 +871,21 @@ async function listExistingAgentIdsOnDisk(): Promise<Set<string>> {
   return ids;
 }
 
+async function listExistingConfiguredOrRuntimeAgentIds(): Promise<Set<string>> {
+  const [config, runtimeIds] = await Promise.all([
+    readOpenClawConfig() as Promise<AgentConfigDocument>,
+    listExistingAgentIdsOnDisk(),
+  ]);
+  const { entries } = normalizeAgentsConfig(config);
+  const existingIds = new Set(entries.map((entry) => normalizeAgentId(entry.id)));
+
+  for (const runtimeId of runtimeIds) {
+    existingIds.add(normalizeAgentId(runtimeId));
+  }
+
+  return existingIds;
+}
+
 async function removeAgentRuntimeDirectory(agentId: string): Promise<void> {
   const runtimeDir = join(getOpenClawConfigDir(), 'agents', agentId);
   try {
@@ -1252,16 +1267,17 @@ export async function updateDefaultAgentFallbacks(
 }
 
 export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummary[]> {
-  const [catalog, management] = await Promise.all([
+  const [catalog, management, existingIds] = await Promise.all([
     loadAgentMarketplaceCatalog(),
     readAgentManagementMap(),
+    listExistingConfiguredOrRuntimeAgentIds(),
   ]);
 
   return catalog.map((entry) => {
     const supportedOnCurrentPlatform = isPresetSupportedOnPlatform(entry.platforms, process.platform);
     const supportedOnCurrentAppVersion = isMarketplaceEntrySupportedOnCurrentAppVersion(entry);
     const installedMetadata = management[entry.agentId];
-    const installed = installedMetadata?.managed === true;
+    const installed = installedMetadata?.managed === true || existingIds.has(normalizeAgentId(entry.agentId));
     const installedVersion = installedMetadata?.source === 'marketplace'
       ? installedMetadata.packageVersion
       : undefined;

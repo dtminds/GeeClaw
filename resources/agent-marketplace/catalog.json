@@ -7,7 +7,7 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/delivery-execution/1.0.0.zip",
-    "checksum": "sha256-50b5384cc5a0631690d09e0e8529382542d3a9671b9f533308322b7890dea80e",
+    "checksum": "sha256-eca4e432ef372e2817b66fc23be62b152a16050ee44dc153d5efd161fe3f3f6e",
     "size": 30519,
     "presetSkills": [
       "dummy-dataset",
@@ -29,7 +29,7 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/discovery-research/1.0.0.zip",
-    "checksum": "sha256-f1a24df42c175313dde997540d4354b812546ca107be25b5f7bf15b67c375282",
+    "checksum": "sha256-fb7b5ea411e377205fa1d51d30537920a9c02c0751c87c0597ba5b01438ee71d",
     "size": 60866,
     "presetSkills": [
       "analyze-feature-requests",
@@ -61,7 +61,7 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/growth-optimization/1.0.0.zip",
-    "checksum": "sha256-83229fa6cacc6686968f67e88141d8ce2e029f20b187e2d1614d36592b888996",
+    "checksum": "sha256-48ab7a6ebffdb45a870bce1e5f3ba2d0f90270c4da6ab0f35a191d952592894b",
     "size": 55201,
     "presetSkills": [
       "ab-test-analysis",
@@ -89,8 +89,8 @@
     "category": "资讯热点",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
-    "checksum": "sha256-67faea868777a9268b61e372e53e478c589c59b41b8a9f20c5d1606eb08ab079",
-    "size": 4864
+    "checksum": "sha256-cc59f3922c47782357e04bcf725667bfc2749fdecc979abcb65d9920487900fe",
+    "size": 2972
   },
   {
     "agentId": "marketing-growth-assistant",
@@ -100,7 +100,7 @@
     "category": "Marketing",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-growth-assistant/1.0.0.zip",
-    "checksum": "sha256-3fe23516a0288411384dd00176c3c97ee1a540bc377833f1bef6e1db57400d95",
+    "checksum": "sha256-08e69d54d206e890a15ce881773a2cbd40327019321b7e5cee570f2915c19fa1",
     "size": 232734,
     "presetSkills": [
       "sales-pipeline",
@@ -118,7 +118,7 @@
     "category": "PM",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/strategy-planning/1.0.0.zip",
-    "checksum": "sha256-977ddb3e3047edaca44193c370333fe842f9533f2df6c78ac8397e43f74bf816",
+    "checksum": "sha256-e2c0d27f2bf347051546de222cd12feed638d046155cd8eb1576bb880b404ed7",
     "size": 67999,
     "presetSkills": [
       "ansoff-matrix",
@@ -149,7 +149,7 @@
     "category": "内容运营",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/wechat-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-4889226fbc8cc9c7cf58a6b08d0dd19ab633736f11f958015de5304ad94003fd",
+    "checksum": "sha256-e2d84426de84c6c81e2b07fda5d749dfcb939964a3105034d0449b0a36341fea",
     "size": 197151,
     "presetSkills": [
       "wewrite",
@@ -164,14 +164,37 @@
     "category": "内容运营",
     "version": "1.0.0",
     "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/xhs-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-72c1b3a61f788bb905e612d1762e10e6c5826a978a6ab1b7a69fbbe57f95980d",
-    "size": 435800,
+    "checksum": "sha256-4dbb8d5a7b9a00c51c3d7c9f49bf2edd5a44917716cd5c4cc918485aaf8a029e",
+    "size": 436192,
     "presetSkills": [
       "baoyu-xhs-images",
       "baoyu-infographic",
       "baoyu-cover-image",
       "baoyu-url-to-markdown",
       "baoyu-image-gen"
+    ]
+  },
+  {
+    "agentId": "xy-boss-assistant",
+    "name": "星云BOSS助手",
+    "description": "聚焦星云有客 BOSS 后台里的租户分析、续费判断、升级归因与降级复盘。",
+    "emoji": "👔",
+    "category": "客户成功",
+    "version": "1.0.1",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/xy-boss-assistant/1.0.1.zip",
+    "checksum": "sha256-f8bf63ea882977841df80565e523c2bd5988ea9924188ae2db2afb82a3f18bef",
+    "size": 22797,
+    "presetSkills": [
+      "pdf",
+      "xlsx",
+      "docx",
+      "pptx",
+      "schedule-skill",
+      "mcporter",
+      "boss-downgrade-analysis",
+      "boss-upgrade-analysis",
+      "boss-tenant-analysis",
+      "boss-tenant-expiring-analysis"
     ]
   }
 ]
