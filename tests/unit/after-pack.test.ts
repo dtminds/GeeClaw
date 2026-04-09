@@ -66,4 +66,25 @@ describe('after-pack bundled runtime sync', () => {
     expect(lstatSync(copiedLink).isSymbolicLink()).toBe(true);
     expect(readlinkSync(copiedLink)).toBe('../shiki/dist/langs/json5.d.mts');
   });
+
+  it('removes declaration-only mts and cts files during packaged cleanup', async () => {
+    const { cleanupUnnecessaryFiles } = await import('../../scripts/after-pack.cjs');
+
+    const packageRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-cleanup-'));
+    tempDirs.push(packageRoot);
+
+    mkdirSync(join(packageRoot, 'node_modules', 'shiki', 'dist', 'langs'), { recursive: true });
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(join(packageRoot, 'node_modules', 'shiki', 'dist', 'langs', 'plsql.mjs'), 'export default {};\n');
+    writeFileSync(join(packageRoot, 'node_modules', 'shiki', 'dist', 'langs', 'plsql.d.mts'), 'export interface Lang {}\n');
+    writeFileSync(join(packageRoot, 'node_modules', 'pkg', 'index.cjs'), 'module.exports = {};\n');
+    writeFileSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'), 'export = {};\n');
+
+    cleanupUnnecessaryFiles(packageRoot);
+
+    expect(existsSync(join(packageRoot, 'node_modules', 'shiki', 'dist', 'langs', 'plsql.mjs'))).toBe(true);
+    expect(existsSync(join(packageRoot, 'node_modules', 'shiki', 'dist', 'langs', 'plsql.d.mts'))).toBe(false);
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.cjs'))).toBe(true);
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'))).toBe(false);
+  });
 });

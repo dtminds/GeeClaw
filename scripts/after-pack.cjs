@@ -84,7 +84,18 @@ function cleanupUnnecessaryFiles(dir) {
   const REMOVE_DIRS = new Set([
     'test', 'tests', '__tests__', '.github', 'examples', 'example',
   ]);
-  const REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+  const REMOVE_FILE_EXTS = [
+    '.d.ts',
+    '.d.ts.map',
+    '.d.mts',
+    '.d.cts',
+    '.js.map',
+    '.mjs.map',
+    '.mts.map',
+    '.cts.map',
+    '.ts.map',
+    '.markdown',
+  ];
   const REMOVE_FILE_NAMES = new Set([
     '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
     'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
@@ -115,6 +126,8 @@ function cleanupUnnecessaryFiles(dir) {
   walk(dir);
   return removedCount;
 }
+
+exports.cleanupUnnecessaryFiles = cleanupUnnecessaryFiles;
 
 // ── Platform-specific: koffi ─────────────────────────────────────────────────
 // koffi ships 18 platform pre-builds under koffi/build/koffi/{platform}_{arch}/.
