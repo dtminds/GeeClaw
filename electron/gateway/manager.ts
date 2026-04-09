@@ -742,8 +742,6 @@ export class GatewayManager extends EventEmitter {
       onExit: (exitedChild, code) => {
         this.processExitCode = code;
         const exitedOwnedChild = this.process === exitedChild;
-        const socketStillOpen = this.ws?.readyState === WebSocket.OPEN;
-        const keepLiveConnection = this.status.state === 'running' && socketStillOpen;
         this.ownsProcess = false;
         if (exitedOwnedChild) {
           this.process = null;
@@ -751,11 +749,20 @@ export class GatewayManager extends EventEmitter {
         }
         this.emit('exit', code);
 
-        if (keepLiveConnection) {
+        if (!exitedOwnedChild && this.status.state === 'running' && this.ws?.readyState === WebSocket.OPEN) {
           logger.info(
-            'Gateway child exited after a live WebSocket connection was established; continuing with the existing listener',
+            'Superseded Gateway child exited after a replacement connection was established; keeping the active listener',
           );
           return;
+        }
+
+        if (exitedOwnedChild && this.ws) {
+          try {
+            this.ws.terminate();
+          } catch {
+            // ignore socket teardown errors during exit handling
+          }
+          this.ws = null;
         }
 
         this.connectionMonitor.clear();

@@ -1,6 +1,6 @@
 {
     "name": "geeclaw",
-    "version": "0.9.13-test.1",
+    "version": "0.9.14-beta.1",
     "description": "GeeClaw - Graphical AI Assistant based on OpenClaw",
     "keywords": [
         "electron",
@@ -150,7 +150,7 @@
         "i18next": "^25.8.11",
         "jsdom": "^28.1.0",
         "lucide-react": "^0.563.0",
-        "openclaw": "2026.4.5",
+        "openclaw": "2026.4.9",
         "png2icons": "^2.0.1",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",

@@ -123,7 +123,7 @@ describe('GatewayManager auto reconnect', () => {
     expect(reconcileGatewayRuntimeForEmbeddedModeMock).toHaveBeenCalledWith(28788);
   });
 
-  it('stays connected when the spawned child exits after the websocket is already running', async () => {
+  it('tears down the socket and schedules reconnect when the owned child exits after handshake', async () => {
     vi.doUnmock('@electron/gateway/startup-orchestrator');
 
     const ws = {
@@ -175,12 +175,13 @@ describe('GatewayManager auto reconnect', () => {
     expect(exitedChild).not.toBeNull();
     emitExit?.(0);
 
+    expect(ws.terminate).toHaveBeenCalledTimes(1);
     expect(manager.getStatus()).toMatchObject({
-      state: 'running',
+      state: 'reconnecting',
       port: 28788,
       pid: undefined,
     });
-    expect((manager as unknown as { reconnectTimer: NodeJS.Timeout | null }).reconnectTimer).toBeNull();
+    expect((manager as unknown as { reconnectTimer: NodeJS.Timeout | null }).reconnectTimer).not.toBeNull();
 
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
