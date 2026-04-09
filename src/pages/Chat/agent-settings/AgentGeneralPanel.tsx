@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { AgentAvatarPicker } from '@/components/agents/AgentAvatarPicker';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toUserMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import type { AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
 import { useAgentsStore } from '@/stores/agents';
 
 interface AgentGeneralPanelProps {
@@ -23,16 +25,18 @@ const labelClasses = 'text-[13px] font-semibold text-foreground/70';
 export function AgentGeneralPanel({ agentId, title, description, onDeleted }: AgentGeneralPanelProps) {
   const { t } = useTranslation(['chat', 'common']);
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
-  const updateAgent = useAgentsStore((state) => state.updateAgent);
+  const updateAgentSettings = useAgentsStore((state) => state.updateAgentSettings);
   const deleteAgent = useAgentsStore((state) => state.deleteAgent);
   const [name, setName] = useState(agent?.name ?? '');
+  const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId | null>(agent?.avatarPresetId ?? null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setName(agent?.name ?? '');
-  }, [agent?.name, agentId]);
+    setAvatarPresetId(agent?.avatarPresetId ?? null);
+  }, [agent?.avatarPresetId, agent?.name, agentId]);
 
   const modelLabel = useMemo(() => {
     if (!agent) return '';
@@ -40,15 +44,28 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     return `${agent.modelDisplay}${suffix}`;
   }, [agent, t]);
 
-  const canSave = Boolean(agent && name.trim() && name.trim() !== agent.name);
+  const canSave = Boolean(
+    agent
+    && (
+      (name.trim() && name.trim() !== agent.name)
+      || (avatarPresetId && avatarPresetId !== agent.avatarPresetId)
+    ),
+  );
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));
   const deleteDisabled = !agent || deleting || isDeleteProtected;
 
   const handleSave = async () => {
-    if (!agent || !canSave) return;
+    if (!agent || !canSave || !avatarPresetId) return;
     setSaving(true);
     try {
-      await updateAgent(agent.id, name.trim());
+      const updates: { name?: string; avatarPresetId?: AgentAvatarPresetId } = {};
+      if (name.trim() && name.trim() !== agent.name) {
+        updates.name = name.trim();
+      }
+      if (avatarPresetId !== agent.avatarPresetId) {
+        updates.avatarPresetId = avatarPresetId;
+      }
+      await updateAgentSettings(agent.id, updates);
       toast.success(t('agentSettingsDialog.general.toastSaved'));
     } catch (error) {
       toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
@@ -105,6 +122,24 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
             </Button>
           </div>
         </div>
+
+        {avatarPresetId ? (
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <Label className={labelClasses}>
+                {t('agentSettingsDialog.general.avatarLabel', 'Avatar')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('agentSettingsDialog.general.avatarDescription', 'Choose a preset avatar')}
+              </p>
+            </div>
+            <AgentAvatarPicker
+              value={avatarPresetId}
+              onChange={setAvatarPresetId}
+              disabled={!agent || saving || deleting}
+            />
+          </div>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2.5">

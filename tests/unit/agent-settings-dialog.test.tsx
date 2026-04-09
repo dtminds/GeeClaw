@@ -15,6 +15,8 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.sections.general.description': 'General settings',
   'agentSettingsDialog.general.nameLabel': 'Agent Name',
   'agentSettingsDialog.general.namePlaceholder': 'Assistant',
+  'agentSettingsDialog.general.avatarLabel': 'Avatar',
+  'agentSettingsDialog.general.avatarDescription': 'Choose a preset avatar',
   'agentSettingsDialog.general.agentIdLabel': 'Agent ID',
   'agentSettingsDialog.general.modelLabel': 'Model',
   'agentSettingsDialog.general.inheritedSuffix': '(inherited)',
@@ -131,6 +133,8 @@ describe('AgentSettingsDialog shell', () => {
     skillScope: { mode: 'default' },
     presetSkills: [],
     canUseDefaultSkillScope: true,
+    avatarPresetId: 'chibi-researcher',
+    avatarSource: 'default',
   };
 
   const deletableAgentSummary = {
@@ -483,6 +487,29 @@ describe('AgentSettingsDialog shell', () => {
     await waitFor(() => {
       expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
         skillScope: { mode: 'specified', skills: ['beta-skill'] },
+      });
+    });
+  });
+
+  it('saves avatar changes from the general panel', async () => {
+    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+      updateAgentSettings,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Analyst/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
+        avatarPresetId: 'chibi-analyst',
       });
     });
   });

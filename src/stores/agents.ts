@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
+import type { AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
 import { useGatewayStore } from '@/stores/gateway';
 import type { ChannelType } from '@/types/channel';
 import type {
@@ -41,9 +42,9 @@ interface AgentsState {
   error: string | null;
   fetchAgents: () => Promise<void>;
   fetchPresets: () => Promise<void>;
-  createAgent: (name: string, id: string) => Promise<void>;
+  createAgent: (name: string, id: string, avatarPresetId?: AgentAvatarPresetId) => Promise<void>;
   updateAgent: (agentId: string, name: string) => Promise<void>;
-  updateAgentSettings: (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope }) => Promise<void>;
+  updateAgentSettings: (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope; avatarPresetId?: AgentAvatarPresetId }) => Promise<void>;
   deleteAgent: (agentId: string) => Promise<void>;
   installMarketplaceAgent: (agentId: string) => Promise<void>;
   updateMarketplaceAgent: (agentId: string) => Promise<void>;
@@ -246,12 +247,12 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     }
   },
 
-  createAgent: async (name: string, id: string) => {
+  createAgent: async (name: string, id: string, avatarPresetId?: AgentAvatarPresetId) => {
     set({ error: null });
     try {
       const snapshot = await hostApiFetch<AgentsSnapshot & { success?: boolean }>('/api/agents', {
         method: 'POST',
-        body: JSON.stringify({ name, id }),
+        body: JSON.stringify({ name, id, avatarPresetId }),
       });
       set(applySnapshot(snapshot, 'Creating agent'));
     } catch (error) {
@@ -264,7 +265,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     await get().updateAgentSettings(agentId, { name });
   },
 
-  updateAgentSettings: async (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope }) => {
+  updateAgentSettings: async (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope; avatarPresetId?: AgentAvatarPresetId }) => {
     set({ error: null });
     try {
       const snapshot = await hostApiFetch<AgentsSnapshot & { success?: boolean }>(

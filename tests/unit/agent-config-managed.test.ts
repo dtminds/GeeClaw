@@ -968,10 +968,12 @@ describe('managed agent config domain', () => {
   it('creates and deletes custom agents under the managed geeclaw workspace root', async () => {
     const { homeDir, configDir, agentConfig, deleteDesktopSessionsForAgent } = await setupManagedPresetFixture();
 
-    const created = await agentConfig.createAgent('Research Helper', 'research-helper');
+    const created = await agentConfig.createAgent('Research Helper', 'research-helper', 'chibi-researcher');
     expect(created.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
       workspace: '~/geeclaw/workspace-research-helper',
       agentDir: '~/.openclaw-geeclaw/agents/research-helper/agent',
+      avatarPresetId: 'chibi-researcher',
+      avatarSource: 'user',
     });
     const configAfterCreate = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: {
@@ -992,6 +994,23 @@ describe('managed agent config domain', () => {
     });
     expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
     expect(deleteDesktopSessionsForAgent).toHaveBeenCalledWith('research-helper');
+  });
+
+  it('keeps a user-selected avatar when a marketplace agent updates', async () => {
+    const { agentConfig, marketplaceState } = await setupManagedPresetFixture();
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+    await agentConfig.updateAgentSettings('stockexpert', {
+      avatarPresetId: 'gradient-rose',
+    });
+    marketplaceState.preparedPackage.catalogEntry.version = '1.2.4';
+    marketplaceState.preparedPackage.package.meta.packageVersion = '1.2.4';
+
+    const updated = await agentConfig.updateMarketplaceAgent('stockexpert');
+    expect(updated.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
+      avatarPresetId: 'gradient-rose',
+      avatarSource: 'user',
+    });
   });
 
   it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {

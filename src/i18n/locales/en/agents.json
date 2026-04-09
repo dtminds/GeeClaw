@@ -20,6 +20,8 @@
         "description": "Workspaces, personas, and memories will be completely isolated between different agents.",
         "nameLabel": "Agent Name",
         "namePlaceholder": "Coding Helper",
+        "avatarLabel": "Avatar",
+        "avatarDescription": "Choose from chibi and gradient presets.",
         "idLabel": "Agent ID",
         "idPlaceholder": "coding-helper",
         "idHint": "Use lowercase letters, numbers, and hyphens (for example: trading-expert-2).",

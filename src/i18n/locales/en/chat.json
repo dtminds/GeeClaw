@@ -87,6 +87,8 @@
         "general": {
             "nameLabel": "Agent Name",
             "namePlaceholder": "Assistant",
+            "avatarLabel": "Avatar",
+            "avatarDescription": "Choose a preset avatar",
             "agentIdLabel": "Agent ID",
             "modelLabel": "Model",
             "inheritedSuffix": "(inherited)",

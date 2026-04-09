@@ -9,6 +9,14 @@ import {
   getManagedAgentWorkspacePath,
   resolveManagedAgentWorkspacePath,
 } from './managed-agent-workspace';
+import type { AgentAvatarPresetId, AgentAvatarSource } from './agent-avatar';
+import {
+  normalizeAgentAvatarPresetId,
+  normalizeAgentAvatarSource,
+  resolveDefaultAgentAvatarPresetId,
+  resolveMarketplaceAvatarPresetId,
+  shouldReplaceAgentAvatarOnMarketplaceSync,
+} from './agent-avatar';
 import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
@@ -69,6 +77,8 @@ interface AgentListEntry extends Record<string, unknown> {
   workspace?: string;
   agentDir?: string;
   model?: string | AgentModelConfig;
+  avatarPresetId?: string;
+  avatarSource?: string;
 }
 
 interface AgentsConfig extends Record<string, unknown> {
@@ -134,6 +144,7 @@ interface AgentPresetMissingRequirements {
 export interface AgentSettingsUpdate {
   name?: string;
   skillScope?: AgentSkillScope;
+  avatarPresetId?: AgentAvatarPresetId;
 }
 
 export interface AgentSummary {
@@ -158,6 +169,8 @@ export interface AgentSummary {
   skillScope: AgentSkillScope;
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
+  avatarPresetId: AgentAvatarPresetId;
+  avatarSource: AgentAvatarSource;
 }
 
 export interface AgentsSnapshot {
@@ -388,6 +401,29 @@ function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): Ag
 
   nextEntry.skills = [...scope.skills];
   return nextEntry;
+}
+
+function readAgentAvatarPresetId(entry: AgentListEntry): AgentAvatarPresetId {
+  const rawValue = typeof entry.avatarPresetId === 'string' && entry.avatarPresetId.trim()
+    ? entry.avatarPresetId
+    : resolveDefaultAgentAvatarPresetId(entry.id);
+  return normalizeAgentAvatarPresetId(rawValue);
+}
+
+function readAgentAvatarSource(entry: AgentListEntry): AgentAvatarSource {
+  return normalizeAgentAvatarSource(entry.avatarSource) ?? 'default';
+}
+
+function applyAgentAvatar(
+  entry: AgentListEntry,
+  avatarPresetId: AgentAvatarPresetId,
+  avatarSource: AgentAvatarSource,
+): AgentListEntry {
+  return {
+    ...entry,
+    avatarPresetId,
+    avatarSource,
+  };
 }
 
 function mergeManagedMarkdownSection(
@@ -1094,6 +1130,8 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       skillScope: readAgentSkillScope(entry),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
+      avatarPresetId: readAgentAvatarPresetId(entry),
+      avatarSource: readAgentAvatarSource(entry),
     };
   });
 
@@ -1397,15 +1435,16 @@ async function installMarketplaceAgentFromPreparedPackage(
         ? { model: cloneValue(preparedPackage.package.meta.agent.model) }
         : {}),
     }, nextScope);
-    nextEntries.push(newEntry);
+    const avatarEntry = applyAgentAvatar(newEntry, resolveMarketplaceAvatarPresetId(nextId), 'default');
+    nextEntries.push(avatarEntry);
 
     config.agents = {
       ...agentsConfig,
       list: nextEntries,
     };
 
-    await provisionAgentFilesystem(config, newEntry);
-    const workspace = expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
+    await provisionAgentFilesystem(config, avatarEntry);
+    const workspace = expandPath(avatarEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
     await seedPresetFilesIntoWorkspace(
       workspace,
       preparedPackage.package.files,
@@ -1475,7 +1514,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
 
     const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
     const currentEntry = entries[index];
-    const nextEntry = applyAgentSkillScope({
+    let nextEntry = applyAgentSkillScope({
       ...currentEntry,
       id: normalizedAgentId,
       name: preparedPackage.package.meta.name,
@@ -1483,6 +1522,10 @@ async function updateMarketplaceAgentFromPreparedPackage(
         ? { model: cloneValue(preparedPackage.package.meta.agent.model) }
         : {}),
     }, nextScope);
+    const currentAvatarSource = readAgentAvatarSource(currentEntry);
+    nextEntry = shouldReplaceAgentAvatarOnMarketplaceSync(currentAvatarSource)
+      ? applyAgentAvatar(nextEntry, resolveMarketplaceAvatarPresetId(normalizedAgentId), 'default')
+      : applyAgentAvatar(nextEntry, readAgentAvatarPresetId(currentEntry), currentAvatarSource);
     entries[index] = nextEntry;
     config.agents = {
       ...agentsConfig,
@@ -1569,6 +1612,9 @@ export async function updateAgentSettings(
   if (typeof updates.name === 'string' && updates.name.trim()) {
     nextEntry.name = normalizeAgentName(updates.name);
   }
+  if (updates.avatarPresetId) {
+    nextEntry = applyAgentAvatar(nextEntry, normalizeAgentAvatarPresetId(updates.avatarPresetId), 'user');
+  }
   if (updates.skillScope) {
     const nextScope = normalizeSkillScope(updates.skillScope);
     if (managed?.managed) {
@@ -1613,7 +1659,11 @@ export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
   return buildSnapshotFromConfig(config);
 }
 
-export async function createAgent(name: string, requestedId: string): Promise<AgentsSnapshot> {
+export async function createAgent(
+  name: string,
+  requestedId: string,
+  avatarPresetId?: AgentAvatarPresetId,
+): Promise<AgentsSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
   const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
   const normalizedName = normalizeAgentName(name);
@@ -1627,11 +1677,11 @@ export async function createAgent(name: string, requestedId: string): Promise<Ag
   const nextId = normalizedRequestedId;
 
   const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.filter((_, index) => index > 0)] : [...entries];
-  const newAgent: AgentListEntry = {
+  const newAgent = applyAgentAvatar({
     id: nextId,
     name: normalizedName,
     workspace: getDefaultWorkspacePathForAgent(nextId),
-  };
+  }, normalizeAgentAvatarPresetId(avatarPresetId ?? resolveDefaultAgentAvatarPresetId(nextId)), avatarPresetId ? 'user' : 'default');
 
   if (!nextEntries.some((entry) => entry.id === MAIN_AGENT_ID) && syntheticMain) {
     nextEntries.unshift(createImplicitMainEntry(config));
