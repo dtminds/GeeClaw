@@ -5,6 +5,10 @@ export const AGENT_AVATAR_PRESET_IDS = [
   'gradient-lagoon',
   'gradient-indigo',
   'gradient-rose',
+  'gradient-sage',
+  'gradient-clay',
+  'gradient-stone',
+  'gradient-dune',
 ] as const;
 
 export type AgentAvatarPresetId = typeof AGENT_AVATAR_PRESET_IDS[number];
@@ -52,6 +56,26 @@ export const AGENT_AVATAR_PRESETS: AgentAvatarPreset[] = [
     id: 'gradient-rose',
     label: 'Rose',
     palette: { background: 'linear-gradient(135deg, #f472b6 0%, #fb7185 100%)', accent: '#fff1f2', stroke: '#9f1239' },
+  },
+  {
+    id: 'gradient-sage',
+    label: 'Sage',
+    palette: { background: 'linear-gradient(135deg, #a8b7aa 0%, #c8d1c0 100%)', accent: '#f6f5ef', stroke: '#7f8f82' },
+  },
+  {
+    id: 'gradient-clay',
+    label: 'Clay',
+    palette: { background: 'linear-gradient(135deg, #b88f84 0%, #d2b3a4 100%)', accent: '#fff5ef', stroke: '#9d7569' },
+  },
+  {
+    id: 'gradient-stone',
+    label: 'Stone',
+    palette: { background: 'linear-gradient(135deg, #8f98a1 0%, #b7bfc6 100%)', accent: '#f5f7f8', stroke: '#6e7781' },
+  },
+  {
+    id: 'gradient-dune',
+    label: 'Dune',
+    palette: { background: 'linear-gradient(135deg, #b8aa93 0%, #d5c9b4 100%)', accent: '#fffaf1', stroke: '#8e816d' },
   },
 ];
 

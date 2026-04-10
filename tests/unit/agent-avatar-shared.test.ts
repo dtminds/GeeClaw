@@ -24,6 +24,13 @@ describe('agent avatar shared helpers', () => {
     expect(normalizeAgentAvatarPresetId('not-a-real-preset')).toBe(DEFAULT_AGENT_AVATAR_PRESET_ID);
   });
 
+  it('exposes additional muted Morandi-style presets', () => {
+    expect(AGENT_AVATAR_PRESET_IDS).toContain('gradient-sage');
+    expect(AGENT_AVATAR_PRESET_IDS).toContain('gradient-clay');
+    expect(AGENT_AVATAR_PRESET_IDS).toContain('gradient-stone');
+    expect(AGENT_AVATAR_PRESET_IDS).toContain('gradient-dune');
+  });
+
   it('keeps user-selected avatars during marketplace updates', () => {
     expect(shouldReplaceAgentAvatarOnMarketplaceSync('default')).toBe(true);
     expect(shouldReplaceAgentAvatarOnMarketplaceSync('user')).toBe(false);

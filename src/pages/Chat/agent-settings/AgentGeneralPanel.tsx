@@ -29,7 +29,8 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   const deleteAgent = useAgentsStore((state) => state.deleteAgent);
   const [name, setName] = useState(agent?.name ?? '');
   const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId | null>(agent?.avatarPresetId ?? null);
-  const [saving, setSaving] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [savingAvatarPresetId, setSavingAvatarPresetId] = useState<AgentAvatarPresetId | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -44,33 +45,38 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     return `${agent.modelDisplay}${suffix}`;
   }, [agent, t]);
 
-  const canSave = Boolean(
-    agent
-    && (
-      (name.trim() && name.trim() !== agent.name)
-      || (avatarPresetId && avatarPresetId !== agent.avatarPresetId)
-    ),
-  );
+  const canSaveName = Boolean(agent && name.trim() && name.trim() !== agent.name);
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));
   const deleteDisabled = !agent || deleting || isDeleteProtected;
 
-  const handleSave = async () => {
-    if (!agent || !canSave || !avatarPresetId) return;
-    setSaving(true);
+  const handleSaveName = async () => {
+    if (!agent || !canSaveName) return;
+    setSavingName(true);
     try {
-      const updates: { name?: string; avatarPresetId?: AgentAvatarPresetId } = {};
-      if (name.trim() && name.trim() !== agent.name) {
-        updates.name = name.trim();
-      }
-      if (avatarPresetId !== agent.avatarPresetId) {
-        updates.avatarPresetId = avatarPresetId;
-      }
-      await updateAgentSettings(agent.id, updates);
+      await updateAgentSettings(agent.id, { name: name.trim() });
       toast.success(t('agentSettingsDialog.general.toastSaved'));
     } catch (error) {
       toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
     } finally {
-      setSaving(false);
+      setSavingName(false);
+    }
+  };
+
+  const handleAvatarChange = async (nextPresetId: AgentAvatarPresetId) => {
+    if (!agent || deleting || savingAvatarPresetId || nextPresetId === agent.avatarPresetId) {
+      return;
+    }
+
+    const previousPresetId = avatarPresetId ?? agent.avatarPresetId;
+    setAvatarPresetId(nextPresetId);
+    setSavingAvatarPresetId(nextPresetId);
+    try {
+      await updateAgentSettings(agent.id, { avatarPresetId: nextPresetId });
+    } catch (error) {
+      setAvatarPresetId(previousPresetId);
+      toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
+    } finally {
+      setSavingAvatarPresetId(null);
     }
   };
 
@@ -91,13 +97,7 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
 
   return (
     <section className="flex h-full min-h-0 flex-col px-1 pr-1">
-      <header className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
-        ) : null}
-      </header>
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-5">
         <div className="space-y-2.5">
           <Label htmlFor="agent-general-name" className={labelClasses}>
             {t('agentSettingsDialog.general.nameLabel')}
@@ -109,16 +109,16 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
               onChange={(event) => setName(event.target.value)}
               placeholder={t('agentSettingsDialog.general.namePlaceholder')}
               className={cn(inputClasses, 'flex-1')}
-              disabled={!agent || saving || deleting}
+              disabled={!agent || savingName || deleting}
             />
             <Button
               type="button"
               variant="outline"
-              onClick={() => void handleSave()}
-              disabled={!canSave || saving || deleting}
+              onClick={() => void handleSaveName()}
+              disabled={!canSaveName || savingName || deleting}
               className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
+              {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
             </Button>
           </div>
         </div>
@@ -135,8 +135,8 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
             </div>
             <AgentAvatarPicker
               value={avatarPresetId}
-              onChange={setAvatarPresetId}
-              disabled={!agent || saving || deleting}
+              onChange={(presetId) => void handleAvatarChange(presetId)}
+              disabled={!agent || Boolean(savingAvatarPresetId) || deleting}
             />
           </div>
         ) : null}

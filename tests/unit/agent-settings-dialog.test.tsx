@@ -5,6 +5,8 @@ import { useSkillsStore } from '@/stores/skills';
 import { SOUL_TEMPLATES } from '@/pages/Chat/agent-settings/useAgentPersona';
 
 const mockHostApiFetch = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
 
 const translations: Record<string, string> = {
   'agentSettingsDialog.title': 'Agent Settings',
@@ -90,12 +92,21 @@ vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => mockHostApiFetch(...args),
 }));
 
+vi.mock('sonner', () => ({
+  toast: {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
+}));
+
 const initialAgentsState = useAgentsStore.getState();
 const initialSkillsState = useSkillsStore.getState();
 
 describe('AgentSettingsDialog shell', () => {
   beforeEach(() => {
     mockHostApiFetch.mockReset();
+    mockToastSuccess.mockReset();
+    mockToastError.mockReset();
     useAgentsStore.setState(initialAgentsState, true);
     useSkillsStore.setState(initialSkillsState, true);
   });
@@ -491,7 +502,7 @@ describe('AgentSettingsDialog shell', () => {
     });
   });
 
-  it('saves avatar changes from the general panel', async () => {
+  it('saves avatar changes from the general panel immediately', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
@@ -505,13 +516,13 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Sunset/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
         avatarPresetId: 'gradient-sunset',
       });
     });
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 
   it('locks preset skills and enforces the six-skill limit', async () => {

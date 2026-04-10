@@ -5,6 +5,10 @@ export const AGENT_AVATAR_PRESET_IDS = [
   'gradient-lagoon',
   'gradient-indigo',
   'gradient-rose',
+  'gradient-sage',
+  'gradient-clay',
+  'gradient-stone',
+  'gradient-dune',
 ] as const;
 
 export type AgentAvatarPresetId = typeof AGENT_AVATAR_PRESET_IDS[number];
