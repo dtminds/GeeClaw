@@ -69,7 +69,7 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
 
     return leftPriority - rightPriority;
   })
-  .slice(0, 8);
+  .slice(0, 5);
 
 export function Chat() {
   const { t } = useTranslation('chat');
