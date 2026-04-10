@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isMainGatewaySessionKey, resolveConfiguredMainKey } from './main-session-key';
 
 export interface DesktopSessionSummary {
   id: string;
@@ -23,10 +24,6 @@ function buildDefaultGatewaySessionKey(id: string): string {
   return `${GEECLAW_SESSION_PREFIX}${id}`;
 }
 
-function isMainGatewaySessionKey(sessionKey: string): boolean {
-  return sessionKey.endsWith(':main');
-}
-
 function getAgentIdFromGatewaySessionKey(sessionKey: string): string | null {
   if (!sessionKey.startsWith('agent:')) {
     return null;
@@ -41,7 +38,8 @@ function shouldReplaceSession(current: DesktopSessionSummary, candidate: Desktop
     || (candidate.updatedAt === current.updatedAt && candidate.createdAt > current.createdAt);
 }
 
-function normalizeSessions(sessions: DesktopSessionSummary[]): DesktopSessionSummary[] {
+async function normalizeSessions(sessions: DesktopSessionSummary[]): Promise<DesktopSessionSummary[]> {
+  const configuredMainKey = await resolveConfiguredMainKey();
   const dedupedMainSessions = new Map<string, DesktopSessionSummary>();
   const otherSessions: DesktopSessionSummary[] = [];
 
@@ -55,7 +53,7 @@ function normalizeSessions(sessions: DesktopSessionSummary[]): DesktopSessionSum
       lastMessagePreview: typeof session.lastMessagePreview === 'string' ? session.lastMessagePreview : '',
     };
 
-    if (!isMainGatewaySessionKey(normalizedSession.gatewaySessionKey)) {
+    if (!isMainGatewaySessionKey(normalizedSession.gatewaySessionKey, configuredMainKey)) {
       otherSessions.push(normalizedSession);
       continue;
     }
@@ -94,7 +92,7 @@ async function readSessions(): Promise<DesktopSessionSummary[]> {
     return [];
   }
 
-  const normalizedSessions = normalizeSessions(sessions);
+  const normalizedSessions = await normalizeSessions(sessions);
   const needsRewrite = normalizedSessions.length !== sessions.length
     || normalizedSessions.some((session, index) => (
       !sessions[index]
@@ -132,9 +130,10 @@ export async function createDesktopSession(input?: { title?: string; gatewaySess
   const now = Date.now();
   const id = crypto.randomUUID();
   const gatewaySessionKey = input?.gatewaySessionKey?.trim() || buildDefaultGatewaySessionKey(id);
+  const configuredMainKey = await resolveConfiguredMainKey();
   const sessions = await readSessions();
 
-  if (isMainGatewaySessionKey(gatewaySessionKey)) {
+  if (isMainGatewaySessionKey(gatewaySessionKey, configuredMainKey)) {
     const existing = sessions.find((session) => session.gatewaySessionKey === gatewaySessionKey);
     if (existing) {
       return existing;
@@ -156,6 +155,7 @@ export async function updateDesktopSession(
   id: string,
   patch: Partial<Pick<DesktopSessionSummary, 'title' | 'updatedAt' | 'deletedAt' | 'gatewaySessionKey' | 'lastMessagePreview'>>,
 ): Promise<DesktopSessionSummary | null> {
+  const configuredMainKey = await resolveConfiguredMainKey();
   const sessions = await readSessions();
   const index = sessions.findIndex((session) => session.id === id);
   if (index === -1) {
@@ -174,7 +174,7 @@ export async function updateDesktopSession(
 
   const nextSessions = [...sessions];
   nextSessions[index] = next;
-  const normalizedNextSessions = isMainGatewaySessionKey(next.gatewaySessionKey)
+  const normalizedNextSessions = isMainGatewaySessionKey(next.gatewaySessionKey, configuredMainKey)
     ? nextSessions.filter((session, sessionIndex) => (
       sessionIndex === index || session.gatewaySessionKey !== next.gatewaySessionKey
     ))

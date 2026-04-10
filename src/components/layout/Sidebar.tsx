@@ -108,10 +108,6 @@ function getAgentIdFromSessionKey(sessionKey: string): string {
   return parts[1] || 'main';
 }
 
-function isMainSessionKey(sessionKey: string): boolean {
-  return sessionKey.endsWith(':main');
-}
-
 export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
@@ -181,12 +177,14 @@ export function Sidebar() {
   const sortedAgents = [...agents].sort(
     (left, right) => Number(right.isDefault) - Number(left.isDefault) || left.name.localeCompare(right.name),
   );
+  const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
   const agentMainSessions = desktopSessions.reduce((map, session) => {
-    if (!isMainSessionKey(session.gatewaySessionKey)) {
+    const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
+    const mainSessionKey = mainSessionKeyByAgentId.get(agentId) ?? `agent:${agentId}:geeclaw_main`;
+    if (session.gatewaySessionKey !== mainSessionKey) {
       return map;
     }
 
-    const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
     const current = map.get(agentId);
     if (!current || session.updatedAt > current.updatedAt) {
       map.set(agentId, session);

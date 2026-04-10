@@ -4,6 +4,7 @@ import { dirname, join, normalize } from 'path';
 import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
+import { normalizeMainKey } from './main-session-key';
 import {
   getManagedAgentDirPath,
   getManagedAgentWorkspacePath,
@@ -796,12 +797,6 @@ function isChannelBinding(binding: unknown): binding is BindingConfig {
 
 function normalizeAgentIdForBinding(id: string): string {
   return (id ?? '').trim().toLowerCase() || '';
-}
-
-function normalizeMainKey(value: unknown): string {
-  if (typeof value !== 'string') return 'main';
-  const trimmed = value.trim().toLowerCase();
-  return trimmed || 'main';
 }
 
 function readDefaultAgentModelConfig(
