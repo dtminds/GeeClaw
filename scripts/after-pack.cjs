@@ -19,7 +19,7 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
+const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
 const { join, dirname, basename, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 
@@ -75,6 +75,146 @@ function copyPathPreservingLinks(sourcePath, destPath) {
 }
 
 exports.copyPathPreservingLinks = copyPathPreservingLinks;
+
+function readPackageIdentity(packageDir) {
+  const packageJsonPath = join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return null;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    if (typeof pkg.name !== 'string' || typeof pkg.version !== 'string') {
+      return null;
+    }
+
+    return {
+      name: pkg.name,
+      version: pkg.version,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function listNodeModulesPackageDirs(nodeModulesDir) {
+  if (!existsSync(nodeModulesDir)) {
+    return [];
+  }
+
+  let entries;
+  try {
+    entries = readdirSync(nodeModulesDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const packageDirs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === '.bin') continue;
+
+    if (entry.name.startsWith('@')) {
+      let scopedEntries;
+      try {
+        scopedEntries = readdirSync(join(nodeModulesDir, entry.name), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const scopedEntry of scopedEntries) {
+        if (!scopedEntry.isDirectory()) continue;
+        packageDirs.push({
+          name: `${entry.name}/${scopedEntry.name}`,
+          dir: join(nodeModulesDir, entry.name, scopedEntry.name),
+        });
+      }
+      continue;
+    }
+
+    packageDirs.push({
+      name: entry.name,
+      dir: join(nodeModulesDir, entry.name),
+    });
+  }
+
+  return packageDirs;
+}
+
+function canLinkPackageDirToTopLevel(packageDir, topLevelPackageDir) {
+  if (!existsSync(packageDir) || !existsSync(topLevelPackageDir)) {
+    return false;
+  }
+
+  const packageIdentity = readPackageIdentity(packageDir);
+  const topLevelIdentity = readPackageIdentity(topLevelPackageDir);
+  return Boolean(
+    packageIdentity
+      && topLevelIdentity
+      && packageIdentity.name === topLevelIdentity.name
+      && packageIdentity.version === topLevelIdentity.version,
+  );
+}
+
+exports.canLinkPackageDirToTopLevel = canLinkPackageDirToTopLevel;
+
+function canLinkExtensionNodeModulesToTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir) {
+  const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
+  if (packageDirs.length === 0) {
+    return false;
+  }
+
+  return packageDirs.every(({ name, dir }) =>
+    canLinkPackageDirToTopLevel(dir, join(topLevelNodeModulesDir, ...name.split('/'))),
+  );
+}
+
+exports.canLinkExtensionNodeModulesToTopLevel = canLinkExtensionNodeModulesToTopLevel;
+
+function linkExtensionNodeModulesToTopLevel(openclawRoot) {
+  const topLevelNodeModulesDir = join(openclawRoot, 'node_modules');
+  const extensionsDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(topLevelNodeModulesDir) || !existsSync(extensionsDir)) {
+    return 0;
+  }
+
+  let linkedExtensions = 0;
+  let linkedPackages = 0;
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+
+  for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+
+    const extensionDir = join(extensionsDir, extensionEntry.name);
+    const extensionNodeModulesDir = join(extensionDir, 'node_modules');
+    if (!existsSync(extensionNodeModulesDir)) continue;
+
+    const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
+    if (packageDirs.length === 0) continue;
+
+    if (canLinkExtensionNodeModulesToTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir)) {
+      const relativeTarget = relative(extensionDir, topLevelNodeModulesDir);
+      rmSync(extensionNodeModulesDir, { recursive: true, force: true });
+      symlinkSync(relativeTarget, extensionNodeModulesDir, linkType);
+      linkedExtensions++;
+      continue;
+    }
+
+    for (const { name, dir } of packageDirs) {
+      const topLevelPackageDir = join(topLevelNodeModulesDir, ...name.split('/'));
+      if (!canLinkPackageDirToTopLevel(dir, topLevelPackageDir)) {
+        continue;
+      }
+
+      rmSync(dir, { recursive: true, force: true });
+      symlinkSync(relative(dirname(dir), topLevelPackageDir), dir, linkType);
+      linkedPackages++;
+    }
+  }
+
+  return { linkedExtensions, linkedPackages };
+}
+
+exports.linkExtensionNodeModulesToTopLevel = linkExtensionNodeModulesToTopLevel;
 
 // ── General cleanup ──────────────────────────────────────────────────────────
 
@@ -696,6 +836,10 @@ exports.default = async function afterPack(context) {
     }
     if (extNMCount > 0) {
       console.log(`[after-pack] ✅ Copied node_modules for ${extNMCount} built-in extension(s), merged ${mergedPkgCount} packages into top-level.`);
+      if (platform === 'darwin') {
+        const { linkedExtensions, linkedPackages } = linkExtensionNodeModulesToTopLevel(openclawRoot);
+        console.log(`[after-pack] ✅ Linked ${linkedExtensions} built-in extension node_modules and ${linkedPackages} extension package directories to top-level.`);
+      }
     }
   }
 

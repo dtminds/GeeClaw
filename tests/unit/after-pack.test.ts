@@ -87,4 +87,128 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.cjs'))).toBe(true);
     expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'))).toBe(false);
   });
+
+  it('links built-in extension node_modules to the top-level openclaw node_modules when all package identities match', async () => {
+    const { canLinkExtensionNodeModulesToTopLevel, linkExtensionNodeModulesToTopLevel } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-openclaw-'));
+    tempDirs.push(openclawRoot);
+
+    mkdirSync(join(openclawRoot, 'node_modules', 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(openclawRoot, 'node_modules', 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.39.0"}\n',
+      'utf8',
+    );
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'discord', 'node_modules');
+    mkdirSync(join(extNodeModules, 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.39.0"}\n',
+      'utf8',
+    );
+
+    expect(canLinkExtensionNodeModulesToTopLevel(extNodeModules, join(openclawRoot, 'node_modules'))).toBe(true);
+    expect(linkExtensionNodeModulesToTopLevel(openclawRoot)).toEqual({
+      linkedExtensions: 1,
+      linkedPackages: 0,
+    });
+    expect(lstatSync(extNodeModules).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(extNodeModules)).toBe('../../../node_modules');
+  });
+
+  it('keeps extension-local node_modules as directories when matching package names have different versions', async () => {
+    const { canLinkExtensionNodeModulesToTopLevel, canLinkPackageDirToTopLevel, linkExtensionNodeModulesToTopLevel } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-openclaw-'));
+    tempDirs.push(openclawRoot);
+
+    mkdirSync(join(openclawRoot, 'node_modules', 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(openclawRoot, 'node_modules', 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.38.0"}\n',
+      'utf8',
+    );
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'discord', 'node_modules');
+    mkdirSync(join(extNodeModules, 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.39.0"}\n',
+      'utf8',
+    );
+
+    expect(canLinkExtensionNodeModulesToTopLevel(extNodeModules, join(openclawRoot, 'node_modules'))).toBe(false);
+    expect(
+      canLinkPackageDirToTopLevel(
+        join(extNodeModules, 'discord-api-types'),
+        join(openclawRoot, 'node_modules', 'discord-api-types'),
+      ),
+    ).toBe(false);
+    expect(linkExtensionNodeModulesToTopLevel(openclawRoot)).toEqual({
+      linkedExtensions: 0,
+      linkedPackages: 0,
+    });
+    expect(lstatSync(extNodeModules).isDirectory()).toBe(true);
+    expect(lstatSync(join(extNodeModules, 'discord-api-types')).isDirectory()).toBe(true);
+  });
+
+  it('links only the matching extension packages when an extension has mixed versions', async () => {
+    const { canLinkExtensionNodeModulesToTopLevel, canLinkPackageDirToTopLevel, linkExtensionNodeModulesToTopLevel } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-openclaw-'));
+    tempDirs.push(openclawRoot);
+
+    mkdirSync(join(openclawRoot, 'node_modules', 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(openclawRoot, 'node_modules', 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.39.0"}\n',
+      'utf8',
+    );
+    mkdirSync(join(openclawRoot, 'node_modules', 'magic-bytes.js'), { recursive: true });
+    writeFileSync(
+      join(openclawRoot, 'node_modules', 'magic-bytes.js', 'package.json'),
+      '{"name":"magic-bytes.js","version":"1.12.1"}\n',
+      'utf8',
+    );
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'telegram', 'node_modules');
+    mkdirSync(join(extNodeModules, 'discord-api-types'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, 'discord-api-types', 'package.json'),
+      '{"name":"discord-api-types","version":"0.39.0"}\n',
+      'utf8',
+    );
+    mkdirSync(join(extNodeModules, 'magic-bytes.js'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, 'magic-bytes.js', 'package.json'),
+      '{"name":"magic-bytes.js","version":"1.13.0"}\n',
+      'utf8',
+    );
+
+    expect(canLinkExtensionNodeModulesToTopLevel(extNodeModules, join(openclawRoot, 'node_modules'))).toBe(false);
+    expect(
+      canLinkPackageDirToTopLevel(
+        join(extNodeModules, 'discord-api-types'),
+        join(openclawRoot, 'node_modules', 'discord-api-types'),
+      ),
+    ).toBe(true);
+    expect(
+      canLinkPackageDirToTopLevel(
+        join(extNodeModules, 'magic-bytes.js'),
+        join(openclawRoot, 'node_modules', 'magic-bytes.js'),
+      ),
+    ).toBe(false);
+
+    expect(linkExtensionNodeModulesToTopLevel(openclawRoot)).toEqual({
+      linkedExtensions: 0,
+      linkedPackages: 1,
+    });
+
+    expect(lstatSync(extNodeModules).isDirectory()).toBe(true);
+    expect(lstatSync(join(extNodeModules, 'discord-api-types')).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(join(extNodeModules, 'discord-api-types'))).toBe('../../../../node_modules/discord-api-types');
+    expect(lstatSync(join(extNodeModules, 'magic-bytes.js')).isDirectory()).toBe(true);
+  });
 });
