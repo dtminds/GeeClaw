@@ -30,7 +30,7 @@ function isMainGatewaySessionKey(sessionKey: string): boolean {
   }
 
   const parts = sessionKey.split(':');
-  return parts[2] === GEECLAW_MAIN_SESSION_KEY;
+  return parts.length === 3 && parts[2] === GEECLAW_MAIN_SESSION_KEY;
 }
 
 function getAgentIdFromGatewaySessionKey(sessionKey: string): string | null {

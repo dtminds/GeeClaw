@@ -76,4 +76,17 @@ describe('desktop session cleanup', () => {
     expect(existing.id).toBe('session-main');
     expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main')).toHaveLength(1);
   });
+
+  it('does not treat nested geeclaw_main keys as the canonical main session', async () => {
+    const { createDesktopSession, listDesktopSessions } = await import('@electron/utils/desktop-sessions');
+
+    const nested = await createDesktopSession({ gatewaySessionKey: 'agent:writer:geeclaw_main:sub' });
+    const nestedDuplicate = await createDesktopSession({ gatewaySessionKey: 'agent:writer:geeclaw_main:sub' });
+    const sessions = await listDesktopSessions();
+
+    expect(nested.id).not.toBe('session-main');
+    expect(nestedDuplicate.id).not.toBe(nested.id);
+    expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main:sub')).toHaveLength(2);
+    expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main')).toHaveLength(1);
+  });
 });

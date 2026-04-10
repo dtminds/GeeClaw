@@ -592,7 +592,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   openAgentMainSession: async (agentId: string) => {
     const normalizedAgentId = agentId || 'main';
-    const mainSessionKey = resolveMainSessionKeyForAgent(normalizedAgentId) || buildDefaultMainSessionKey(normalizedAgentId);
+    const mainSessionKey = resolveMainSessionKeyForAgent(normalizedAgentId)!;
     const existingMainSession = get().desktopSessions.find((session) => session.gatewaySessionKey === mainSessionKey);
 
     if (existingMainSession) {
@@ -704,7 +704,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (remaining.length === 0) {
       try {
         const fallbackAgentId = get().currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-        const fallbackMainKey = resolveMainSessionKeyForAgent(fallbackAgentId) || buildDefaultMainSessionKey(fallbackAgentId);
+        const fallbackMainKey = resolveMainSessionKeyForAgent(fallbackAgentId)!;
         remaining = [await createDesktopSessionRequest('', fallbackMainKey)];
       } catch (error) {
         console.warn('Failed to create replacement desktop session:', error);
@@ -712,7 +712,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     const preferredAgentId = currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-    const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || buildDefaultMainSessionKey(preferredAgentId);
+    const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId)!;
     const sameAgentRemaining = remaining.filter(
       (session) => getAgentIdFromSessionKey(session.gatewaySessionKey) === preferredAgentId,
     );
