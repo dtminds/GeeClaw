@@ -345,12 +345,12 @@ export async function writeOpenClawConfig(
             logger.warn(`[plugin] ${warning}`);
         }
 
-        // Keep restart command disabled in the managed OpenClaw profile.
+        // Keep restart command enabled in the managed OpenClaw profile.
         const commands =
             config.commands && typeof config.commands === 'object'
                 ? { ...(config.commands as Record<string, unknown>) }
                 : {};
-        commands.restart = false;
+        commands.restart = true;
         config.commands = commands;
 
         const syncTargets = resolveStoreSyncTargets(options);

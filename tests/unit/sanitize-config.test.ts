@@ -181,8 +181,8 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
       ? { ...(config.commands as Record<string, unknown>) }
       : {}
   ) as Record<string, unknown>;
-  if (commands.restart !== false) {
-    commands.restart = false;
+  if (commands.restart !== true) {
+    commands.restart = true;
     config.commands = commands;
     modified = true;
   }
@@ -289,7 +289,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('does nothing when config is already valid', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: {
         entries: { 'my-skill': { enabled: true } },
@@ -310,7 +310,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     // the blocklist approach should NOT strip them.
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: {
         entries: { 'x': { enabled: true } },
@@ -333,7 +333,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('handles config with no skills section', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       gateway: { mode: 'local' },
     };
@@ -352,7 +352,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     const result = await readConfig();
     expect(result).toEqual({
       commands: {
-        restart: false,
+        restart: true,
       },
     });
   });
@@ -366,7 +366,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     // Edge case: skills is not an object
     await writeConfig({
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: ['something'],
     });
@@ -464,7 +464,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('keeps tools.web.search.kimi.apiKey when moonshot provider is absent', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       models: {
         providers: {
@@ -653,10 +653,10 @@ describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
     expect(result.gateway).toEqual({ mode: 'local' });
   });
 
-  it('forces commands.restart to false', async () => {
+  it('forces commands.restart to true', async () => {
     await writeConfig({
       commands: {
-        restart: true,
+        restart: false,
         retained: 'value',
       },
     });
@@ -666,7 +666,7 @@ describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
 
     const result = await readConfig();
     expect(result.commands).toEqual({
-      restart: false,
+      restart: true,
       retained: 'value',
     });
   });

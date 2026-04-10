@@ -214,11 +214,11 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
         ? { ...(config.commands as Record<string, unknown>) }
         : {}
     ) as Record<string, unknown>;
-    if (commands.restart !== false) {
-      commands.restart = false;
+    if (commands.restart !== true) {
+      commands.restart = true;
       config.commands = commands;
       changed = true;
-      console.log('[sanitize] Forcing commands.restart to false');
+      console.log('[sanitize] Forcing commands.restart to true');
     }
 
     const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
