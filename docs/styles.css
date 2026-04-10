@@ -250,13 +250,14 @@ img {
   margin: 0;
   padding: 0 38px;
   font-family: "Outfit", "Manrope", "PingFang SC", sans-serif;
+  text-align: center;
   font-size: 44px;
   line-height: 1.22;
   font-weight: 800;
 }
 
 .flow-intro {
-  max-width: 720px;
+  text-align: center;
   margin: 16px 0 0;
   padding: 0 38px;
   font-size: 16px;
@@ -437,6 +438,7 @@ img {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+
   .topbar,
   .hero-copy,
   .workspace-shot,
