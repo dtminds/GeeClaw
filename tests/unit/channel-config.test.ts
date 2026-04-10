@@ -152,6 +152,63 @@ describe('saveChannelConfig', () => {
     });
   });
 
+  it('stores dingtalk config flat for the strict-schema runtime while keeping a synthetic default account summary', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { listConfiguredChannelAccounts, readOpenClawConfig, saveChannelConfig } = await import('@electron/utils/channel-config');
+    await saveChannelConfig('dingtalk', {
+      enabled: true,
+      clientId: 'dt-client-id',
+      clientSecret: 'dt-client-secret',
+    }, 'helper');
+
+    const config = await readOpenClawConfig() as {
+      channels?: {
+        dingtalk?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.dingtalk).toMatchObject({
+      enabled: true,
+      clientId: 'dt-client-id',
+      clientSecret: 'dt-client-secret',
+    });
+    expect(config.channels?.dingtalk).not.toHaveProperty('accounts');
+    expect(config.channels?.dingtalk).not.toHaveProperty('defaultAccount');
+
+    const summaries = await listConfiguredChannelAccounts();
+    expect(summaries.dingtalk).toEqual({
+      defaultAccount: 'default',
+      accounts: [
+        {
+          accountId: 'default',
+          enabled: true,
+          isDefault: true,
+        },
+      ],
+    });
+  });
+
   it('does not write session config when saving channel config', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);
@@ -697,6 +754,64 @@ describe('saveChannelConfig', () => {
     for (const entryId of entryIds) {
       expect(config.plugins?.entries?.[entryId]).toBeUndefined();
     }
+  });
+
+  it('deletes the flat dingtalk channel config when deleting its implicit default account', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const configDir = await getMockedOpenClawConfigDir();
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      channels: {
+        dingtalk: {
+          enabled: true,
+          clientId: 'dt-client-id',
+          clientSecret: 'dt-client-secret',
+        },
+      },
+      plugins: {
+        enabled: true,
+        allow: ['dingtalk'],
+        entries: {
+          dingtalk: { enabled: true },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { deleteChannelAccountConfig, readOpenClawConfig } = await import('@electron/utils/channel-config');
+    await deleteChannelAccountConfig('dingtalk', 'default');
+
+    const config = await readOpenClawConfig() as {
+      channels?: Record<string, unknown>;
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.dingtalk).toBeUndefined();
+    expect(config.plugins?.allow?.includes('dingtalk')).not.toBe(true);
+    expect(config.plugins?.entries?.dingtalk).toBeUndefined();
   });
 
   it.each([
