@@ -140,7 +140,7 @@ function listNodeModulesPackageDirs(nodeModulesDir) {
   return packageDirs;
 }
 
-function canLinkPackageDirToTopLevel(packageDir, topLevelPackageDir) {
+function canPrunePackageDirAgainstTopLevel(packageDir, topLevelPackageDir) {
   if (!existsSync(packageDir) || !existsSync(topLevelPackageDir)) {
     return false;
   }
@@ -155,31 +155,49 @@ function canLinkPackageDirToTopLevel(packageDir, topLevelPackageDir) {
   );
 }
 
-exports.canLinkPackageDirToTopLevel = canLinkPackageDirToTopLevel;
+exports.canPrunePackageDirAgainstTopLevel = canPrunePackageDirAgainstTopLevel;
 
-function canLinkExtensionNodeModulesToTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir) {
+function canPruneExtensionNodeModulesAgainstTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir) {
   const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
   if (packageDirs.length === 0) {
     return false;
   }
 
   return packageDirs.every(({ name, dir }) =>
-    canLinkPackageDirToTopLevel(dir, join(topLevelNodeModulesDir, ...name.split('/'))),
+    canPrunePackageDirAgainstTopLevel(dir, join(topLevelNodeModulesDir, ...name.split('/'))),
   );
 }
 
-exports.canLinkExtensionNodeModulesToTopLevel = canLinkExtensionNodeModulesToTopLevel;
+exports.canPruneExtensionNodeModulesAgainstTopLevel = canPruneExtensionNodeModulesAgainstTopLevel;
 
-function linkExtensionNodeModulesToTopLevel(openclawRoot) {
+function removeEmptyDirChain(dir, stopDir) {
+  let currentDir = dir;
+  while (currentDir !== stopDir && existsSync(currentDir)) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir);
+    } catch {
+      return;
+    }
+
+    if (entries.length > 0) {
+      return;
+    }
+
+    rmSync(currentDir, { recursive: true, force: true });
+    currentDir = dirname(currentDir);
+  }
+}
+
+function pruneExtensionNodeModulesAgainstTopLevel(openclawRoot) {
   const topLevelNodeModulesDir = join(openclawRoot, 'node_modules');
   const extensionsDir = join(openclawRoot, 'dist', 'extensions');
   if (!existsSync(topLevelNodeModulesDir) || !existsSync(extensionsDir)) {
-    return 0;
+    return { removedExtensions: 0, removedPackages: 0 };
   }
 
-  let linkedExtensions = 0;
-  let linkedPackages = 0;
-  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  let removedExtensions = 0;
+  let removedPackages = 0;
 
   for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
     if (!extensionEntry.isDirectory()) continue;
@@ -191,30 +209,28 @@ function linkExtensionNodeModulesToTopLevel(openclawRoot) {
     const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
     if (packageDirs.length === 0) continue;
 
-    if (canLinkExtensionNodeModulesToTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir)) {
-      const relativeTarget = relative(extensionDir, topLevelNodeModulesDir);
+    if (canPruneExtensionNodeModulesAgainstTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir)) {
       rmSync(extensionNodeModulesDir, { recursive: true, force: true });
-      symlinkSync(relativeTarget, extensionNodeModulesDir, linkType);
-      linkedExtensions++;
+      removedExtensions++;
       continue;
     }
 
     for (const { name, dir } of packageDirs) {
       const topLevelPackageDir = join(topLevelNodeModulesDir, ...name.split('/'));
-      if (!canLinkPackageDirToTopLevel(dir, topLevelPackageDir)) {
+      if (!canPrunePackageDirAgainstTopLevel(dir, topLevelPackageDir)) {
         continue;
       }
 
       rmSync(dir, { recursive: true, force: true });
-      symlinkSync(relative(dirname(dir), topLevelPackageDir), dir, linkType);
-      linkedPackages++;
+      removeEmptyDirChain(dirname(dir), extensionNodeModulesDir);
+      removedPackages++;
     }
   }
 
-  return { linkedExtensions, linkedPackages };
+  return { removedExtensions, removedPackages };
 }
 
-exports.linkExtensionNodeModulesToTopLevel = linkExtensionNodeModulesToTopLevel;
+exports.pruneExtensionNodeModulesAgainstTopLevel = pruneExtensionNodeModulesAgainstTopLevel;
 
 // ── General cleanup ──────────────────────────────────────────────────────────
 
@@ -837,8 +853,8 @@ exports.default = async function afterPack(context) {
     if (extNMCount > 0) {
       console.log(`[after-pack] ✅ Copied node_modules for ${extNMCount} built-in extension(s), merged ${mergedPkgCount} packages into top-level.`);
       if (platform === 'darwin') {
-        const { linkedExtensions, linkedPackages } = linkExtensionNodeModulesToTopLevel(openclawRoot);
-        console.log(`[after-pack] ✅ Linked ${linkedExtensions} built-in extension node_modules and ${linkedPackages} extension package directories to top-level.`);
+        const { removedExtensions, removedPackages } = pruneExtensionNodeModulesAgainstTopLevel(openclawRoot);
+        console.log(`[after-pack] ✅ Pruned ${removedExtensions} built-in extension node_modules and ${removedPackages} duplicate extension package directories.`);
       }
     }
   }
