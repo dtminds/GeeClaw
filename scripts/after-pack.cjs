@@ -20,8 +20,12 @@
  */
 
 const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
-const { join, dirname, basename, relative } = require('path');
+const { join, dirname, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
+const {
+  bundlePluginMirrors,
+  getExtraBundledPluginPackages,
+} = require('./lib/openclaw-plugin-bundler.cjs');
 
 // ── Arch helpers ─────────────────────────────────────────────────────────────
 // electron-builder Arch enum: 0=ia32, 1=x64, 2=armv7l, 3=arm64, 4=universal
@@ -75,6 +79,14 @@ function copyPathPreservingLinks(sourcePath, destPath) {
 }
 
 exports.copyPathPreservingLinks = copyPathPreservingLinks;
+exports.getExtraBundledPluginPackages = getExtraBundledPluginPackages;
+
+function createPrefixedLogger(prefix) {
+  return {
+    log: (message) => console.log(`${prefix}${message}`),
+    warn: (message) => console.warn(`${prefix}${message}`),
+  };
+}
 
 function readPackageIdentity(packageDir) {
   const packageJsonPath = join(packageDir, 'package.json');
@@ -588,164 +600,6 @@ function patchBrokenModules(nodeModulesDir) {
   }
 }
 
-// ── Plugin bundler ───────────────────────────────────────────────────────────
-// Bundles a single OpenClaw plugin (and its transitive deps) from node_modules
-// directly into the packaged resources directory.  Mirrors the logic in
-// bundle-openclaw-plugins.mjs so the packaged app is self-contained even when
-// build/openclaw-plugins/ was not pre-generated.
-
-function getVirtualStoreNodeModules(realPkgPath) {
-  let dir = realPkgPath;
-  while (dir !== dirname(dir)) {
-    if (basename(dir) === 'node_modules') return dir;
-    dir = dirname(dir);
-  }
-  return null;
-}
-
-function listPkgs(nodeModulesDir) {
-  const result = [];
-  const nDir = normWin(nodeModulesDir);
-  if (!existsSync(nDir)) return result;
-  for (const entry of readdirSync(nDir)) {
-    if (entry === '.bin') continue;
-    // Use original (non-normWin) join for the logical path stored in result.fullPath,
-    // so callers can still call getVirtualStoreNodeModules() on it correctly.
-    const fullPath = join(nodeModulesDir, entry);
-    if (entry.startsWith('@')) {
-      let subs;
-      try { subs = readdirSync(normWin(fullPath)); } catch { continue; }
-      for (const sub of subs) {
-        result.push({ name: `${entry}/${sub}`, fullPath: join(fullPath, sub) });
-      }
-    } else {
-      result.push({ name: entry, fullPath });
-    }
-  }
-  return result;
-}
-
-const EXTRA_BUNDLED_PLUGIN_PACKAGES = {
-  // Upstream package imports SessionManager from pi-coding-agent at runtime,
-  // but does not declare it in package.json. Bundle it explicitly until the
-  // plugin publishes correct metadata.
-  '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
-};
-
-function getExtraBundledPluginPackages(npmName) {
-  return EXTRA_BUNDLED_PLUGIN_PACKAGES[npmName] || [];
-}
-
-exports.getExtraBundledPluginPackages = getExtraBundledPluginPackages;
-
-function bundlePlugin(nodeModulesRoot, npmName, destDir) {
-  const pkgPath = join(nodeModulesRoot, ...npmName.split('/'));
-  if (!existsSync(pkgPath)) {
-    console.warn(`[after-pack] ⚠️  Plugin package not found: ${pkgPath}. Run pnpm install.`);
-    return false;
-  }
-
-  let realPluginPath;
-  try { realPluginPath = realpathCompat(pkgPath); } catch { realPluginPath = pkgPath; }
-
-  // Copy plugin package itself
-  if (existsSync(normWin(destDir))) rmSync(normWin(destDir), { recursive: true, force: true });
-  mkdirSync(normWin(destDir), { recursive: true });
-  cpSync(normWin(realPluginPath), normWin(destDir), { recursive: true, dereference: true });
-
-  // Collect transitive deps via pnpm virtual store BFS
-  const collected = new Map();
-  const queue = [];
-
-  const rootVirtualNM = getVirtualStoreNodeModules(realPluginPath);
-  if (!rootVirtualNM) {
-    console.warn(`[after-pack] ⚠️  Could not find virtual store for ${npmName}, skipping deps.`);
-    return true;
-  }
-  queue.push({ nodeModulesDir: rootVirtualNM, skipPkg: npmName });
-
-  // Read peerDependencies from the plugin's package.json so we don't bundle
-  // packages that are provided by the host environment (e.g. openclaw itself).
-  const SKIP_PACKAGES = new Set(['typescript', '@playwright/test']);
-  const SKIP_SCOPES = ['@types/'];
-  try {
-    const pluginPkg = JSON.parse(
-      require('fs').readFileSync(join(destDir, 'package.json'), 'utf8')
-    );
-    for (const peer of Object.keys(pluginPkg.peerDependencies || {})) {
-      SKIP_PACKAGES.add(peer);
-    }
-  } catch { /* ignore */ }
-
-  while (queue.length > 0) {
-    const { nodeModulesDir, skipPkg } = queue.shift();
-    for (const { name, fullPath } of listPkgs(nodeModulesDir)) {
-      if (name === skipPkg) continue;
-      if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
-      let rp;
-      try { rp = realpathCompat(fullPath); } catch { continue; }
-      if (collected.has(rp)) continue;
-      collected.set(rp, name);
-      const depVirtualNM = getVirtualStoreNodeModules(rp);
-      if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
-        queue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
-      }
-    }
-  }
-
-  for (const extraPkgName of getExtraBundledPluginPackages(npmName)) {
-    const extraPkgPath = join(nodeModulesRoot, ...extraPkgName.split('/'));
-    if (!existsSync(extraPkgPath)) {
-      console.warn(`[after-pack] ⚠️  Extra plugin dependency not found: ${extraPkgPath}. Run pnpm install.`);
-      continue;
-    }
-
-    let extraRealPath;
-    try { extraRealPath = realpathCompat(extraPkgPath); } catch { extraRealPath = extraPkgPath; }
-    collected.set(extraRealPath, extraPkgName);
-
-    const extraVirtualNM = getVirtualStoreNodeModules(extraRealPath);
-    if (!extraVirtualNM) continue;
-
-    const extraQueue = [{ nodeModulesDir: extraVirtualNM, skipPkg: extraPkgName }];
-    while (extraQueue.length > 0) {
-      const { nodeModulesDir, skipPkg } = extraQueue.shift();
-      for (const { name, fullPath } of listPkgs(nodeModulesDir)) {
-        if (name === skipPkg) continue;
-        if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
-        let rp;
-        try { rp = realpathCompat(fullPath); } catch { continue; }
-        if (collected.has(rp)) continue;
-        collected.set(rp, name);
-        const depVirtualNM = getVirtualStoreNodeModules(rp);
-        if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
-          extraQueue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
-        }
-      }
-    }
-  }
-
-  // Copy flattened deps into destDir/node_modules
-  const destNM = join(destDir, 'node_modules');
-  mkdirSync(destNM, { recursive: true });
-  const copiedNames = new Set();
-  let count = 0;
-  for (const [rp, pkgName] of collected) {
-    if (copiedNames.has(pkgName)) continue;
-    copiedNames.add(pkgName);
-    const d = join(destNM, pkgName);
-    try {
-      mkdirSync(normWin(dirname(d)), { recursive: true });
-      cpSync(normWin(rp), normWin(d), { recursive: true, dereference: true });
-      count++;
-    } catch (e) {
-      console.warn(`[after-pack]   Skipped dep ${pkgName}: ${e.message}`);
-    }
-  }
-  console.log(`[after-pack] ✅ Plugin ${npmName}: copied ${count} deps to ${destDir}`);
-  return true;
-}
-
 // ── Main hook ────────────────────────────────────────────────────────────────
 
 exports.default = async function afterPack(context) {
@@ -768,7 +622,6 @@ exports.default = async function afterPack(context) {
 
   const openclawRoot = join(resourcesDir, 'openclaw');
   const dest = join(openclawRoot, 'node_modules');
-  const nodeModulesRoot = join(__dirname, '..', 'node_modules');
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
 
   if (!existsSync(src)) {
@@ -820,25 +673,19 @@ exports.default = async function afterPack(context) {
       }
     }
   } else {
-    const BUNDLED_PLUGINS = [
-      { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
-      { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
-      { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
-      { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
-    ];
+    const fallbackLogger = createPrefixedLogger('[after-pack] ');
+    const { plugins } = bundlePluginMirrors({
+      rootDir: join(__dirname, '..'),
+      outputRoot: pluginsDestRoot,
+      logger: fallbackLogger,
+    });
 
-    mkdirSync(pluginsDestRoot, { recursive: true });
-    for (const { npmName, pluginId } of BUNDLED_PLUGINS) {
-      const pluginDestDir = join(pluginsDestRoot, pluginId);
-      console.log(`[after-pack] Bundling plugin ${npmName} -> ${pluginDestDir}`);
-      const ok = bundlePlugin(nodeModulesRoot, npmName, pluginDestDir);
-      if (ok) {
-        const pluginNM = join(pluginDestDir, 'node_modules');
-        cleanupUnnecessaryFiles(pluginDestDir);
-        if (existsSync(pluginNM)) {
-          cleanupKoffi(pluginNM, platform, arch);
-          cleanupNativePlatformPackages(pluginNM, platform, arch);
-        }
+    for (const plugin of plugins) {
+      const pluginNM = join(plugin.outputDir, 'node_modules');
+      cleanupUnnecessaryFiles(plugin.outputDir);
+      if (existsSync(pluginNM)) {
+        cleanupKoffi(pluginNM, platform, arch);
+        cleanupNativePlatformPackages(pluginNM, platform, arch);
       }
     }
   }
