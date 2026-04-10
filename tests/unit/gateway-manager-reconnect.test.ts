@@ -185,4 +185,41 @@ describe('GatewayManager auto reconnect', () => {
 
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
+
+  it('records restart completion when reconnecting to the owned process', async () => {
+    vi.doMock('@electron/gateway/startup-orchestrator', () => ({
+      runGatewayStartupSequence: runGatewayStartupSequenceMock,
+    }));
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    await manager.start();
+
+    const startupHooks = runGatewayStartupSequenceMock.mock.calls.at(-1)?.[0];
+    expect(startupHooks).toBeDefined();
+
+    const recordRestartCompleted = vi.fn();
+    (manager as unknown as {
+      process: { pid: number };
+      ownsProcess: boolean;
+      restartController: { recordRestartCompleted: () => void };
+    }).process = { pid: 99612 };
+    (manager as unknown as {
+      process: { pid: number };
+      ownsProcess: boolean;
+      restartController: { recordRestartCompleted: () => void };
+    }).ownsProcess = true;
+    (manager as unknown as {
+      process: { pid: number };
+      ownsProcess: boolean;
+      restartController: { recordRestartCompleted: () => void };
+    }).restartController.recordRestartCompleted = recordRestartCompleted;
+
+    startupHooks.onConnectedToExistingGateway();
+
+    expect(recordRestartCompleted).toHaveBeenCalledTimes(1);
+
+    (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
+  });
 });
