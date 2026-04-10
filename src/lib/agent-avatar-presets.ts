@@ -1,18 +1,13 @@
-export const AGENT_AVATAR_PRESET_IDS = [
-  'gradient-sky',
-  'gradient-orchid',
-  'gradient-sunset',
-  'gradient-lagoon',
-  'gradient-indigo',
-  'gradient-rose',
-  'gradient-sage',
-  'gradient-clay',
-  'gradient-stone',
-  'gradient-dune',
-] as const;
-
-export type AgentAvatarPresetId = typeof AGENT_AVATAR_PRESET_IDS[number];
-export type AgentAvatarSource = 'default' | 'user';
+export {
+  AGENT_AVATAR_PRESET_IDS,
+  DEFAULT_AGENT_AVATAR_PRESET_ID,
+  normalizeAgentAvatarPresetId,
+  resolveMarketplaceAvatarPresetId,
+  shouldReplaceAgentAvatarOnMarketplaceSync,
+  type AgentAvatarPresetId,
+  type AgentAvatarSource,
+} from '@/shared/agent-avatar';
+import type { AgentAvatarPresetId } from '@/shared/agent-avatar';
 
 export interface AgentAvatarPreset {
   id: AgentAvatarPresetId;
@@ -23,8 +18,6 @@ export interface AgentAvatarPreset {
     stroke?: string;
   };
 }
-
-export const DEFAULT_AGENT_AVATAR_PRESET_ID: AgentAvatarPresetId = 'gradient-sky';
 
 export const AGENT_AVATAR_PRESETS: AgentAvatarPreset[] = [
   {
@@ -82,35 +75,3 @@ export const AGENT_AVATAR_PRESETS: AgentAvatarPreset[] = [
 export const AGENT_AVATAR_PRESET_MAP = Object.fromEntries(
   AGENT_AVATAR_PRESETS.map((preset) => [preset.id, preset]),
 ) as Record<AgentAvatarPresetId, AgentAvatarPreset>;
-
-const MARKETPLACE_AGENT_AVATAR_MAP: Partial<Record<string, AgentAvatarPresetId>> = {
-  stockexpert: 'gradient-sunset',
-};
-
-export function normalizeAgentAvatarPresetId(value: unknown): AgentAvatarPresetId {
-  return typeof value === 'string' && value in AGENT_AVATAR_PRESET_MAP
-    ? value as AgentAvatarPresetId
-    : DEFAULT_AGENT_AVATAR_PRESET_ID;
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash);
-}
-
-function resolveHashedAvatarPresetId(seed: string): AgentAvatarPresetId {
-  const index = hashString(seed) % AGENT_AVATAR_PRESET_IDS.length;
-  return AGENT_AVATAR_PRESET_IDS[index] ?? DEFAULT_AGENT_AVATAR_PRESET_ID;
-}
-
-export function resolveMarketplaceAvatarPresetId(agentId: string): AgentAvatarPresetId {
-  const normalizedAgentId = agentId.trim().toLowerCase();
-  return MARKETPLACE_AGENT_AVATAR_MAP[normalizedAgentId] ?? resolveHashedAvatarPresetId(normalizedAgentId);
-}
-
-export function shouldReplaceAgentAvatarOnMarketplaceSync(source?: AgentAvatarSource): boolean {
-  return source !== 'user';
-}
