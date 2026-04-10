@@ -18,6 +18,7 @@
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import {
   findOpenClawDoctorPatchRelativePath,
   patchOpenClawDoctorBundledRuntimeDepsSource,
@@ -41,10 +42,7 @@ const openclawReal = realpathCompat(openclawLink);
 echo`   openclaw resolved: ${openclawReal}`;
 
 // 2. Clean and create output directory
-if (fs.existsSync(OUTPUT)) {
-  fs.rmSync(OUTPUT, { recursive: true });
-}
-fs.mkdirSync(OUTPUT, { recursive: true });
+cleanDirectorySync(OUTPUT, fs);
 
 // 3. Copy openclaw package itself to OUTPUT root
 echo`   Copying openclaw package...`;
