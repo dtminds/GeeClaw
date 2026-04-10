@@ -89,4 +89,16 @@ describe('desktop session cleanup', () => {
     expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main:sub')).toHaveLength(2);
     expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main')).toHaveLength(1);
   });
+
+  it('does not treat malformed keys with an empty agent id as the canonical main session', async () => {
+    const { createDesktopSession, listDesktopSessions } = await import('@electron/utils/desktop-sessions');
+
+    const malformed = await createDesktopSession({ gatewaySessionKey: 'agent::geeclaw_main' });
+    const malformedDuplicate = await createDesktopSession({ gatewaySessionKey: 'agent::geeclaw_main' });
+    const sessions = await listDesktopSessions();
+
+    expect(malformed.id).not.toBe('session-main');
+    expect(malformedDuplicate.id).not.toBe(malformed.id);
+    expect(sessions.filter((session) => session.gatewaySessionKey === 'agent::geeclaw_main')).toHaveLength(2);
+  });
 });
