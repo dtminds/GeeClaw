@@ -98,7 +98,7 @@ function syncToolPermission(
   toolPermission: ToolPermission,
 ): void {
   if (toolPermission === 'default') {
-    tools.deny = ['group:automation'];
+    tools.deny = ['gateway'];
     return;
   }
 

@@ -105,7 +105,7 @@ describe('saveChannelConfig', () => {
       commands?: {
         restart?: boolean;
       };
-    }).commands?.restart).toBe(false);
+    }).commands?.restart).toBe(true);
   });
 
   it('does not synthesize a duplicate default account from mirrored top-level credentials', async () => {

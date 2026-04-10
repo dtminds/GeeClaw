@@ -34,7 +34,7 @@ function ensureCommandsRestart(config: OpenClawConfigDocument): void {
       : {}
   ) as Record<string, unknown>;
 
-  commands.restart = false;
+  commands.restart = true;
   config.commands = commands;
 }
 
