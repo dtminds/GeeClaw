@@ -17,7 +17,7 @@ const initialGatewayState = useGatewayStore.getState();
 
 const mainSession: DesktopSessionSummary = {
   id: 'desktop-main',
-  gatewaySessionKey: 'agent:main:main',
+  gatewaySessionKey: 'agent:main:geeclaw_main',
   title: '',
   lastMessagePreview: '',
   createdAt: 1,
@@ -26,7 +26,7 @@ const mainSession: DesktopSessionSummary = {
 
 const writerSession: DesktopSessionSummary = {
   id: 'desktop-writer',
-  gatewaySessionKey: 'agent:writer:main',
+  gatewaySessionKey: 'agent:writer:geeclaw_main',
   title: '',
   lastMessagePreview: '',
   createdAt: 2,
@@ -72,7 +72,7 @@ describe('chat store session selection', () => {
           inheritedModel: false,
           workspace: '/tmp/main',
           agentDir: '/tmp/main/agent',
-          mainSessionKey: 'agent:main:main',
+          mainSessionKey: 'agent:main:geeclaw_main',
           channelTypes: [],
           channelAccounts: [],
           source: 'custom',
@@ -93,7 +93,7 @@ describe('chat store session selection', () => {
           inheritedModel: false,
           workspace: '/tmp/writer',
           agentDir: '/tmp/writer/agent',
-          mainSessionKey: 'agent:writer:main',
+          mainSessionKey: 'agent:writer:geeclaw_main',
           channelTypes: [],
           channelAccounts: [],
           source: 'custom',
@@ -120,7 +120,7 @@ describe('chat store session selection', () => {
     await useChatStore.getState().openAgentMainSession('writer');
 
     expect(useChatStore.getState().currentAgentId).toBe('writer');
-    expect(useChatStore.getState().currentSessionKey).toBe('agent:writer:main');
+    expect(useChatStore.getState().currentSessionKey).toBe('agent:writer:geeclaw_main');
 
     hostApiFetchMock.mockResolvedValue({
       sessions: [mainSession],

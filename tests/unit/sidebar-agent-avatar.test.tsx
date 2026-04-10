@@ -10,9 +10,9 @@ const settingsState = {
 const chatState = {
   desktopSessions: [
     {
-      gatewaySessionKey: 'agent:alpha:main',
+      gatewaySessionKey: 'agent:alpha:geeclaw_main',
       updatedAt: '2026-03-31T08:00:00.000Z',
-      lastMessagePreview: '',
+      lastMessagePreview: 'Fixed session preview',
     },
   ],
   currentAgentId: 'alpha',
@@ -29,7 +29,7 @@ const agentsState = {
       inheritedModel: false,
       workspace: '/tmp/alpha',
       agentDir: '/tmp/alpha/agent',
-      mainSessionKey: 'agent:alpha:main',
+      mainSessionKey: 'agent:alpha:geeclaw_main',
       channelTypes: [],
       channelAccounts: [],
       source: 'custom',
@@ -136,6 +136,7 @@ describe('Sidebar agent avatars', () => {
     expect(avatar).toHaveAttribute('data-avatar-size', 'full');
     expect(avatar).toHaveAttribute('data-avatar-preset', 'gradient-indigo');
     expect(within(avatar).getByText('A')).toBeInTheDocument();
+    expect(within(agentButton).getByText('Fixed session preview')).toBeInTheDocument();
   });
 
   it('renders compact avatars in the collapsed sidebar', async () => {

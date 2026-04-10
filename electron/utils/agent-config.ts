@@ -799,9 +799,9 @@ function normalizeAgentIdForBinding(id: string): string {
 }
 
 function normalizeMainKey(value: unknown): string {
-  if (typeof value !== 'string') return 'main';
+  if (typeof value !== 'string') return 'geeclaw_main';
   const trimmed = value.trim().toLowerCase();
-  return trimmed || 'main';
+  return trimmed || 'geeclaw_main';
 }
 
 function readDefaultAgentModelConfig(

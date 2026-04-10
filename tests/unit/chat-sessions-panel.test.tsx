@@ -5,7 +5,7 @@ const chatState = {
   desktopSessions: [
     {
       id: 'main-session',
-      gatewaySessionKey: 'agent:writer:main',
+      gatewaySessionKey: 'agent:writer:geeclaw_main',
       title: 'Writer',
       lastMessagePreview: 'Main preview',
       createdAt: 1,
@@ -35,7 +35,7 @@ const chatState = {
 };
 
 const agentsState = {
-  agents: [{ id: 'writer', name: 'Writer', mainSessionKey: 'agent:writer:main' }],
+  agents: [{ id: 'writer', name: 'Writer', mainSessionKey: 'agent:writer:geeclaw_main' }],
 };
 
 const translations: Record<string, string> = {
@@ -168,7 +168,7 @@ describe('ChatSessionsPanel', () => {
     chatState.desktopSessions = [
       {
         id: 'main-session',
-        gatewaySessionKey: 'agent:writer:main',
+        gatewaySessionKey: 'agent:writer:geeclaw_main',
         title: 'Writer',
         lastMessagePreview: 'Main preview',
         createdAt: 1,
@@ -176,7 +176,7 @@ describe('ChatSessionsPanel', () => {
       },
     ];
     chatState.currentDesktopSessionId = '';
-    chatState.currentSessionKey = 'agent:writer:main';
+    chatState.currentSessionKey = 'agent:writer:geeclaw_main';
 
     try {
       render(<ChatSessionsPanel />);

@@ -31,7 +31,7 @@ describe('desktop session cleanup', () => {
       sessions: [
         {
           id: 'session-main',
-          gatewaySessionKey: 'agent:writer:main',
+          gatewaySessionKey: 'agent:writer:geeclaw_main',
           title: 'Writer',
           lastMessagePreview: '',
           createdAt: 10,
@@ -47,7 +47,7 @@ describe('desktop session cleanup', () => {
         },
         {
           id: 'session-other',
-          gatewaySessionKey: 'agent:main:main',
+          gatewaySessionKey: 'agent:main:geeclaw_main',
           title: 'Main',
           lastMessagePreview: '',
           createdAt: 50,
@@ -65,5 +65,15 @@ describe('desktop session cleanup', () => {
 
     expect(deleted.map((session) => session.id)).toEqual(['session-main', 'session-tmp']);
     expect(remaining.map((session) => session.id)).toEqual(['session-other']);
+  });
+
+  it('reuses an existing geeclaw main desktop session instead of creating a duplicate', async () => {
+    const { createDesktopSession, listDesktopSessions } = await import('@electron/utils/desktop-sessions');
+
+    const existing = await createDesktopSession({ gatewaySessionKey: 'agent:writer:geeclaw_main' });
+    const sessions = await listDesktopSessions();
+
+    expect(existing.id).toBe('session-main');
+    expect(sessions.filter((session) => session.gatewaySessionKey === 'agent:writer:geeclaw_main')).toHaveLength(1);
   });
 });

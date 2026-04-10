@@ -18,13 +18,19 @@ type DesktopSessionsStoreShape = {
 const DESKTOP_SESSIONS_STORE_NAME = 'desktop-sessions';
 const DESKTOP_SESSIONS_SCHEMA_VERSION = 2;
 const GEECLAW_SESSION_PREFIX = 'agent:main:geeclaw-';
+const GEECLAW_MAIN_SESSION_KEY = 'geeclaw_main';
 
 function buildDefaultGatewaySessionKey(id: string): string {
   return `${GEECLAW_SESSION_PREFIX}${id}`;
 }
 
 function isMainGatewaySessionKey(sessionKey: string): boolean {
-  return sessionKey.endsWith(':main');
+  if (!sessionKey.startsWith('agent:')) {
+    return false;
+  }
+
+  const parts = sessionKey.split(':');
+  return parts[2] === GEECLAW_MAIN_SESSION_KEY;
 }
 
 function getAgentIdFromGatewaySessionKey(sessionKey: string): string | null {
