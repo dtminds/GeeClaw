@@ -32,7 +32,7 @@ export function AgentAvatar({
 }: AgentAvatarProps) {
   const normalizedPresetId = normalizeAgentAvatarPresetId(presetId);
   const preset = AGENT_AVATAR_PRESET_MAP[normalizedPresetId];
-  const initial = (label ?? '').trim().slice(0, 1).toUpperCase();
+  const initial = Array.from((label ?? '').trim())[0]?.toUpperCase() ?? '';
 
   return (
     <div
