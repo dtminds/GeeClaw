@@ -37,6 +37,17 @@ const PLUGINS = [
   { npmName: '@tencent-weixin/openclaw-weixin', pluginId: 'openclaw-weixin' },
 ];
 
+const EXTRA_BUNDLED_PLUGIN_PACKAGES = {
+  // Upstream package imports SessionManager from pi-coding-agent at runtime,
+  // but does not declare it in package.json. Bundle it explicitly until the
+  // plugin publishes correct metadata.
+  '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
+};
+
+function getExtraBundledPluginPackages(npmName) {
+  return EXTRA_BUNDLED_PLUGIN_PACKAGES[npmName] || [];
+}
+
 function discoverLocalPlugins() {
   if (!fs.existsSync(LOCAL_PLUGIN_ROOT)) {
     return [];
@@ -281,6 +292,20 @@ function bundleOnePlugin({ npmName, pluginId, sourcePath }) {
 
   // 2) Collect transitive deps from pnpm virtual store
   const collected = collectPackageDependencyGraph(realPluginPath, { skipPkg: npmName });
+  for (const extraPkgName of getExtraBundledPluginPackages(npmName)) {
+    const extraPkgPath = path.join(NODE_MODULES, ...extraPkgName.split('/'));
+    if (!fs.existsSync(extraPkgPath)) {
+      throw new Error(`Missing extra plugin dependency "${extraPkgName}" for "${npmName}". Run pnpm install first.`);
+    }
+
+    const extraRealPath = realpathCompat(extraPkgPath);
+    collected.set(extraRealPath, extraPkgName);
+
+    const extraCollected = collectPackageDependencyGraph(extraRealPath, { skipPkg: extraPkgName });
+    for (const [realPath, pkgName] of extraCollected) {
+      collected.set(realPath, pkgName);
+    }
+  }
   const { copiedCount, skippedDupes } = copyCollectedDependencies(outputDir, collected);
 
   const manifestPath = path.join(outputDir, 'openclaw.plugin.json');
