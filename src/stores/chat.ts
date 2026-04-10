@@ -316,12 +316,14 @@ function isRecoverableChatSendTimeout(error: string): boolean {
   return error.includes('RPC timeout: chat.send');
 }
 
-function resolveMainSessionKeyForAgent(agentId: string): string;
-function resolveMainSessionKeyForAgent(agentId?: string | null): string | null;
 function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
   if (!agentId) return null;
   const agent = useAgentsStore.getState().agents.find((entry) => entry.id === agentId);
   return agent?.mainSessionKey ?? buildDefaultMainSessionKey(agentId);
+}
+
+function resolveMainSessionKeyForKnownAgent(agentId: string): string {
+  return resolveMainSessionKeyForAgent(agentId) ?? buildDefaultMainSessionKey(agentId);
 }
 
 function reconcilePreferredMainSession(
@@ -594,7 +596,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   openAgentMainSession: async (agentId: string) => {
     const normalizedAgentId = agentId || 'main';
-    const mainSessionKey = resolveMainSessionKeyForAgent(normalizedAgentId);
+    const mainSessionKey = resolveMainSessionKeyForKnownAgent(normalizedAgentId);
     const existingMainSession = get().desktopSessions.find((session) => session.gatewaySessionKey === mainSessionKey);
 
     if (existingMainSession) {
@@ -706,7 +708,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (remaining.length === 0) {
       try {
         const fallbackAgentId = get().currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-        const fallbackMainKey = resolveMainSessionKeyForAgent(fallbackAgentId);
+        const fallbackMainKey = resolveMainSessionKeyForKnownAgent(fallbackAgentId);
         remaining = [await createDesktopSessionRequest('', fallbackMainKey)];
       } catch (error) {
         console.warn('Failed to create replacement desktop session:', error);
@@ -714,7 +716,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     const preferredAgentId = currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-    const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId);
+    const preferredMainSessionKey = resolveMainSessionKeyForKnownAgent(preferredAgentId);
     const sameAgentRemaining = remaining.filter(
       (session) => getAgentIdFromSessionKey(session.gatewaySessionKey) === preferredAgentId,
     );
