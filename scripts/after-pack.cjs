@@ -625,6 +625,19 @@ function listPkgs(nodeModulesDir) {
   return result;
 }
 
+const EXTRA_BUNDLED_PLUGIN_PACKAGES = {
+  // Upstream package imports SessionManager from pi-coding-agent at runtime,
+  // but does not declare it in package.json. Bundle it explicitly until the
+  // plugin publishes correct metadata.
+  '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
+};
+
+function getExtraBundledPluginPackages(npmName) {
+  return EXTRA_BUNDLED_PLUGIN_PACKAGES[npmName] || [];
+}
+
+exports.getExtraBundledPluginPackages = getExtraBundledPluginPackages;
+
 function bundlePlugin(nodeModulesRoot, npmName, destDir) {
   const pkgPath = join(nodeModulesRoot, ...npmName.split('/'));
   if (!existsSync(pkgPath)) {
@@ -676,6 +689,38 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
       const depVirtualNM = getVirtualStoreNodeModules(rp);
       if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
         queue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
+      }
+    }
+  }
+
+  for (const extraPkgName of getExtraBundledPluginPackages(npmName)) {
+    const extraPkgPath = join(nodeModulesRoot, ...extraPkgName.split('/'));
+    if (!existsSync(extraPkgPath)) {
+      console.warn(`[after-pack] ⚠️  Extra plugin dependency not found: ${extraPkgPath}. Run pnpm install.`);
+      continue;
+    }
+
+    let extraRealPath;
+    try { extraRealPath = realpathCompat(extraPkgPath); } catch { extraRealPath = extraPkgPath; }
+    collected.set(extraRealPath, extraPkgName);
+
+    const extraVirtualNM = getVirtualStoreNodeModules(extraRealPath);
+    if (!extraVirtualNM) continue;
+
+    const extraQueue = [{ nodeModulesDir: extraVirtualNM, skipPkg: extraPkgName }];
+    while (extraQueue.length > 0) {
+      const { nodeModulesDir, skipPkg } = extraQueue.shift();
+      for (const { name, fullPath } of listPkgs(nodeModulesDir)) {
+        if (name === skipPkg) continue;
+        if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
+        let rp;
+        try { rp = realpathCompat(fullPath); } catch { continue; }
+        if (collected.has(rp)) continue;
+        collected.set(rp, name);
+        const depVirtualNM = getVirtualStoreNodeModules(rp);
+        if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
+          extraQueue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
+        }
       }
     }
   }

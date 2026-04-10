@@ -209,4 +209,13 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(extNodeModules, 'discord-api-types'))).toBe(false);
     expect(lstatSync(join(extNodeModules, 'magic-bytes.js')).isDirectory()).toBe(true);
   });
+
+  it('bundles compatibility runtime deps for plugins with undeclared workspace imports', async () => {
+    const { getExtraBundledPluginPackages } = await import('../../scripts/after-pack.cjs');
+
+    expect(getExtraBundledPluginPackages('@martian-engineering/lossless-claw')).toEqual([
+      '@mariozechner/pi-coding-agent',
+    ]);
+    expect(getExtraBundledPluginPackages('@soimy/dingtalk')).toEqual([]);
+  });
 });
