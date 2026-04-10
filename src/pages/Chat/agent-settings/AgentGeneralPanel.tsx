@@ -97,6 +97,12 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
 
   return (
     <section className="flex h-full min-h-0 flex-col px-1 pr-1">
+      <header className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {description ? (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        ) : null}
+      </header>
       <div className="flex min-h-0 flex-1 flex-col gap-5">
         <div className="space-y-2.5">
           <Label htmlFor="agent-general-name" className={labelClasses}>
