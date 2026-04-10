@@ -153,8 +153,8 @@ export async function handleAgentRoutes(
 
   if (url.pathname === '/api/agents' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<{ name: string; id: string }>(req);
-      const snapshot = await createAgent(body.name, body.id);
+      const body = await parseJsonBody<{ name: string; id: string; avatarPresetId?: string }>(req);
+      const snapshot = await createAgent(body.name, body.id, body.avatarPresetId);
       scheduleGatewayReload(ctx, 'create-agent');
       sendJson(res, 200, { success: true, ...snapshot });
     } catch (error) {
@@ -210,11 +210,13 @@ export async function handleAgentRoutes(
       try {
         const body = await parseJsonBody<{
           name?: string;
+          avatarPresetId?: string;
           skillScope?: { mode: 'default' | 'specified'; skills?: string[] };
         }>(req);
         const agentId = decodeURIComponent(parts[0]);
         const snapshot = await updateAgentSettings(agentId, {
           name: body.name,
+          avatarPresetId: body.avatarPresetId,
           skillScope: body.skillScope?.mode === 'specified'
             ? { mode: 'specified', skills: body.skillScope.skills ?? [] }
             : body.skillScope?.mode === 'default'

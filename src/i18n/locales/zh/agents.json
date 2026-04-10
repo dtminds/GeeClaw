@@ -20,6 +20,8 @@
         "description": "不同智能体间的工作空间、人设、记忆将完全隔离",
         "nameLabel": "智能体名称",
         "namePlaceholder": "Coding Helper",
+        "avatarLabel": "头像",
+        "avatarDescription": "从一组预设头像中选择一套",
         "idLabel": "智能体 ID",
         "idPlaceholder": "coding-helper",
         "idHint": "只允许小写英文、数字和连字符，例如：trading-expert-2",

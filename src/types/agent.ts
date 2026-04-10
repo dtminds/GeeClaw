@@ -1,3 +1,5 @@
+import type { AgentAvatarPresetId, AgentAvatarSource } from '@/lib/agent-avatar-presets';
+
 export type AgentSkillScope =
   | { mode: 'default' }
   | { mode: 'specified'; skills: string[] };
@@ -62,6 +64,8 @@ export interface AgentSummary {
   skillScope: AgentSkillScope;
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
+  avatarPresetId: AgentAvatarPresetId;
+  avatarSource: AgentAvatarSource;
 }
 
 export interface AgentsSnapshot {

@@ -228,6 +228,7 @@ describe('agent API routes', () => {
 
     parseJsonBody.mockResolvedValueOnce({
       name: '股票助手 Pro',
+      avatarPresetId: 'gradient-sunset',
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -249,11 +250,37 @@ describe('agent API routes', () => {
     expect(handled).toBe(true);
     expect(updateAgentSettings).toHaveBeenCalledWith('stockexpert', {
       name: '股票助手 Pro',
+      avatarPresetId: 'gradient-sunset',
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
       },
     });
+  });
+
+  it('forwards avatar preset selections when creating agents', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    parseJsonBody.mockResolvedValueOnce({
+      name: 'Research Helper',
+      id: 'research-helper',
+      avatarPresetId: 'gradient-sky',
+    });
+
+    const handled = await handleAgentRoutes(
+      { method: 'POST' } as never,
+      {} as never,
+      new URL('http://127.0.0.1/api/agents'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(createAgent).toHaveBeenCalledWith('Research Helper', 'research-helper', 'gradient-sky');
   });
 
   it('unmanages preset agents through the dedicated route', async () => {

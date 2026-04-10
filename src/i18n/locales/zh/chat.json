@@ -87,6 +87,8 @@
         "general": {
             "nameLabel": "智能体名称",
             "namePlaceholder": "Assistant",
+            "avatarLabel": "头像",
+            "avatarDescription": "选择一套预设头像",
             "agentIdLabel": "智能体 ID",
             "modelLabel": "模型",
             "inheritedSuffix": "（继承）",

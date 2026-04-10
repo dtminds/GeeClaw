@@ -18,6 +18,7 @@ import {
   AiInnovation02Icon,
 } from '@hugeicons/core-free-icons';
 import { Plus } from 'lucide-react';
+import { AgentAvatar } from '@/components/agents/AgentAvatar';
 import { cn } from '@/lib/utils';
 import { formatShortDateTime } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
@@ -280,15 +281,19 @@ export function Sidebar() {
                     onClick={() => {
                       navigate('/chat', { state: { requestedAgentId: agent.id } });
                     }}
+                    title={agent.name}
                     className={cn(
-                      'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
-                      isActiveAgent
-                        ? 'bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65'
-                        : 'bg-black/[0.08] text-foreground/56 dark:bg-white/[0.11] dark:text-foreground/58',
+                      'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-transform',
+                      isActiveAgent && 'scale-[1.02]',
                     )}
                     aria-label={t('sidebar.switchToAgent', { defaultValue: '切换到 {{name}}', name: agent.name })}
                   >
-                    {agent.name.slice(0, 1).toUpperCase()}
+                    <AgentAvatar
+                      presetId={agent.avatarPresetId}
+                      label={agent.name}
+                      size="compact"
+                      className="h-7 w-7"
+                    />
                   </button>
                 );
               }
@@ -307,9 +312,12 @@ export function Sidebar() {
                   )}
                 >
                   <div className="flex items-start gap-2.5">
-                    <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400/65 to-fuchsia-400/65 text-[12px] font-semibold text-white">
-                      {agent.name.slice(0, 1).toUpperCase()}
-                    </div>
+                    <AgentAvatar
+                      presetId={agent.avatarPresetId}
+                      label={agent.name}
+                      size="full"
+                      className="mt-0.5 shrink-0"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-[13px] font-medium text-foreground">{agent.name}</span>

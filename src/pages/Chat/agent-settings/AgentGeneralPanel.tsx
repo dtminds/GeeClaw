@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { AgentAvatarPicker } from '@/components/agents/AgentAvatarPicker';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toUserMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import type { AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
 import { useAgentsStore } from '@/stores/agents';
 
 interface AgentGeneralPanelProps {
@@ -23,16 +25,19 @@ const labelClasses = 'text-[13px] font-semibold text-foreground/70';
 export function AgentGeneralPanel({ agentId, title, description, onDeleted }: AgentGeneralPanelProps) {
   const { t } = useTranslation(['chat', 'common']);
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
-  const updateAgent = useAgentsStore((state) => state.updateAgent);
+  const updateAgentSettings = useAgentsStore((state) => state.updateAgentSettings);
   const deleteAgent = useAgentsStore((state) => state.deleteAgent);
   const [name, setName] = useState(agent?.name ?? '');
-  const [saving, setSaving] = useState(false);
+  const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId | null>(agent?.avatarPresetId ?? null);
+  const [savingName, setSavingName] = useState(false);
+  const [savingAvatarPresetId, setSavingAvatarPresetId] = useState<AgentAvatarPresetId | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setName(agent?.name ?? '');
-  }, [agent?.name, agentId]);
+    setAvatarPresetId(agent?.avatarPresetId ?? null);
+  }, [agent?.avatarPresetId, agent?.name, agentId]);
 
   const modelLabel = useMemo(() => {
     if (!agent) return '';
@@ -40,20 +45,38 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     return `${agent.modelDisplay}${suffix}`;
   }, [agent, t]);
 
-  const canSave = Boolean(agent && name.trim() && name.trim() !== agent.name);
+  const canSaveName = Boolean(agent && name.trim() && name.trim() !== agent.name);
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));
   const deleteDisabled = !agent || deleting || isDeleteProtected;
 
-  const handleSave = async () => {
-    if (!agent || !canSave) return;
-    setSaving(true);
+  const handleSaveName = async () => {
+    if (!agent || !canSaveName) return;
+    setSavingName(true);
     try {
-      await updateAgent(agent.id, name.trim());
+      await updateAgentSettings(agent.id, { name: name.trim() });
       toast.success(t('agentSettingsDialog.general.toastSaved'));
     } catch (error) {
       toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
     } finally {
-      setSaving(false);
+      setSavingName(false);
+    }
+  };
+
+  const handleAvatarChange = async (nextPresetId: AgentAvatarPresetId) => {
+    if (!agent || deleting || savingAvatarPresetId || nextPresetId === agent.avatarPresetId) {
+      return;
+    }
+
+    const previousPresetId = avatarPresetId ?? agent.avatarPresetId;
+    setAvatarPresetId(nextPresetId);
+    setSavingAvatarPresetId(nextPresetId);
+    try {
+      await updateAgentSettings(agent.id, { avatarPresetId: nextPresetId });
+    } catch (error) {
+      setAvatarPresetId(previousPresetId);
+      toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
+    } finally {
+      setSavingAvatarPresetId(null);
     }
   };
 
@@ -80,7 +103,7 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
           <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}
       </header>
-      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-5">
         <div className="space-y-2.5">
           <Label htmlFor="agent-general-name" className={labelClasses}>
             {t('agentSettingsDialog.general.nameLabel')}
@@ -92,19 +115,37 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
               onChange={(event) => setName(event.target.value)}
               placeholder={t('agentSettingsDialog.general.namePlaceholder')}
               className={cn(inputClasses, 'flex-1')}
-              disabled={!agent || saving || deleting}
+              disabled={!agent || savingName || deleting}
             />
             <Button
               type="button"
               variant="outline"
-              onClick={() => void handleSave()}
-              disabled={!canSave || saving || deleting}
+              onClick={() => void handleSaveName()}
+              disabled={!canSaveName || savingName || deleting}
               className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
+              {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
             </Button>
           </div>
         </div>
+
+        {avatarPresetId ? (
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <Label className={labelClasses}>
+                {t('agentSettingsDialog.general.avatarLabel', 'Avatar')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('agentSettingsDialog.general.avatarDescription', 'Choose a preset avatar')}
+              </p>
+            </div>
+            <AgentAvatarPicker
+              value={avatarPresetId}
+              onChange={(presetId) => void handleAvatarChange(presetId)}
+              disabled={!agent || Boolean(savingAvatarPresetId) || deleting}
+            />
+          </div>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2.5">
