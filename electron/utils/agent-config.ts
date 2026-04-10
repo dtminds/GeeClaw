@@ -4,11 +4,20 @@ import { dirname, join, normalize } from 'path';
 import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
+import { normalizeMainKey } from './main-session-key';
 import {
   getManagedAgentDirPath,
   getManagedAgentWorkspacePath,
   resolveManagedAgentWorkspacePath,
 } from './managed-agent-workspace';
+import type { AgentAvatarPresetId, AgentAvatarSource } from './agent-avatar';
+import {
+  normalizeAgentAvatarPresetId,
+  normalizeAgentAvatarSource,
+  resolveDefaultAgentAvatarPresetId,
+  resolveMarketplaceAvatarPresetId,
+  shouldReplaceAgentAvatarOnMarketplaceSync,
+} from './agent-avatar';
 import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
 import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
@@ -125,6 +134,11 @@ interface ManagedAgentMetadata {
   unmanagedAt?: string;
 }
 
+interface StoredAgentAvatarEntry {
+  avatarPresetId: AgentAvatarPresetId;
+  avatarSource: AgentAvatarSource;
+}
+
 interface AgentPresetMissingRequirements {
   bins?: string[];
   anyBins?: string[];
@@ -134,6 +148,7 @@ interface AgentPresetMissingRequirements {
 export interface AgentSettingsUpdate {
   name?: string;
   skillScope?: AgentSkillScope;
+  avatarPresetId?: AgentAvatarPresetId;
 }
 
 export interface AgentSummary {
@@ -158,6 +173,8 @@ export interface AgentSummary {
   skillScope: AgentSkillScope;
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
+  avatarPresetId: AgentAvatarPresetId;
+  avatarSource: AgentAvatarSource;
 }
 
 export interface AgentsSnapshot {
@@ -274,6 +291,10 @@ function normalizeAgentId(agentId: string): string {
   return agentId.trim().toLowerCase();
 }
 
+function getAgentAvatarStoreKey(agentId: string): string {
+  return normalizeAgentId(agentId);
+}
+
 function validateAgentId(agentId: string): void {
   // lowercase letters, numbers, and internal hyphens; no leading/trailing hyphen
   const valid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agentId);
@@ -366,6 +387,42 @@ async function writeAgentManagementMap(nextMap: Record<string, ManagedAgentMetad
   store.set('management', cloneValue(nextMap));
 }
 
+async function readAgentAvatarMap(): Promise<Record<string, StoredAgentAvatarEntry>> {
+  const store = await getGeeClawAgentStore();
+  const value = store.get('agentAvatars');
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const normalized: Record<string, StoredAgentAvatarEntry> = {};
+  for (const [agentId, rawEntry] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedAgentId = getAgentAvatarStoreKey(agentId);
+    if (!normalizedAgentId) {
+      continue;
+    }
+
+    const entry = rawEntry && typeof rawEntry === 'object'
+      ? rawEntry as Record<string, unknown>
+      : {};
+    normalized[normalizedAgentId] = {
+      avatarPresetId: normalizeAgentAvatarPresetId(entry.avatarPresetId),
+      avatarSource: normalizeAgentAvatarSource(entry.avatarSource) ?? 'default',
+    };
+  }
+
+  return normalized;
+}
+
+async function writeAgentAvatarMap(nextMap: Record<string, StoredAgentAvatarEntry>): Promise<void> {
+  const store = await getGeeClawAgentStore();
+  if (Object.keys(nextMap).length === 0) {
+    store.delete('agentAvatars');
+    return;
+  }
+
+  store.set('agentAvatars', cloneValue(nextMap));
+}
+
 function readAgentSkillScope(entry: AgentListEntry): AgentSkillScope {
   const skills = Array.isArray(entry.skills)
     ? entry.skills
@@ -388,6 +445,31 @@ function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): Ag
 
   nextEntry.skills = [...scope.skills];
   return nextEntry;
+}
+
+function resolveDefaultAvatarPresetIdForAgent(
+  agentId: string,
+  management?: ManagedAgentMetadata,
+): AgentAvatarPresetId {
+  return management?.source === 'marketplace'
+    ? resolveMarketplaceAvatarPresetId(agentId)
+    : resolveDefaultAgentAvatarPresetId(agentId);
+}
+
+function resolveAgentAvatar(
+  agentId: string,
+  avatarMap: Record<string, StoredAgentAvatarEntry>,
+  management?: ManagedAgentMetadata,
+): StoredAgentAvatarEntry {
+  const stored = avatarMap[getAgentAvatarStoreKey(agentId)];
+  if (stored) {
+    return stored;
+  }
+
+  return {
+    avatarPresetId: resolveDefaultAvatarPresetIdForAgent(agentId, management),
+    avatarSource: 'default',
+  };
 }
 
 function mergeManagedMarkdownSection(
@@ -671,6 +753,8 @@ function normalizeAgentsConfig(config: AgentConfigDocument): {
 
   const normalizedEntries = rawEntries.map((entry) => {
     const nextEntry = { ...entry };
+    delete nextEntry.avatarPresetId;
+    delete nextEntry.avatarSource;
     if (nextEntry.id === MAIN_AGENT_ID) {
       delete nextEntry.workspace;
     }
@@ -713,12 +797,6 @@ function isChannelBinding(binding: unknown): binding is BindingConfig {
 
 function normalizeAgentIdForBinding(id: string): string {
   return (id ?? '').trim().toLowerCase() || '';
-}
-
-function normalizeMainKey(value: unknown): string {
-  if (typeof value !== 'string') return 'main';
-  const trimmed = value.trim().toLowerCase();
-  return trimmed || 'main';
 }
 
 function readDefaultAgentModelConfig(
@@ -1010,7 +1088,10 @@ function listConfiguredAccountIdsForChannel(config: AgentConfigDocument, channel
 
 async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<AgentsSnapshot> {
   const { entries, defaultAgentId } = normalizeAgentsConfig(config);
-  const management = await readAgentManagementMap();
+  const [management, avatarMap] = await Promise.all([
+    readAgentManagementMap(),
+    readAgentAvatarMap(),
+  ]);
   const configuredChannels = await listConfiguredChannels();
   const { channelToAgent, accountToAgent } = getChannelBindingMap(config.bindings);
   const defaultAgentIdNorm = normalizeAgentIdForBinding(defaultAgentId);
@@ -1072,6 +1153,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
         return { channelType, accountId };
       })
       .sort((left, right) => left.channelType.localeCompare(right.channelType) || left.accountId.localeCompare(right.accountId));
+    const avatar = resolveAgentAvatar(entry.id, avatarMap, managedMetadata);
     return {
       id: entry.id,
       name: entry.name || (entry.id === MAIN_AGENT_ID ? MAIN_AGENT_NAME : entry.id),
@@ -1094,6 +1176,8 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       skillScope: readAgentSkillScope(entry),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
+      avatarPresetId: avatar.avatarPresetId,
+      avatarSource: avatar.avatarSource,
     };
   });
 
@@ -1374,7 +1458,10 @@ async function installMarketplaceAgentFromPreparedPackage(
   try {
     const config = await readOpenClawConfig() as AgentConfigDocument;
     const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
-    const management = await readAgentManagementMap();
+    const [management, avatars] = await Promise.all([
+      readAgentManagementMap(),
+      readAgentAvatarMap(),
+    ]);
     const nextId = normalizeAgentId(preparedPackage.package.meta.agent.id);
     validateAgentId(nextId);
 
@@ -1404,6 +1491,8 @@ async function installMarketplaceAgentFromPreparedPackage(
       list: nextEntries,
     };
 
+    delete avatars[getAgentAvatarStoreKey(nextId)];
+
     await provisionAgentFilesystem(config, newEntry);
     const workspace = expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
     await seedPresetFilesIntoWorkspace(
@@ -1430,6 +1519,7 @@ async function installMarketplaceAgentFromPreparedPackage(
       updatedAt: timestamp,
     };
     await writeAgentManagementMap(management);
+    await writeAgentAvatarMap(avatars);
 
     logger.info('Installed marketplace agent', { agentId: nextId, version: catalogEntry.version });
     return {
@@ -1453,7 +1543,10 @@ async function updateMarketplaceAgentFromPreparedPackage(
   validateAgentId(normalizedAgentId);
 
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const management = await readAgentManagementMap();
+  const [management, avatars] = await Promise.all([
+    readAgentManagementMap(),
+    readAgentAvatarMap(),
+  ]);
   const current = management[normalizedAgentId];
   if (!current?.managed || current.source !== 'marketplace') {
     throw new Error(`Marketplace agent "${normalizedAgentId}" is not marketplace-managed`);
@@ -1475,7 +1568,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
 
     const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
     const currentEntry = entries[index];
-    const nextEntry = applyAgentSkillScope({
+    let nextEntry = applyAgentSkillScope({
       ...currentEntry,
       id: normalizedAgentId,
       name: preparedPackage.package.meta.name,
@@ -1488,6 +1581,13 @@ async function updateMarketplaceAgentFromPreparedPackage(
       ...agentsConfig,
       list: entries,
     };
+
+    const currentAvatar = resolveAgentAvatar(normalizedAgentId, avatars, current);
+    if (shouldReplaceAgentAvatarOnMarketplaceSync(currentAvatar.avatarSource)) {
+      delete avatars[getAgentAvatarStoreKey(normalizedAgentId)];
+    } else {
+      avatars[getAgentAvatarStoreKey(normalizedAgentId)] = currentAvatar;
+    }
 
     const workspace = getWorkspacePathForEntry(config, nextEntry);
     const previousManagedFiles = new Set(current.managedFiles);
@@ -1527,6 +1627,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
       updatedAt: new Date().toISOString(),
     };
     await writeAgentManagementMap(management);
+    await writeAgentAvatarMap(avatars);
 
     logger.info('Updated marketplace agent', { agentId: normalizedAgentId, version: catalogEntry.version });
     return {
@@ -1557,7 +1658,10 @@ export async function updateAgentSettings(
   updates: AgentSettingsUpdate,
 ): Promise<AgentsSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const management = await readAgentManagementMap();
+  const [management, avatars] = await Promise.all([
+    readAgentManagementMap(),
+    readAgentAvatarMap(),
+  ]);
   const managed = management[agentId];
   const { agentsConfig, entries } = normalizeAgentsConfig(config);
   const index = entries.findIndex((entry) => entry.id === agentId);
@@ -1568,6 +1672,12 @@ export async function updateAgentSettings(
   let nextEntry = { ...entries[index] };
   if (typeof updates.name === 'string' && updates.name.trim()) {
     nextEntry.name = normalizeAgentName(updates.name);
+  }
+  if (updates.avatarPresetId) {
+    avatars[getAgentAvatarStoreKey(agentId)] = {
+      avatarPresetId: normalizeAgentAvatarPresetId(updates.avatarPresetId),
+      avatarSource: 'user',
+    };
   }
   if (updates.skillScope) {
     const nextScope = normalizeSkillScope(updates.skillScope);
@@ -1584,6 +1694,9 @@ export async function updateAgentSettings(
   };
 
   await persistAgentConfigAndPatchRuntime(config);
+  if (updates.avatarPresetId) {
+    await writeAgentAvatarMap(avatars);
+  }
   logger.info('Updated agent settings', { agentId });
   return buildSnapshotFromConfig(config);
 }
@@ -1613,9 +1726,14 @@ export async function unmanageAgent(agentId: string): Promise<AgentsSnapshot> {
   return buildSnapshotFromConfig(config);
 }
 
-export async function createAgent(name: string, requestedId: string): Promise<AgentsSnapshot> {
+export async function createAgent(
+  name: string,
+  requestedId: string,
+  avatarPresetId?: AgentAvatarPresetId,
+): Promise<AgentsSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
   const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
+  const avatars = await readAgentAvatarMap();
   const normalizedName = normalizeAgentName(name);
   const normalizedRequestedId = normalizeAgentId(requestedId);
   validateAgentId(normalizedRequestedId);
@@ -1627,7 +1745,7 @@ export async function createAgent(name: string, requestedId: string): Promise<Ag
   const nextId = normalizedRequestedId;
 
   const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.filter((_, index) => index > 0)] : [...entries];
-  const newAgent: AgentListEntry = {
+  const newAgent = {
     id: nextId,
     name: normalizedName,
     workspace: getDefaultWorkspacePathForAgent(nextId),
@@ -1643,8 +1761,18 @@ export async function createAgent(name: string, requestedId: string): Promise<Ag
     list: nextEntries,
   };
 
+  if (avatarPresetId) {
+    avatars[getAgentAvatarStoreKey(nextId)] = {
+      avatarPresetId: normalizeAgentAvatarPresetId(avatarPresetId),
+      avatarSource: 'user',
+    };
+  } else {
+    delete avatars[getAgentAvatarStoreKey(nextId)];
+  }
+
   await provisionAgentFilesystem(config, newAgent);
   await persistAgentConfigAndPatchRuntime(config);
+  await writeAgentAvatarMap(avatars);
   logger.info('Created agent config entry', { agentId: nextId });
   return buildSnapshotFromConfig(config);
 }
@@ -1681,7 +1809,10 @@ export async function deleteAgentConfig(
   }
 
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const management = await readAgentManagementMap();
+  const [management, avatars] = await Promise.all([
+    readAgentManagementMap(),
+    readAgentAvatarMap(),
+  ]);
   const { agentsConfig, entries, defaultAgentId } = normalizeAgentsConfig(config);
   const removedEntry = entries.find((entry) => entry.id === agentId);
   const nextEntries = entries.filter((entry) => entry.id !== agentId);
@@ -1708,6 +1839,10 @@ export async function deleteAgentConfig(
   if (management[agentId]) {
     delete management[agentId];
     await writeAgentManagementMap(management);
+  }
+  if (avatars[getAgentAvatarStoreKey(agentId)]) {
+    delete avatars[getAgentAvatarStoreKey(agentId)];
+    await writeAgentAvatarMap(avatars);
   }
   await deleteDesktopSessionsForAgent(agentId);
   await removeAgentRuntimeDirectory(agentId);

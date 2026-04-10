@@ -33,6 +33,7 @@ const WECOM_PLUGIN_ID = 'wecom-openclaw-plugin';
 const WEIXIN_PLUGIN_ID = WEIXIN_CHANNEL_ID;
 const FEISHU_PLUGIN_ID = 'openclaw-lark';
 const DEFAULT_ACCOUNT_ID = 'default';
+const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
 const CHANNEL_TOP_LEVEL_KEYS_TO_KEEP = new Set(['enabled', 'defaultAccount', 'accounts']);
 const MANAGED_PLUGIN_ENTRY_IDS = [DINGTALK_PLUGIN_ID, WECOM_PLUGIN_ID, WEIXIN_PLUGIN_ID, FEISHU_PLUGIN_ID];
 
@@ -66,6 +67,10 @@ async function fileExists(p: string): Promise<boolean> {
 
 function getManagedChannelPluginInstall(channelType: string): ManagedChannelPluginInstall | undefined {
     return CHANNEL_PLUGIN_INSTALLS[channelType];
+}
+
+function isStrictSchemaChannel(channelType: string): boolean {
+    return CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR.has(channelType);
 }
 
 function getManagedChannelPluginRegistrationIds(channelType: string): string[] {
@@ -345,12 +350,12 @@ export async function writeOpenClawConfig(
             logger.warn(`[plugin] ${warning}`);
         }
 
-        // Keep restart command disabled in the managed OpenClaw profile.
+        // Keep restart command enabled in the managed OpenClaw profile.
         const commands =
             config.commands && typeof config.commands === 'object'
                 ? { ...(config.commands as Record<string, unknown>) }
                 : {};
-        commands.restart = false;
+        commands.restart = true;
         config.commands = commands;
 
         const syncTargets = resolveStoreSyncTargets(options);
@@ -824,29 +829,46 @@ export async function saveChannelConfig(
     }
 
     const channelSection = currentConfig.channels[channelType];
-    migrateLegacyChannelConfigToAccounts(channelSection, DEFAULT_ACCOUNT_ID);
-    const existingAccountConfig = resolveAccountConfig(channelSection, resolvedAccountId);
+    if (!isStrictSchemaChannel(channelType)) {
+        migrateLegacyChannelConfigToAccounts(channelSection, DEFAULT_ACCOUNT_ID);
+    }
+    const existingAccountConfig = isStrictSchemaChannel(channelType)
+        ? channelSection
+        : resolveAccountConfig(channelSection, resolvedAccountId);
     const transformedConfig = transformChannelConfig(channelType, config, existingAccountConfig);
 
-    if (!channelSection.accounts || typeof channelSection.accounts !== 'object') {
-        channelSection.accounts = {};
-    }
-    const accounts = channelSection.accounts as Record<string, ChannelConfigData>;
-    const previousAccountIds = Object.keys(accounts);
-    channelSection.defaultAccount = getResolvedDefaultAccountId(channelSection);
-    accounts[resolvedAccountId] = {
-        ...accounts[resolvedAccountId],
-        ...transformedConfig,
-        enabled: transformedConfig.enabled ?? true,
-    };
+    if (isStrictSchemaChannel(channelType)) {
+        for (const key of Object.keys(channelSection)) {
+            if (CHANNEL_TOP_LEVEL_KEYS_TO_KEEP.has(key)) continue;
+            delete channelSection[key];
+        }
+        for (const [key, value] of Object.entries(transformedConfig)) {
+            channelSection[key] = value;
+        }
+        channelSection.enabled = transformedConfig.enabled ?? channelSection.enabled ?? true;
+        delete channelSection.accounts;
+        delete channelSection.defaultAccount;
+    } else {
+        if (!channelSection.accounts || typeof channelSection.accounts !== 'object') {
+            channelSection.accounts = {};
+        }
+        const accounts = channelSection.accounts as Record<string, ChannelConfigData>;
+        const previousAccountIds = Object.keys(accounts);
+        channelSection.defaultAccount = getResolvedDefaultAccountId(channelSection);
+        accounts[resolvedAccountId] = {
+            ...accounts[resolvedAccountId],
+            ...transformedConfig,
+            enabled: transformedConfig.enabled ?? true,
+        };
 
-    if (previousAccountIds.length === 0 || !accounts[channelSection.defaultAccount]) {
-        channelSection.defaultAccount = resolvedAccountId;
-    }
+        if (previousAccountIds.length === 0 || !accounts[channelSection.defaultAccount]) {
+            channelSection.defaultAccount = resolvedAccountId;
+        }
 
-    // Mirror the effective default-account credentials back to top-level so
-    // upstream channel plugins can discover them without reading accounts.*.
-    syncTopLevelFromDefaultAccount(channelSection, channelSection.defaultAccount);
+        // Mirror the effective default-account credentials back to top-level so
+        // upstream channel plugins can discover them without reading accounts.*.
+        syncTopLevelFromDefaultAccount(channelSection, channelSection.defaultAccount);
+    }
 
     await writeOpenClawConfig(currentConfig);
     logger.info('Channel config saved', {
@@ -944,6 +966,22 @@ export async function deleteChannelAccountConfig(channelType: string, accountId:
         return;
     }
 
+    if (isStrictSchemaChannel(channelType)) {
+        delete currentConfig.channels![channelType];
+        cleanupCanonicalChannelPluginRegistration(currentConfig, channelType);
+        cleanupLegacyBuiltInChannelPluginRegistration(currentConfig, channelType);
+        if (pluginInstall) {
+            removeManagedChannelPluginRegistration(currentConfig, channelType);
+        }
+        await writeOpenClawConfig(currentConfig);
+        if (pluginInstall?.deleteAccountState) {
+            await pluginInstall.deleteAccountState(accountId);
+        }
+        logger.info('Deleted strict-schema channel config', { channelType, accountId });
+        console.log(`Deleted strict-schema channel config for ${channelType}`);
+        return;
+    }
+
     migrateLegacyChannelConfigToAccounts(channelSection, DEFAULT_ACCOUNT_ID);
     const defaultAccountId = getResolvedDefaultAccountId(channelSection);
     if (accountId === defaultAccountId) {
@@ -983,6 +1021,13 @@ export async function setDefaultChannelAccount(channelType: string, accountId: s
     const channelSection = currentConfig.channels?.[channelType];
     if (!channelSection) {
         throw new Error(`Channel "${channelType}" is not configured`);
+    }
+
+    if (isStrictSchemaChannel(channelType)) {
+        if (accountId !== DEFAULT_ACCOUNT_ID) {
+            throw new Error(`Channel "${channelType}" does not support multiple accounts`);
+        }
+        return;
     }
 
     migrateLegacyChannelConfigToAccounts(channelSection, DEFAULT_ACCOUNT_ID);
@@ -1099,6 +1144,26 @@ export async function listConfiguredChannelAccounts(): Promise<Record<string, Co
             continue;
         }
 
+        if (isStrictSchemaChannel(channelType)) {
+            const hasConfig =
+                section.enabled !== undefined
+                || Object.keys(getLegacyChannelPayload(section as ChannelConfigData)).length > 0;
+            if (!hasConfig) {
+                continue;
+            }
+            summaries[channelType] = {
+                defaultAccount: DEFAULT_ACCOUNT_ID,
+                accounts: [
+                    {
+                        accountId: DEFAULT_ACCOUNT_ID,
+                        enabled: section.enabled !== false,
+                        isDefault: true,
+                    },
+                ],
+            };
+            continue;
+        }
+
         migrateLegacyChannelConfigToAccounts(section, DEFAULT_ACCOUNT_ID);
         const defaultAccount = getResolvedDefaultAccountId(section);
         const accounts = (section.accounts as Record<string, ChannelConfigData> | undefined) ?? {};
@@ -1168,6 +1233,22 @@ export async function deleteAgentChannelAccounts(agentId: string): Promise<void>
     for (const channelType of Object.keys(currentConfig.channels)) {
         const section = currentConfig.channels[channelType];
         const pluginInstall = getManagedChannelPluginInstall(channelType);
+        if (isStrictSchemaChannel(channelType)) {
+            if (accountId !== DEFAULT_ACCOUNT_ID) {
+                continue;
+            }
+            delete currentConfig.channels[channelType];
+            cleanupCanonicalChannelPluginRegistration(currentConfig, channelType);
+            cleanupLegacyBuiltInChannelPluginRegistration(currentConfig, channelType);
+            if (pluginInstall) {
+                removeManagedChannelPluginRegistration(currentConfig, channelType);
+            }
+            if (pluginInstall?.clearChannelState) {
+                postWriteCleanupTasks.push(() => pluginInstall.clearChannelState!());
+            }
+            modified = true;
+            continue;
+        }
         migrateLegacyChannelConfigToAccounts(section, DEFAULT_ACCOUNT_ID);
         const accounts = section.accounts as Record<string, ChannelConfigData> | undefined;
         if (!accounts?.[accountId]) continue;

@@ -155,7 +155,7 @@ describe('skill config sync', () => {
     expect(config.skills?.entries?.['extra-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['personal-skill']?.enabled).toBe(false);
     expect(config.skills?.entries?.['project-skill']?.enabled).toBe(false);
-    expect(config.commands?.restart).toBe(false);
+    expect(config.commands?.restart).toBe(true);
   });
 
   it('does not default-disable skills already referenced by agents.list entries', async () => {

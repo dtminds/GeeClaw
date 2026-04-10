@@ -19,7 +19,7 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
+const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
 const { join, dirname, basename, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 
@@ -74,6 +74,164 @@ function copyPathPreservingLinks(sourcePath, destPath) {
   });
 }
 
+exports.copyPathPreservingLinks = copyPathPreservingLinks;
+
+function readPackageIdentity(packageDir) {
+  const packageJsonPath = join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return null;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    if (typeof pkg.name !== 'string' || typeof pkg.version !== 'string') {
+      return null;
+    }
+
+    return {
+      name: pkg.name,
+      version: pkg.version,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function listNodeModulesPackageDirs(nodeModulesDir) {
+  if (!existsSync(nodeModulesDir)) {
+    return [];
+  }
+
+  let entries;
+  try {
+    entries = readdirSync(nodeModulesDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const packageDirs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === '.bin') continue;
+
+    if (entry.name.startsWith('@')) {
+      let scopedEntries;
+      try {
+        scopedEntries = readdirSync(join(nodeModulesDir, entry.name), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const scopedEntry of scopedEntries) {
+        if (!scopedEntry.isDirectory()) continue;
+        packageDirs.push({
+          name: `${entry.name}/${scopedEntry.name}`,
+          dir: join(nodeModulesDir, entry.name, scopedEntry.name),
+        });
+      }
+      continue;
+    }
+
+    packageDirs.push({
+      name: entry.name,
+      dir: join(nodeModulesDir, entry.name),
+    });
+  }
+
+  return packageDirs;
+}
+
+function canPrunePackageDirAgainstTopLevel(packageDir, topLevelPackageDir) {
+  if (!existsSync(packageDir) || !existsSync(topLevelPackageDir)) {
+    return false;
+  }
+
+  const packageIdentity = readPackageIdentity(packageDir);
+  const topLevelIdentity = readPackageIdentity(topLevelPackageDir);
+  return Boolean(
+    packageIdentity
+      && topLevelIdentity
+      && packageIdentity.name === topLevelIdentity.name
+      && packageIdentity.version === topLevelIdentity.version,
+  );
+}
+
+exports.canPrunePackageDirAgainstTopLevel = canPrunePackageDirAgainstTopLevel;
+
+function canPruneExtensionNodeModulesAgainstTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir) {
+  const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
+  if (packageDirs.length === 0) {
+    return false;
+  }
+
+  return packageDirs.every(({ name, dir }) =>
+    canPrunePackageDirAgainstTopLevel(dir, join(topLevelNodeModulesDir, ...name.split('/'))),
+  );
+}
+
+exports.canPruneExtensionNodeModulesAgainstTopLevel = canPruneExtensionNodeModulesAgainstTopLevel;
+
+function removeEmptyDirChain(dir, stopDir) {
+  let currentDir = dir;
+  while (currentDir !== stopDir && existsSync(currentDir)) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir);
+    } catch {
+      return;
+    }
+
+    if (entries.length > 0) {
+      return;
+    }
+
+    rmSync(currentDir, { recursive: true, force: true });
+    currentDir = dirname(currentDir);
+  }
+}
+
+function pruneExtensionNodeModulesAgainstTopLevel(openclawRoot) {
+  const topLevelNodeModulesDir = join(openclawRoot, 'node_modules');
+  const extensionsDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(topLevelNodeModulesDir) || !existsSync(extensionsDir)) {
+    return { removedExtensions: 0, removedPackages: 0 };
+  }
+
+  let removedExtensions = 0;
+  let removedPackages = 0;
+
+  for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+
+    const extensionDir = join(extensionsDir, extensionEntry.name);
+    const extensionNodeModulesDir = join(extensionDir, 'node_modules');
+    if (!existsSync(extensionNodeModulesDir)) continue;
+
+    const packageDirs = listNodeModulesPackageDirs(extensionNodeModulesDir);
+    if (packageDirs.length === 0) continue;
+
+    if (canPruneExtensionNodeModulesAgainstTopLevel(extensionNodeModulesDir, topLevelNodeModulesDir)) {
+      rmSync(extensionNodeModulesDir, { recursive: true, force: true });
+      removedExtensions++;
+      continue;
+    }
+
+    for (const { name, dir } of packageDirs) {
+      const topLevelPackageDir = join(topLevelNodeModulesDir, ...name.split('/'));
+      if (!canPrunePackageDirAgainstTopLevel(dir, topLevelPackageDir)) {
+        continue;
+      }
+
+      rmSync(dir, { recursive: true, force: true });
+      removeEmptyDirChain(dirname(dir), extensionNodeModulesDir);
+      removedPackages++;
+    }
+  }
+
+  return { removedExtensions, removedPackages };
+}
+
+exports.pruneExtensionNodeModulesAgainstTopLevel = pruneExtensionNodeModulesAgainstTopLevel;
+
 // ── General cleanup ──────────────────────────────────────────────────────────
 
 function cleanupUnnecessaryFiles(dir) {
@@ -82,7 +240,18 @@ function cleanupUnnecessaryFiles(dir) {
   const REMOVE_DIRS = new Set([
     'test', 'tests', '__tests__', '.github', 'examples', 'example',
   ]);
-  const REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+  const REMOVE_FILE_EXTS = [
+    '.d.ts',
+    '.d.ts.map',
+    '.d.mts',
+    '.d.cts',
+    '.js.map',
+    '.mjs.map',
+    '.mts.map',
+    '.cts.map',
+    '.ts.map',
+    '.markdown',
+  ];
   const REMOVE_FILE_NAMES = new Set([
     '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
     'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
@@ -113,6 +282,8 @@ function cleanupUnnecessaryFiles(dir) {
   walk(dir);
   return removedCount;
 }
+
+exports.cleanupUnnecessaryFiles = cleanupUnnecessaryFiles;
 
 // ── Platform-specific: koffi ─────────────────────────────────────────────────
 // koffi ships 18 platform pre-builds under koffi/build/koffi/{platform}_{arch}/.
@@ -568,7 +739,10 @@ exports.default = async function afterPack(context) {
     .length;
 
   console.log(`[after-pack] Copying ${depCount} openclaw dependencies to ${dest} ...`);
-  cpSync(src, dest, { recursive: true });
+  rmSync(normWin(dest), { recursive: true, force: true });
+  // Avoid fs.cp recursive directory fan-out here: the bundled OpenClaw tree is
+  // large enough on CI runners to trip EMFILE while copying package resources.
+  copyPathPreservingLinks(src, dest);
   console.log('[after-pack] ✅ openclaw node_modules copied.');
 
   // Patch broken modules whose CJS transpiled output sets module.exports = undefined,
@@ -678,6 +852,10 @@ exports.default = async function afterPack(context) {
     }
     if (extNMCount > 0) {
       console.log(`[after-pack] ✅ Copied node_modules for ${extNMCount} built-in extension(s), merged ${mergedPkgCount} packages into top-level.`);
+      if (platform === 'darwin') {
+        const { removedExtensions, removedPackages } = pruneExtensionNodeModulesAgainstTopLevel(openclawRoot);
+        console.log(`[after-pack] ✅ Pruned ${removedExtensions} built-in extension node_modules and ${removedPackages} duplicate extension package directories.`);
+      }
     }
   }
 

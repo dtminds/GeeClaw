@@ -277,6 +277,8 @@ export class GatewayManager extends EventEmitter {
           if (!isOwnProcess) {
             this.ownsProcess = false;
             this.setStatus({ pid: undefined });
+          } else {
+            this.restartController.recordRestartCompleted();
           }
           this.startHealthCheck();
         },

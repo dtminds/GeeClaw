@@ -206,7 +206,7 @@ export function ChatSessionsPanel() {
     () => agents.find((agent) => agent.id === currentAgentId),
     [agents, currentAgentId],
   );
-  const currentMainSessionKey = currentAgent?.mainSessionKey ?? `agent:${currentAgentId}:main`;
+  const currentMainSessionKey = currentAgent?.mainSessionKey ?? `agent:${currentAgentId}:geeclaw_main`;
 
   const { mainSession, temporarySessions } = useMemo(() => {
     const scopedSessions = desktopSessions.filter(

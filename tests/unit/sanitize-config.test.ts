@@ -81,6 +81,7 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
   const LEGACY_BUILTIN_PLUGIN_IDS: Record<string, string[]> = {
     qqbot: ['openclaw-qqbot'],
   };
+  const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
 
   // Mirror of the production blocklist logic
   const skills = config.skills;
@@ -181,10 +182,48 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
       ? { ...(config.commands as Record<string, unknown>) }
       : {}
   ) as Record<string, unknown>;
-  if (commands.restart !== false) {
-    commands.restart = false;
+  if (commands.restart !== true) {
+    commands.restart = true;
     config.commands = commands;
     modified = true;
+  }
+
+  const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
+  if (channelsObj && typeof channelsObj === 'object') {
+    for (const [channelType, section] of Object.entries(channelsObj)) {
+      if (!section || typeof section !== 'object') continue;
+
+      if (CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR.has(channelType)) {
+        if ('accounts' in section) {
+          delete section.accounts;
+          modified = true;
+        }
+        if ('defaultAccount' in section) {
+          delete section.defaultAccount;
+          modified = true;
+        }
+        continue;
+      }
+
+      const accounts = section.accounts as Record<string, Record<string, unknown>> | undefined;
+      const defaultAccountId =
+        typeof section.defaultAccount === 'string' && section.defaultAccount.trim()
+          ? section.defaultAccount
+          : 'default';
+      const defaultAccount = accounts?.[defaultAccountId] ?? accounts?.default;
+      if (!defaultAccount || typeof defaultAccount !== 'object') continue;
+
+      let mirrored = false;
+      for (const [key, value] of Object.entries(defaultAccount)) {
+        if (!(key in section)) {
+          section[key] = value;
+          mirrored = true;
+        }
+      }
+      if (mirrored) {
+        modified = true;
+      }
+    }
   }
 
   // Mirror: remove stale tools.web.search.kimi.apiKey when moonshot provider exists.
@@ -289,7 +328,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('does nothing when config is already valid', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: {
         entries: { 'my-skill': { enabled: true } },
@@ -310,7 +349,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     // the blocklist approach should NOT strip them.
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: {
         entries: { 'x': { enabled: true } },
@@ -333,7 +372,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('handles config with no skills section', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       gateway: { mode: 'local' },
     };
@@ -352,7 +391,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     const result = await readConfig();
     expect(result).toEqual({
       commands: {
-        restart: false,
+        restart: true,
       },
     });
   });
@@ -366,7 +405,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     // Edge case: skills is not an object
     await writeConfig({
       commands: {
-        restart: false,
+        restart: true,
       },
       skills: ['something'],
     });
@@ -464,7 +503,7 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
   it('keeps tools.web.search.kimi.apiKey when moonshot provider is absent', async () => {
     const original = {
       commands: {
-        restart: false,
+        restart: true,
       },
       models: {
         providers: {
@@ -519,6 +558,73 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
           existingPluginDir,
           'relative-plugin-path',
         ],
+      },
+    });
+  });
+
+  it('mirrors the configured default account credentials to the channel top level', async () => {
+    await writeConfig({
+      channels: {
+        telegram: {
+          enabled: true,
+          defaultAccount: 'helper',
+          accounts: {
+            helper: {
+              botToken: 'telegram-token',
+              enabled: true,
+            },
+          },
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.channels).toEqual({
+      telegram: {
+        enabled: true,
+        defaultAccount: 'helper',
+        accounts: {
+          helper: {
+            botToken: 'telegram-token',
+            enabled: true,
+          },
+        },
+        botToken: 'telegram-token',
+      },
+    });
+  });
+
+  it('strips dingtalk multi-account metadata while preserving flat credentials', async () => {
+    await writeConfig({
+      channels: {
+        dingtalk: {
+          enabled: true,
+          defaultAccount: 'default',
+          accounts: {
+            default: {
+              clientId: 'nested-client-id',
+              clientSecret: 'nested-client-secret',
+              enabled: true,
+            },
+          },
+          clientId: 'dt-client-id',
+          clientSecret: 'dt-client-secret',
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.channels).toEqual({
+      dingtalk: {
+        enabled: true,
+        clientId: 'dt-client-id',
+        clientSecret: 'dt-client-secret',
       },
     });
   });
@@ -653,10 +759,10 @@ describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
     expect(result.gateway).toEqual({ mode: 'local' });
   });
 
-  it('forces commands.restart to false', async () => {
+  it('forces commands.restart to true', async () => {
     await writeConfig({
       commands: {
-        restart: true,
+        restart: false,
         retained: 'value',
       },
     });
@@ -666,7 +772,7 @@ describe('sanitizeOpenClawConfig (managed agent defaults guard)', () => {
 
     const result = await readConfig();
     expect(result.commands).toEqual({
-      restart: false,
+      restart: true,
       retained: 'value',
     });
   });

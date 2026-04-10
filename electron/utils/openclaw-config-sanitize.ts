@@ -7,6 +7,7 @@ import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
+const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -214,19 +215,37 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
         ? { ...(config.commands as Record<string, unknown>) }
         : {}
     ) as Record<string, unknown>;
-    if (commands.restart !== false) {
-      commands.restart = false;
+    if (commands.restart !== true) {
+      commands.restart = true;
       config.commands = commands;
       changed = true;
-      console.log('[sanitize] Forcing commands.restart to false');
+      console.log('[sanitize] Forcing commands.restart to true');
     }
 
     const channelsObj = config.channels as Record<string, Record<string, unknown>> | undefined;
     if (channelsObj && typeof channelsObj === 'object') {
       for (const [channelType, section] of Object.entries(channelsObj)) {
         if (!section || typeof section !== 'object') continue;
+        if (CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR.has(channelType)) {
+          if ('accounts' in section) {
+            delete section.accounts;
+            changed = true;
+            console.log(`[sanitize] Removed incompatible 'accounts' from channels.${channelType}`);
+          }
+          if ('defaultAccount' in section) {
+            delete section.defaultAccount;
+            changed = true;
+            console.log(`[sanitize] Removed incompatible 'defaultAccount' from channels.${channelType}`);
+          }
+          continue;
+        }
+
         const accounts = section.accounts as Record<string, Record<string, unknown>> | undefined;
-        const defaultAccount = accounts?.default;
+        const defaultAccountId =
+          typeof section.defaultAccount === 'string' && section.defaultAccount.trim()
+            ? section.defaultAccount
+            : 'default';
+        const defaultAccount = accounts?.[defaultAccountId] ?? accounts?.default;
         if (!defaultAccount || typeof defaultAccount !== 'object') continue;
 
         let mirrored = false;

@@ -18,6 +18,7 @@
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import {
   findOpenClawDoctorPatchRelativePath,
   patchOpenClawDoctorBundledRuntimeDepsSource,
@@ -41,10 +42,7 @@ const openclawReal = realpathCompat(openclawLink);
 echo`   openclaw resolved: ${openclawReal}`;
 
 // 2. Clean and create output directory
-if (fs.existsSync(OUTPUT)) {
-  fs.rmSync(OUTPUT, { recursive: true });
-}
-fs.mkdirSync(OUTPUT, { recursive: true });
+cleanDirectorySync(OUTPUT, fs);
 
 // 3. Copy openclaw package itself to OUTPUT root
 echo`   Copying openclaw package...`;
@@ -443,7 +441,18 @@ function cleanupBundle(outputDir) {
     const NM_REMOVE_DIRS = new Set([
       'test', 'tests', '__tests__', '.github', 'docs', 'examples', 'example',
     ]);
-    const NM_REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+    const NM_REMOVE_FILE_EXTS = [
+      '.d.ts',
+      '.d.ts.map',
+      '.d.mts',
+      '.d.cts',
+      '.js.map',
+      '.mjs.map',
+      '.mts.map',
+      '.cts.map',
+      '.ts.map',
+      '.markdown',
+    ];
     const NM_REMOVE_FILE_NAMES = new Set([
       '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
       'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
@@ -497,7 +506,18 @@ function cleanupBundle(outputDir) {
     const REMOVE_DIRS = new Set([
       'test', 'tests', '__tests__', '.github', 'docs', 'examples', 'example',
     ]);
-    const REMOVE_FILE_EXTS = ['.d.ts', '.d.ts.map', '.js.map', '.mjs.map', '.ts.map', '.markdown'];
+    const REMOVE_FILE_EXTS = [
+      '.d.ts',
+      '.d.ts.map',
+      '.d.mts',
+      '.d.cts',
+      '.js.map',
+      '.mjs.map',
+      '.mts.map',
+      '.cts.map',
+      '.ts.map',
+      '.markdown',
+    ];
     const REMOVE_FILE_NAMES = new Set([
       '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
       'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',

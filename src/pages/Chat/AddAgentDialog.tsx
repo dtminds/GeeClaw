@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { AgentAvatarPicker } from '@/components/agents/AgentAvatarPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { DEFAULT_AGENT_AVATAR_PRESET_ID, type AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
 import { useAgentsStore } from '@/stores/agents';
 
 const inputClasses = 'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40';
@@ -38,6 +40,7 @@ function AddAgentDialogBody({ onOpenChange }: Pick<AddAgentDialogProps, 'onOpenC
   const createAgent = useAgentsStore((state) => state.createAgent);
   const [name, setName] = useState('');
   const [agentId, setAgentId] = useState('');
+  const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId>(DEFAULT_AGENT_AVATAR_PRESET_ID);
   const [saving, setSaving] = useState(false);
 
   const normalizedAgentId = agentId.trim().toLowerCase();
@@ -54,7 +57,7 @@ function AddAgentDialogBody({ onOpenChange }: Pick<AddAgentDialogProps, 'onOpenC
     if (!canSubmit) return;
     setSaving(true);
     try {
-      await createAgent(name.trim(), normalizedAgentId);
+      await createAgent(name.trim(), normalizedAgentId, avatarPresetId);
       toast.success(t('toast.agentCreated'));
       onOpenChange(false);
     } catch (error) {
@@ -99,6 +102,15 @@ function AddAgentDialogBody({ onOpenChange }: Pick<AddAgentDialogProps, 'onOpenC
           <p className={cn('text-[12px]', idError ? 'text-destructive' : 'text-muted-foreground')}>
             {idError || t('createDialog.idHint')}
           </p>
+        </div>
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <Label className={labelClasses}>{t('createDialog.avatarLabel', 'Avatar')}</Label>
+            <p className="text-[12px] text-muted-foreground">
+              {t('createDialog.avatarDescription', 'Choose a preset avatar.')}
+            </p>
+          </div>
+          <AgentAvatarPicker value={avatarPresetId} onChange={setAvatarPresetId} disabled={saving} />
         </div>
         <div className="modal-footer">
           <Button

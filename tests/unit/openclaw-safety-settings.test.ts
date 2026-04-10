@@ -164,6 +164,35 @@ describe('syncOpenClawSafetySettings', () => {
     });
   });
 
+  it('maps default tool permission to deny gateway instead of automation', async () => {
+    await writeOpenClawJson({
+      tools: {
+        deny: ['group:automation'],
+      },
+    });
+
+    const { syncOpenClawSafetySettings } = await import('@electron/utils/openclaw-safety-settings');
+
+    await syncOpenClawSafetySettings({
+      toolPermission: 'default',
+      approvalPolicy: 'full',
+    });
+
+    const config = await readOpenClawJson();
+
+    expect(config.tools).toEqual({
+      profile: 'full',
+      exec: {
+        security: 'full',
+        ask: 'off',
+      },
+      elevated: {
+        enabled: false,
+      },
+      deny: ['gateway'],
+    });
+  });
+
   it('removes the deny list when tool permission is full', async () => {
     await writeOpenClawJson({
       tools: {

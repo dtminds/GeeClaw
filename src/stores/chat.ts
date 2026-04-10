@@ -223,8 +223,13 @@ function buildCronRunSessionKey(run: Pick<CronAgentRunSummary, 'agentId' | 'jobI
   return run.sessionKey || `agent:${run.agentId || 'main'}:cron:${run.jobId}:run:${run.id}`;
 }
 
+function buildDefaultMainSessionKey(agentId: string): string {
+  return `agent:${agentId}:geeclaw_main`;
+}
+
 function isMainSessionKey(sessionKey: string): boolean {
-  return sessionKey.endsWith(':main');
+  const agentId = getAgentIdFromSessionKey(sessionKey);
+  return sessionKey === resolveMainSessionKeyForAgent(agentId);
 }
 
 function buildTemporarySessionKey(agentId: string): string {
@@ -314,7 +319,11 @@ function isRecoverableChatSendTimeout(error: string): boolean {
 function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
   if (!agentId) return null;
   const agent = useAgentsStore.getState().agents.find((entry) => entry.id === agentId);
-  return agent?.mainSessionKey ?? `agent:${agentId}:main`;
+  return agent?.mainSessionKey ?? buildDefaultMainSessionKey(agentId);
+}
+
+function resolveMainSessionKeyForKnownAgent(agentId: string): string {
+  return resolveMainSessionKeyForAgent(agentId) ?? buildDefaultMainSessionKey(agentId);
 }
 
 function reconcilePreferredMainSession(
@@ -344,7 +353,6 @@ function reconcilePreferredMainSession(
 
   if (
     previousSelectedSession
-    && isMainSessionKey(previousSelectedSession.gatewaySessionKey)
     && previousSelectedSession.gatewaySessionKey === preferredMainSessionKey
     && !desktopSessions.some((session) =>
       session.id === previousSelectedSession.id
@@ -588,7 +596,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   openAgentMainSession: async (agentId: string) => {
     const normalizedAgentId = agentId || 'main';
-    const mainSessionKey = resolveMainSessionKeyForAgent(normalizedAgentId) || `agent:${normalizedAgentId}:main`;
+    const mainSessionKey = resolveMainSessionKeyForKnownAgent(normalizedAgentId);
     const existingMainSession = get().desktopSessions.find((session) => session.gatewaySessionKey === mainSessionKey);
 
     if (existingMainSession) {
@@ -700,7 +708,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (remaining.length === 0) {
       try {
         const fallbackAgentId = get().currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-        const fallbackMainKey = resolveMainSessionKeyForAgent(fallbackAgentId) || `agent:${fallbackAgentId}:main`;
+        const fallbackMainKey = resolveMainSessionKeyForKnownAgent(fallbackAgentId);
         remaining = [await createDesktopSessionRequest('', fallbackMainKey)];
       } catch (error) {
         console.warn('Failed to create replacement desktop session:', error);
@@ -708,7 +716,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     const preferredAgentId = currentAgentId || useAgentsStore.getState().defaultAgentId || 'main';
-    const preferredMainSessionKey = resolveMainSessionKeyForAgent(preferredAgentId) || `agent:${preferredAgentId}:main`;
+    const preferredMainSessionKey = resolveMainSessionKeyForKnownAgent(preferredAgentId);
     const sameAgentRemaining = remaining.filter(
       (session) => getAgentIdFromSessionKey(session.gatewaySessionKey) === preferredAgentId,
     );

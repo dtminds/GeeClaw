@@ -20,7 +20,7 @@ describe('openclaw-config-coordinator', () => {
     await rm(openclawConfigDir, { recursive: true, force: true });
   });
 
-  it('forces commands.restart to false on write', async () => {
+  it('forces commands.restart to true on write', async () => {
     const { writeOpenClawConfigDocument } = await import('@electron/utils/openclaw-config-coordinator');
 
     await writeOpenClawConfigDocument({
@@ -33,7 +33,7 @@ describe('openclaw-config-coordinator', () => {
     const raw = await readFile(join(openclawConfigDir, 'openclaw.json'), 'utf8');
     expect(JSON.parse(raw)).toEqual({
       commands: {
-        restart: false,
+        restart: true,
         other: 'keep',
       },
     });

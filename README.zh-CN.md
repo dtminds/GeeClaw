@@ -67,7 +67,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 从安装到第一次 AI 对话，全程通过直观的图形界面完成。无需终端命令，无需 YAML 文件，无需到处寻找环境变量。
 
 ### 💬 智能聊天界面
-通过现代化的聊天体验与 AI 智能体交互。侧边栏现在遵循 OpenClaw 原生会话模型，展示 Agent 列表并直接进入各 Agent 的主会话（`agent:{agentId}:main`）；进入聊天页后，左侧还会显示当前 Agent 的会话面板，分开展示主会话与临时会话，并可直接在面板内新建临时会话。GeeClaw 仍会将桌面管理的聊天条目与原始 Gateway 会话注册表分离，并额外提供一个只读入口，用于浏览全部 Gateway 会话及其 transcript。现在也支持多 Agent，并且可以在主输入框中通过 `@agent-id` 将下一条消息直接路由到目标 Agent 的主会话。主输入框的模型切换菜单现在基于各个 provider 已配置的模型目录生成，而 Agent 的 primary 模型和 fallback 链路则在设置中独立维护。与此同时，也支持类似 Codex 的 `/` 技能搜索，可持续筛选、键盘导航，并以内嵌 skill token 的形式把已选中的启用技能直接插入到句子里。
+通过现代化的聊天体验与 AI 智能体交互。侧边栏现在遵循 OpenClaw 原生会话模型，展示 Agent 列表并直接进入各 Agent 的主会话（`agent:{agentId}:geeclaw_main`）；进入聊天页后，左侧还会显示当前 Agent 的会话面板，分开展示主会话与临时会话，并可直接在面板内新建临时会话。GeeClaw 仍会将桌面管理的聊天条目与原始 Gateway 会话注册表分离，并额外提供一个只读入口，用于浏览全部 Gateway 会话及其 transcript。现在也支持多 Agent，并且可以在主输入框中通过 `@agent-id` 将下一条消息直接路由到目标 Agent 的主会话。主输入框的模型切换菜单现在基于各个 provider 已配置的模型目录生成，而 Agent 的 primary 模型和 fallback 链路则在设置中独立维护。与此同时，也支持类似 Codex 的 `/` 技能搜索，可持续筛选、键盘导航，并以内嵌 skill token 的形式把已选中的启用技能直接插入到句子里。
 
 ### ✅ 全局审批弹窗
 当 OpenClaw 发起 exec 或 plugin 审批请求时，GeeClaw 现在会在应用任意页面之上显示阻塞式审批弹窗，包括启动页和设置层。用户的选择会通过现有 Gateway RPC 通道回传，弹窗会一直保留到 Gateway 发出对应的 resolved 事件，或该请求在本地过期为止。
