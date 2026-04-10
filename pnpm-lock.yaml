@@ -80,8 +80,8 @@ importers:
         specifier: 2026.4.1
         version: 2026.4.1(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))
       '@martian-engineering/lossless-claw':
-        specifier: 0.8.0
-        version: 0.8.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))(ws@8.19.0)(zod@4.3.6)
+        specifier: 0.5.2
+        version: 0.5.2(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))(ws@8.19.0)(zod@4.3.6)
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1577,8 +1577,8 @@ packages:
     resolution: {integrity: sha512-LBPbIBASjCF4QLrc/dwmPdBzVMsbkDhzmBIAFgglX5rZBnGRppB7ekSA+1kb5pdxDpDn8IbxJX+bl7ZaeqZqxw==}
     engines: {node: '>=20.0.0'}
 
-  '@martian-engineering/lossless-claw@0.8.0':
-    resolution: {integrity: sha512-wOOYD0XgmFGC/PyD8GGUPF7Q6le4mmuI90qcHIdv0qHsT1gJjlgWw+MOtSK5y9HEGAU6M7Abqhd21Fx5xe8L5A==}
+  '@martian-engineering/lossless-claw@0.5.2':
+    resolution: {integrity: sha512-z1XP+czeRyyB31Mb3W++kXlldTisi9Ttqh25ggrm7rGMqBGpWxJ+sVAMGAHdKgSZTVmj8wOOVyMfEW9IHI6K+g==}
     peerDependencies:
       openclaw: '*'
 
@@ -9898,7 +9898,7 @@ snapshots:
     optionalDependencies:
       koffi: 2.15.1
 
-  '@martian-engineering/lossless-claw@0.8.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))(ws@8.19.0)(zod@4.3.6)':
+  '@martian-engineering/lossless-claw@0.5.2(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@mariozechner/pi-agent-core': 0.65.2(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai': 0.65.2(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
