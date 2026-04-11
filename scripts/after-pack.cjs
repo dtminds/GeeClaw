@@ -623,7 +623,7 @@ function readBundleVersion(openclawRoot) {
 }
 
 function resolveTarCommand() {
-  return process.platform === 'win32' ? 'tar.exe' : '/usr/bin/tar';
+  return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
 function collectRegularFiles(rootDir) {
