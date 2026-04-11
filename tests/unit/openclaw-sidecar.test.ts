@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
 }));
 
 function tarCommand(): string {
-  return process.platform === 'win32' ? 'tar.exe' : '/usr/bin/tar';
+  return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
 describe('packaged OpenClaw sidecar materialization', () => {
@@ -80,9 +80,9 @@ describe('packaged OpenClaw sidecar materialization', () => {
       'utf8',
     );
 
-    const { materializePackagedOpenClawSidecarSync } = await import('@electron/utils/openclaw-sidecar');
+    const { materializePackagedOpenClawSidecar } = await import('@electron/utils/openclaw-sidecar');
 
-    const extractedRoot = materializePackagedOpenClawSidecarSync();
+    const extractedRoot = await materializePackagedOpenClawSidecar();
     const extractedEntry = join(userDataRoot, 'runtime', 'openclaw-sidecar', 'openclaw.mjs');
     const stampPath = join(userDataRoot, 'runtime', 'openclaw-sidecar', '.archive-stamp');
 
@@ -90,7 +90,7 @@ describe('packaged OpenClaw sidecar materialization', () => {
     expect(existsSync(extractedEntry)).toBe(true);
     expect(readFileSync(stampPath, 'utf8')).toBe('2026.4.10');
 
-    const reusedRoot = materializePackagedOpenClawSidecarSync();
+    const reusedRoot = await materializePackagedOpenClawSidecar();
     expect(reusedRoot).toBe(extractedRoot);
   });
 });

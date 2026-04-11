@@ -6,11 +6,11 @@ const originalResourcesPath = process.resourcesPath;
 const {
   mockExistsSync,
   mockIsPackagedGetter,
-  mockMaterializePackagedOpenClawSidecarSync,
+  mockGetHydratedOpenClawSidecarRootIfReady,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn<(value: string) => boolean>(),
   mockIsPackagedGetter: { value: false },
-  mockMaterializePackagedOpenClawSidecarSync: vi.fn<() => string | null>(),
+  mockGetHydratedOpenClawSidecarRootIfReady: vi.fn<() => string | null>(),
 }));
 
 vi.mock('electron', () => ({
@@ -35,7 +35,7 @@ vi.mock('fs', async () => {
 });
 
 vi.mock('@electron/utils/openclaw-sidecar', () => ({
-  materializePackagedOpenClawSidecarSync: mockMaterializePackagedOpenClawSidecarSync,
+  getHydratedOpenClawSidecarRootIfReady: mockGetHydratedOpenClawSidecarRootIfReady,
 }));
 
 describe('getOpenClawDir (development)', () => {
@@ -43,7 +43,7 @@ describe('getOpenClawDir (development)', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockIsPackagedGetter.value = false;
-    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue(null);
+    mockGetHydratedOpenClawSidecarRootIfReady.mockReturnValue(null);
     process.cwd = () => '/repo';
   });
 
@@ -81,7 +81,7 @@ describe('getOpenClawDir (packaged)', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockIsPackagedGetter.value = true;
-    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue('/tmp/geeclaw-user-data/runtime/openclaw-sidecar');
+    mockGetHydratedOpenClawSidecarRootIfReady.mockReturnValue('/tmp/geeclaw-user-data/runtime/openclaw-sidecar');
     Object.defineProperty(process, 'resourcesPath', {
       value: '/opt/geeclaw/resources',
       configurable: true,
@@ -97,7 +97,7 @@ describe('getOpenClawDir (packaged)', () => {
   });
 
   it('falls back to the legacy bundled resources path when no sidecar archive is present', async () => {
-    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue(null);
+    mockGetHydratedOpenClawSidecarRootIfReady.mockReturnValue(null);
 
     const { getOpenClawDir } = await import('@electron/utils/paths');
 

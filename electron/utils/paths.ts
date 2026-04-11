@@ -7,7 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
 import { logger } from './logger';
-import { materializePackagedOpenClawSidecarSync } from './openclaw-sidecar';
+import { getHydratedOpenClawSidecarRootIfReady } from './openclaw-sidecar';
 
 export {
   quoteForCmd,
@@ -124,7 +124,7 @@ export function getPreloadPath(): string {
  */
 export function getOpenClawDir(): string {
   if (app.isPackaged) {
-    const hydratedSidecarRoot = materializePackagedOpenClawSidecarSync();
+    const hydratedSidecarRoot = getHydratedOpenClawSidecarRootIfReady();
     if (hydratedSidecarRoot) {
       return hydratedSidecarRoot;
     }
