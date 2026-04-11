@@ -289,6 +289,7 @@ const PLATFORM_NATIVE_SCOPES = {
   '@napi-rs': /^canvas-(darwin|linux|win32)-(x64|arm64)/,
   '@img': /^sharp(?:-libvips)?-(darwin|linux(?:musl)?|win32)-(x64|arm64|arm|ppc64|riscv64|s390x)/,
   '@mariozechner': /^clipboard-(darwin|linux|win32)-(x64|arm64|universal)/,
+  '@tloncorp': /^tlon-skill-(darwin|linux|win32|windows)-(x64|arm64)/,
   '@snazzah': /^davey-(darwin|linux|android|freebsd|win32|wasm32)-(x64|arm64|arm|ia32|arm64-gnu|arm64-musl|x64-gnu|x64-musl|x64-msvc|arm64-msvc|ia32-msvc|arm-eabi|arm-gnueabihf|wasi)/,
   '@lydell': /^node-pty-(darwin|linux|win32)-(x64|arm64)/,
   '@reflink': /^reflink-(darwin|linux|win32)-(x64|arm64|x64-gnu|x64-musl|arm64-gnu|arm64-musl|x64-msvc|arm64-msvc)/,
@@ -310,6 +311,50 @@ const UNSCOPED_NATIVE_PACKAGES = [
 function baseArch(rawArch) {
   const dash = rawArch.indexOf('-');
   return dash > 0 ? rawArch.slice(0, dash) : rawArch;
+}
+
+function readPackagePlatformConstraints(packageDir) {
+  const packageJsonPath = join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return null;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return {
+      os: Array.isArray(pkg.os) ? pkg.os.filter((entry) => typeof entry === 'string') : null,
+      cpu: Array.isArray(pkg.cpu) ? pkg.cpu.filter((entry) => typeof entry === 'string') : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function matchesPlatformConstraint(values, target, normalizeValue = (value) => value) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return true;
+  }
+
+  const normalizedTarget = normalizeValue(target);
+  const positives = [];
+
+  for (const rawValue of values) {
+    const isNegated = rawValue.startsWith('!');
+    const normalizedValue = normalizeValue(isNegated ? rawValue.slice(1) : rawValue);
+    if (isNegated) {
+      if (normalizedValue === normalizedTarget) {
+        return false;
+      }
+      continue;
+    }
+    positives.push(normalizedValue);
+  }
+
+  if (positives.length === 0) {
+    return true;
+  }
+
+  return positives.includes(normalizedTarget);
 }
 
 function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
@@ -373,8 +418,69 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
     }
   }
 
+  // 3. Generic package.json os/cpu filtering for future platform-native packages.
+  const packageDirs = [];
+
+  for (const entry of unscopedEntries) {
+    const fullPath = join(nodeModulesDir, entry);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
+    if (!stats.isDirectory()) continue;
+    if (entry === '.bin' || entry.startsWith('@')) continue;
+    packageDirs.push(fullPath);
+  }
+
+  for (const scope of Object.keys(PLATFORM_NATIVE_SCOPES)) {
+    const scopeDir = join(nodeModulesDir, scope);
+    if (!existsSync(scopeDir)) continue;
+    for (const entry of readdirSync(scopeDir)) {
+      const fullPath = join(scopeDir, entry);
+      let stats;
+      try {
+        stats = statSync(fullPath);
+      } catch {
+        continue;
+      }
+      if (!stats.isDirectory()) continue;
+      packageDirs.push(fullPath);
+    }
+  }
+
+  for (const packageDir of packageDirs) {
+    if (!existsSync(packageDir)) continue;
+
+    const constraints = readPackagePlatformConstraints(packageDir);
+    if (!constraints) continue;
+
+    const osMatches = matchesPlatformConstraint(
+      constraints.os,
+      platform,
+      (value) => PLATFORM_ALIASES[value] || value,
+    );
+    const cpuMatches = matchesPlatformConstraint(
+      constraints.cpu,
+      arch,
+      (value) => {
+        const normalized = baseArch(value);
+        return normalized === 'universal' ? arch : normalized;
+      },
+    );
+
+    if (!osMatches || !cpuMatches) {
+      try {
+        rmSync(packageDir, { recursive: true, force: true });
+        removed++;
+      } catch { /* */ }
+    }
+  }
+
   return removed;
 }
+exports.cleanupNativePlatformPackages = cleanupNativePlatformPackages;
 
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
