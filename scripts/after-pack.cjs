@@ -22,6 +22,7 @@
 const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
 const { join, dirname, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
+const { cleanupUnnecessaryFiles } = require('./lib/package-cleanup.cjs');
 const {
   bundlePluginMirrors,
   getExtraBundledPluginPackages,
@@ -245,55 +246,6 @@ function pruneExtensionNodeModulesAgainstTopLevel(openclawRoot) {
 exports.pruneExtensionNodeModulesAgainstTopLevel = pruneExtensionNodeModulesAgainstTopLevel;
 
 // ── General cleanup ──────────────────────────────────────────────────────────
-
-function cleanupUnnecessaryFiles(dir) {
-  let removedCount = 0;
-
-  const REMOVE_DIRS = new Set([
-    'test', 'tests', '__tests__', '.github', 'examples', 'example',
-  ]);
-  const REMOVE_FILE_EXTS = [
-    '.d.ts',
-    '.d.ts.map',
-    '.d.mts',
-    '.d.cts',
-    '.js.map',
-    '.mjs.map',
-    '.mts.map',
-    '.cts.map',
-    '.ts.map',
-    '.markdown',
-  ];
-  const REMOVE_FILE_NAMES = new Set([
-    '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
-    'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
-  ]);
-
-  function walk(currentDir) {
-    let entries;
-    try { entries = readdirSync(currentDir, { withFileTypes: true }); } catch { return; }
-
-    for (const entry of entries) {
-      const fullPath = join(currentDir, entry.name);
-
-      if (entry.isDirectory()) {
-        if (REMOVE_DIRS.has(entry.name)) {
-          try { rmSync(fullPath, { recursive: true, force: true }); removedCount++; } catch { /* */ }
-        } else {
-          walk(fullPath);
-        }
-      } else if (entry.isFile()) {
-        const name = entry.name;
-        if (REMOVE_FILE_NAMES.has(name) || REMOVE_FILE_EXTS.some(e => name.endsWith(e))) {
-          try { rmSync(fullPath, { force: true }); removedCount++; } catch { /* */ }
-        }
-      }
-    }
-  }
-
-  walk(dir);
-  return removedCount;
-}
 
 exports.cleanupUnnecessaryFiles = cleanupUnnecessaryFiles;
 
