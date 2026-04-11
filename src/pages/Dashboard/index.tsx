@@ -11,7 +11,7 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<'agents' | 'inspiration'>('agents');
 
   return (
-    <div className="flex flex-col dark:bg-background">
+    <div data-testid="dashboard-page" className="flex flex-col dark:bg-background">
       <div className="w-full max-w-6xl mx-auto flex flex-col h-full px-10 pt-8">
         <div className="flex-1 overflow-y-auto pr-2 pb-10 min-h-0 -mr-2">
           <section className="my-6">

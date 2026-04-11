@@ -4,7 +4,7 @@
  */
 import { app, BrowserWindow, nativeImage, session } from 'electron';
 import type { Server } from 'node:http';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray, updateTrayStatus } from './tray';
@@ -64,6 +64,11 @@ if (shouldDisableHardwareAcceleration(process.argv)) {
 // Must be called before app.whenReady() / before any window is created.
 if (process.platform === 'linux') {
   app.setDesktopName('geeclaw.desktop');
+}
+
+const e2eUserDataDir = process.env.GEECLAW_USER_DATA_DIR?.trim();
+if (e2eUserDataDir) {
+  app.setPath('userData', resolve(e2eUserDataDir));
 }
 
 // Prevent multiple instances of the app from running simultaneously.

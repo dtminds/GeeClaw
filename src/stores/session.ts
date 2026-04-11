@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import i18n from '@/i18n';
+import { shouldSkipE2ELogin } from '@/lib/e2e';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
 import { USER_STATUS_ACTIVE, type UserStatus } from '../../shared/auth/user-status';
@@ -110,6 +111,15 @@ async function showAuthFailureNotice(message: string): Promise<void> {
   toast.error(message);
 }
 
+const E2E_SESSION_ACCOUNT: SessionAccount = {
+  id: 'geeclaw-e2e',
+  email: 'e2e@geeclaw.local',
+  displayName: 'GeeClaw E2E',
+  nickName: 'GeeClaw E2E',
+  userId: 0,
+  userStatus: USER_STATUS_ACTIVE,
+};
+
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   status: 'checking',
   account: null,
@@ -119,6 +129,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (get().isInitialized) return;
 
     set({ status: 'checking' });
+    if (shouldSkipE2ELogin()) {
+      set({
+        status: 'authenticated',
+        account: E2E_SESSION_ACCOUNT,
+        isInitialized: true,
+      });
+      return;
+    }
+
     console.info('[SessionStore(Renderer)] init -> requesting /api/session');
     const raw = await hostApiFetch<unknown>('/api/session');
     const session = parseSessionResponse(raw);
@@ -136,6 +155,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   loginWithWechat: async () => {
     const previous = get();
     set({ status: 'checking' });
+    if (shouldSkipE2ELogin()) {
+      set({
+        status: 'authenticated',
+        account: E2E_SESSION_ACCOUNT,
+        isInitialized: true,
+      });
+      return;
+    }
+
     try {
       console.info('[SessionStore(Renderer)] loginWithWechat -> requesting /api/session/wechat/login');
       const raw = await hostApiFetch<unknown>('/api/session/wechat/login', {

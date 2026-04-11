@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { USER_STATUS_REQUIRES_INVITE } from '../../shared/auth/user-status';
+import { shouldSkipE2EProvider } from '@/lib/e2e';
 import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
@@ -126,7 +127,7 @@ async function ensureGatewayReady(): Promise<void> {
 async function continueBootstrap(set: (patch: Partial<BootstrapStoreState>) => void): Promise<void> {
   set({ phase: 'preparing', error: null });
 
-  if (!(await hasUsableProvider())) {
+  if (!shouldSkipE2EProvider() && !(await hasUsableProvider())) {
     set({ phase: 'needs_provider' });
     return;
   }

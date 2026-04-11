@@ -170,14 +170,14 @@ export function Channels() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[240px] flex-col items-center justify-center">
+      <div data-testid="channels-page" className="flex min-h-[240px] flex-col items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col px-10 pb-12 pt-16">
+    <div data-testid="channels-page" className="mx-auto flex h-full w-full max-w-6xl flex-col px-10 pb-12 pt-16">
       <div className="mb-10 flex items-start justify-between gap-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">{t('title')}</h1>
