@@ -1,5 +1,5 @@
 const { readdirSync, rmSync } = require('fs');
-const { join } = require('path');
+const { basename, join } = require('path');
 
 function cleanupUnnecessaryFiles(dir) {
   let removedCount = 0;
@@ -36,7 +36,8 @@ function cleanupUnnecessaryFiles(dir) {
       const fullPath = join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
-        if (REMOVE_DIRS.has(entry.name)) {
+        const shouldRemoveBinShimDir = entry.name === '.bin' && basename(currentDir) === 'node_modules';
+        if (REMOVE_DIRS.has(entry.name) || shouldRemoveBinShimDir) {
           try {
             rmSync(fullPath, { recursive: true, force: true });
             removedCount++;

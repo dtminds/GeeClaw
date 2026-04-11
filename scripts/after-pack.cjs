@@ -482,6 +482,24 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
 }
 exports.cleanupNativePlatformPackages = cleanupNativePlatformPackages;
 
+function cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch) {
+  const extensionsDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(extensionsDir)) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+    const extensionNodeModulesDir = join(extensionsDir, extensionEntry.name, 'node_modules');
+    if (!existsSync(extensionNodeModulesDir)) continue;
+    removed += cleanupNativePlatformPackages(extensionNodeModulesDir, platform, arch);
+  }
+
+  return removed;
+}
+exports.cleanupExtensionNativePlatformPackages = cleanupExtensionNativePlatformPackages;
+
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
 // without ever assigning `exports.default`, leaving module.exports === undefined.
@@ -824,6 +842,11 @@ exports.default = async function afterPack(context) {
   const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
   if (nativeRemoved > 0) {
     console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+  }
+
+  const extensionNativeRemoved = cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch);
+  if (extensionNativeRemoved > 0) {
+    console.log(`[after-pack] ✅ Removed ${extensionNativeRemoved} non-target native packages from built-in extension node_modules.`);
   }
 
   const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');

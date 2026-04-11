@@ -88,6 +88,30 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'))).toBe(false);
   });
 
+  it('removes nested node_modules .bin directories that can preserve invalid absolute symlinks', async () => {
+    const { cleanupUnnecessaryFiles } = await import('../../scripts/after-pack.cjs');
+
+    const packageRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-cleanup-bin-'));
+    tempDirs.push(packageRoot);
+
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'), { recursive: true });
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin'), { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'),
+      'console.log("helper");\n',
+      'utf8',
+    );
+    symlinkSync(
+      '/tmp/outside-bundle/helper.js',
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin', 'helper'),
+    );
+
+    cleanupUnnecessaryFiles(packageRoot);
+
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'))).toBe(false);
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'))).toBe(true);
+  });
+
   it('prunes built-in extension node_modules when all package identities match top-level packages', async () => {
     const { canPruneExtensionNodeModulesAgainstTopLevel, pruneExtensionNodeModulesAgainstTopLevel } = await import('../../scripts/after-pack.cjs');
 
@@ -258,5 +282,31 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'))).toBe(true);
     expect(existsSync(join(nodeModulesRoot, 'future-native-helper'))).toBe(false);
     expect(existsSync(join(nodeModulesRoot, 'portable-helper'))).toBe(true);
+  });
+
+  it('removes non-target native packages from built-in extension node_modules too', async () => {
+    const { cleanupExtensionNativePlatformPackages } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-extension-native-'));
+    tempDirs.push(openclawRoot);
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'discord', 'node_modules');
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu', 'package.json'),
+      '{"name":"@snazzah/davey-linux-x64-gnu","version":"0.0.0","os":["linux"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc', 'package.json'),
+      '{"name":"@snazzah/davey-darwin-x64-msvc","version":"0.0.0","os":["darwin"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    expect(cleanupExtensionNativePlatformPackages(openclawRoot, 'darwin', 'x64')).toBe(1);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'))).toBe(false);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'))).toBe(true);
   });
 });
