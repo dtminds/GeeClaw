@@ -19,8 +19,18 @@ jobs:
         include:
           - os: macos-latest
             platform: mac
+            arch: arm64
+            build_script: package:mac:arm64
+            artifact_name: release-mac-arm64
+          - os: macos-latest
+            platform: mac
+            arch: x64
+            build_script: package:mac:x64
+            artifact_name: release-mac-x64
           - os: windows-latest
             platform: win
+            build_script: package:win
+            artifact_name: release-win
           # Temporarily disable Linux release builds.
           # Restore by uncommenting the entry below.
           # - os: ubuntu-latest
@@ -68,6 +78,25 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
+
+      - name: Restore npm cache for openclaw-runtime installs
+        uses: actions/cache@v4
+        with:
+          path: openclaw-runtime/.npm-cache
+          key: ${{ runner.os }}-openclaw-runtime-npm-cache-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-openclaw-runtime-npm-cache-
+
+      - name: Restore Electron build caches
+        if: matrix.platform == 'mac'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-builder-cache-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'electron-builder.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-cache-
 
       - name: Install dependencies
         run: pnpm install
@@ -117,14 +146,14 @@ jobs:
         run: |
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
-          pnpm run package:mac
+          pnpm run ${{ matrix.build_script }}
 
       # Windows specific steps
       - name: Build Windows
         if: matrix.platform == 'win'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run package:win
+        run: pnpm run ${{ matrix.build_script }}
 
       # Temporarily disable Linux release builds.
       # Restore by uncommenting the step below.
@@ -137,7 +166,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.platform }}
+          name: ${{ matrix.artifact_name }}
           path: |
             release/*.dmg
             release/*.zip
