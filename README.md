@@ -313,7 +313,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 ```bash
 # Development
 pnpm run init             # Install dependencies + download uv and bundled Node/npm
-pnpm dev                  # Start with hot reload
+pnpm dev                  # Start with hot reload (prefers repo-local openclaw-runtime)
 
 # Quality
 pnpm lint                 # Run ESLint
@@ -326,6 +326,7 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
+pnpm run openclaw-runtime:prepare  # Ensure the isolated runtime exists for local development
 pnpm run openclaw-runtime:install  # Refresh the isolated OpenClaw runtime used for packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)

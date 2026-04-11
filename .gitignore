@@ -11,6 +11,7 @@ dist-electron/
 release/
 *.local
 openclaw-runtime/.npm-cache/
+tmp/
 
 # IDE
 .vscode/*

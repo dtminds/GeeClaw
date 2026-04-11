@@ -16,11 +16,17 @@
 ## 常用命令
 
 ```bash
+pnpm run openclaw-runtime:prepare
 pnpm run openclaw-runtime:install
 pnpm run openclaw-runtime:clean
 ```
 
 安装完成后，`openclaw-runtime/node_modules/openclaw/` 会成为打包输入源。
+
+开发态现在也会优先使用这份 runtime。`pnpm dev` 会先执行一次 `openclaw-runtime:prepare`：
+
+- 已安装时直接复用
+- 尚未安装时自动补装
 
 ## 为什么要这样做
 

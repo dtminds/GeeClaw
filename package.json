@@ -53,7 +53,7 @@
     "private": true,
     "scripts": {
         "init": "pnpm install && pnpm run uv:download && pnpm run node:download",
-        "dev": "vite",
+        "dev": "pnpm run openclaw-runtime:prepare && vite",
         "build": "pnpm run node:download && pnpm run openclaw-runtime:install && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && electron-builder",
         "build:vite": "vite build",
         "bundle:openclaw-plugins": "zx scripts/bundle-openclaw-plugins.mjs",
@@ -74,6 +74,7 @@
         "prep:mac-binaries": "pnpm run node:download:mac",
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win",
         "icons": "zx scripts/generate-icons.mjs",
+        "openclaw-runtime:prepare": "node ./openclaw-runtime/ensure-runtime.mjs",
         "openclaw-runtime:install": "node ./openclaw-runtime/install-runtime.mjs",
         "openclaw-runtime:clean": "node ./openclaw-runtime/clean-node-modules.mjs",
         "package": "pnpm run openclaw-runtime:install && vite build && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
