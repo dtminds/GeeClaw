@@ -43,6 +43,10 @@ import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
 import { loadRendererWindow } from './renderer-loader';
+import {
+  getOpenClawSidecarStatus,
+  subscribeOpenClawSidecarStatus,
+} from '../utils/openclaw-sidecar-status';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -437,6 +441,19 @@ async function initialize(): Promise<void> {
   weixinLoginManager.on('error', (error) => {
     hostEventBus.emit('channel:openclaw-weixin-error', error);
   });
+
+  const emitOpenClawSidecarStatus = () => {
+    const status = getOpenClawSidecarStatus();
+    hostEventBus.emit('openclaw:sidecar-status', status);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('openclaw:sidecar-status', status);
+    }
+  };
+
+  subscribeOpenClawSidecarStatus(() => {
+    emitOpenClawSidecarStatus();
+  });
+  emitOpenClawSidecarStatus();
 
   const gatewayAutoStart = await getSetting('gatewayAutoStart');
   logger.info(

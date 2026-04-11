@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { app } from 'electron';
+import { setOpenClawSidecarStatus } from './openclaw-sidecar-status';
 
 interface PackagedArchiveMetadata {
   format?: string;
@@ -43,6 +44,27 @@ function resolveArchiveStamp(archivePath: string, archiveMetadata: PackagedArchi
   return `${archiveStat.size}:${archiveStat.mtimeMs}`;
 }
 
+function readSidecarStamp(stampPath: string): string | undefined {
+  if (!existsSync(stampPath)) {
+    return undefined;
+  }
+
+  try {
+    const stamp = readFileSync(stampPath, 'utf8').trim();
+    return stamp || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeVersionStamp(stamp: string | undefined): string | undefined {
+  if (!stamp) {
+    return undefined;
+  }
+
+  return stamp.includes(':') ? undefined : stamp;
+}
+
 export function getPackagedOpenClawSidecarRoot(): string {
   return join(process.resourcesPath, 'runtime', 'openclaw');
 }
@@ -73,6 +95,9 @@ export function materializePackagedOpenClawSidecarSync(): string | null {
   const extractedEntryPath = join(extractedSidecarRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
   const stampPath = join(extractedSidecarRoot, '.archive-stamp');
   const archiveStamp = resolveArchiveStamp(archivePath, archiveMetadata);
+  const previousStamp = readSidecarStamp(stampPath);
+  const previousVersion = normalizeVersionStamp(previousStamp);
+  const version = archiveMetadata?.version;
 
   if (
     existsSync(stampPath)
@@ -86,24 +111,45 @@ export function materializePackagedOpenClawSidecarSync(): string | null {
   rmSync(tempRoot, { recursive: true, force: true });
   mkdirSync(tempRoot, { recursive: true });
 
-  const extraction = spawnSync(resolveTarCommand(), ['-xzf', archivePath, '-C', tempRoot], {
-    stdio: 'pipe',
+  setOpenClawSidecarStatus({
+    stage: 'extracting',
+    version,
+    previousVersion,
   });
-  if (extraction.status !== 0) {
-    const stderr = extraction.stderr?.toString().trim();
-    const stdout = extraction.stdout?.toString().trim();
-    throw new Error(`Failed to extract packaged OpenClaw sidecar${stderr ? `: ${stderr}` : stdout ? `: ${stdout}` : ''}`);
+
+  try {
+    const extraction = spawnSync(resolveTarCommand(), ['-xzf', archivePath, '-C', tempRoot], {
+      stdio: 'pipe',
+    });
+    if (extraction.status !== 0) {
+      const stderr = extraction.stderr?.toString().trim();
+      const stdout = extraction.stdout?.toString().trim();
+      throw new Error(`Failed to extract packaged OpenClaw sidecar${stderr ? `: ${stderr}` : stdout ? `: ${stdout}` : ''}`);
+    }
+
+    const tempEntryPath = join(tempRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
+    if (!existsSync(tempEntryPath)) {
+      throw new Error(`Packaged OpenClaw sidecar extraction is incomplete: missing ${tempEntryPath}`);
+    }
+
+    writeFileSync(join(tempRoot, '.archive-stamp'), archiveStamp, 'utf8');
+    mkdirSync(resolve(extractedSidecarRoot, '..'), { recursive: true });
+    rmSync(extractedSidecarRoot, { recursive: true, force: true });
+    renameSync(tempRoot, extractedSidecarRoot);
+
+    setOpenClawSidecarStatus({
+      stage: 'ready',
+      version,
+      previousVersion,
+    });
+    return extractedSidecarRoot;
+  } catch (error) {
+    setOpenClawSidecarStatus({
+      stage: 'error',
+      version,
+      previousVersion,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-
-  const tempEntryPath = join(tempRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
-  if (!existsSync(tempEntryPath)) {
-    throw new Error(`Packaged OpenClaw sidecar extraction is incomplete: missing ${tempEntryPath}`);
-  }
-
-  writeFileSync(join(tempRoot, '.archive-stamp'), archiveStamp, 'utf8');
-  mkdirSync(resolve(extractedSidecarRoot, '..'), { recursive: true });
-  rmSync(extractedSidecarRoot, { recursive: true, force: true });
-  renameSync(tempRoot, extractedSidecarRoot);
-
-  return extractedSidecarRoot;
 }
