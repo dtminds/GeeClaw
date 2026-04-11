@@ -333,6 +333,7 @@ pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包
 pnpm package:mac          # 为 macOS 打包
+pnpm package:mac:dir:quick # 本地快速验证 macOS 目录包；复用已有 build/openclaw*、plugin、skill 资源
 pnpm package:win          # 为 Windows 打包
 pnpm package:linux        # 为 Linux 打包
 ```
