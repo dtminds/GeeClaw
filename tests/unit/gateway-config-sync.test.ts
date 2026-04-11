@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
@@ -7,8 +7,17 @@ const forkMock = vi.fn();
 const spawnMock = vi.fn();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
-let openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
+let openclawRuntimeDir = join(process.cwd(), 'openclaw-runtime/node_modules/openclaw');
 let openclawRuntimeSource: 'bundled' | 'system' = 'bundled';
+const runtimeDirsToCleanup = new Set<string>();
+
+function createMockOpenClawRuntime(prefix: string): string {
+  const runtimeDir = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(join(runtimeDir, 'node_modules'), { recursive: true });
+  writeFileSync(join(runtimeDir, 'openclaw.mjs'), 'export {};', 'utf-8');
+  runtimeDirsToCleanup.add(runtimeDir);
+  return runtimeDir;
+}
 
 vi.mock('electron', () => ({
   app: {
@@ -146,8 +155,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   openclawConfigDir = '/Users/test/.openclaw-geeclaw';
   homeDir = '/Users/test';
-  openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
+  openclawRuntimeDir = createMockOpenClawRuntime('geeclaw-openclaw-runtime-');
   openclawRuntimeSource = 'bundled';
+});
+
+afterEach(() => {
+  for (const runtimeDir of runtimeDirsToCleanup) {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+  runtimeDirsToCleanup.clear();
 });
 
 describe('buildGatewayForkEnv', () => {
@@ -425,13 +441,13 @@ describe('prepareGatewayLaunchContext', () => {
       const [command, args, options] = spawnMock.mock.calls[0] as [string, string[], { cwd: string; stdio: string[]; windowsHide: boolean }];
       expect(command).toMatch(/node(?:\.exe)?$/);
       expect(args).toEqual([
-        join(process.cwd(), 'node_modules/openclaw/openclaw.mjs'),
+        join(openclawRuntimeDir, 'openclaw.mjs'),
         '--profile',
         'geeclaw',
         'setup',
       ]);
       expect(options).toEqual(expect.objectContaining({
-        cwd: join(process.cwd(), 'node_modules/openclaw'),
+        cwd: openclawRuntimeDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       }));

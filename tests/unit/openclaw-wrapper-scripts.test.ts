@@ -10,6 +10,7 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('--profile "$PROFILE_NAME"');
     expect(script).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
     expect(script).toContain('$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
+    expect(script).not.toContain('$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs');
     expect(script).toContain('Resources/bin"');
     expect(script).toContain('Resources/bin/bin');
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');

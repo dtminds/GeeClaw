@@ -341,7 +341,7 @@ pnpm package:linux        # 为 Linux 打包
 
 准备打包发布前，请先更新 [`resources/release-notes.md`](resources/release-notes.md)。`electron-builder` 会把这份 Markdown 写入自动更新元数据，GeeClaw 检测到新版本时就能在启动弹窗里直接显示更新日志。
 
-现在打包会优先使用仓库内的 `openclaw-runtime/` 独立安装结果，而不是直接依赖 workspace 的 `pnpm` 虚拟仓库结构。这样可以保留 OpenClaw 自己的安装期脚本，也能降低 release 构建对 `pnpm` 布局细节的耦合。
+现在开发态和打包都统一以仓库内的 `openclaw-runtime/` 独立安装结果作为唯一来源，不再依赖重复的根级 `node_modules/openclaw`。这样可以保留 OpenClaw 自己的安装期脚本，也能降低 release 构建对包管理器布局细节的耦合。
 
 未发布到 npm 的 OpenClaw plugin 也可以直接放到
 `plugins/openclaw/<plugin-id>/` 下参与打包，而不需要安装到应用顶层

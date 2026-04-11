@@ -54,11 +54,11 @@ describe('getOpenClawDir (development)', () => {
     expect(getOpenClawEntryPath()).toBe('/repo/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
   });
 
-  it('falls back to workspace node_modules/openclaw when the isolated runtime is absent', async () => {
+  it('still resolves to the isolated runtime path when the runtime is absent', async () => {
     mockExistsSync.mockReturnValue(false);
 
     const { getOpenClawDir } = await import('@electron/utils/paths');
 
-    expect(getOpenClawDir()).toContain('/node_modules/openclaw');
+    expect(getOpenClawDir()).toBe('/repo/openclaw-runtime/node_modules/openclaw');
   });
 });

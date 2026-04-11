@@ -32,17 +32,5 @@ export function resolveOpenClawBundleSource(rootDir, fsImpl = fs) {
     };
   }
 
-  const workspaceNodeModulesDir = path.join(rootDir, 'node_modules');
-  const workspaceOpenClawDir = path.join(workspaceNodeModulesDir, 'openclaw');
-  if (fsImpl.existsSync(workspaceOpenClawDir)) {
-    return {
-      mode: 'workspace-node_modules',
-      label: 'workspace node_modules/openclaw',
-      openclawDir: workspaceOpenClawDir,
-      nodeModulesDir: workspaceNodeModulesDir,
-      runtimeRoot: null,
-    };
-  }
-
   return null;
 }

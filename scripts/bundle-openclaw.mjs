@@ -6,13 +6,8 @@
  * Bundles the openclaw npm package into a self-contained directory
  * (build/openclaw/) for electron-builder to pick up.
  *
- * Preferred source: repo-local openclaw-runtime/node_modules/openclaw from a
- * real isolated npm install. This preserves OpenClaw's own postinstall logic.
- *
- * Fallback source: workspace node_modules/openclaw from pnpm. Because pnpm
- * uses a content-addressable virtual store with symlinks, the fallback path
- * still needs a recursive BFS to collect transitive deps into a flat
- * node_modules structure.
+ * Source: repo-local openclaw-runtime/node_modules/openclaw from a real
+ * isolated npm install. This preserves OpenClaw's own postinstall logic.
  */
 
 import 'zx/globals';
@@ -107,7 +102,7 @@ function pickPreferredCandidate(pkgName, candidates) {
 
 const bundleSource = resolveOpenClawBundleSource(ROOT, fs);
 if (!bundleSource) {
-  echo`❌ No OpenClaw bundle source found. Run pnpm install or pnpm run openclaw-runtime:install first.`;
+  echo`❌ No OpenClaw bundle source found. Run pnpm run openclaw-runtime:install first.`;
   process.exit(1);
 }
 

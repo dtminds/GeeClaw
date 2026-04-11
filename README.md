@@ -340,7 +340,7 @@ pnpm package:linux        # Package for Linux
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
 
-Packaging now prefers a repo-local `openclaw-runtime/` install over the workspace `pnpm` graph. This keeps OpenClaw's own install-time scripts intact and makes release builds less dependent on `pnpm` virtual-store layout details.
+Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and release bundling. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The

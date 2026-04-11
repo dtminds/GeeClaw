@@ -2,16 +2,16 @@
 
 `openclaw-runtime/` 是 GeeClaw 的独立 OpenClaw 安装单元。
 
-目的只有一个：让打包阶段消费一份真实安装出来的 runtime，而不是再从 workspace 的 `pnpm` 虚拟仓库里递归拼装 `build/openclaw/`。
+目的只有一个：让打包阶段消费一份真实安装出来的 runtime。
 
 ## 当前阶段
 
 这是第一阶段验证版：
 
-- 使用独立 `npm install` 安装 `openclaw@2026.4.9`
+- 使用独立 `npm install` 安装 `openclaw`
 - 允许 OpenClaw 自己的 `postinstall` 正常执行
-- 让 `scripts/bundle-openclaw.mjs` 在该 runtime 存在时优先使用它
-- 如果该 runtime 尚未准备好，则回退到当前 workspace `node_modules/openclaw`
+- 让 `scripts/bundle-openclaw.mjs` 和开发态都统一使用它
+- 如果该 runtime 尚未准备好，则视为环境未完成，而不是回退到根级 `node_modules/openclaw`
 
 ## 常用命令
 

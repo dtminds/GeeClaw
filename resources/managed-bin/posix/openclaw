@@ -37,16 +37,6 @@ if [ -f "$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs" ]; t
   if [ -d "$DEV_BUNDLED_BIN" ]; then
     PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
   fi
-elif [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
-  CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
-  DEV_BUNDLED_ROOT="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
-  DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin"
-  if [ -d "$DEV_BUNDLED_ROOT" ]; then
-    PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_ROOT"
-  fi
-  if [ -d "$DEV_BUNDLED_BIN" ]; then
-    PATH_PREFIX="$PATH_PREFIX:$DEV_BUNDLED_BIN"
-  fi
 elif [ "$(uname)" = "Darwin" ]; then
   # macOS: <App>.app/Contents/Resources/managed-bin/openclaw
   # SCRIPT_DIR = .../Contents/Resources/managed-bin
