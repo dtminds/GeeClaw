@@ -14,23 +14,27 @@ permissions:
 
 jobs:
   release:
+    name: ${{ matrix.job_name }}
     strategy:
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15
             platform: mac
             arch: arm64
             build_script: package:mac:arm64
             artifact_name: release-mac-arm64
-          - os: macos-latest
+            job_name: release-mac-arm64
+          - os: macos-15-intel
             platform: mac
             arch: x64
             build_script: package:mac:x64
             artifact_name: release-mac-x64
+            job_name: release-mac-x64
           - os: windows-latest
             platform: win
             build_script: package:win
             artifact_name: release-win
+            job_name: release-win
           # Temporarily disable Linux release builds.
           # Restore by uncommenting the entry below.
           # - os: ubuntu-latest
