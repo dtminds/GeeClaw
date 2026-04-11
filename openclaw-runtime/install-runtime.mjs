@@ -11,6 +11,7 @@ function createCommandSpec(command, args) {
   return {
     command: process.platform === 'win32' ? `${command}.cmd` : command,
     args,
+    shell: process.platform === 'win32',
   };
 }
 
@@ -23,6 +24,7 @@ async function run(command, args) {
         ...process.env,
         npm_config_cache: npmCacheDir,
       },
+      shell: commandSpec.shell,
       stdio: 'inherit',
     });
 
