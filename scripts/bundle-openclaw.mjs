@@ -17,6 +17,7 @@
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import { copyInstalledNodeModules, shouldSkipBundledPackage } from './lib/openclaw-bundle-filters.mjs';
 import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import { resolveOpenClawBundleSource } from './lib/openclaw-bundle-source.mjs';
 
@@ -76,25 +77,6 @@ function listPackages(nodeModulesDir) {
   return result;
 }
 
-function copyInstalledNodeModules(sourceNodeModulesDir, destNodeModulesDir) {
-  let copied = 0;
-
-  for (const { name, fullPath } of listPackages(sourceNodeModulesDir)) {
-    if (name === 'openclaw') continue;
-
-    const dest = path.join(destNodeModulesDir, name);
-    try {
-      fs.mkdirSync(normWin(path.dirname(dest)), { recursive: true });
-      fs.cpSync(normWin(fullPath), normWin(dest), { recursive: true, dereference: true });
-      copied++;
-    } catch (err) {
-      echo`   ⚠️  Skipped ${name}: ${err.message}`;
-    }
-  }
-
-  return copied;
-}
-
 function readPkgJsonSafe(pkgRoot) {
   try {
     const raw = fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8');
@@ -143,17 +125,6 @@ cleanDirectorySync(OUTPUT, fs);
 echo`   Copying openclaw package...`;
 fs.cpSync(normWin(openclawReal), normWin(OUTPUT), { recursive: true, dereference: true });
 
-const SKIP_PACKAGES = new Set([
-  'typescript',
-  '@playwright/test',
-  // @discordjs/opus is a native .node addon compiled for the system Node.js
-  // ABI. The Gateway runs inside Electron's utilityProcess which has a
-  // different ABI, so the binary fails with "Cannot find native binding".
-  // The package is optional — openclaw gracefully degrades when absent
-  // (only Discord voice features are affected; text chat works fine).
-  '@discordjs/opus',
-]);
-const SKIP_SCOPES = ['@cloudflare/', '@types/'];
 const outputNodeModules = path.join(OUTPUT, 'node_modules');
 fs.mkdirSync(outputNodeModules, { recursive: true });
 
@@ -172,14 +143,24 @@ let discoveredCount = 0;
 const copiedNames = new Set();
 
 if (bundleSource.mode === 'runtime-install') {
-  copiedCount = copyInstalledNodeModules(bundleSource.nodeModulesDir, outputNodeModules);
-  discoveredCount = copiedCount;
+  const result = copyInstalledNodeModules(bundleSource.nodeModulesDir, outputNodeModules, {
+    fsImpl: fs,
+    pathImpl: path,
+    normalizePath: normWin,
+    logSkip: (name, error) => {
+      echo`   ⚠️  Skipped ${name}: ${error.message}`;
+    },
+  });
+  copiedCount = result.copiedCount;
+  skippedDevCount = result.skippedCount;
+  discoveredCount = result.discoveredCount;
 
   for (const { name } of listPackages(outputNodeModules)) {
     copiedNames.add(name);
   }
 
   echo`   Copied ${copiedCount} installed runtime packages from openclaw-runtime`;
+  echo`   Skipped ${skippedDevCount} dev-only package references`;
 } else {
   const collected = new Map(); // realPath -> packageName (for deduplication)
   const queue = []; // BFS queue of virtual-store node_modules dirs to visit
@@ -202,7 +183,7 @@ if (bundleSource.mode === 'runtime-install') {
       // Skip the package that owns this virtual store entry (it's the package itself, not a dep)
       if (name === skipPkg) continue;
 
-      if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) {
+      if (shouldSkipBundledPackage(name)) {
         skippedDevCount++;
         continue;
       }
@@ -271,7 +252,7 @@ if (bundleSource.mode === 'runtime-install') {
 
       for (const { name, fullPath } of packages) {
         if (name === skipPkg) continue;
-        if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some((scope) => name.startsWith(scope))) continue;
+        if (shouldSkipBundledPackage(name)) continue;
 
         let realPath;
         try {
@@ -359,6 +340,10 @@ if (fs.existsSync(extensionsDir)) {
           if (!scopedEntry.isDirectory()) continue;
 
           const scopedPackageName = `${packageEntry.name}/${scopedEntry.name}`;
+          if (shouldSkipBundledPackage(scopedPackageName)) {
+            skippedDevCount++;
+            continue;
+          }
           if (copiedNames.has(scopedPackageName)) continue;
 
           const sourceScopedDir = path.join(sourcePackageDir, scopedEntry.name);
@@ -377,6 +362,10 @@ if (fs.existsSync(extensionsDir)) {
       }
 
       if (copiedNames.has(packageEntry.name)) continue;
+      if (shouldSkipBundledPackage(packageEntry.name)) {
+        skippedDevCount++;
+        continue;
+      }
 
       const destPackageDir = path.join(outputNodeModules, packageEntry.name);
       try {
