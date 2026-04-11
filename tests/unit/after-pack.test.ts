@@ -343,6 +343,8 @@ describe('after-pack bundled runtime sync', () => {
     expect(isPotentialMacCodeSignCandidate('/tmp/pkg/libvips.dylib')).toBe(true);
     expect(isPotentialMacCodeSignCandidate('/tmp/pkg/bare-fs.bare')).toBe(true);
     expect(isPotentialMacCodeSignCandidate('/tmp/pkg/spawn-helper')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/esbuild/bin/esbuild')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/@esbuild/darwin-arm64/bin/esbuild')).toBe(true);
     expect(isPotentialMacCodeSignCandidate('/tmp/pkg/tlon')).toBe(false);
     expect(isPotentialMacCodeSignCandidate('/tmp/pkg/helper.so')).toBe(false);
   });

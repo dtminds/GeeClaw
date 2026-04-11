@@ -663,6 +663,7 @@ function isPotentialMacCodeSignCandidate(filePath) {
     || fileName.endsWith('.dylib')
     || fileName.endsWith('.bare')
     || fileName === 'spawn-helper'
+    || /\/node_modules\/(?:@esbuild\/[^/]+\/bin|esbuild\/bin)\/esbuild$/u.test(filePath.replace(/\\/gu, '/'))
   );
 }
 exports.isPotentialMacCodeSignCandidate = isPotentialMacCodeSignCandidate;
