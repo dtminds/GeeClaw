@@ -118,14 +118,14 @@ export function getPreloadPath(): string {
 /**
  * Get OpenClaw package directory
  * - Production (packaged): from resources/openclaw (copied by electron-builder extraResources)
- * - Development: from node_modules/openclaw
+ * - Development: from the repo-local openclaw-runtime install
  */
 export function getOpenClawDir(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'openclaw');
   }
-  // Development: use node_modules/openclaw
-  return join(__dirname, '../../node_modules/openclaw');
+
+  return join(process.cwd(), 'openclaw-runtime', 'node_modules', 'openclaw');
 }
 
 /**

@@ -3,68 +3,24 @@
 /**
  * bundle-openclaw.mjs
  *
- * Bundles the openclaw npm package with ALL its dependencies (including
- * transitive ones) into a self-contained directory (build/openclaw/) for
- * electron-builder to pick up.
+ * Bundles the openclaw npm package into a self-contained directory
+ * (build/openclaw/) for electron-builder to pick up.
  *
- * pnpm uses a content-addressable virtual store with symlinks. A naive copy
- * of node_modules/openclaw/ will miss runtime dependencies entirely. Even
- * copying only direct siblings misses transitive deps (e.g. @clack/prompts
- * depends on @clack/core which lives in a separate virtual store entry).
- *
- * This script performs a recursive BFS through pnpm's virtual store to
- * collect every transitive dependency into a flat node_modules structure.
+ * Source: repo-local openclaw-runtime/node_modules/openclaw from a real
+ * isolated npm install. This preserves OpenClaw's own postinstall logic.
  */
 
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
+import { copyInstalledNodeModules, shouldSkipBundledPackage } from './lib/openclaw-bundle-filters.mjs';
+import { copyTreeWithFallback } from './lib/openclaw-copy-tree.mjs';
 import { cleanDirectorySync } from './lib/fs-utils.mjs';
-import {
-  findOpenClawDoctorPatchRelativePath,
-  patchOpenClawDoctorBundledRuntimeDepsSource,
-} from '../shared/openclaw-doctor-patch.js';
+import { resolveOpenClawBundleSource } from './lib/openclaw-bundle-source.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
 const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
-
-echo`📦 Bundling openclaw for electron-builder...`;
-
-// 1. Resolve the real path of node_modules/openclaw (follows pnpm symlink)
-const openclawLink = path.join(NODE_MODULES, 'openclaw');
-if (!fs.existsSync(openclawLink)) {
-  echo`❌ node_modules/openclaw not found. Run pnpm install first.`;
-  process.exit(1);
-}
-
-const openclawReal = realpathCompat(openclawLink);
-echo`   openclaw resolved: ${openclawReal}`;
-
-// 2. Clean and create output directory
-cleanDirectorySync(OUTPUT, fs);
-
-// 3. Copy openclaw package itself to OUTPUT root
-echo`   Copying openclaw package...`;
-fs.cpSync(openclawReal, OUTPUT, { recursive: true, dereference: true });
-
-// 4. Recursively collect ALL transitive dependencies via pnpm virtual store BFS
-//
-// pnpm structure example:
-//   .pnpm/openclaw@ver/node_modules/
-//     openclaw/          <- real files
-//     chalk/             <- symlink -> .pnpm/chalk@ver/node_modules/chalk
-//     @clack/prompts/    <- symlink -> .pnpm/@clack+prompts@ver/node_modules/@clack/prompts
-//
-//   .pnpm/@clack+prompts@ver/node_modules/
-//     @clack/prompts/    <- real files
-//     @clack/core/       <- symlink (transitive dep, NOT in openclaw's siblings!)
-//
-// We BFS from openclaw's virtual store node_modules, following each symlink
-// to discover the target's own virtual store node_modules and its deps.
-
-const collected = new Map(); // realPath -> packageName (for deduplication)
-const queue = []; // BFS queue of virtual-store node_modules dirs to visit
 
 /**
  * Given a real path of a package, find the containing virtual-store node_modules.
@@ -117,148 +73,6 @@ function listPackages(nodeModulesDir) {
   return result;
 }
 
-// Start BFS from openclaw's virtual store node_modules
-const openclawVirtualNM = getVirtualStoreNodeModules(openclawReal);
-if (!openclawVirtualNM) {
-  echo`❌ Could not determine pnpm virtual store for openclaw`;
-  process.exit(1);
-}
-
-echo`   Virtual store root: ${openclawVirtualNM}`;
-queue.push({ nodeModulesDir: openclawVirtualNM, skipPkg: 'openclaw' });
-
-const SKIP_PACKAGES = new Set([
-  'typescript',
-  '@playwright/test',
-  // @discordjs/opus is a native .node addon compiled for the system Node.js
-  // ABI. The Gateway runs inside Electron's utilityProcess which has a
-  // different ABI, so the binary fails with "Cannot find native binding".
-  // The package is optional — openclaw gracefully degrades when absent
-  // (only Discord voice features are affected; text chat works fine).
-  '@discordjs/opus',
-]);
-const SKIP_SCOPES = ['@cloudflare/', '@types/'];
-let skippedDevCount = 0;
-
-while (queue.length > 0) {
-  const { nodeModulesDir, skipPkg } = queue.shift();
-  const packages = listPackages(nodeModulesDir);
-
-  for (const { name, fullPath } of packages) {
-    // Skip the package that owns this virtual store entry (it's the package itself, not a dep)
-    if (name === skipPkg) continue;
-
-    if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) {
-      skippedDevCount++;
-      continue;
-    }
-
-    let realPath;
-    try {
-      realPath = realpathCompat(fullPath);
-    } catch {
-      continue; // broken symlink, skip
-    }
-
-    if (collected.has(realPath)) continue; // already visited
-    collected.set(realPath, name);
-
-    // Find this package's own virtual store node_modules to discover ITS deps
-    const depVirtualNM = getVirtualStoreNodeModules(realPath);
-    if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
-      // Determine the package's "self name" in its own virtual store
-      // For scoped: @clack/core -> skip "@clack/core" when scanning
-      queue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
-    }
-  }
-}
-
-echo`   Found ${collected.size} total packages (direct + transitive)`;
-echo`   Skipped ${skippedDevCount} dev-only package references`;
-
-// 4b. Collect extra packages required by GeeClaw's Electron main process that
-// are not part of OpenClaw's dependency graph, but are resolved from the
-// OpenClaw context at runtime.
-const EXTRA_BUNDLED_PACKAGES = [
-  '@whiskeysockets/baileys',
-];
-
-let extraCount = 0;
-for (const pkgName of EXTRA_BUNDLED_PACKAGES) {
-  const pkgLink = path.join(NODE_MODULES, ...pkgName.split('/'));
-  if (!fs.existsSync(pkgLink)) {
-    echo`   ⚠️  Extra package ${pkgName} not found in workspace node_modules, skipping.`;
-    continue;
-  }
-
-  let pkgReal;
-  try {
-    pkgReal = realpathCompat(pkgLink);
-  } catch {
-    continue;
-  }
-
-  if (collected.has(pkgReal)) {
-    continue;
-  }
-
-  collected.set(pkgReal, pkgName);
-  extraCount++;
-
-  const depVirtualNM = getVirtualStoreNodeModules(pkgReal);
-  if (!depVirtualNM) {
-    continue;
-  }
-
-  const extraQueue = [{ nodeModulesDir: depVirtualNM, skipPkg: pkgName }];
-  while (extraQueue.length > 0) {
-    const { nodeModulesDir, skipPkg } = extraQueue.shift();
-    const packages = listPackages(nodeModulesDir);
-
-    for (const { name, fullPath } of packages) {
-      if (name === skipPkg) continue;
-      if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some((scope) => name.startsWith(scope))) continue;
-
-      let realPath;
-      try {
-        realPath = realpathCompat(fullPath);
-      } catch {
-        continue;
-      }
-
-      if (collected.has(realPath)) continue;
-      collected.set(realPath, name);
-      extraCount++;
-
-      const innerVirtualNM = getVirtualStoreNodeModules(realPath);
-      if (innerVirtualNM && innerVirtualNM !== nodeModulesDir) {
-        extraQueue.push({ nodeModulesDir: innerVirtualNM, skipPkg: name });
-      }
-    }
-  }
-}
-
-if (extraCount > 0) {
-  echo`   Added ${extraCount} extra packages (+ transitive deps) for Electron main process`;
-}
-
-// 5. Copy all collected packages into OUTPUT/node_modules/ (flat structure)
-//
-// IMPORTANT: BFS guarantees direct deps are encountered before transitive deps.
-// When the same package name appears at different versions (e.g. chalk@5 from
-// openclaw directly, chalk@4 from a transitive dep), we keep the FIRST one
-// (direct dep version) and skip later duplicates. This prevents version
-// conflicts like CJS chalk@4 overwriting ESM chalk@5.
-const outputNodeModules = path.join(OUTPUT, 'node_modules');
-fs.mkdirSync(outputNodeModules, { recursive: true });
-
-const FORCE_CJS_COMPAT_PACKAGES = new Set([
-  // proxy-agent / pac-proxy-agent still `require()` these packages at runtime.
-  // Prefer CJS-friendly variants when multiple versions are discovered.
-  'agent-base',
-  'https-proxy-agent',
-]);
-
 function readPkgJsonSafe(pkgRoot) {
   try {
     const raw = fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8');
@@ -286,37 +100,216 @@ function pickPreferredCandidate(pkgName, candidates) {
   return cjsCandidate || candidates[0];
 }
 
-// Group candidates by package name while preserving BFS discovery order.
-const candidatesByName = new Map();
-for (const [realPath, pkgName] of collected) {
-  if (!candidatesByName.has(pkgName)) candidatesByName.set(pkgName, []);
-  candidatesByName.get(pkgName).push({
-    realPath,
-    pkgJson: readPkgJsonSafe(realPath),
-  });
+const bundleSource = resolveOpenClawBundleSource(ROOT, fs);
+if (!bundleSource) {
+  echo`❌ No OpenClaw bundle source found. Run pnpm run openclaw-runtime:install first.`;
+  process.exit(1);
 }
+
+const openclawReal = bundleSource.mode === 'runtime-install'
+  ? bundleSource.openclawDir
+  : realpathCompat(bundleSource.openclawDir);
+
+echo`📦 Bundling openclaw for electron-builder...`;
+echo`   source: ${bundleSource.label}`;
+echo`   openclaw resolved: ${openclawReal}`;
+
+// 1. Clean and create output directory
+cleanDirectorySync(OUTPUT, fs);
+
+// 2. Copy openclaw package itself to OUTPUT root
+echo`   Copying openclaw package...`;
+copyTreeWithFallback(openclawReal, OUTPUT, {
+  fsImpl: fs,
+  pathImpl: path,
+  normalizePath: normWin,
+  logFallback: (sourceDir, error) => {
+    echo`   ⚠️  Bulk copy fallback for ${sourceDir}: ${error.code || error.message}`;
+  },
+});
+
+const outputNodeModules = path.join(OUTPUT, 'node_modules');
+fs.mkdirSync(outputNodeModules, { recursive: true });
+
+const FORCE_CJS_COMPAT_PACKAGES = new Set([
+  // proxy-agent / pac-proxy-agent still `require()` these packages at runtime.
+  // Prefer CJS-friendly variants when multiple versions are discovered.
+  'agent-base',
+  'https-proxy-agent',
+]);
 
 let copiedCount = 0;
 let skippedDupes = 0;
+let skippedDevCount = 0;
+let extraCount = 0;
+let discoveredCount = 0;
 const copiedNames = new Set();
-for (const [pkgName, candidates] of candidatesByName.entries()) {
-  const picked = pickPreferredCandidate(pkgName, candidates);
-  skippedDupes += Math.max(0, candidates.length - 1);
 
-  if (FORCE_CJS_COMPAT_PACKAGES.has(pkgName) && picked?.pkgJson) {
-    const pickedVersion = picked.pkgJson.version || 'unknown';
-    const mode = isCjsFriendlyPackage(picked.pkgJson) ? 'cjs-compatible' : 'default';
-    echo`   ↳ ${pkgName}: selected ${pickedVersion} (${mode})`;
+if (bundleSource.mode === 'runtime-install') {
+  const result = copyInstalledNodeModules(bundleSource.nodeModulesDir, outputNodeModules, {
+    fsImpl: fs,
+    pathImpl: path,
+    normalizePath: normWin,
+    logSkip: (name, error) => {
+      echo`   ⚠️  Skipped ${name}: ${error.message}`;
+    },
+  });
+  copiedCount = result.copiedCount;
+  skippedDevCount = result.skippedCount;
+  discoveredCount = result.discoveredCount;
+
+  for (const { name } of listPackages(outputNodeModules)) {
+    copiedNames.add(name);
   }
 
-  const dest = path.join(outputNodeModules, pkgName);
-  try {
-    fs.mkdirSync(normWin(path.dirname(dest)), { recursive: true });
-    fs.cpSync(normWin(picked.realPath), normWin(dest), { recursive: true, dereference: true });
-    copiedCount++;
-    copiedNames.add(pkgName);
-  } catch (err) {
-    echo`   ⚠️  Skipped ${pkgName}: ${err.message}`;
+  echo`   Copied ${copiedCount} installed runtime packages from openclaw-runtime`;
+  echo`   Skipped ${skippedDevCount} dev-only package references`;
+} else {
+  const collected = new Map(); // realPath -> packageName (for deduplication)
+  const queue = []; // BFS queue of virtual-store node_modules dirs to visit
+
+  // Start BFS from openclaw's virtual store node_modules
+  const openclawVirtualNM = getVirtualStoreNodeModules(openclawReal);
+  if (!openclawVirtualNM) {
+    echo`❌ Could not determine pnpm virtual store for openclaw`;
+    process.exit(1);
+  }
+
+  echo`   Virtual store root: ${openclawVirtualNM}`;
+  queue.push({ nodeModulesDir: openclawVirtualNM, skipPkg: 'openclaw' });
+
+  while (queue.length > 0) {
+    const { nodeModulesDir, skipPkg } = queue.shift();
+    const packages = listPackages(nodeModulesDir);
+
+    for (const { name, fullPath } of packages) {
+      // Skip the package that owns this virtual store entry (it's the package itself, not a dep)
+      if (name === skipPkg) continue;
+
+      if (shouldSkipBundledPackage(name)) {
+        skippedDevCount++;
+        continue;
+      }
+
+      let realPath;
+      try {
+        realPath = realpathCompat(fullPath);
+      } catch {
+        continue; // broken symlink, skip
+      }
+
+      if (collected.has(realPath)) continue; // already visited
+      collected.set(realPath, name);
+
+      // Find this package's own virtual store node_modules to discover ITS deps
+      const depVirtualNM = getVirtualStoreNodeModules(realPath);
+      if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
+        // Determine the package's "self name" in its own virtual store
+        // For scoped: @clack/core -> skip "@clack/core" when scanning
+        queue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
+      }
+    }
+  }
+
+  discoveredCount = collected.size;
+  echo`   Found ${discoveredCount} total packages (direct + transitive)`;
+  echo`   Skipped ${skippedDevCount} dev-only package references`;
+
+  // 4b. Collect extra packages required by GeeClaw's Electron main process that
+  // are not part of OpenClaw's dependency graph, but are resolved from the
+  // OpenClaw context at runtime.
+  // NOTE: If adding packages here, also add them to openclaw-runtime/package.json
+  const EXTRA_BUNDLED_PACKAGES = [
+    '@whiskeysockets/baileys',
+  ];
+
+  for (const pkgName of EXTRA_BUNDLED_PACKAGES) {
+    const pkgLink = path.join(NODE_MODULES, ...pkgName.split('/'));
+    if (!fs.existsSync(pkgLink)) {
+      echo`   ⚠️  Extra package ${pkgName} not found in workspace node_modules, skipping.`;
+      continue;
+    }
+
+    let pkgReal;
+    try {
+      pkgReal = realpathCompat(pkgLink);
+    } catch {
+      continue;
+    }
+
+    if (collected.has(pkgReal)) {
+      continue;
+    }
+
+    collected.set(pkgReal, pkgName);
+    extraCount++;
+
+    const depVirtualNM = getVirtualStoreNodeModules(pkgReal);
+    if (!depVirtualNM) {
+      continue;
+    }
+
+    const extraQueue = [{ nodeModulesDir: depVirtualNM, skipPkg: pkgName }];
+    while (extraQueue.length > 0) {
+      const { nodeModulesDir, skipPkg } = extraQueue.shift();
+      const packages = listPackages(nodeModulesDir);
+
+      for (const { name, fullPath } of packages) {
+        if (name === skipPkg) continue;
+        if (shouldSkipBundledPackage(name)) continue;
+
+        let realPath;
+        try {
+          realPath = realpathCompat(fullPath);
+        } catch {
+          continue;
+        }
+
+        if (collected.has(realPath)) continue;
+        collected.set(realPath, name);
+        extraCount++;
+
+        const innerVirtualNM = getVirtualStoreNodeModules(realPath);
+        if (innerVirtualNM && innerVirtualNM !== nodeModulesDir) {
+          extraQueue.push({ nodeModulesDir: innerVirtualNM, skipPkg: name });
+        }
+      }
+    }
+  }
+
+  if (extraCount > 0) {
+    echo`   Added ${extraCount} extra packages (+ transitive deps) for Electron main process`;
+  }
+
+  // Group candidates by package name while preserving BFS discovery order.
+  const candidatesByName = new Map();
+  for (const [realPath, pkgName] of collected) {
+    if (!candidatesByName.has(pkgName)) candidatesByName.set(pkgName, []);
+    candidatesByName.get(pkgName).push({
+      realPath,
+      pkgJson: readPkgJsonSafe(realPath),
+    });
+  }
+
+  for (const [pkgName, candidates] of candidatesByName.entries()) {
+    const picked = pickPreferredCandidate(pkgName, candidates);
+    skippedDupes += Math.max(0, candidates.length - 1);
+
+    if (FORCE_CJS_COMPAT_PACKAGES.has(pkgName) && picked?.pkgJson) {
+      const pickedVersion = picked.pkgJson.version || 'unknown';
+      const mode = isCjsFriendlyPackage(picked.pkgJson) ? 'cjs-compatible' : 'default';
+      echo`   ↳ ${pkgName}: selected ${pickedVersion} (${mode})`;
+    }
+
+    const dest = path.join(outputNodeModules, pkgName);
+    try {
+      fs.mkdirSync(normWin(path.dirname(dest)), { recursive: true });
+      fs.cpSync(normWin(picked.realPath), normWin(dest), { recursive: true, dereference: true });
+      copiedCount++;
+      copiedNames.add(pkgName);
+    } catch (err) {
+      echo`   ⚠️  Skipped ${pkgName}: ${err.message}`;
+    }
   }
 }
 
@@ -351,6 +344,10 @@ if (fs.existsSync(extensionsDir)) {
           if (!scopedEntry.isDirectory()) continue;
 
           const scopedPackageName = `${packageEntry.name}/${scopedEntry.name}`;
+          if (shouldSkipBundledPackage(scopedPackageName)) {
+            skippedDevCount++;
+            continue;
+          }
           if (copiedNames.has(scopedPackageName)) continue;
 
           const sourceScopedDir = path.join(sourcePackageDir, scopedEntry.name);
@@ -369,6 +366,10 @@ if (fs.existsSync(extensionsDir)) {
       }
 
       if (copiedNames.has(packageEntry.name)) continue;
+      if (shouldSkipBundledPackage(packageEntry.name)) {
+        skippedDevCount++;
+        continue;
+      }
 
       const destPackageDir = path.join(outputNodeModules, packageEntry.name);
       try {
@@ -882,32 +883,6 @@ function patchBundledRuntime(outputDir) {
     echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
   }
 
-  const distDir = path.join(outputDir, 'dist');
-  const doctorRelativePath = findOpenClawDoctorPatchRelativePath(
-    fs.existsSync(distDir)
-      ? fs.readdirSync(distDir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name)
-      : [],
-    (candidateName) => fs.readFileSync(path.join(distDir, candidateName), 'utf8'),
-  );
-  if (!doctorRelativePath) {
-    echo`   ⚠️  Skipped doctor deps patch: target file not found`;
-    return;
-  }
-
-  const doctorTarget = path.join(distDir, doctorRelativePath);
-  const current = fs.readFileSync(doctorTarget, 'utf8');
-  const result = patchOpenClawDoctorBundledRuntimeDepsSource(current);
-  if (!result.matched) {
-    echo`   ⚠️  Skipped doctor deps patch: expected source snippet not found`;
-    return;
-  }
-
-  if (!result.changed) {
-    return;
-  }
-
-  fs.writeFileSync(doctorTarget, result.source, 'utf8');
-  echo`   🩹 Patched bundled doctor deps guard`;
 }
 
 patchBrokenModules(outputNodeModules);
@@ -922,7 +897,7 @@ echo`✅ Bundle complete: ${OUTPUT}`;
 echo`   Unique packages copied: ${copiedCount}`;
 echo`   Dev-only packages skipped: ${skippedDevCount}`;
 echo`   Duplicate versions skipped: ${skippedDupes}`;
-echo`   Total discovered: ${collected.size}`;
+echo`   Total discovered: ${discoveredCount}`;
 echo`   openclaw.mjs: ${entryExists ? '✓' : '✗'}`;
 echo`   dist/entry.js: ${distExists ? '✓' : '✗'}`;
 

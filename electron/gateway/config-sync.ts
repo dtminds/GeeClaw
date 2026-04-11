@@ -42,7 +42,6 @@ import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 import { getBundledNodePath } from '../utils/managed-bin';
-import { ensureOpenClawDoctorBundledRuntimeDepsPatch } from '../utils/openclaw-doctor-patch';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
@@ -631,7 +630,6 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
 
 async function resolveChannelStartupPolicy(): Promise<{
   skipChannels: boolean;
-  disableBundledPlugins: boolean;
   channelStartupSummary: string;
 }> {
   try {
@@ -639,21 +637,18 @@ async function resolveChannelStartupPolicy(): Promise<{
     if (configuredChannels.length === 0) {
       return {
         skipChannels: true,
-        disableBundledPlugins: true,
         channelStartupSummary: 'skipped(no configured channels)',
       };
     }
 
     return {
       skipChannels: false,
-      disableBundledPlugins: false,
       channelStartupSummary: `enabled(${configuredChannels.join(',')})`,
     };
   } catch (error) {
     logger.warn('Failed to determine configured channels for gateway launch:', error);
     return {
       skipChannels: false,
-      disableBundledPlugins: false,
       channelStartupSummary: 'enabled(unknown)',
     };
   }
@@ -671,10 +666,6 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   if (!entryScript || !existsSync(entryScript)) {
     throw new Error(`OpenClaw entry script not found at: ${entryScript}`);
-  }
-
-  if (runtime.source === 'bundled') {
-    ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir);
   }
 
   const mode = app.isPackaged ? 'packaged' : 'dev';
@@ -715,7 +706,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     '--allow-unconfigured',
   ]);
   const { providerEnv, loadedProviderKeyCount } = await loadProviderEnv();
-  const { skipChannels, disableBundledPlugins, channelStartupSummary } = await resolveChannelStartupPolicy();
+  const { skipChannels, channelStartupSummary } = await resolveChannelStartupPolicy();
   const resolvedProxy = resolveProxySettings(appSettings);
   const proxySummary = appSettings.proxyEnabled
     ? `http=${resolvedProxy.httpProxy || '-'}, https=${resolvedProxy.httpsProxy || '-'}, all=${resolvedProxy.allProxy || '-'}`
@@ -731,7 +722,6 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
       ...proxyEnv,
       OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
       OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
-      OPENCLAW_DISABLE_BUNDLED_PLUGINS: disableBundledPlugins ? '1' : '',
       CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',
     },
     openclawConfigDir,

@@ -199,9 +199,6 @@ importers:
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
-      openclaw:
-        specifier: 2026.4.9
-        version: 2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3)
       png2icons:
         specifier: ^2.0.1
         version: 2.0.1

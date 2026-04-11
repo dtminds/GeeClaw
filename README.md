@@ -313,7 +313,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 ```bash
 # Development
 pnpm run init             # Install dependencies + download uv and bundled Node/npm
-pnpm dev                  # Start with hot reload
+pnpm dev                  # Start with hot reload (prefers repo-local openclaw-runtime)
 
 # Quality
 pnpm lint                 # Run ESLint
@@ -326,10 +326,13 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
+pnpm run openclaw-runtime:prepare  # Ensure the isolated runtime exists for local development
+pnpm run openclaw-runtime:install  # Refresh the isolated OpenClaw runtime used for packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
 pnpm package:mac          # Package for macOS
+pnpm package:mac:dir:quick # Fast local macOS dir packaging; reuses existing build/openclaw*, plugins, and skills assets
 pnpm package:win          # Package for Windows
 pnpm package:linux        # Package for Linux
 ```
@@ -337,6 +340,8 @@ pnpm package:linux        # Package for Linux
 ### Release Notes For Auto-Update
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
+
+Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and release bundling. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The

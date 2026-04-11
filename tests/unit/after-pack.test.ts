@@ -218,4 +218,45 @@ describe('after-pack bundled runtime sync', () => {
     // ]);
     expect(getExtraBundledPluginPackages('@soimy/dingtalk')).toEqual([]);
   });
+
+  it('removes packages whose package.json os/cpu constraints do not match the target bundle', async () => {
+    const { cleanupNativePlatformPackages } = await import('../../scripts/after-pack.cjs');
+
+    const nodeModulesRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-native-'));
+    tempDirs.push(nodeModulesRoot);
+
+    mkdirSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64', 'package.json'),
+      '{"name":"@tloncorp/tlon-skill-darwin-arm64","version":"0.3.5"}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, '@tloncorp', 'tlon-skill', 'package.json'),
+      '{"name":"@tloncorp/tlon-skill","version":"0.3.5"}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, 'future-native-helper'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, 'future-native-helper', 'package.json'),
+      '{"name":"future-native-helper","version":"1.0.0","os":["darwin"],"cpu":["arm64"]}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, 'portable-helper'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, 'portable-helper', 'package.json'),
+      '{"name":"portable-helper","version":"1.0.0","os":["darwin","linux"],"cpu":["x64","arm64"]}\n',
+      'utf8',
+    );
+
+    expect(cleanupNativePlatformPackages(nodeModulesRoot, 'darwin', 'x64')).toBe(2);
+    expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64'))).toBe(false);
+    expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'))).toBe(true);
+    expect(existsSync(join(nodeModulesRoot, 'future-native-helper'))).toBe(false);
+    expect(existsSync(join(nodeModulesRoot, 'portable-helper'))).toBe(true);
+  });
 });

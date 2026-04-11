@@ -27,8 +27,8 @@ STATE_DIR="${HOME}/.openclaw-geeclaw"
 CONFIG_PATH="${STATE_DIR}/openclaw.json"
 PROFILE_NAME="geeclaw"
 
-if [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
-  CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
+if [ -f "$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs" ]; then
+  CLI="$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs"
   DEV_BUNDLED_ROOT="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
   DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin"
   if [ -d "$DEV_BUNDLED_ROOT" ]; then

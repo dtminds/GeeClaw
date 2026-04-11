@@ -110,6 +110,26 @@ let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
 
+async function logGpuDiagnostics(): Promise<void> {
+  try {
+    logger.info('GPU launch switches', {
+      enableGpu: process.argv.includes('--enable-gpu'),
+      disableGpu: process.argv.includes('--disable-gpu'),
+      useAngle: app.commandLine.getSwitchValue('use-angle') || undefined,
+      useGl: app.commandLine.getSwitchValue('use-gl') || undefined,
+      disableGpuSandbox: app.commandLine.hasSwitch('disable-gpu-sandbox'),
+      inProcessGpu: app.commandLine.hasSwitch('in-process-gpu'),
+    });
+
+    logger.info('GPU feature status', app.getGPUFeatureStatus());
+
+    const gpuInfo = await app.getGPUInfo('basic');
+    logger.info('GPU basic info', gpuInfo);
+  } catch (error) {
+    logger.warn('Failed to collect GPU diagnostics:', error);
+  }
+}
+
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
   try {
     const status = await gatewayManager.rpc<{ skills?: Array<{ skillKey?: string; source?: string }> }>('skills.status');
@@ -227,6 +247,7 @@ async function initialize(): Promise<void> {
   logger.debug(
     `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}, pid=${process.pid}, ppid=${process.ppid}`
   );
+  void logGpuDiagnostics();
 
   // Warm up network optimization (non-blocking)
   void warmupNetworkOptimization();
@@ -439,6 +460,18 @@ if (gotTheLock) {
 
   app.on('will-quit', () => {
     releaseProcessInstanceFileLock();
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    logger.warn('Electron child process exited', details);
+  });
+
+  app.on('render-process-gone', (_event, _webContents, details) => {
+    logger.warn('Electron render process exited', details);
+  });
+
+  app.on('gpu-info-update', () => {
+    logger.debug('Electron emitted gpu-info-update');
   });
 
   // When a second instance is launched, focus the existing window instead.
