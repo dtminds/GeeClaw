@@ -657,23 +657,15 @@ function collectRegularFiles(rootDir) {
 }
 
 function isPotentialMacCodeSignCandidate(filePath) {
-  const ext = basename(filePath).toLowerCase();
-  if (
-    ext.endsWith('.node')
-    || ext.endsWith('.dylib')
-    || ext.endsWith('.so')
-    || ext.endsWith('.bare')
-  ) {
-    return true;
-  }
-
-  try {
-    const stats = statSync(filePath);
-    return (stats.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
+  const fileName = basename(filePath).toLowerCase();
+  return (
+    fileName.endsWith('.node')
+    || fileName.endsWith('.dylib')
+    || fileName.endsWith('.bare')
+    || fileName === 'spawn-helper'
+  );
 }
+exports.isPotentialMacCodeSignCandidate = isPotentialMacCodeSignCandidate;
 
 function readFileDescription(filePath) {
   try {

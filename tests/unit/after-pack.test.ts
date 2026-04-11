@@ -336,6 +336,17 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(prebuildsDir, 'linux-x64'))).toBe(false);
   });
 
+  it('only signs the native file types we explicitly allow for the sidecar payload', async () => {
+    const { isPotentialMacCodeSignCandidate } = await import('../../scripts/after-pack.cjs');
+
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/native.node')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/libvips.dylib')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/bare-fs.bare')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/spawn-helper')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/tlon')).toBe(false);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/helper.so')).toBe(false);
+  });
+
   it('archives the packaged OpenClaw runtime into a sidecar payload and removes the raw bundle', async () => {
     const { createOpenClawSidecarArchive } = await import('../../scripts/after-pack.cjs');
 
