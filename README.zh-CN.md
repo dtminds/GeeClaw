@@ -105,6 +105,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 
 ### 📦 内置 OpenClaw Runtime
 GeeClaw 固定使用内置 OpenClaw Runtime，避免依赖系统 PATH 或覆盖已有的系统 OpenClaw 安装。
+当前打包的 runtime 会排除上游 Tlon skill 二进制，以保证 macOS 签名和 notarization 稳定通过。
 
 ---
 
@@ -343,6 +344,8 @@ pnpm package:linux        # 为 Linux 打包
 准备打包发布前，请先更新 [`resources/release-notes.md`](resources/release-notes.md)。`electron-builder` 会把这份 Markdown 写入自动更新元数据，GeeClaw 检测到新版本时就能在启动弹窗里直接显示更新日志。
 
 现在开发态和打包都统一以仓库内的 `openclaw-runtime/` 独立安装结果作为唯一来源，不再依赖重复的根级 `node_modules/openclaw`。这样可以保留 OpenClaw 自己的安装期脚本，也能降低 release 构建对包管理器布局细节的耦合。
+
+正式打包时，GeeClaw 也不再把完整 OpenClaw runtime 直接保留在 `Contents/Resources/openclaw` 下。`after-pack` 会先把准备好的 runtime 归档到 `Contents/Resources/runtime/openclaw/payload.tar.gz`，再在签名前删除原始目录；应用首次启动时再把它解压到当前用户的数据目录中使用。这样既能保留完整运行时内容，也能避开 macOS 对 OpenClaw 内部符号链接和二进制做深度签名校验时触发的问题。
 
 未发布到 npm 的 OpenClaw plugin 也可以直接放到
 `plugins/openclaw/<plugin-id>/` 下参与打包，而不需要安装到应用顶层

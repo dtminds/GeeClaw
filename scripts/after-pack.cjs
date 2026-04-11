@@ -19,8 +19,9 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
-const { join, dirname, relative } = require('path');
+const { execFileSync } = require('child_process');
+const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } = require('fs');
+const { basename, dirname, isAbsolute, join, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 const { cleanupUnnecessaryFiles } = require('./lib/package-cleanup.cjs');
 const {
@@ -309,8 +310,58 @@ const UNSCOPED_NATIVE_PACKAGES = [
  * e.g. "x64-msvc" -> "x64", "arm64-gnu" -> "arm64", "arm64-metal" -> "arm64"
  */
 function baseArch(rawArch) {
+  if (rawArch === 'x86_64') {
+    return 'x64';
+  }
+  if (rawArch.startsWith('arm64')) {
+    return 'arm64';
+  }
   const dash = rawArch.indexOf('-');
   return dash > 0 ? rawArch.slice(0, dash) : rawArch;
+}
+
+const PREBUILD_PLATFORM_ALIASES = {
+  ...PLATFORM_ALIASES,
+  ios: 'ios',
+  android: 'android',
+  freebsd: 'freebsd',
+  netbsd: 'netbsd',
+  openbsd: 'openbsd',
+  sunos: 'sunos',
+  aix: 'aix',
+  openharmony: 'openharmony',
+};
+
+function parseArchTokens(rawValue) {
+  return rawValue
+    .split('+')
+    .map((part) => baseArch(part))
+    .filter(Boolean);
+}
+
+function shouldKeepNativePrebuildDir(prebuildDirName, platform, arch) {
+  const parts = prebuildDirName.split('-').filter(Boolean);
+  if (parts.length === 0) {
+    return true;
+  }
+
+  const normalizedPlatform = PREBUILD_PLATFORM_ALIASES[parts[0]] || parts[0];
+  if (!(normalizedPlatform in PREBUILD_PLATFORM_ALIASES)) {
+    return true;
+  }
+  if (normalizedPlatform !== platform) {
+    return false;
+  }
+
+  const archTokens = parts.slice(1).flatMap(parseArchTokens);
+  if (archTokens.length === 0) {
+    return true;
+  }
+  if (archTokens.includes('universal')) {
+    return true;
+  }
+
+  return archTokens.includes(arch);
 }
 
 function readPackagePlatformConstraints(packageDir) {
@@ -481,6 +532,270 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
   return removed;
 }
 exports.cleanupNativePlatformPackages = cleanupNativePlatformPackages;
+
+function cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch) {
+  const extensionsDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(extensionsDir)) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+    const extensionNodeModulesDir = join(extensionsDir, extensionEntry.name, 'node_modules');
+    if (!existsSync(extensionNodeModulesDir)) continue;
+    removed += cleanupNativePlatformPackages(extensionNodeModulesDir, platform, arch);
+  }
+
+  return removed;
+}
+exports.cleanupExtensionNativePlatformPackages = cleanupExtensionNativePlatformPackages;
+
+function cleanupNativePrebuilds(rootDir, platform, arch) {
+  if (!existsSync(rootDir)) {
+    return 0;
+  }
+
+  let removed = 0;
+
+  function walk(currentDir) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const fullPath = join(currentDir, entry.name);
+      if (entry.name === 'prebuilds') {
+        let prebuildEntries;
+        try {
+          prebuildEntries = readdirSync(fullPath, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+
+        for (const prebuildEntry of prebuildEntries) {
+          if (!prebuildEntry.isDirectory()) {
+            continue;
+          }
+
+          if (shouldKeepNativePrebuildDir(prebuildEntry.name, platform, arch)) {
+            continue;
+          }
+
+          try {
+            rmSync(join(fullPath, prebuildEntry.name), { recursive: true, force: true });
+            removed++;
+          } catch {
+            // Ignore cleanup failures and keep scanning the rest of the tree.
+          }
+        }
+        continue;
+      }
+
+      walk(fullPath);
+    }
+  }
+
+  walk(rootDir);
+  return removed;
+}
+exports.cleanupNativePrebuilds = cleanupNativePrebuilds;
+
+function readBundleVersion(openclawRoot) {
+  const packageJsonPath = join(openclawRoot, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return typeof pkg.version === 'string' ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveTarCommand() {
+  return process.platform === 'win32' ? 'tar.exe' : 'tar';
+}
+
+function collectRegularFiles(rootDir) {
+  const files = [];
+
+  function walk(currentDir) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walk(rootDir);
+  return files;
+}
+
+function isPotentialMacCodeSignCandidate(filePath) {
+  const fileName = basename(filePath).toLowerCase();
+  return (
+    fileName.endsWith('.node')
+    || fileName.endsWith('.dylib')
+    || fileName.endsWith('.bare')
+    || fileName === 'spawn-helper'
+    || /\/node_modules\/(?:@esbuild\/[^/]+\/bin|esbuild\/bin)\/esbuild$/u.test(filePath.replace(/\\/gu, '/'))
+  );
+}
+exports.isPotentialMacCodeSignCandidate = isPotentialMacCodeSignCandidate;
+
+function readFileDescription(filePath) {
+  try {
+    return execFileSync('/usr/bin/file', ['-b', filePath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function resolveMacCodeSigningConfig(context) {
+  if (context.electronPlatformName !== 'darwin') {
+    return null;
+  }
+
+  const packager = context.packager;
+  const explicitIdentity = packager.platformSpecificBuildOptions?.identity;
+  if (explicitIdentity === null || explicitIdentity === 'null' || explicitIdentity === '-') {
+    return null;
+  }
+
+  const codeSigningInfo = packager.codeSigningInfo?.value
+    ? await packager.codeSigningInfo.value
+    : null;
+  const keychainFile = codeSigningInfo?.keychainFile || null;
+  const { findIdentity } = require('app-builder-lib/out/codeSign/macCodeSign');
+
+  const identity = await findIdentity(
+    'Developer ID Application',
+    typeof explicitIdentity === 'string' ? explicitIdentity : null,
+    keychainFile,
+  );
+  if (!identity) {
+    return null;
+  }
+
+  const configuredEntitlementsPath = packager.platformSpecificBuildOptions?.entitlementsInherit
+    || packager.platformSpecificBuildOptions?.entitlements
+    || 'entitlements.mac.plist';
+  const entitlementsPath = isAbsolute(configuredEntitlementsPath)
+    ? configuredEntitlementsPath
+    : join(__dirname, '..', configuredEntitlementsPath);
+
+  return {
+    identity: identity.hash || identity.name,
+    keychainFile,
+    entitlementsPath,
+  };
+}
+
+async function signOpenClawNativeBinaries(context, openclawRoot) {
+  const signingConfig = await resolveMacCodeSigningConfig(context);
+  if (!signingConfig || !existsSync(openclawRoot)) {
+    return 0;
+  }
+
+  const candidates = collectRegularFiles(openclawRoot)
+    .filter(isPotentialMacCodeSignCandidate)
+    .sort((left, right) => right.length - left.length);
+
+  let signed = 0;
+  for (const filePath of candidates) {
+    const description = readFileDescription(filePath);
+    if (!description.includes('Mach-O')) {
+      continue;
+    }
+
+    const isExecutable = description.includes('executable') || description.includes('bundle');
+    const args = [
+      '--force',
+      '--sign',
+      signingConfig.identity,
+      '--timestamp',
+      '--entitlements',
+      signingConfig.entitlementsPath,
+      ...(signingConfig.keychainFile ? ['--keychain', signingConfig.keychainFile] : []),
+      ...(isExecutable ? ['--options', 'runtime'] : []),
+      filePath,
+    ];
+
+    execFileSync('/usr/bin/codesign', args, { stdio: 'inherit' });
+    signed++;
+  }
+
+  return signed;
+}
+
+function createOpenClawSidecarArchive(resourcesDir, openclawRoot) {
+  if (!existsSync(openclawRoot)) {
+    return null;
+  }
+
+  const sidecarRoot = join(resourcesDir, 'runtime', 'openclaw');
+  const payloadPath = join(sidecarRoot, 'payload.tar.gz');
+  const version = readBundleVersion(openclawRoot);
+
+  rmSync(sidecarRoot, { recursive: true, force: true });
+  mkdirSync(sidecarRoot, { recursive: true });
+
+  execFileSync(resolveTarCommand(), ['-czf', payloadPath, '-C', openclawRoot, '.'], {
+    stdio: 'inherit',
+  });
+
+  writeFileSync(
+    join(sidecarRoot, 'archive.json'),
+    JSON.stringify({
+      format: 'tar.gz',
+      path: 'payload.tar.gz',
+      version,
+    }, null, 2) + '\n',
+    'utf8',
+  );
+  writeFileSync(
+    join(sidecarRoot, 'package.json'),
+    '{\n  "name": "openclaw-sidecar",\n  "private": true\n}\n',
+    'utf8',
+  );
+
+  rmSync(openclawRoot, { recursive: true, force: true });
+
+  return {
+    sidecarRoot,
+    payloadPath,
+    version,
+  };
+}
+exports.createOpenClawSidecarArchive = createOpenClawSidecarArchive;
 
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
@@ -824,6 +1139,28 @@ exports.default = async function afterPack(context) {
   const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
   if (nativeRemoved > 0) {
     console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+  }
+
+  const extensionNativeRemoved = cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch);
+  if (extensionNativeRemoved > 0) {
+    console.log(`[after-pack] ✅ Removed ${extensionNativeRemoved} non-target native packages from built-in extension node_modules.`);
+  }
+
+  const prebuildsRemoved = cleanupNativePrebuilds(openclawRoot, platform, arch);
+  if (prebuildsRemoved > 0) {
+    console.log(`[after-pack] ✅ Removed ${prebuildsRemoved} non-target native prebuild directories.`);
+  }
+
+  const signedOpenClawBinaries = await signOpenClawNativeBinaries(context, openclawRoot);
+  if (signedOpenClawBinaries > 0) {
+    console.log(`[after-pack] ✅ Signed ${signedOpenClawBinaries} OpenClaw native binaries before archiving.`);
+  }
+
+  const archivedSidecar = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+  if (archivedSidecar) {
+    console.log(
+      `[after-pack] ✅ Archived OpenClaw sidecar to ${archivedSidecar.payloadPath}${archivedSidecar.version ? ` (v${archivedSidecar.version})` : ''}.`,
+    );
   }
 
   const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');

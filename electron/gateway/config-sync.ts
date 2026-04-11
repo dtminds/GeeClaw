@@ -8,6 +8,7 @@ import { resolveGeeClawAppEnvironment } from '../utils/app-env';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
+import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import { getOpenClawConfigDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { listConfiguredChannels } from '../utils/channel-config';
@@ -655,6 +656,10 @@ async function resolveChannelStartupPolicy(): Promise<{
 }
 
 export async function prepareGatewayLaunchContext(port: number): Promise<GatewayLaunchContext> {
+  if (app.isPackaged) {
+    await materializePackagedOpenClawSidecar();
+  }
+
   const runtime = await getConfiguredOpenClawRuntime();
   const openclawDir = runtime.dir;
   const entryScript = runtime.entryPath;

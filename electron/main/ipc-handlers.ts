@@ -20,6 +20,7 @@ import {
 } from '../utils/openclaw-cli';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../utils/store';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
+import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import {
   saveProviderKeyToOpenClaw,
 } from '../utils/openclaw-auth';
@@ -1316,6 +1317,9 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
   // Get a shell command to run OpenClaw CLI without modifying PATH
   ipcMain.handle('openclaw:getCliCommand', async () => {
     try {
+      if (app.isPackaged) {
+        await materializePackagedOpenClawSidecar();
+      }
       const status = await getConfiguredOpenClawRuntime();
       if (!status.packageExists) {
         return { success: false, error: status.error || 'OpenClaw runtime not found' };
@@ -1331,6 +1335,9 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
 
   ipcMain.handle('openclaw:installCli', async () => {
     try {
+      if (app.isPackaged) {
+        await materializePackagedOpenClawSidecar();
+      }
       const status = await getConfiguredOpenClawRuntime();
       if (!status.packageExists) {
         return { success: false, error: status.error || 'OpenClaw runtime not found' };

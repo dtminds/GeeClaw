@@ -105,6 +105,7 @@ Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your pre
 
 ### 📦 Bundled OpenClaw Runtime
 GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
+The packaged runtime currently excludes the upstream Tlon skill binaries so macOS signing and notarization remain stable.
 
 ---
 
@@ -342,6 +343,8 @@ pnpm package:linux        # Package for Linux
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
 
 Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and release bundling. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
+
+In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The

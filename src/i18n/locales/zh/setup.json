@@ -162,7 +162,11 @@
             "title": "正在准备 GeeClaw",
             "body": "首次启动时可能会稍微久一点。",
             "caption": "第一次准备可能需要几分钟时间，请不要关闭窗口。",
-            "captionReturning": "正在启动所需服务，请稍候"
+            "captionReturning": "正在启动所需服务，请稍候",
+            "openclawExtractingTitle": "正在准备 OpenClaw 运行时",
+            "openclawExtractingCaption": "首次启动需要解压运行时，请保持窗口打开。",
+            "openclawUpdatingTitle": "正在更新 OpenClaw 到 {{version}}",
+            "openclawUpdatingCaption": "正在替换内置运行时，请保持窗口打开。"
         },
         "needsProvider": {
             "title": "连接您的 AI 服务",

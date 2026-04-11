@@ -88,6 +88,30 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'))).toBe(false);
   });
 
+  it('removes nested node_modules .bin directories that can preserve invalid absolute symlinks', async () => {
+    const { cleanupUnnecessaryFiles } = await import('../../scripts/after-pack.cjs');
+
+    const packageRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-cleanup-bin-'));
+    tempDirs.push(packageRoot);
+
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'), { recursive: true });
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin'), { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'),
+      'console.log("helper");\n',
+      'utf8',
+    );
+    symlinkSync(
+      '/tmp/outside-bundle/helper.js',
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin', 'helper'),
+    );
+
+    cleanupUnnecessaryFiles(packageRoot);
+
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'))).toBe(false);
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'))).toBe(true);
+  });
+
   it('prunes built-in extension node_modules when all package identities match top-level packages', async () => {
     const { canPruneExtensionNodeModulesAgainstTopLevel, pruneExtensionNodeModulesAgainstTopLevel } = await import('../../scripts/after-pack.cjs');
 
@@ -258,5 +282,95 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'))).toBe(true);
     expect(existsSync(join(nodeModulesRoot, 'future-native-helper'))).toBe(false);
     expect(existsSync(join(nodeModulesRoot, 'portable-helper'))).toBe(true);
+  });
+
+  it('removes non-target native packages from built-in extension node_modules too', async () => {
+    const { cleanupExtensionNativePlatformPackages } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-extension-native-'));
+    tempDirs.push(openclawRoot);
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'discord', 'node_modules');
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu', 'package.json'),
+      '{"name":"@snazzah/davey-linux-x64-gnu","version":"0.0.0","os":["linux"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc', 'package.json'),
+      '{"name":"@snazzah/davey-darwin-x64-msvc","version":"0.0.0","os":["darwin"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    expect(cleanupExtensionNativePlatformPackages(openclawRoot, 'darwin', 'x64')).toBe(1);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'))).toBe(false);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'))).toBe(true);
+  });
+
+  it('prunes non-target prebuild directories before archiving the sidecar payload', async () => {
+    const { cleanupNativePrebuilds } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-prebuilds-'));
+    tempDirs.push(openclawRoot);
+
+    const prebuildsDir = join(openclawRoot, 'node_modules', 'bare-fs', 'prebuilds');
+    mkdirSync(join(prebuildsDir, 'darwin-x64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-arm64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-universal'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'ios-x64-simulator'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'linux-x64'), { recursive: true });
+    writeFileSync(join(prebuildsDir, 'darwin-x64', 'bare-fs.bare'), 'x64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-arm64', 'bare-fs.bare'), 'arm64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-universal', 'bare-fs.bare'), 'universal\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'ios-x64-simulator', 'bare-fs.bare'), 'ios\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'linux-x64', 'bare-fs.bare'), 'linux\n', 'utf8');
+
+    expect(cleanupNativePrebuilds(openclawRoot, 'darwin', 'x64')).toBe(3);
+    expect(existsSync(join(prebuildsDir, 'darwin-x64'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-universal'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-arm64'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'ios-x64-simulator'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'linux-x64'))).toBe(false);
+  });
+
+  it('only signs the native file types we explicitly allow for the sidecar payload', async () => {
+    const { isPotentialMacCodeSignCandidate } = await import('../../scripts/after-pack.cjs');
+
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/native.node')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/libvips.dylib')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/bare-fs.bare')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/spawn-helper')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/esbuild/bin/esbuild')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/@esbuild/darwin-arm64/bin/esbuild')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/tlon')).toBe(false);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/helper.so')).toBe(false);
+  });
+
+  it('archives the packaged OpenClaw runtime into a sidecar payload and removes the raw bundle', async () => {
+    const { createOpenClawSidecarArchive } = await import('../../scripts/after-pack.cjs');
+
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-resources-'));
+    const openclawRoot = join(resourcesDir, 'openclaw');
+    tempDirs.push(resourcesDir);
+
+    const entryPath = join(openclawRoot, 'openclaw.mjs');
+
+    mkdirSync(openclawRoot, { recursive: true });
+    writeFileSync(join(openclawRoot, 'package.json'), '{"name":"openclaw","version":"2026.4.10"}\n', 'utf8');
+    writeFileSync(entryPath, 'export {};\n', 'utf8');
+
+    const archiveInfo = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+
+    expect(archiveInfo).toMatchObject({
+      sidecarRoot: join(resourcesDir, 'runtime', 'openclaw'),
+      payloadPath: join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'),
+      version: '2026.4.10',
+    });
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
+    expect(existsSync(openclawRoot)).toBe(false);
   });
 });

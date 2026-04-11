@@ -15,6 +15,7 @@ import { ProviderContent } from '@/pages/Setup';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
 import { cn } from '@/lib/utils';
+import { subscribeHostEvent } from '@/lib/host-events';
 import geeclawIcon from '@/assets/logo.svg';
 
 const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
@@ -25,6 +26,13 @@ const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
   needs_provider: 88,
   ready: 100,
 };
+
+interface OpenClawSidecarStatus {
+  stage: 'idle' | 'extracting' | 'ready' | 'error';
+  version?: string;
+  previousVersion?: string;
+  error?: string;
+}
 
 export function Startup() {
   const { t } = useTranslation('setup');
@@ -43,6 +51,7 @@ export function Startup() {
   const [apiKey, setApiKey] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isSubmittingInviteCode, setIsSubmittingInviteCode] = useState(false);
+  const [sidecarStatus, setSidecarStatus] = useState<OpenClawSidecarStatus | null>(null);
 
   const progress = phaseProgress[phase] ?? 12;
   const isLoadingPhase = phase === 'idle' || phase === 'checking_session' || phase === 'preparing';
@@ -53,6 +62,12 @@ export function Startup() {
       setIsSubmittingInviteCode(false);
     }
   }, [phase]);
+
+  useEffect(() => {
+    return subscribeHostEvent<OpenClawSidecarStatus>('openclaw:sidecar-status', (payload) => {
+      setSidecarStatus(payload);
+    });
+  }, []);
 
   const handleProviderConfiguredChange = useCallback((configured: boolean) => {
     if (configured) {
@@ -76,6 +91,28 @@ export function Startup() {
 
   const loadingCopy = useMemo(() => {
     if (phase === 'preparing') {
+      const isSidecarExtracting = sidecarStatus?.stage === 'extracting';
+      const isOpenClawUpgrade = Boolean(
+        isSidecarExtracting
+          && sidecarStatus?.version
+          && sidecarStatus?.previousVersion
+          && sidecarStatus.previousVersion !== sidecarStatus.version,
+      );
+
+      if (isOpenClawUpgrade) {
+        return {
+          title: t('startup.preparing.openclawUpdatingTitle', { version: sidecarStatus?.version ?? '' }),
+          caption: t('startup.preparing.openclawUpdatingCaption', { version: sidecarStatus?.version ?? '' }),
+        };
+      }
+
+      if (isSidecarExtracting) {
+        return {
+          title: t('startup.preparing.openclawExtractingTitle'),
+          caption: t('startup.preparing.openclawExtractingCaption'),
+        };
+      }
+
       return {
         title: t('startup.preparing.title'),
         caption: setupComplete
@@ -88,7 +125,7 @@ export function Startup() {
       title: t('startup.checkingSession.title'),
       caption: t('startup.checkingSession.caption'),
     };
-  }, [phase, setupComplete, t]);
+  }, [phase, setupComplete, sidecarStatus, t]);
 
   const statusMessage = useMemo(() => {
     if (phase === 'needs_provider') {
