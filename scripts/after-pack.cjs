@@ -19,7 +19,8 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
+const { execFileSync } = require('child_process');
+const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } = require('fs');
 const { join, dirname, relative } = require('path');
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 const { cleanupUnnecessaryFiles } = require('./lib/package-cleanup.cjs');
@@ -500,39 +501,64 @@ function cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch) {
 }
 exports.cleanupExtensionNativePlatformPackages = cleanupExtensionNativePlatformPackages;
 
-const DESKTOP_SIGNING_RISK_TARGETS = {
-  darwin: {
-    arm64: [
-      'node_modules/@tloncorp/tlon-skill-darwin-arm64/tlon',
-    ],
-    x64: [
-      'node_modules/@tloncorp/tlon-skill-darwin-x64/tlon',
-    ],
-  },
-};
-
-function cleanupDesktopSigningRiskTargets(openclawRoot, platform, arch) {
-  const targets = DESKTOP_SIGNING_RISK_TARGETS[platform]?.[arch];
-  if (!Array.isArray(targets) || targets.length === 0) {
-    return 0;
+function readBundleVersion(openclawRoot) {
+  const packageJsonPath = join(openclawRoot, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
   }
 
-  let removed = 0;
-  for (const relativeTarget of targets) {
-    const fullPath = join(openclawRoot, relativeTarget);
-    if (!existsSync(fullPath)) {
-      continue;
-    }
-    try {
-      rmSync(fullPath, { force: true });
-      removed++;
-    } catch {
-      // Keep packaging resilient if an optional file cannot be removed.
-    }
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return typeof pkg.version === 'string' ? pkg.version : undefined;
+  } catch {
+    return undefined;
   }
-  return removed;
 }
-exports.cleanupDesktopSigningRiskTargets = cleanupDesktopSigningRiskTargets;
+
+function resolveTarCommand() {
+  return process.platform === 'win32' ? 'tar.exe' : '/usr/bin/tar';
+}
+
+function createOpenClawSidecarArchive(resourcesDir, openclawRoot) {
+  if (!existsSync(openclawRoot)) {
+    return null;
+  }
+
+  const sidecarRoot = join(resourcesDir, 'runtime', 'openclaw');
+  const payloadPath = join(sidecarRoot, 'payload.tar.gz');
+  const version = readBundleVersion(openclawRoot);
+
+  rmSync(sidecarRoot, { recursive: true, force: true });
+  mkdirSync(sidecarRoot, { recursive: true });
+
+  execFileSync(resolveTarCommand(), ['-czf', payloadPath, '-C', openclawRoot, '.'], {
+    stdio: 'inherit',
+  });
+
+  writeFileSync(
+    join(sidecarRoot, 'archive.json'),
+    JSON.stringify({
+      format: 'tar.gz',
+      path: 'payload.tar.gz',
+      version,
+    }, null, 2) + '\n',
+    'utf8',
+  );
+  writeFileSync(
+    join(sidecarRoot, 'package.json'),
+    '{\n  "name": "openclaw-sidecar",\n  "private": true\n}\n',
+    'utf8',
+  );
+
+  rmSync(openclawRoot, { recursive: true, force: true });
+
+  return {
+    sidecarRoot,
+    payloadPath,
+    version,
+  };
+}
+exports.createOpenClawSidecarArchive = createOpenClawSidecarArchive;
 
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
@@ -883,9 +909,11 @@ exports.default = async function afterPack(context) {
     console.log(`[after-pack] ✅ Removed ${extensionNativeRemoved} non-target native packages from built-in extension node_modules.`);
   }
 
-  const signingRiskRemoved = cleanupDesktopSigningRiskTargets(openclawRoot, platform, arch);
-  if (signingRiskRemoved > 0) {
-    console.log(`[after-pack] ✅ Removed ${signingRiskRemoved} known desktop signing blocker(s).`);
+  const archivedSidecar = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+  if (archivedSidecar) {
+    console.log(
+      `[after-pack] ✅ Archived OpenClaw sidecar to ${archivedSidecar.payloadPath}${archivedSidecar.version ? ` (v${archivedSidecar.version})` : ''}.`,
+    );
   }
 
   const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');

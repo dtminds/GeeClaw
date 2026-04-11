@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalCwd = process.cwd;
+const originalResourcesPath = process.resourcesPath;
 
 const {
   mockExistsSync,
   mockIsPackagedGetter,
+  mockMaterializePackagedOpenClawSidecarSync,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn<(value: string) => boolean>(),
   mockIsPackagedGetter: { value: false },
+  mockMaterializePackagedOpenClawSidecarSync: vi.fn<() => string | null>(),
 }));
 
 vi.mock('electron', () => ({
@@ -31,16 +34,26 @@ vi.mock('fs', async () => {
   };
 });
 
+vi.mock('@electron/utils/openclaw-sidecar', () => ({
+  materializePackagedOpenClawSidecarSync: mockMaterializePackagedOpenClawSidecarSync,
+}));
+
 describe('getOpenClawDir (development)', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     mockIsPackagedGetter.value = false;
+    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue(null);
     process.cwd = () => '/repo';
   });
 
   afterEach(() => {
     process.cwd = originalCwd;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: originalResourcesPath,
+      configurable: true,
+      writable: true,
+    });
   });
 
   it('prefers the repo-local openclaw-runtime install when present', async () => {
@@ -60,5 +73,34 @@ describe('getOpenClawDir (development)', () => {
     const { getOpenClawDir } = await import('@electron/utils/paths');
 
     expect(getOpenClawDir()).toBe('/repo/openclaw-runtime/node_modules/openclaw');
+  });
+});
+
+describe('getOpenClawDir (packaged)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockIsPackagedGetter.value = true;
+    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue('/tmp/geeclaw-user-data/runtime/openclaw-sidecar');
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/opt/geeclaw/resources',
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it('prefers the hydrated sidecar runtime when a packaged archive is present', async () => {
+    const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
+
+    expect(getOpenClawDir()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/node_modules/openclaw');
+    expect(getOpenClawEntryPath()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/node_modules/openclaw/openclaw.mjs');
+  });
+
+  it('falls back to the legacy bundled resources path when no sidecar archive is present', async () => {
+    mockMaterializePackagedOpenClawSidecarSync.mockReturnValue(null);
+
+    const { getOpenClawDir } = await import('@electron/utils/paths');
+
+    expect(getOpenClawDir()).toBe('/opt/geeclaw/resources/openclaw');
   });
 });

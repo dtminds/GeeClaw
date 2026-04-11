@@ -7,6 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
 import { logger } from './logger';
+import { materializePackagedOpenClawSidecarSync } from './openclaw-sidecar';
 
 export {
   quoteForCmd,
@@ -117,11 +118,16 @@ export function getPreloadPath(): string {
 
 /**
  * Get OpenClaw package directory
- * - Production (packaged): from resources/openclaw (copied by electron-builder extraResources)
+ * - Production (packaged): prefer the hydrated sidecar extracted under userData/runtime/
+ *   from the packaged runtime archive, falling back to legacy resources/openclaw builds.
  * - Development: from the repo-local openclaw-runtime install
  */
 export function getOpenClawDir(): string {
   if (app.isPackaged) {
+    const hydratedSidecarRoot = materializePackagedOpenClawSidecarSync();
+    if (hydratedSidecarRoot) {
+      return join(hydratedSidecarRoot, 'node_modules', 'openclaw');
+    }
     return join(process.resourcesPath, 'openclaw');
   }
 

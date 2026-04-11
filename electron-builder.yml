@@ -27,7 +27,9 @@ extraResources:
       - "!managed-bin/**"
       - "!screenshot/**"
   # OpenClaw package (node_modules copied separately by afterPack hook
-  # because electron-builder respects .gitignore which excludes node_modules/)
+  # because electron-builder respects .gitignore which excludes node_modules/.
+  # afterPack completes the runtime, then archives it into runtime/openclaw/
+  # and removes the raw bundle before signing.)
   - from: build/openclaw/
     to: openclaw/
   - from: build/preinstalled-skills/

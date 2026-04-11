@@ -310,45 +310,33 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'))).toBe(true);
   });
 
-  it('prunes known mac signing blockers from the packaged runtime by exact path', async () => {
-    const { cleanupDesktopSigningRiskTargets } = await import('../../scripts/after-pack.cjs');
+  it('archives the packaged OpenClaw runtime into a sidecar payload and removes the raw bundle', async () => {
+    const { createOpenClawSidecarArchive } = await import('../../scripts/after-pack.cjs');
 
-    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-sign-risk-'));
-    tempDirs.push(openclawRoot);
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-resources-'));
+    const openclawRoot = join(resourcesDir, 'openclaw');
+    tempDirs.push(resourcesDir);
 
-    const arm64Tlon = join(
+    const entryPath = join(
       openclawRoot,
       'node_modules',
-      '@tloncorp',
-      'tlon-skill-darwin-arm64',
-      'tlon',
-    );
-    const x64Tlon = join(
-      openclawRoot,
-      'node_modules',
-      '@tloncorp',
-      'tlon-skill-darwin-x64',
-      'tlon',
-    );
-    const unrelatedFile = join(
-      openclawRoot,
-      'node_modules',
-      '@tloncorp',
-      'tlon-skill',
-      'bin',
-      'tlon.js',
+      'openclaw',
+      'openclaw.mjs',
     );
 
-    mkdirSync(join(arm64Tlon, '..'), { recursive: true });
-    mkdirSync(join(x64Tlon, '..'), { recursive: true });
-    mkdirSync(join(unrelatedFile, '..'), { recursive: true });
-    writeFileSync(arm64Tlon, 'arm64 binary', 'utf8');
-    writeFileSync(x64Tlon, 'x64 binary', 'utf8');
-    writeFileSync(unrelatedFile, 'wrapper', 'utf8');
+    mkdirSync(join(entryPath, '..'), { recursive: true });
+    writeFileSync(join(openclawRoot, 'package.json'), '{"name":"openclaw","version":"2026.4.10"}\n', 'utf8');
+    writeFileSync(entryPath, 'export {};\n', 'utf8');
 
-    expect(cleanupDesktopSigningRiskTargets(openclawRoot, 'darwin', 'arm64')).toBe(1);
-    expect(existsSync(arm64Tlon)).toBe(false);
-    expect(existsSync(x64Tlon)).toBe(true);
-    expect(existsSync(unrelatedFile)).toBe(true);
+    const archiveInfo = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+
+    expect(archiveInfo).toMatchObject({
+      sidecarRoot: join(resourcesDir, 'runtime', 'openclaw'),
+      payloadPath: join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'),
+      version: '2026.4.10',
+    });
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
+    expect(existsSync(openclawRoot)).toBe(false);
   });
 });
