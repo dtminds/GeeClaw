@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { cleanupUnnecessaryFiles } = require('./package-cleanup.cjs');
 const windowsPaths = require('./windows-paths.cjs');
 
 const { normWinFsPath: normWin, realpathCompat } = windowsPaths;
@@ -16,7 +17,7 @@ const EXTRA_BUNDLED_PLUGIN_PACKAGES = {
   // Upstream package imports SessionManager from pi-coding-agent at runtime,
   // but does not declare it in package.json. Bundle it explicitly until the
   // plugin publishes correct metadata.
-  '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
+  // '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
 };
 
 const SKIP_PACKAGE_NAMES = new Set(['typescript', '@playwright/test']);
@@ -456,16 +457,19 @@ function bundleLocalPlugin(plugin, context) {
     }));
   }
 
+  const removedCount = cleanupUnnecessaryFiles(outputDir);
+
   const validation = validateBundledPluginOutput(outputDir, {
     pluginId: plugin.pluginId,
     extraRequiredPackages: [],
   });
 
-  log.log(`   ✅ ${plugin.pluginId}: copied ${copiedCount} runtime package(s)`);
+  log.log(`   ✅ ${plugin.pluginId}: copied ${copiedCount} runtime package(s), removed ${removedCount} disposable artifact(s)`);
   return {
     pluginId: plugin.pluginId,
     outputDir,
     copiedCount,
+    removedCount,
     validation,
   };
 }
@@ -484,8 +488,8 @@ function bundleNpmPlugin(plugin, context) {
   }
 
   const realPluginPath = realpathCompat(pkgPath);
-  cleanDirectory(outputDir);
   log.log(`📦 Bundling plugin ${plugin.npmName} -> ${outputDir}`);
+  cleanDirectory(outputDir);
 
   copyPluginPackageSource(realPluginPath, outputDir);
 
@@ -495,18 +499,21 @@ function bundleNpmPlugin(plugin, context) {
     extraPackageNodeModulesDir: nodeModulesRoot,
   });
 
+  const removedCount = cleanupUnnecessaryFiles(outputDir);
+
   const validation = validateBundledPluginOutput(outputDir, {
     pluginId: plugin.pluginId,
     npmName: plugin.npmName,
     extraRequiredPackages: getExtraBundledPluginPackages(plugin.npmName),
   });
 
-  log.log(`   ✅ ${plugin.pluginId}: copied ${copiedCount} runtime package(s)`);
+  log.log(`   ✅ ${plugin.pluginId}: copied ${copiedCount} runtime package(s), removed ${removedCount} disposable artifact(s)`);
   return {
     pluginId: plugin.pluginId,
     npmName: plugin.npmName,
     outputDir,
     copiedCount,
+    removedCount,
     validation,
   };
 }
@@ -530,7 +537,9 @@ function bundlePluginMirrors(options) {
   } = options;
   const log = createLogger(logger);
 
+  log.log(`🧹 Clearing existing OpenClaw plugin mirror output: ${outputRoot}`);
   cleanDirectory(outputRoot);
+  log.log(`✅ Output directory ready: ${outputRoot}`);
 
   const localPlugins = includeLocalPlugins ? discoverLocalPlugins(localPluginRoot) : [];
   if (localPlugins.length > 0) {
