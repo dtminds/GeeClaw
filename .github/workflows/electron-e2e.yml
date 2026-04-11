@@ -1,0 +1,81 @@
+name: Electron E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/electron-e2e.yml"
+      - "electron/**"
+      - "package.json"
+      - "playwright.config.ts"
+      - "pnpm-lock.yaml"
+      - "src/**"
+      - "tests/e2e/**"
+      - "tsconfig.json"
+      - "tsconfig.node.json"
+      - "vite.config.ts"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/electron-e2e.yml"
+      - "electron/**"
+      - "package.json"
+      - "playwright.config.ts"
+      - "pnpm-lock.yaml"
+      - "src/**"
+      - "tests/e2e/**"
+      - "tsconfig.json"
+      - "tsconfig.node.json"
+      - "vite.config.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  electron-e2e:
+    name: Electron E2E (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild Electron binary
+        run: pnpm rebuild electron
+
+      - name: Run Electron smoke E2E
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-macos
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 7
