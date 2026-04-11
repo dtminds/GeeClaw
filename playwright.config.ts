@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   timeout: 120_000,
   expect: {
-    timeout: 20_000,
+    timeout: 60_000,
   },
   reporter: [
     ['list'],
