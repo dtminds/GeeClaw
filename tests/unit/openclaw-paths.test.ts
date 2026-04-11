@@ -92,8 +92,8 @@ describe('getOpenClawDir (packaged)', () => {
   it('prefers the hydrated sidecar runtime when a packaged archive is present', async () => {
     const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
 
-    expect(getOpenClawDir()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/node_modules/openclaw');
-    expect(getOpenClawEntryPath()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/node_modules/openclaw/openclaw.mjs');
+    expect(getOpenClawDir()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar');
+    expect(getOpenClawEntryPath()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/openclaw.mjs');
   });
 
   it('falls back to the legacy bundled resources path when no sidecar archive is present', async () => {

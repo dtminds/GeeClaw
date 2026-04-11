@@ -126,7 +126,7 @@ export function getOpenClawDir(): string {
   if (app.isPackaged) {
     const hydratedSidecarRoot = materializePackagedOpenClawSidecarSync();
     if (hydratedSidecarRoot) {
-      return join(hydratedSidecarRoot, 'node_modules', 'openclaw');
+      return hydratedSidecarRoot;
     }
     return join(process.resourcesPath, 'openclaw');
   }

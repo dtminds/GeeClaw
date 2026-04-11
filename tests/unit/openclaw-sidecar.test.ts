@@ -68,9 +68,9 @@ describe('packaged OpenClaw sidecar materialization', () => {
     const packagedSidecarRoot = join(resourcesRoot, 'runtime', 'openclaw');
     const payloadPath = join(packagedSidecarRoot, 'payload.tar.gz');
     const archiveMetadataPath = join(packagedSidecarRoot, 'archive.json');
-    const stagedEntry = join(payloadStageRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
+    const stagedEntry = join(payloadStageRoot, 'openclaw.mjs');
 
-    mkdirSync(join(stagedEntry, '..'), { recursive: true });
+    mkdirSync(payloadStageRoot, { recursive: true });
     mkdirSync(packagedSidecarRoot, { recursive: true });
     writeFileSync(stagedEntry, 'export {};\n', 'utf8');
     execFileSync(tarCommand(), ['-czf', payloadPath, '-C', payloadStageRoot, '.']);
@@ -83,7 +83,7 @@ describe('packaged OpenClaw sidecar materialization', () => {
     const { materializePackagedOpenClawSidecarSync } = await import('@electron/utils/openclaw-sidecar');
 
     const extractedRoot = materializePackagedOpenClawSidecarSync();
-    const extractedEntry = join(userDataRoot, 'runtime', 'openclaw-sidecar', 'node_modules', 'openclaw', 'openclaw.mjs');
+    const extractedEntry = join(userDataRoot, 'runtime', 'openclaw-sidecar', 'openclaw.mjs');
     const stampPath = join(userDataRoot, 'runtime', 'openclaw-sidecar', '.archive-stamp');
 
     expect(extractedRoot).toBe(join(userDataRoot, 'runtime', 'openclaw-sidecar'));

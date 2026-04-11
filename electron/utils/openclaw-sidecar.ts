@@ -92,7 +92,7 @@ export function materializePackagedOpenClawSidecarSync(): string | null {
   }
 
   const extractedSidecarRoot = getHydratedOpenClawSidecarRoot();
-  const extractedEntryPath = join(extractedSidecarRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
+  const extractedEntryPath = join(extractedSidecarRoot, 'openclaw.mjs');
   const stampPath = join(extractedSidecarRoot, '.archive-stamp');
   const archiveStamp = resolveArchiveStamp(archivePath, archiveMetadata);
   const previousStamp = readSidecarStamp(stampPath);
@@ -127,7 +127,7 @@ export function materializePackagedOpenClawSidecarSync(): string | null {
       throw new Error(`Failed to extract packaged OpenClaw sidecar${stderr ? `: ${stderr}` : stdout ? `: ${stdout}` : ''}`);
     }
 
-    const tempEntryPath = join(tempRoot, 'node_modules', 'openclaw', 'openclaw.mjs');
+    const tempEntryPath = join(tempRoot, 'openclaw.mjs');
     if (!existsSync(tempEntryPath)) {
       throw new Error(`Packaged OpenClaw sidecar extraction is incomplete: missing ${tempEntryPath}`);
     }

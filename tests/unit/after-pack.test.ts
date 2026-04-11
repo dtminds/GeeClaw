@@ -310,6 +310,32 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'))).toBe(true);
   });
 
+  it('prunes non-target prebuild directories before archiving the sidecar payload', async () => {
+    const { cleanupNativePrebuilds } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-prebuilds-'));
+    tempDirs.push(openclawRoot);
+
+    const prebuildsDir = join(openclawRoot, 'node_modules', 'bare-fs', 'prebuilds');
+    mkdirSync(join(prebuildsDir, 'darwin-x64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-arm64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-universal'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'ios-x64-simulator'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'linux-x64'), { recursive: true });
+    writeFileSync(join(prebuildsDir, 'darwin-x64', 'bare-fs.bare'), 'x64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-arm64', 'bare-fs.bare'), 'arm64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-universal', 'bare-fs.bare'), 'universal\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'ios-x64-simulator', 'bare-fs.bare'), 'ios\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'linux-x64', 'bare-fs.bare'), 'linux\n', 'utf8');
+
+    expect(cleanupNativePrebuilds(openclawRoot, 'darwin', 'x64')).toBe(3);
+    expect(existsSync(join(prebuildsDir, 'darwin-x64'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-universal'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-arm64'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'ios-x64-simulator'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'linux-x64'))).toBe(false);
+  });
+
   it('archives the packaged OpenClaw runtime into a sidecar payload and removes the raw bundle', async () => {
     const { createOpenClawSidecarArchive } = await import('../../scripts/after-pack.cjs');
 
@@ -317,14 +343,9 @@ describe('after-pack bundled runtime sync', () => {
     const openclawRoot = join(resourcesDir, 'openclaw');
     tempDirs.push(resourcesDir);
 
-    const entryPath = join(
-      openclawRoot,
-      'node_modules',
-      'openclaw',
-      'openclaw.mjs',
-    );
+    const entryPath = join(openclawRoot, 'openclaw.mjs');
 
-    mkdirSync(join(entryPath, '..'), { recursive: true });
+    mkdirSync(openclawRoot, { recursive: true });
     writeFileSync(join(openclawRoot, 'package.json'), '{"name":"openclaw","version":"2026.4.10"}\n', 'utf8');
     writeFileSync(entryPath, 'export {};\n', 'utf8');
 
