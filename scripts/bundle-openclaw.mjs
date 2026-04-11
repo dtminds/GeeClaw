@@ -18,6 +18,7 @@
 import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
 import { copyInstalledNodeModules, shouldSkipBundledPackage } from './lib/openclaw-bundle-filters.mjs';
+import { copyTreeWithFallback } from './lib/openclaw-copy-tree.mjs';
 import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import { resolveOpenClawBundleSource } from './lib/openclaw-bundle-source.mjs';
 
@@ -123,7 +124,14 @@ cleanDirectorySync(OUTPUT, fs);
 
 // 2. Copy openclaw package itself to OUTPUT root
 echo`   Copying openclaw package...`;
-fs.cpSync(normWin(openclawReal), normWin(OUTPUT), { recursive: true, dereference: true });
+copyTreeWithFallback(openclawReal, OUTPUT, {
+  fsImpl: fs,
+  pathImpl: path,
+  normalizePath: normWin,
+  logFallback: (sourceDir, error) => {
+    echo`   ⚠️  Bulk copy fallback for ${sourceDir}: ${error.code || error.message}`;
+  },
+});
 
 const outputNodeModules = path.join(OUTPUT, 'node_modules');
 fs.mkdirSync(outputNodeModules, { recursive: true });
