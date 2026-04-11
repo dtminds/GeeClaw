@@ -49,4 +49,14 @@ describe('openclaw-runtime prune', () => {
     }
     expect(existsSync(preservedTemplate)).toBe(true);
   });
+
+  it('includes tlon skill packages in prune targets', () => {
+    expect(pruneTargets).toEqual(expect.arrayContaining([
+      'node_modules/@tloncorp/tlon-skill',
+      'node_modules/@tloncorp/tlon-skill-darwin-arm64',
+      'node_modules/@tloncorp/tlon-skill-darwin-x64',
+      'node_modules/@tloncorp/tlon-skill-linux-arm64',
+      'node_modules/@tloncorp/tlon-skill-linux-x64',
+    ]));
+  });
 });

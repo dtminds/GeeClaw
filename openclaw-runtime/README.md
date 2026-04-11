@@ -53,11 +53,13 @@ pnpm run openclaw-runtime:clean
 职责：
 
 - 删除一小批已确认不参与运行的文档目录和静态资源
+- 删除 GeeClaw 当前不随包分发的 Tlon skill 及其平台二进制包
 - 当前只做保守裁剪，不删除任何 `.node`、`.dylib` 或其他运行时原生库
 - 主要参考 `nexu` 的 runtime 安装后清理思路，但范围更保守
 
 当前会裁剪的内容包括：
 
+- `@tloncorp/tlon-skill` 及其平台二进制包
 - 若干第三方依赖的 `docs/`
 - `openclaw/docs/assets`
 - `openclaw/docs/images`

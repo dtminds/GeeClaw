@@ -105,6 +105,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，并将托管运行时状态保存
 
 ### 📦 内置 OpenClaw Runtime
 GeeClaw 固定使用内置 OpenClaw Runtime，避免依赖系统 PATH 或覆盖已有的系统 OpenClaw 安装。
+当前打包的 runtime 会排除上游 Tlon skill 二进制，以保证 macOS 签名和 notarization 稳定通过。
 
 ---
 

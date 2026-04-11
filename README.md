@@ -105,6 +105,7 @@ Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your pre
 
 ### 📦 Bundled OpenClaw Runtime
 GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
+The packaged runtime currently excludes the upstream Tlon skill binaries so macOS signing and notarization remain stable.
 
 ---
 
