@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const forkMock = vi.fn();
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+  },
   utilityProcess: {
     fork: forkMock,
   },
