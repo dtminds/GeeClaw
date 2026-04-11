@@ -2,24 +2,50 @@ import { EventEmitter } from 'events';
 import { createRequire } from 'module';
 import { dirname, join } from 'path';
 import { platform } from 'os';
+import { deflateSync } from 'zlib';
 import { getOpenClawResolvedDir } from './paths';
 import { proxyAwareFetch } from './proxy-fetch';
 
-const openclawResolvedPath = getOpenClawResolvedDir();
-const openclawRequire = createRequire(join(openclawResolvedPath, 'package.json'));
+const require = createRequire(import.meta.url);
+
+type QrDependencies = {
+  QRCode: new (typeNumber: number, errorCorrectionLevel: unknown) => {
+    addData: (input: string) => void;
+    make: () => void;
+    getModuleCount: () => number;
+    isDark: (row: number, col: number) => boolean;
+  };
+  QRErrorCorrectLevel: {
+    L: unknown;
+  };
+};
+
+let qrDependencies: QrDependencies | null = null;
 
 function resolveOpenClawPackageJson(packageName: string): string {
   const specifier = `${packageName}/package.json`;
+  const openclawRequire = createRequire(join(getOpenClawResolvedDir(), 'package.json'));
   return openclawRequire.resolve(specifier);
 }
 
-const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
-const require = createRequire(import.meta.url);
-const QRCodeModule = require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js'));
-const QRErrorCorrectLevelModule = require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'QRErrorCorrectLevel.js'));
+function getQrDependencies(): QrDependencies {
+  if (qrDependencies) {
+    return qrDependencies;
+  }
 
-const QRCode = QRCodeModule;
-const QRErrorCorrectLevel = QRErrorCorrectLevelModule;
+  const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
+  qrDependencies = {
+    QRCode: require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js')) as QrDependencies['QRCode'],
+    QRErrorCorrectLevel: require(join(
+      qrcodeTerminalPath,
+      'vendor',
+      'QRCode',
+      'QRErrorCorrectLevel.js',
+    )) as QrDependencies['QRErrorCorrectLevel'],
+  };
+
+  return qrDependencies;
+}
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 180000;
@@ -38,6 +64,7 @@ function getPlatCode(): number {
 }
 
 function createQrMatrix(input: string) {
+  const { QRCode, QRErrorCorrectLevel } = getQrDependencies();
   const qr = new QRCode(-1, QRErrorCorrectLevel.L);
   qr.addData(input);
   qr.make();
@@ -101,7 +128,7 @@ function encodePngRgba(buffer: Buffer, width: number, height: number): Buffer {
     raw[rawOffset] = 0;
     buffer.copy(raw, rawOffset + 1, row * stride, row * stride + stride);
   }
-  const compressed = require('zlib').deflateSync(raw);
+  const compressed = deflateSync(raw);
 
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = Buffer.alloc(13);
