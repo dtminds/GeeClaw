@@ -5,7 +5,8 @@
   "packageManager": "npm@11.6.2",
   "scripts": {
     "clean": "node ./clean-node-modules.mjs",
-    "install:runtime": "node ./install-runtime.mjs"
+    "install:runtime": "node ./install-runtime.mjs",
+    "prune": "node ./prune-runtime.mjs"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc.9",

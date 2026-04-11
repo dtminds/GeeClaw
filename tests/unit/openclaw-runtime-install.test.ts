@@ -6,9 +6,11 @@ const originalPlatform = process.platform;
 const {
   mockSpawn,
   mockExistsSync,
+  mockPruneRuntime,
 } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockExistsSync: vi.fn(() => false),
+  mockPruneRuntime: vi.fn(() => Promise.resolve(0)),
 }));
 
 function setPlatform(platform: string) {
@@ -52,6 +54,10 @@ vi.mock('node:fs', async () => {
   };
 });
 
+vi.mock('../../openclaw-runtime/prune-runtime.mjs', () => ({
+  pruneRuntime: mockPruneRuntime,
+}));
+
 describe('openclaw-runtime install script', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -77,5 +83,41 @@ describe('openclaw-runtime install script', () => {
         shell: true,
       }),
     );
+    expect(mockPruneRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('still prunes the runtime after npm ci falls back to npm install', async () => {
+    const { installRuntime } = await import('../../openclaw-runtime/install-runtime.mjs');
+
+    mockExistsSync.mockReturnValue(true);
+    mockSpawn
+      .mockImplementationOnce(() => {
+        const child = new EventEmitter() as EventEmitter;
+        setTimeout(() => {
+          child.emit('exit', 1);
+        }, 0);
+        return child;
+      })
+      .mockImplementationOnce(() => createSuccessfulChildProcess());
+
+    await installRuntime();
+
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      1,
+      'npm.cmd',
+      ['ci', '--omit=peer', '--no-audit', '--no-fund'],
+      expect.objectContaining({
+        shell: true,
+      }),
+    );
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      2,
+      'npm.cmd',
+      ['install', '--omit=peer', '--no-audit', '--no-fund', '--prefer-offline'],
+      expect.objectContaining({
+        shell: true,
+      }),
+    );
+    expect(mockPruneRuntime).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,6 +18,7 @@
 ```bash
 pnpm run openclaw-runtime:prepare
 pnpm run openclaw-runtime:install
+pnpm run openclaw-runtime:prune
 pnpm run openclaw-runtime:clean
 ```
 
@@ -39,12 +40,35 @@ pnpm run openclaw-runtime:clean
 - 优先跑 `npm ci`
 - 如果 `package-lock.json` 和 `package.json` 不匹配，或 `npm ci` 失败，再回退到 `npm install --prefer-offline`
 - 把 npm cache 固定到本目录下的 `.npm-cache/`
+- 安装完成后执行一次保守裁剪，删除已确认不参与运行的文档/静态资源目录
 
 什么时候用：
 
 - 你改了 [`openclaw-runtime/package.json`](./package.json)
 - 你更新了 [`openclaw-runtime/package-lock.json`](./package-lock.json)
 - 你想重新安装一份干净的 runtime
+
+### `prune-runtime.mjs`
+
+职责：
+
+- 删除一小批已确认不参与运行的文档目录和静态资源
+- 当前只做保守裁剪，不删除任何 `.node`、`.dylib` 或其他运行时原生库
+- 主要参考 `nexu` 的 runtime 安装后清理思路，但范围更保守
+
+当前会裁剪的内容包括：
+
+- 若干第三方依赖的 `docs/`
+- `openclaw/docs/assets`
+- `openclaw/docs/images`
+- `openclaw/docs/zh-CN`
+- `openclaw/docs/ja-JP`
+
+不会裁剪：
+
+- `openclaw/docs/reference/templates/`
+- 任何运行时原生二进制
+- 任何 OpenClaw extension 源码目录
 
 ### `ensure-runtime.mjs`
 

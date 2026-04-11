@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { pruneRuntime } from './prune-runtime.mjs';
 
 const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
 const lockfilePath = path.join(runtimeDir, 'package-lock.json');
@@ -47,6 +48,7 @@ export async function installRuntime() {
   if (fs.existsSync(lockfilePath)) {
     try {
       await run(npmCommand, ['ci', ...installArgs]);
+      await pruneRuntime();
       return;
     } catch (error) {
       console.warn('openclaw-runtime npm ci failed, falling back to npm install --prefer-offline.');
@@ -55,6 +57,7 @@ export async function installRuntime() {
   }
 
   await run(npmCommand, ['install', ...installArgs, '--prefer-offline']);
+  await pruneRuntime();
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
