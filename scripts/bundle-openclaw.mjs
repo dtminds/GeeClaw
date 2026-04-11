@@ -223,6 +223,7 @@ if (bundleSource.mode === 'runtime-install') {
   // 4b. Collect extra packages required by GeeClaw's Electron main process that
   // are not part of OpenClaw's dependency graph, but are resolved from the
   // OpenClaw context at runtime.
+  // NOTE: If adding packages here, also add them to openclaw-runtime/package.json
   const EXTRA_BUNDLED_PACKAGES = [
     '@whiskeysockets/baileys',
   ];
