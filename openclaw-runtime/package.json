@@ -1,0 +1,17 @@
+{
+  "name": "openclaw-runtime",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "clean": "node ./clean-node-modules.mjs",
+    "install:runtime": "node ./install-runtime.mjs"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "openclaw": "2026.4.9"
+  },
+  "overrides": {
+    "https-proxy-agent": "7.0.6"
+  }
+}

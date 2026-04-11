@@ -327,6 +327,7 @@ pnpm run verify           # 运行 lint + typecheck + 单元测试
 
 # 构建与打包
 pnpm run build:vite       # 仅构建前端
+pnpm run openclaw-runtime:install  # 刷新打包使用的独立 OpenClaw runtime
 pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包
@@ -338,6 +339,8 @@ pnpm package:linux        # 为 Linux 打包
 ### 自动更新发布日志
 
 准备打包发布前，请先更新 [`resources/release-notes.md`](resources/release-notes.md)。`electron-builder` 会把这份 Markdown 写入自动更新元数据，GeeClaw 检测到新版本时就能在启动弹窗里直接显示更新日志。
+
+现在打包会优先使用仓库内的 `openclaw-runtime/` 独立安装结果，而不是直接依赖 workspace 的 `pnpm` 虚拟仓库结构。这样可以保留 OpenClaw 自己的安装期脚本，也能降低 release 构建对 `pnpm` 布局细节的耦合。
 
 未发布到 npm 的 OpenClaw plugin 也可以直接放到
 `plugins/openclaw/<plugin-id>/` 下参与打包，而不需要安装到应用顶层

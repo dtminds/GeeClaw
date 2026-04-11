@@ -326,6 +326,7 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
+pnpm run openclaw-runtime:install  # Refresh the isolated OpenClaw runtime used for packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
@@ -337,6 +338,8 @@ pnpm package:linux        # Package for Linux
 ### Release Notes For Auto-Update
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
+
+Packaging now prefers a repo-local `openclaw-runtime/` install over the workspace `pnpm` graph. This keeps OpenClaw's own install-time scripts intact and makes release builds less dependent on `pnpm` virtual-store layout details.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The
