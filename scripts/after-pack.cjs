@@ -500,6 +500,40 @@ function cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch) {
 }
 exports.cleanupExtensionNativePlatformPackages = cleanupExtensionNativePlatformPackages;
 
+const DESKTOP_SIGNING_RISK_TARGETS = {
+  darwin: {
+    arm64: [
+      'node_modules/@tloncorp/tlon-skill-darwin-arm64/tlon',
+    ],
+    x64: [
+      'node_modules/@tloncorp/tlon-skill-darwin-x64/tlon',
+    ],
+  },
+};
+
+function cleanupDesktopSigningRiskTargets(openclawRoot, platform, arch) {
+  const targets = DESKTOP_SIGNING_RISK_TARGETS[platform]?.[arch];
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const relativeTarget of targets) {
+    const fullPath = join(openclawRoot, relativeTarget);
+    if (!existsSync(fullPath)) {
+      continue;
+    }
+    try {
+      rmSync(fullPath, { force: true });
+      removed++;
+    } catch {
+      // Keep packaging resilient if an optional file cannot be removed.
+    }
+  }
+  return removed;
+}
+exports.cleanupDesktopSigningRiskTargets = cleanupDesktopSigningRiskTargets;
+
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
 // without ever assigning `exports.default`, leaving module.exports === undefined.
@@ -847,6 +881,11 @@ exports.default = async function afterPack(context) {
   const extensionNativeRemoved = cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch);
   if (extensionNativeRemoved > 0) {
     console.log(`[after-pack] ✅ Removed ${extensionNativeRemoved} non-target native packages from built-in extension node_modules.`);
+  }
+
+  const signingRiskRemoved = cleanupDesktopSigningRiskTargets(openclawRoot, platform, arch);
+  if (signingRiskRemoved > 0) {
+    console.log(`[after-pack] ✅ Removed ${signingRiskRemoved} known desktop signing blocker(s).`);
   }
 
   const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');
