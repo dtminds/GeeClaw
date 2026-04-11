@@ -19,10 +19,6 @@ import 'zx/globals';
 import windowsPaths from './lib/windows-paths.cjs';
 import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import { resolveOpenClawBundleSource } from './lib/openclaw-bundle-source.mjs';
-import {
-  findOpenClawDoctorPatchRelativePath,
-  patchOpenClawDoctorBundledRuntimeDepsSource,
-} from '../shared/openclaw-doctor-patch.js';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -894,32 +890,6 @@ function patchBundledRuntime(outputDir) {
     echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
   }
 
-  const distDir = path.join(outputDir, 'dist');
-  const doctorRelativePath = findOpenClawDoctorPatchRelativePath(
-    fs.existsSync(distDir)
-      ? fs.readdirSync(distDir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name)
-      : [],
-    (candidateName) => fs.readFileSync(path.join(distDir, candidateName), 'utf8'),
-  );
-  if (!doctorRelativePath) {
-    echo`   ⚠️  Skipped doctor deps patch: target file not found`;
-    return;
-  }
-
-  const doctorTarget = path.join(distDir, doctorRelativePath);
-  const current = fs.readFileSync(doctorTarget, 'utf8');
-  const result = patchOpenClawDoctorBundledRuntimeDepsSource(current);
-  if (!result.matched) {
-    echo`   ⚠️  Skipped doctor deps patch: expected source snippet not found`;
-    return;
-  }
-
-  if (!result.changed) {
-    return;
-  }
-
-  fs.writeFileSync(doctorTarget, result.source, 'utf8');
-  echo`   🩹 Patched bundled doctor deps guard`;
 }
 
 patchBrokenModules(outputNodeModules);

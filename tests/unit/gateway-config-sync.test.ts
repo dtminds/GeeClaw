@@ -251,7 +251,7 @@ describe('prepareGatewayLaunchContext', () => {
     }
   });
 
-  it('patches doctor bundled runtime-deps repair to respect disabled bundled plugins', async () => {
+  it('does not rewrite bundled doctor sources during launch preparation', async () => {
     homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
     openclawRuntimeDir = mkdtempSync(join(tmpdir(), 'geeclaw-openclaw-'));
@@ -288,11 +288,9 @@ describe('prepareGatewayLaunchContext', () => {
     try {
       await prepareGatewayLaunchContext(28788);
 
-      const patchedDoctorSource = readFileSync(doctorPatchTarget, 'utf-8');
-      expect(patchedDoctorSource).toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS');
-      expect(patchedDoctorSource).toContain(
-        'if (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;',
-      );
+      const bundledDoctorSource = readFileSync(doctorPatchTarget, 'utf-8');
+      expect(bundledDoctorSource).not.toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS');
+      expect(bundledDoctorSource).not.toContain('bundledPluginsDisabledRaw');
     } finally {
       rmSync(openclawRuntimeDir, { recursive: true, force: true });
       rmSync(openclawConfigDir, { recursive: true, force: true });
@@ -487,7 +485,7 @@ describe('prepareGatewayLaunchContext', () => {
 
       const launchContext = await launchPromise;
       expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
-      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       expect(launchContext.gatewayArgs).toEqual([
         '--profile',
         'geeclaw',
@@ -558,7 +556,7 @@ describe('prepareGatewayLaunchContext', () => {
       if (resolved) {
         const launchContext = await launchPromise;
         expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
-        expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
+        expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       }
     } finally {
       exitHandler?.(0);
@@ -615,7 +613,7 @@ describe('prepareGatewayLaunchContext', () => {
 
       const launchContext = await launchPromise;
       expect(launchContext.forkEnv.OPENCLAW_SKIP_CHANNELS).toBe('');
-      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       expect(launchContext.channelStartupSummary).toBe('enabled(discord)');
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });

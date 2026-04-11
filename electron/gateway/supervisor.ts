@@ -583,7 +583,6 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
       OPENCLAW_STATE_DIR: openclawConfigDir,
       OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(openclawConfigDir),
       OPENCLAW_GATEWAY_PORT: String(PORTS.OPENCLAW_GATEWAY),
-      OPENCLAW_DISABLE_BUNDLED_PLUGINS: '1',
       OPENCLAW_NO_RESPAWN: '1',
     };
 
