@@ -6,16 +6,15 @@ import { describe, expect, it } from 'vitest';
 describe('installer.nsh', () => {
   const installer = readFileSync(join(process.cwd(), 'scripts/installer.nsh'), 'utf8');
 
-  it('keeps the custom app-running check aligned with electron-builder safeguards', () => {
-    expect(installer).toContain('!include "getProcessInfo.nsh"');
-    expect(installer).toContain('${GetProcessInfo} 0 $pid $1 $2 $3 $4');
-    expect(installer).toContain('${if} $3 != "${APP_EXECUTABLE_FILENAME}"');
-    expect(installer).toContain("StartsWith('${INSTALL_DIR}', 'CurrentCultureIgnoreCase')");
+  it('kills lingering processes from the existing install directory before overwrite', () => {
+    expect(installer).toContain("Get-CimInstance -ClassName Win32_Process");
+    expect(installer).toContain("StartsWith('$INSTDIR', [System.StringComparison]::OrdinalIgnoreCase)");
+    expect(installer).toContain('Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue');
   });
 
-  it('adds a compatibility fallback when an old uninstaller exits non-zero', () => {
+  it('allows installation to continue when an old uninstaller returns non-zero', () => {
     expect(installer).toContain('!macro customUnInstallCheck');
-    expect(installer).toContain('Old GeeClaw uninstaller exited with code $R0');
-    expect(installer).toContain('"$installationDir"');
+    expect(installer).toContain('Old GeeClaw uninstaller exited with code $R0. Continuing installation...');
+    expect(installer).toContain('ClearErrors');
   });
 });
