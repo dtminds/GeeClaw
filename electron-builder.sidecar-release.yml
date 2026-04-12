@@ -1,0 +1,17 @@
+extends: ./electron-builder.yml
+
+# Release jobs that consume a prebuilt OpenClaw sidecar should not ask
+# electron-builder to scan the raw build/openclaw tree at all.
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*"
+      - "!icons/*.md"
+      - "!icons/*.svg"
+      - "!bin/**"
+      - "!cli/**"
+      - "!managed-bin/**"
+      - "!screenshot/**"
+  - from: build/preinstalled-skills/
+    to: skills/

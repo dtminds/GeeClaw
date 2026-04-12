@@ -395,7 +395,7 @@ cp /tmp/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-version.json \
 ```bash
 pnpm run openclaw-sidecar:download -- --target darwin-arm64
 pnpm run package:release:resources
-pnpm exec electron-builder --mac --arm64 --dir --config.mac.identity=null
+pnpm exec electron-builder --config electron-builder.sidecar-release.yml --mac --arm64 --dir --config.mac.identity=null
 ```
 
 - 验证其他目标时，把 `darwin-arm64` 换成 `darwin-x64` 或 `win32-x64`。
