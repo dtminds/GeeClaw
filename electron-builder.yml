@@ -1,7 +1,7 @@
 appId: app.dtminds.geeclaw
 productName: GeeClaw
 copyright: Copyright © 2026 GeeClaw
-compression: maximum
+compression: normal
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 directories:

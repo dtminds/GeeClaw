@@ -119,9 +119,4 @@ pnpm run openclaw-runtime:clean
 
 ## 为什么要这样做
 
-当前 GeeClaw 的旧方案有两个天然脆弱点：
-
-1. 它依赖 `pnpm` 的虚拟 store 结构，打包脚本必须自己推导整棵依赖图。
-2. 它绕过了 OpenClaw 包本身的安装期副作用，尤其是 bundled plugins 的安装与修复逻辑。
-
 独立 runtime 的收益是把“依赖安装”还给包管理器，把“打包拷贝”限制为纯文件搬运。
