@@ -8,7 +8,10 @@ describe('installer.nsh', () => {
 
   it('kills lingering processes from the existing install directory before overwrite', () => {
     expect(installer).toContain("Get-CimInstance -ClassName Win32_Process");
-    expect(installer).toContain("StartsWith('$INSTDIR', [System.StringComparison]::OrdinalIgnoreCase)");
+    expect(installer).toContain('GetCurrentProcessId()');
+    expect(installer).toContain('SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR")');
+    expect(installer).toContain('$$_.ProcessId -ne $R2');
+    expect(installer).toContain("$$env:TARGET_INSTDIR.TrimEnd('\\\\') + '\\\\'");
     expect(installer).toContain('Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue');
   });
 
