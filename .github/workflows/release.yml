@@ -26,24 +26,21 @@ jobs:
             platform: mac
             arch: arm64
             sidecar_target: darwin-arm64
-            build_script: package:mac:arm64
-            release_build_script: package:release:mac:arm64
+            build_script: package:release:mac:arm64
             artifact_name: release-mac-arm64
             job_name: release-mac-arm64
           - os: macos-15-intel
             platform: mac
             arch: x64
             sidecar_target: darwin-x64
-            build_script: package:mac:x64
-            release_build_script: package:release:mac:x64
+            build_script: package:release:mac:x64
             artifact_name: release-mac-x64
             job_name: release-mac-x64
           - os: windows-latest
             platform: win
             arch: x64
             sidecar_target: win32-x64
-            build_script: package:win
-            release_build_script: package:release:win
+            build_script: package:release:win
             artifact_name: release-win
             job_name: release-win
           # Temporarily disable Linux release builds.
@@ -95,14 +92,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
-      - name: Restore npm cache for openclaw-runtime installs
-        uses: actions/cache@v4
-        with:
-          path: openclaw-runtime/.npm-cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-openclaw-runtime-npm-cache-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-openclaw-runtime-npm-cache-
-
       - name: Restore Electron build caches
         if: matrix.platform == 'mac'
         uses: actions/cache@v4
@@ -117,22 +106,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Detect pinned OpenClaw sidecar
-        id: sidecar
+      - name: Require pinned OpenClaw sidecar for release packaging
         shell: bash
+        env:
+          SIDECAR_TARGET: ${{ matrix.sidecar_target }}
         run: |
-          if node -e "const fs=require('fs'); const p='runtime-artifacts/openclaw-sidecar/version.json'; if (!fs.existsSync(p)) process.exit(1); const m=JSON.parse(fs.readFileSync(p,'utf8')); process.exit(m && m.enabled === true && typeof m.version === 'string' && typeof m.releaseTag === 'string' ? 0 : 1)"; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
+          node --input-type=module -e "import { readOpenClawSidecarVersionManifest, requirePinnedOpenClawSidecarAsset } from './scripts/lib/openclaw-sidecar-artifacts.mjs'; const manifest = readOpenClawSidecarVersionManifest(process.cwd()); const asset = requirePinnedOpenClawSidecarAsset(manifest, process.env.SIDECAR_TARGET); console.log(\`Using pinned OpenClaw sidecar \${manifest.version} for \${process.env.SIDECAR_TARGET}: \${asset.name}\`);"
 
-      - name: Download pinned OpenClaw sidecar (single-target jobs)
-        if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'mac'
-        run: pnpm run openclaw-sidecar:download -- --target ${{ matrix.sidecar_target }}
-
-      - name: Download pinned OpenClaw sidecar (Windows job)
-        if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'win'
+      - name: Download pinned OpenClaw sidecar
         run: pnpm run openclaw-sidecar:download -- --target ${{ matrix.sidecar_target }}
 
       - name: Download uv binaries for macOS
@@ -181,11 +162,7 @@ jobs:
         run: |
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
-          BUILD_SCRIPT="${{ matrix.build_script }}"
-          if [[ "${{ steps.sidecar.outputs.enabled }}" == "true" ]]; then
-            BUILD_SCRIPT="${{ matrix.release_build_script }}"
-          fi
-          pnpm run "${BUILD_SCRIPT}"
+          pnpm run "${{ matrix.build_script }}"
 
       # Windows specific steps
       - name: Build Windows
@@ -193,12 +170,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BUILD_SCRIPT="${{ matrix.build_script }}"
-          if [[ "${{ steps.sidecar.outputs.enabled }}" == "true" ]]; then
-            BUILD_SCRIPT="${{ matrix.release_build_script }}"
-          fi
-          pnpm run "${BUILD_SCRIPT}"
+        run: pnpm run "${{ matrix.build_script }}"
 
       # Temporarily disable Linux release builds.
       # Restore by uncommenting the step below.

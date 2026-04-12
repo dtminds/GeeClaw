@@ -61,6 +61,7 @@ describe('openclaw sidecar artifact manifest helpers', () => {
     const {
       getOpenClawSidecarAsset,
       getOpenClawSidecarAssetDownloadUrl,
+      requirePinnedOpenClawSidecarAsset,
       resolveOpenClawSidecarTarget,
     } = await import('../../scripts/lib/openclaw-sidecar-artifacts.mjs');
 
@@ -99,6 +100,30 @@ describe('openclaw sidecar artifact manifest helpers', () => {
     );
     expect(getOpenClawSidecarAssetDownloadUrl(manifest, 'win32-x64')).toBe(
       'https://github.com/dtminds/GeeClaw/releases/download/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz',
+    );
+    expect(requirePinnedOpenClawSidecarAsset(manifest, 'win32-x64')).toEqual({
+      name: 'openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz',
+      sha256: 'fedcba9876543210',
+    });
+  });
+
+  it('rejects disabled or incomplete pinned manifests for required sidecar targets', async () => {
+    const { requirePinnedOpenClawSidecarAsset } = await import('../../scripts/lib/openclaw-sidecar-artifacts.mjs');
+
+    expect(() => requirePinnedOpenClawSidecarAsset({
+      enabled: false,
+      version: '2026.4.10-r1',
+      releaseTag: 'openclaw-sidecar-v2026.4.10-r1',
+      assets: {},
+    }, 'darwin-arm64')).toThrow('OpenClaw sidecar manifest is disabled.');
+
+    expect(() => requirePinnedOpenClawSidecarAsset({
+      enabled: true,
+      version: '2026.4.10-r1',
+      releaseTag: 'openclaw-sidecar-v2026.4.10-r1',
+      assets: {},
+    }, 'darwin-arm64')).toThrow(
+      'OpenClaw sidecar manifest is missing asset metadata for darwin-arm64.',
     );
   });
 });

@@ -112,6 +112,11 @@ export function getOpenClawSidecarAsset(manifest, target) {
   };
 }
 
+export function requirePinnedOpenClawSidecarAsset(manifest, target) {
+  const pinnedManifest = assertPinnedOpenClawSidecarManifest(manifest);
+  return getOpenClawSidecarAsset(pinnedManifest, target);
+}
+
 export function getOpenClawSidecarAssetDownloadUrl(manifest, target) {
   const asset = getOpenClawSidecarAsset(manifest, target);
   const { releaseTag, repo } = assertPinnedOpenClawSidecarManifest(manifest);
