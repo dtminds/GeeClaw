@@ -74,28 +74,31 @@ describe('openclaw sidecar artifact manifest helpers', () => {
           name: 'openclaw-sidecar-2026.4.10-r1-darwin-x64.tar.gz',
           sha256: '0123456789abcdef',
         },
-        'win32-arm64': {
-          name: 'openclaw-sidecar-2026.4.10-r1-win32-arm64.tar.gz',
+        'win32-x64': {
+          name: 'openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz',
           sha256: 'fedcba9876543210',
         },
       },
     };
 
     expect(resolveOpenClawSidecarTarget('darwin', 'x64')).toBe('darwin-x64');
-    expect(resolveOpenClawSidecarTarget('win32', 'arm64')).toBe('win32-arm64');
+    expect(resolveOpenClawSidecarTarget('win32', 'x64')).toBe('win32-x64');
+    expect(() => resolveOpenClawSidecarTarget('win32', 'arm64')).toThrow(
+      'Unsupported OpenClaw sidecar target: win32-arm64',
+    );
     expect(getOpenClawSidecarAsset(manifest, 'darwin-x64')).toEqual({
       name: 'openclaw-sidecar-2026.4.10-r1-darwin-x64.tar.gz',
       sha256: '0123456789abcdef',
     });
-    expect(getOpenClawSidecarAsset(manifest, 'win32-arm64')).toEqual({
-      name: 'openclaw-sidecar-2026.4.10-r1-win32-arm64.tar.gz',
+    expect(getOpenClawSidecarAsset(manifest, 'win32-x64')).toEqual({
+      name: 'openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz',
       sha256: 'fedcba9876543210',
     });
     expect(getOpenClawSidecarAssetDownloadUrl(manifest, 'darwin-x64')).toBe(
       'https://github.com/dtminds/GeeClaw/releases/download/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-2026.4.10-r1-darwin-x64.tar.gz',
     );
-    expect(getOpenClawSidecarAssetDownloadUrl(manifest, 'win32-arm64')).toBe(
-      'https://github.com/dtminds/GeeClaw/releases/download/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-2026.4.10-r1-win32-arm64.tar.gz',
+    expect(getOpenClawSidecarAssetDownloadUrl(manifest, 'win32-x64')).toBe(
+      'https://github.com/dtminds/GeeClaw/releases/download/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz',
     );
   });
 });

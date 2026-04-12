@@ -7,7 +7,6 @@ export const GENERATED_OPENCLAW_SIDECAR_VERSION_PATH = path.join('build', 'openc
 export const SUPPORTED_OPENCLAW_SIDECAR_TARGETS = new Set([
   'darwin-arm64',
   'darwin-x64',
-  'win32-arm64',
   'win32-x64',
 ]);
 

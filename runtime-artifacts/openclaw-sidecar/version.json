@@ -16,12 +16,6 @@
       "size": 117131513,
       "openclawVersion": "2026.4.10"
     },
-    "win32-arm64": {
-      "name": "openclaw-sidecar-2026.4.10-r1-win32-arm64.tar.gz",
-      "sha256": "3feca773bbe75c3b292bf2bc11b2b60d1011ce42f4152a424752db39ee4bba98",
-      "size": 159889600,
-      "openclawVersion": "2026.4.10"
-    },
     "win32-x64": {
       "name": "openclaw-sidecar-2026.4.10-r1-win32-x64.tar.gz",
       "sha256": "2220bcafa908216db95abf343e5d121564071c87930123d830a3aadf13652e8c",
