@@ -50,7 +50,13 @@ function isHiddenToolOnlyMessage(message: RawMessage): boolean {
       return false;
     }
 
-    if ((block.type === 'tool_use' || block.type === 'toolCall') && shouldHideToolTrace(block.name)) {
+    if (
+      (block.type === 'tool_use'
+        || block.type === 'toolCall'
+        || block.type === 'tool_result'
+        || block.type === 'toolResult')
+      && shouldHideToolTrace(block.name)
+    ) {
       sawHiddenToolBlock = true;
       continue;
     }
@@ -77,9 +83,7 @@ export function buildChatItems({
       isStreaming: false,
     }));
 
-  const visibleToolMessages = toolMessages.filter((message) => !isHiddenToolOnlyMessage(message));
-
-  const maxLen = Math.max(streamSegments.length, visibleToolMessages.length);
+  const maxLen = Math.max(streamSegments.length, toolMessages.length);
   for (let index = 0; index < maxLen; index += 1) {
     const segment = streamSegments[index];
     if (segment && segment.text.trim()) {
@@ -90,8 +94,8 @@ export function buildChatItems({
       });
     }
 
-    const toolMessage = visibleToolMessages[index];
-    if (toolMessage) {
+    const toolMessage = toolMessages[index];
+    if (toolMessage && !isHiddenToolOnlyMessage(toolMessage)) {
       items.push({
         key: messageKey(toolMessage, messages.length + index),
         message: toolMessage,
