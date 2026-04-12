@@ -50,6 +50,8 @@ jobs:
   package-macos-dir:
     runs-on: macos-latest
     timeout-minutes: 45
+    env:
+      CACHE_ARCH: arm64
 
     steps:
       - name: Checkout code
@@ -69,9 +71,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openclaw-runtime/.npm-cache
-          key: desktop-ci-dist-lite-npm-${{ runner.os }}-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
+          key: ${{ runner.os }}-${{ env.CACHE_ARCH }}-openclaw-runtime-npm-cache-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
           restore-keys: |
-            desktop-ci-dist-lite-npm-${{ runner.os }}-
+            ${{ runner.os }}-${{ env.CACHE_ARCH }}-openclaw-runtime-npm-cache-
 
       - name: Restore Electron build caches
         uses: actions/cache@v4
@@ -79,9 +81,9 @@ jobs:
           path: |
             ~/Library/Caches/electron
             ~/Library/Caches/electron-builder
-          key: desktop-ci-dist-lite-electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'electron-builder.yml') }}
+          key: ${{ runner.os }}-${{ env.CACHE_ARCH }}-electron-builder-cache-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'electron-builder.yml') }}
           restore-keys: |
-            desktop-ci-dist-lite-electron-${{ runner.os }}-
+            ${{ runner.os }}-${{ env.CACHE_ARCH }}-electron-builder-cache-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

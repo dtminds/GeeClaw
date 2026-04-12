@@ -61,7 +61,7 @@ export function MainLayout() {
     : clampSidebarWidth(sidebarWidth);
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden">
+    <div data-testid="main-layout" className="app-shell flex h-screen overflow-hidden">
       <div
         data-testid="sidebar-layout-pane"
         className="relative h-full shrink-0"

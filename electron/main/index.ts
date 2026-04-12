@@ -4,13 +4,13 @@
  */
 import { app, BrowserWindow, nativeImage, session } from 'electron';
 import type { Server } from 'node:http';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray, updateTrayStatus } from './tray';
 import { createMenu } from './menu';
 
-import { appUpdater, registerUpdateHandlers } from './updater';
+import { getAppUpdater, registerUpdateHandlers } from './updater';
 import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
@@ -66,6 +66,11 @@ if (process.platform === 'linux') {
   app.setDesktopName('geeclaw.desktop');
 }
 
+const e2eUserDataDir = process.env.GEECLAW_USER_DATA_DIR?.trim();
+if (e2eUserDataDir) {
+  app.setPath('userData', resolve(e2eUserDataDir));
+}
+
 // Prevent multiple instances of the app from running simultaneously.
 // Without this, two instances each spawn their own gateway process on the
 // same port, then each treats the other's gateway as "orphaned" and kills
@@ -109,6 +114,7 @@ const gatewayManager = new GatewayManager();
 const clawHubService = new ClawHubService();
 const cliMarketplaceService = new CliMarketplaceService();
 const hostEventBus = new HostEventBus();
+const appUpdater = getAppUpdater();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;

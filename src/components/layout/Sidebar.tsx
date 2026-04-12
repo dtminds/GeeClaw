@@ -60,16 +60,18 @@ interface NavItemProps {
   to: string;
   icon: React.ReactNode;
   label: string;
+  testId?: string;
   badge?: string;
   trailing?: React.ReactNode;
   collapsed?: boolean;
   onClick?: () => void;
 }
 
-function NavItem({ to, icon, label, badge, trailing, collapsed, onClick }: NavItemProps) {
+function NavItem({ to, icon, label, testId, badge, trailing, collapsed, onClick }: NavItemProps) {
   return (
     <NavLink
       to={to}
+      data-testid={testId}
       onClick={onClick}
       className={({ isActive }) =>
         cn(
@@ -193,10 +195,10 @@ export function Sidebar() {
   }, new Map<string, (typeof desktopSessions)[number]>());
 
   const navItems = [
-    { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard') },
+    { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard'), testId: 'sidebar-nav-dashboard' },
     { to: '/cron', icon: <SidebarGlyph icon={TimeScheduleIcon} />, label: t('sidebar.cronTasks') },
-    { to: '/skills', icon: <SidebarGlyph icon={ThreeDViewIcon} />, label: t('sidebar.skills') },
-    { to: '/channels', icon: <SidebarGlyph icon={SmartPhone03Icon} />, label: t('sidebar.channels'), trailing: channelsTrailing },
+    { to: '/skills', icon: <SidebarGlyph icon={ThreeDViewIcon} />, label: t('sidebar.skills'), testId: 'sidebar-nav-skills' },
+    { to: '/channels', icon: <SidebarGlyph icon={SmartPhone03Icon} />, label: t('sidebar.channels'), testId: 'sidebar-nav-channels', trailing: channelsTrailing },
   ];
   return (
     <aside

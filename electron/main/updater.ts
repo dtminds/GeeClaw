@@ -2,9 +2,9 @@
  * Auto-Updater Module
  * Handles automatic application updates using electron-updater
  *
- * Update providers are configured in electron-builder.yml (OSS primary, GitHub fallback).
- * For prerelease channels, the feed URL is overridden at runtime
- * to point at the channel-specific OSS directory (e.g. /alpha/, /beta/, /rc/).
+ * Runtime updates are served from GeeClaw OSS via electron-updater's generic
+ * provider. We override the packaged config at runtime so each release channel
+ * and macOS architecture resolves against its own OSS directory.
  */
 import { BrowserWindow, app, ipcMain } from 'electron';
 import { createRequire } from 'node:module';
@@ -16,6 +16,17 @@ import type { UpdateInfo, ProgressInfo, UpdateDownloadedEvent } from 'electron-u
 /** Base CDN URL (without trailing channel path) */
 const OSS_BASE_URL = 'https://geeclaw.dtminds.com';
 const require = createRequire(__filename);
+type UpdateChannelSetting = 'stable' | 'beta' | 'dev';
+type FeedTarget = {
+  channel: string;
+  url: string;
+};
+type FeedTargetInput = {
+  version: string;
+  platform: NodeJS.Platform;
+  arch: string;
+  channel?: UpdateChannelSetting | string;
+};
 
 type AutoUpdaterType = typeof import('electron-updater').autoUpdater;
 
@@ -43,6 +54,27 @@ export interface UpdaterEvents {
 function detectChannel(version: string): string {
   const match = version.match(/-([a-zA-Z]+)/);
   return match ? match[1] : 'latest';
+}
+
+function normalizeUpdateChannel(channel: UpdateChannelSetting | string): string {
+  return channel === 'stable' ? 'latest' : channel;
+}
+
+function resolveMacFeedDirectory(arch: string): string {
+  return arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+}
+
+export function resolveFeedTarget(input: FeedTargetInput): FeedTarget {
+  const channel = input.channel
+    ? normalizeUpdateChannel(input.channel)
+    : detectChannel(input.version);
+
+  const baseUrl = `${OSS_BASE_URL}/${channel}`;
+  const url = input.platform === 'darwin'
+    ? `${baseUrl}/${resolveMacFeedDirectory(input.arch)}`
+    : baseUrl;
+
+  return { channel, url };
 }
 
 export class AppUpdater extends EventEmitter {
@@ -82,25 +114,33 @@ export class AppUpdater extends EventEmitter {
       debug: (msg: string) => logger.debug('[Updater]', msg),
     };
 
-    // Override feed URL so each channel resolves against its own CDN directory.
-    // Examples: latest -> /latest/latest-mac.yml, beta -> /beta/beta-mac.yml.
-    const version = app.getVersion();
-    const channel = detectChannel(version);
-    const feedUrl = `${OSS_BASE_URL}/${channel}`;
-
-    logger.info(`[Updater] Version: ${version}, channel: ${channel}, feedUrl: ${feedUrl}`);
-
-    // Set channel so electron-updater requests the correct yml filename.
-    // e.g. channel "alpha" → requests alpha-mac.yml, channel "latest" → requests latest-mac.yml
-    this.autoUpdater.channel = channel;
-
-    this.autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: feedUrl,
-      useMultipleRangeRequest: false,
-    });
+    this.applyFeedTarget({ version: app.getVersion() });
 
     this.setupListeners();
+  }
+
+  private applyFeedTarget(options: {
+    version: string;
+    channel?: UpdateChannelSetting | string;
+  }): void {
+    const autoUpdater = this.getAutoUpdaterOrThrow();
+    const feedTarget = resolveFeedTarget({
+      version: options.version,
+      platform: process.platform,
+      arch: process.arch,
+      channel: options.channel,
+    });
+
+    logger.info(
+      `[Updater] Version: ${options.version}, platform: ${process.platform}/${process.arch}, channel: ${feedTarget.channel}, feedUrl: ${feedTarget.url}`,
+    );
+
+    autoUpdater.channel = feedTarget.channel;
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: feedTarget.url,
+      useMultipleRangeRequest: false,
+    });
   }
 
   private getAutoUpdaterOrThrow(): AutoUpdaterType {
@@ -188,8 +228,7 @@ export class AppUpdater extends EventEmitter {
   }
 
   /**
-   * Check for updates.
-   * electron-updater automatically tries providers defined in electron-builder.yml in order.
+   * Check for updates against the configured OSS generic feed.
    *
    * In dev mode (not packed), autoUpdater.checkForUpdates() silently returns
    * null without emitting any events, so we must detect this and force a
@@ -289,8 +328,8 @@ export class AppUpdater extends EventEmitter {
   /**
    * Set update channel (stable, beta, dev)
    */
-  setChannel(channel: 'stable' | 'beta' | 'dev'): void {
-    this.getAutoUpdaterOrThrow().channel = channel;
+  setChannel(channel: UpdateChannelSetting): void {
+    this.applyFeedTarget({ version: app.getVersion(), channel });
   }
 
   /**
@@ -375,4 +414,9 @@ export function registerUpdateHandlers(
 }
 
 // Export singleton instance
-export const appUpdater = new AppUpdater();
+let appUpdaterInstance: AppUpdater | null = null;
+
+export function getAppUpdater(): AppUpdater {
+  appUpdaterInstance ??= new AppUpdater();
+  return appUpdaterInstance;
+}
