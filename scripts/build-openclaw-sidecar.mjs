@@ -132,6 +132,23 @@ function writeShaSums(sidecarRoot, fileManifest) {
   fs.writeFileSync(path.join(sidecarRoot, 'SHA256SUMS'), `${output}\n`, 'utf8');
 }
 
+export function createOpenClawSidecarManifest({
+  sidecarVersion,
+  openclawVersion,
+  target,
+  generatedAt,
+  fileManifest,
+}) {
+  return {
+    formatVersion: 1,
+    artifactVersion: sidecarVersion,
+    openclawVersion,
+    target,
+    generatedAt,
+    files: fileManifest,
+  };
+}
+
 export async function buildOpenClawSidecar({
   projectRoot = ROOT_DIR,
   target,
@@ -201,22 +218,14 @@ export async function buildOpenClawSidecar({
 
     const manifestPath = path.join(sidecarRoot, 'manifest.json');
     const generatedAt = new Date().toISOString();
-    writeJson(manifestPath, {
-      formatVersion: 1,
-      artifactVersion: sidecarVersion,
-      openclawVersion,
-      target: resolvedTarget.target,
-      generatedAt,
-    });
     const fileManifest = buildFileManifest(sidecarRoot);
-    writeJson(manifestPath, {
-      formatVersion: 1,
-      artifactVersion: sidecarVersion,
+    writeJson(manifestPath, createOpenClawSidecarManifest({
+      sidecarVersion,
       openclawVersion,
       target: resolvedTarget.target,
       generatedAt,
-      files: fileManifest,
-    });
+      fileManifest,
+    }));
     writeShaSums(sidecarRoot, buildFileManifest(sidecarRoot));
 
     execFileSync(resolveTarCommand(), ['-czf', assetPath, '-C', sidecarRoot, '.'], {
