@@ -78,14 +78,29 @@ describe('getOpenClawDir (development)', () => {
 
   it('prefers the downloaded prebuilt sidecar in development when explicitly enabled', async () => {
     process.env.GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR = '1';
+    const normalizedArch = process.arch === 'amd64' ? 'x64' : process.arch;
+    const supportedTarget = (
+      (process.platform === 'darwin' && (normalizedArch === 'arm64' || normalizedArch === 'x64'))
+      || (process.platform === 'win32' && normalizedArch === 'x64')
+    )
+      ? `${process.platform}-${normalizedArch}`
+      : null;
+
     mockExistsSync.mockImplementation((value: string) => (
-      value === '/repo/build/prebuilt-sidecar/darwin-arm64/openclaw.mjs'
+      supportedTarget !== null
+      && value === `/repo/build/prebuilt-sidecar/${supportedTarget}/openclaw.mjs`
     ));
 
     const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
 
-    expect(getOpenClawDir()).toBe('/repo/build/prebuilt-sidecar/darwin-arm64');
-    expect(getOpenClawEntryPath()).toBe('/repo/build/prebuilt-sidecar/darwin-arm64/openclaw.mjs');
+    if (supportedTarget === null) {
+      expect(getOpenClawDir()).toBe('/repo/openclaw-runtime/node_modules/openclaw');
+      expect(getOpenClawEntryPath()).toBe('/repo/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
+      return;
+    }
+
+    expect(getOpenClawDir()).toBe(`/repo/build/prebuilt-sidecar/${supportedTarget}`);
+    expect(getOpenClawEntryPath()).toBe(`/repo/build/prebuilt-sidecar/${supportedTarget}/openclaw.mjs`);
   });
 });
 
