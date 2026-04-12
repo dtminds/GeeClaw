@@ -214,6 +214,16 @@ describe('assistant-display', () => {
     expect(shouldRenderStandaloneToolResult(emptyToolResult, { showToolCalls: true })).toBe(false);
   });
 
+  it('never shows standalone process tool results', () => {
+    const message = {
+      role: 'toolresult',
+      toolName: 'process',
+      content: 'polling...',
+    } as unknown as RawMessage;
+
+    expect(shouldRenderStandaloneToolResult(message, { showToolCalls: true })).toBe(false);
+  });
+
   it('suppresses opaque JSON-only tool results instead of rendering raw payloads', () => {
     const message = {
       role: 'toolresult',
