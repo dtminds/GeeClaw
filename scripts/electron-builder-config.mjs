@@ -20,7 +20,9 @@ export function shouldUsePrebuiltOpenClawSidecar(env = process.env) {
   const lifecycleEvent = typeof env.npm_lifecycle_event === 'string'
     ? env.npm_lifecycle_event
     : '';
-  return lifecycleEvent.startsWith('package:release:');
+  return lifecycleEvent.startsWith('package:release:')
+    || lifecycleEvent === 'package:mac:dir:sidecar'
+    || lifecycleEvent === 'package:mac:dir:quick:sidecar';
 }
 
 export function buildElectronBuilderConfig(baseConfig, { usePrebuiltOpenClawSidecar = false } = {}) {

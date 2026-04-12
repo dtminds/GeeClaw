@@ -20,4 +20,13 @@ describe('electron-builder sidecar release config', () => {
       ],
     });
   });
+
+  it('enables prebuilt sidecar mode for the dedicated sidecar packaging lifecycles only', async () => {
+    const { shouldUsePrebuiltOpenClawSidecar } = await import('../../scripts/electron-builder-config.mjs');
+
+    expect(shouldUsePrebuiltOpenClawSidecar({ npm_lifecycle_event: 'package:mac:dir' })).toBe(false);
+    expect(shouldUsePrebuiltOpenClawSidecar({ npm_lifecycle_event: 'package:mac:dir:quick' })).toBe(false);
+    expect(shouldUsePrebuiltOpenClawSidecar({ npm_lifecycle_event: 'package:mac:dir:sidecar' })).toBe(true);
+    expect(shouldUsePrebuiltOpenClawSidecar({ npm_lifecycle_event: 'package:mac:dir:quick:sidecar' })).toBe(true);
+  });
 });

@@ -89,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build unsigned macOS app bundle
-        run: pnpm run package:mac:dir
+        run: pnpm run package:mac:dir:sidecar
 
       - name: Verify packaged desktop artifacts
         shell: bash
