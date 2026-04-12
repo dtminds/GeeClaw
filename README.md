@@ -394,7 +394,7 @@ To verify a sidecar release artifact locally before running the full release wor
 ```bash
 pnpm run openclaw-sidecar:download -- --target darwin-arm64
 pnpm run package:release:resources
-pnpm exec electron-builder --config electron-builder.sidecar-release.yml --mac --arm64 --dir --config.mac.identity=null
+GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
 ```
 
 - Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
