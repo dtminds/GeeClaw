@@ -15,8 +15,13 @@ describe('updater feed target', () => {
     });
   });
 
-  it('keeps non-mac platforms on the shared channel directory', () => {
+  it('keeps Windows on the shared channel directory so x64 packages keep updating on Windows on Arm', () => {
     expect(resolveFeedTarget({ version: '0.9.16-beta.3', platform: 'win32', arch: 'x64' })).toEqual({
+      channel: 'beta',
+      url: 'https://geeclaw.dtminds.com/beta',
+    });
+
+    expect(resolveFeedTarget({ version: '0.9.16-beta.3', platform: 'win32', arch: 'arm64' })).toEqual({
       channel: 'beta',
       url: 'https://geeclaw.dtminds.com/beta',
     });

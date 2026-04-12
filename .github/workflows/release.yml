@@ -40,8 +40,8 @@ jobs:
             job_name: release-mac-x64
           - os: windows-latest
             platform: win
-            arch: multi
-            sidecar_targets: win32-x64 win32-arm64
+            arch: x64
+            sidecar_target: win32-x64
             build_script: package:win
             release_build_script: package:release:win
             artifact_name: release-win
@@ -131,13 +131,9 @@ jobs:
         if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'mac'
         run: pnpm run openclaw-sidecar:download -- --target ${{ matrix.sidecar_target }}
 
-      - name: Download pinned OpenClaw sidecar (Windows multi-arch job)
+      - name: Download pinned OpenClaw sidecar (Windows job)
         if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'win'
-        shell: bash
-        run: |
-          for target in ${{ matrix.sidecar_targets }}; do
-            pnpm run openclaw-sidecar:download -- --target "$target"
-          done
+        run: pnpm run openclaw-sidecar:download -- --target ${{ matrix.sidecar_target }}
 
       - name: Download uv binaries for macOS
         if: matrix.platform == 'mac'
@@ -300,7 +296,6 @@ jobs:
             
             #### Windows
             - **Installer (x64)**: `GeeClaw-*-win-x64.exe`
-            - **Installer (ARM64)**: `GeeClaw-*-win-arm64.exe`
             
             ### 📝 Release Notes
             
@@ -488,8 +483,7 @@ jobs:
                   arm64: ($base + "/GeeClaw-" + $version + "-mac-arm64.dmg")
                 },
                 win: {
-                  x64: ($base + "/GeeClaw-" + $version + "-win-x64.exe"),
-                  arm64: ($base + "/GeeClaw-" + $version + "-win-arm64.exe")
+                  x64: ($base + "/GeeClaw-" + $version + "-win-x64.exe")
                 }
               },
               changelog: $changelog
