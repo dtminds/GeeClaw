@@ -16,90 +16,144 @@
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}.lnk"
 
+  ; Make stage logs visible on assisted installers (defaults to hidden).
+  SetDetailsPrint both
+  DetailPrint "Preparing installation..."
+  DetailPrint "Extracting ${PRODUCT_NAME} runtime files. This can take a few minutes on slower disks or while antivirus scanning is active."
+
   ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
 
   ${if} $R0 == 0
     ${if} ${isUpdated}
-      # allow app to exit without explicit kill
-      Sleep 1000
-      Goto doStopProcess
+      ; Auto-update: GeeClaw is already quitting via quitAndInstall(). Give the
+      ; before-quit cleanup path time to stop Gateway before forcing anything.
+      DetailPrint `Waiting for "${PRODUCT_NAME}" to finish shutting down...`
+      Sleep 8000
+      ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+      ${if} $R0 != 0
+        nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+        Pop $0
+        Pop $1
+        Goto done_killing
+      ${endIf}
     ${endIf}
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK doStopProcess
-    Quit
+
+    ${if} ${isUpdated}
+    ${else}
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK doStopProcess
+      Quit
+    ${endIf}
 
     doStopProcess:
     DetailPrint `Closing running "${PRODUCT_NAME}"...`
 
-    # Silently kill the process using nsProcess instead of taskkill / cmd.exe
-    ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+    ; Kill any process whose executable lives inside $INSTDIR. This covers the
+    ; main GeeClaw process plus helper children that can keep files locked.
+    System::Call 'kernel32::GetCurrentProcessId() i .R2'
+    System::Call 'kernel32::SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR") i .R3'
+    nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $R2 -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(($$env:TARGET_INSTDIR.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+    Pop $0
+    Pop $1
 
-    # to ensure that files are not "in-use"
-    Sleep 300
+    ${if} $0 != 0
+      ; PowerShell failed (policy restriction, etc.) — fall back to name-based kill.
+      nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
+      Pop $0
+      Pop $1
+    ${endIf}
 
-    # Retry counter
-    StrCpy $R1 0
+    ; Also kill the bundled Gateway in case it detached from the main process.
+    nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+    Pop $0
+    Pop $1
 
-    loop:
-      IntOp $R1 $R1 + 1
+    ; Give Windows / antivirus time to release handles.
+    Sleep 5000
+    DetailPrint "Processes terminated. Continuing installation..."
 
-      ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-      ${if} $R0 == 0
-        # wait to give a chance to exit gracefully
-        Sleep 1000
-        ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-
-        ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-        ${If} $R0 == 0
-          DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
-          Sleep 2000
-        ${else}
-          Goto not_running
-        ${endIf}
-      ${else}
-        Goto not_running
-      ${endIf}
-
-      # App likely running with elevated permissions.
-      # Ask user to close it manually
-      ${if} $R1 > 1
-        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY loop
-        Quit
-      ${else}
-        Goto loop
-      ${endIf}
-    not_running:
+    done_killing:
       ${nsProcess::Unload}
   ${endIf}
 
-  ; Even after GeeClaw.exe exits, bundled helper processes can keep files in
-  ; $INSTDIR locked until Windows finishes releasing their handles. Kill any
-  ; process whose executable lives under the target install directory.
+  ; Even if GeeClaw.exe was not detected as running, orphan helper processes
+  ; from a previous crash or unfinished update can still hold file locks.
   System::Call 'kernel32::GetCurrentProcessId() i .R2'
   System::Call 'kernel32::SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR") i .R3'
-  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $R2 -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(($$env:TARGET_INSTDIR.TrimEnd('\\') + '\\'), [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $R2 -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(($$env:TARGET_INSTDIR.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
   Pop $0
   Pop $1
 
-  ${if} $0 == 0
-    Sleep 2000
-  ${endIf}
+  ; Belt-and-suspenders cleanup for the main app and Gateway process names.
+  nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
+  Pop $0
+  Pop $1
+  nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+  Pop $0
+  Pop $1
+
+  ; Brief wait for handle release.
+  Sleep 2000
+
+  ; Release NSIS's CWD on $INSTDIR before trying to move the old install tree.
+  SetOutPath $TEMP
+
+  ; Move the existing install out of the way so the new payload can be copied
+  ; in even if the old tree still has read-only handles from AV / indexing.
+  IfFileExists "$INSTDIR\" 0 _instdir_clean
+    StrCpy $R8 0
+  _find_free_stale:
+    IfFileExists "$INSTDIR._stale_$R8\" 0 _found_free_stale
+    IntOp $R8 $R8 + 1
+    Goto _find_free_stale
+
+  _found_free_stale:
+    ClearErrors
+    Rename "$INSTDIR" "$INSTDIR._stale_$R8"
+    IfErrors 0 _stale_moved
+      nsExec::ExecToStack 'cmd.exe /c rd /s /q "$INSTDIR"'
+      Pop $0
+      Pop $1
+      Sleep 2000
+      CreateDirectory "$INSTDIR"
+      Goto _instdir_clean
+  _stale_moved:
+    CreateDirectory "$INSTDIR"
+  _instdir_clean:
+
+  ; Skip electron-builder's old-uninstaller retry loop. Once the blocking
+  ; processes are gone, the new installer can overwrite the existing tree.
+  DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString
+  DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
+  DeleteRegValue HKCU "${UNINSTALL_REGISTRY_KEY}" UninstallString
+  DeleteRegValue HKCU "${UNINSTALL_REGISTRY_KEY}" QuietUninstallString
+  !ifdef UNINSTALL_REGISTRY_KEY_2
+    DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}" UninstallString
+    DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}" QuietUninstallString
+    DeleteRegValue HKCU "${UNINSTALL_REGISTRY_KEY_2}" UninstallString
+    DeleteRegValue HKCU "${UNINSTALL_REGISTRY_KEY_2}" QuietUninstallString
+  !endif
 !macroend
 
 !macro customUnInstallCheck
   ${if} $R0 != 0
-    DetailPrint `Old GeeClaw uninstaller exited with code $R0. Continuing installation...`
+    DetailPrint "Old uninstaller exited with code $R0. Continuing with overwrite install..."
   ${endIf}
   ClearErrors
 !macroend
 
 !macro customUnInstallCheckCurrentUser
   ${if} $R0 != 0
-    DetailPrint `Old GeeClaw uninstaller (current user) exited with code $R0. Continuing installation...`
+    DetailPrint "Old uninstaller (current user) exited with code $R0. Continuing..."
   ${endIf}
   ClearErrors
 !macroend
 
 !macro customInstall
+  ; Async cleanup of stale directories left by the rename loop above.
+  IfFileExists "$INSTDIR._stale_0\" 0 _ci_stale_cleaned
+    ExecShell "" "cmd.exe" `/c ping -n 61 127.0.0.1 >nul & cd /d "$INSTDIR\.." & for /d %D in ("$INSTDIR._stale_*") do rd /s /q "%D"` SW_HIDE
+  _ci_stale_cleaned:
+
   ; Enable Windows long path support (Windows 10 1607+ / Windows 11).
   ; pnpm virtual store paths can exceed the default MAX_PATH limit of 260 chars.
   ; Writing to HKLM requires admin privileges; on per-user installs without
