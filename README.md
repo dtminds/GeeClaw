@@ -333,6 +333,8 @@ pnpm run build:vite       # Build frontend only
 pnpm run openclaw-runtime:prepare  # Ensure the isolated runtime exists for local development
 pnpm run openclaw-runtime:install  # Refresh the isolated OpenClaw runtime used for packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
+pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
+pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar into build/prebuilt-sidecar/
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
 pnpm package:mac          # Package for macOS
@@ -357,6 +359,8 @@ Before packaging a release, update [`resources/release-notes.md`](resources/rele
 Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and release bundling. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
 
 In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
+
+For release CI, GeeClaw can now consume a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json). Keep `enabled: false` until a draft sidecar release has been built and its generated `openclaw-sidecar-version.json` has been copied into that tracked pin file.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The

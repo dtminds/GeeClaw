@@ -25,19 +25,25 @@ jobs:
           - os: macos-15
             platform: mac
             arch: arm64
+            sidecar_target: darwin-arm64
             build_script: package:mac:arm64
+            release_build_script: package:release:mac:arm64
             artifact_name: release-mac-arm64
             job_name: release-mac-arm64
           - os: macos-15-intel
             platform: mac
             arch: x64
+            sidecar_target: darwin-x64
             build_script: package:mac:x64
+            release_build_script: package:release:mac:x64
             artifact_name: release-mac-x64
             job_name: release-mac-x64
           - os: windows-latest
             platform: win
             arch: multi
+            sidecar_targets: win32-x64 win32-arm64
             build_script: package:win
+            release_build_script: package:release:win
             artifact_name: release-win
             job_name: release-win
           # Temporarily disable Linux release builds.
@@ -111,6 +117,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Detect pinned OpenClaw sidecar
+        id: sidecar
+        shell: bash
+        run: |
+          if node -e "const fs=require('fs'); const p='runtime-artifacts/openclaw-sidecar/version.json'; if (!fs.existsSync(p)) process.exit(1); const m=JSON.parse(fs.readFileSync(p,'utf8')); process.exit(m && m.enabled === true && typeof m.version === 'string' && typeof m.releaseTag === 'string' ? 0 : 1)"; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download pinned OpenClaw sidecar (single-target jobs)
+        if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'mac'
+        run: pnpm run openclaw-sidecar:download -- --target ${{ matrix.sidecar_target }}
+
+      - name: Download pinned OpenClaw sidecar (Windows multi-arch job)
+        if: steps.sidecar.outputs.enabled == 'true' && matrix.platform == 'win'
+        shell: bash
+        run: |
+          for target in ${{ matrix.sidecar_targets }}; do
+            pnpm run openclaw-sidecar:download -- --target "$target"
+          done
+
       - name: Download uv binaries for macOS
         if: matrix.platform == 'mac'
         run: pnpm run uv:download:mac
@@ -146,6 +174,7 @@ jobs:
       # All artifacts are collected and published atomically in the publish job.
       - name: Build macOS
         if: matrix.platform == 'mac'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -156,14 +185,24 @@ jobs:
         run: |
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
-          pnpm run ${{ matrix.build_script }}
+          BUILD_SCRIPT="${{ matrix.build_script }}"
+          if [[ "${{ steps.sidecar.outputs.enabled }}" == "true" ]]; then
+            BUILD_SCRIPT="${{ matrix.release_build_script }}"
+          fi
+          pnpm run "${BUILD_SCRIPT}"
 
       # Windows specific steps
       - name: Build Windows
         if: matrix.platform == 'win'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run ${{ matrix.build_script }}
+        run: |
+          BUILD_SCRIPT="${{ matrix.build_script }}"
+          if [[ "${{ steps.sidecar.outputs.enabled }}" == "true" ]]; then
+            BUILD_SCRIPT="${{ matrix.release_build_script }}"
+          fi
+          pnpm run "${BUILD_SCRIPT}"
 
       # Temporarily disable Linux release builds.
       # Restore by uncommenting the step below.

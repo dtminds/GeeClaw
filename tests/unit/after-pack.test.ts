@@ -234,6 +234,30 @@ describe('after-pack bundled runtime sync', () => {
     expect(lstatSync(join(extNodeModules, 'magic-bytes.js')).isDirectory()).toBe(true);
   });
 
+  it('merges built-in extension packages into the top-level bundle when shared chunks need them', async () => {
+    const { syncBuiltInExtensionNodeModules } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-extension-merge-'));
+    tempDirs.push(openclawRoot);
+
+    mkdirSync(join(openclawRoot, 'node_modules'), { recursive: true });
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'telegram', 'node_modules');
+    mkdirSync(join(extNodeModules, '@scope', 'shared-helper'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@scope', 'shared-helper', 'package.json'),
+      '{"name":"@scope/shared-helper","version":"1.0.0"}\n',
+      'utf8',
+    );
+
+    const result = syncBuiltInExtensionNodeModules(openclawRoot, openclawRoot);
+
+    expect(result).toEqual({
+      extensionNodeModules: 1,
+      mergedPackages: 1,
+    });
+    expect(existsSync(join(openclawRoot, 'node_modules', '@scope', 'shared-helper', 'package.json'))).toBe(true);
+  });
+
   it('bundles compatibility runtime deps for plugins with undeclared workspace imports', async () => {
     const { getExtraBundledPluginPackages } = await import('../../scripts/after-pack.cjs');
 
@@ -372,5 +396,37 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
     expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
     expect(existsSync(openclawRoot)).toBe(false);
+  });
+
+  it('copies a prebuilt OpenClaw sidecar into packaged resources when available', async () => {
+    const { copyPrebuiltOpenClawSidecar, getPrebuiltOpenClawSidecarRoot } = await import('../../scripts/after-pack.cjs');
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-project-'));
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-resources-'));
+    tempDirs.push(projectRoot, resourcesDir);
+
+    const prebuiltRoot = getPrebuiltOpenClawSidecarRoot(projectRoot, 'darwin', 'x64');
+    mkdirSync(prebuiltRoot, { recursive: true });
+    writeFileSync(
+      join(prebuiltRoot, 'archive.json'),
+      JSON.stringify({ format: 'tar.gz', path: 'payload.tar.gz', version: '2026.4.10-r1' }) + '\n',
+      'utf8',
+    );
+    writeFileSync(join(prebuiltRoot, 'payload.tar.gz'), 'payload\n', 'utf8');
+    writeFileSync(join(prebuiltRoot, 'manifest.json'), '{"version":"2026.4.10-r1"}\n', 'utf8');
+    writeFileSync(join(prebuiltRoot, 'SHA256SUMS'), 'deadbeef  payload.tar.gz\n', 'utf8');
+
+    const copied = copyPrebuiltOpenClawSidecar(projectRoot, resourcesDir, 'darwin', 'x64');
+
+    expect(copied).toMatchObject({
+      prebuiltRoot,
+      sidecarRoot: join(resourcesDir, 'runtime', 'openclaw'),
+      payloadPath: join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'),
+      version: '2026.4.10-r1',
+    });
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'manifest.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'SHA256SUMS'))).toBe(true);
   });
 });
