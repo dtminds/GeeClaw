@@ -32,7 +32,7 @@
 
     # Silently kill the process using nsProcess instead of taskkill / cmd.exe
     ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-    
+
     # to ensure that files are not "in-use"
     Sleep 300
 
@@ -47,7 +47,7 @@
         # wait to give a chance to exit gracefully
         Sleep 1000
         ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-        
+
         ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
         ${If} $R0 == 0
           DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
@@ -70,6 +70,33 @@
     not_running:
       ${nsProcess::Unload}
   ${endIf}
+
+  ; Even after GeeClaw.exe exits, bundled helper processes can keep files in
+  ; $INSTDIR locked until Windows finishes releasing their handles. Kill any
+  ; process whose executable lives under the target install directory.
+  System::Call 'kernel32::GetCurrentProcessId() i .R2'
+  System::Call 'kernel32::SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR") i .R3'
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $R2 -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(($$env:TARGET_INSTDIR.TrimEnd('\\') + '\\'), [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+  Pop $0
+  Pop $1
+
+  ${if} $0 == 0
+    Sleep 2000
+  ${endIf}
+!macroend
+
+!macro customUnInstallCheck
+  ${if} $R0 != 0
+    DetailPrint `Old GeeClaw uninstaller exited with code $R0. Continuing installation...`
+  ${endIf}
+  ClearErrors
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  ${if} $R0 != 0
+    DetailPrint `Old GeeClaw uninstaller (current user) exited with code $R0. Continuing installation...`
+  ${endIf}
+  ClearErrors
 !macroend
 
 !macro customInstall

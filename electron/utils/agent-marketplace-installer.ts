@@ -73,6 +73,23 @@ async function runExtractCommand(command: string, args: string[]): Promise<void>
   });
 }
 
+function isIgnoredArchiveMetadataEntry(name: string): boolean {
+  return name === '__MACOSX' || name === '.DS_Store' || name.startsWith('._');
+}
+
+export async function resolveExtractedPackageDir(extractRoot: string): Promise<string> {
+  const extractedEntries = await readdir(extractRoot, { withFileTypes: true });
+  const relevantEntries = extractedEntries.filter((entry) => !isIgnoredArchiveMetadataEntry(entry.name));
+  const directories = relevantEntries.filter((entry) => entry.isDirectory());
+  const nonDirectories = relevantEntries.filter((entry) => !entry.isDirectory());
+
+  if (directories.length !== 1 || nonDirectories.length > 0) {
+    throw new Error('[agent-marketplace] Extracted archive must contain a single top-level package directory');
+  }
+
+  return join(extractRoot, directories[0].name);
+}
+
 async function defaultExtractArchive(archivePath: string, extractRoot: string): Promise<string> {
   if (process.platform === 'win32') {
     await runExtractCommand('powershell.exe', [
@@ -87,15 +104,7 @@ async function defaultExtractArchive(archivePath: string, extractRoot: string): 
     await runExtractCommand('unzip', ['-oq', archivePath, '-d', extractRoot]);
   }
 
-  const extractedEntries = await readdir(extractRoot, { withFileTypes: true });
-  const directories = extractedEntries.filter((entry) => entry.isDirectory());
-  const nonDirectories = extractedEntries.filter((entry) => !entry.isDirectory());
-
-  if (directories.length !== 1 || nonDirectories.length > 0) {
-    throw new Error('[agent-marketplace] Extracted archive must contain a single top-level package directory');
-  }
-
-  return join(extractRoot, directories[0].name);
+  return await resolveExtractedPackageDir(extractRoot);
 }
 
 export async function getAgentMarketplaceCatalogEntry(
