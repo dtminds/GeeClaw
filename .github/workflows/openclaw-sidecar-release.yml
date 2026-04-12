@@ -27,6 +27,8 @@ jobs:
             sidecar_target: darwin-x64
           - os: windows-latest
             sidecar_target: win32-x64
+          - os: windows-latest
+            sidecar_target: win32-arm64
 
     runs-on: ${{ matrix.os }}
 
