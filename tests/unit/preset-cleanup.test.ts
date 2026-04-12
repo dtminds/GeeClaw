@@ -8,8 +8,9 @@ describe('preset cleanup', () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.build).not.toContain('bundle-agent-preset-skills');
-    expect(packageJson.scripts?.package).not.toContain('bundle-agent-preset-skills');
+    for (const script of Object.values(packageJson.scripts ?? {})) {
+      expect(script).not.toContain('bundle-agent-preset-skills');
+    }
     expect(packageJson.scripts).not.toHaveProperty('bundle:agent-preset-skills');
   });
 
