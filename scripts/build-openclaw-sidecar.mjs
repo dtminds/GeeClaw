@@ -70,7 +70,7 @@ async function resolveStandaloneMacCodeSigningConfig(projectRoot) {
 
   const [{ TmpDir }, macCodeSign] = await Promise.all([
     import('builder-util'),
-    import('app-builder-lib/out/codeSign/macCodeSign'),
+    import('app-builder-lib/out/codeSign/macCodeSign.js'),
   ]);
 
   const explicitIdentity = typeof process.env.CSC_NAME === 'string' && process.env.CSC_NAME.length > 0
