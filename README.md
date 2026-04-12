@@ -330,8 +330,8 @@ pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
-pnpm run openclaw-runtime:prepare  # Ensure the isolated runtime exists for local development
-pnpm run openclaw-runtime:install  # Refresh the isolated OpenClaw runtime used for packaging
+pnpm run openclaw-runtime:prepare  # Ensure the repo-local runtime exists for local development
+pnpm run openclaw-runtime:install  # Refresh the repo-local OpenClaw runtime used by development and non-sidecar packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
 pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar into build/prebuilt-sidecar/
@@ -356,11 +356,50 @@ GeeClaw now includes a Playwright-driven Electron smoke test for the desktop she
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
 
-Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and release bundling. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
+Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and for any local packaging flow that does not explicitly opt into a prebuilt sidecar. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
 
 In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
 
-For release CI, GeeClaw can now consume a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. Keep `enabled: false` until a draft sidecar release has been built and its generated `openclaw-sidecar-version.json` has been copied into that tracked pin file.
+For release CI, GeeClaw now requires a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. If that tracked pin file is disabled, missing, or missing the current target asset, the release workflow fails fast instead of falling back to a local runtime rebuild.
+
+### OpenClaw Runtime Workflow
+
+For local development, initialize and refresh the runtime like this:
+
+```bash
+pnpm install
+pnpm run openclaw-runtime:prepare
+pnpm dev
+```
+
+- `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
+- Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
+- Treat sidecars as release artifacts, not as the default development input.
+
+To update the pinned sidecar version used by release CI:
+
+```bash
+gh release download openclaw-sidecar-v2026.4.10-r1 \
+  --pattern openclaw-sidecar-version.json \
+  --dir /tmp/openclaw-sidecar-v2026.4.10-r1
+cp /tmp/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-version.json \
+  runtime-artifacts/openclaw-sidecar/version.json
+```
+
+- Replace the tag with the exact sidecar release tag you want to pin.
+- Commit the updated [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json) alongside the release change that should consume it.
+
+To verify a sidecar release artifact locally before running the full release workflow:
+
+```bash
+pnpm run openclaw-sidecar:download -- --target darwin-arm64
+pnpm run package:release:resources
+pnpm exec electron-builder --mac --arm64 --dir --config.mac.identity=null
+```
+
+- Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
+- The `package:release:*` flows expect the prebuilt sidecar under `build/prebuilt-sidecar/<target>/`.
+- In the packaged app, confirm `Contents/Resources/runtime/openclaw/payload.tar.gz` exists and that the log shows `Using prebuilt OpenClaw sidecar`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The
