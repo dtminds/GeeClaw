@@ -11,7 +11,7 @@ describe('installer.nsh', () => {
     expect(installer).toContain('GetCurrentProcessId()');
     expect(installer).toContain('SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR")');
     expect(installer).toContain('$$_.ProcessId -ne $R2');
-    expect(installer).toContain("$$env:TARGET_INSTDIR.TrimEnd('\\\\') + '\\\\'");
+    expect(installer).toContain("$$env:TARGET_INSTDIR.TrimEnd('\\') + '\\'");
     expect(installer).toContain('Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue');
   });
 
