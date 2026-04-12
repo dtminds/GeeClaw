@@ -21,7 +21,8 @@
 
 const { execFileSync } = require('child_process');
 const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } = require('fs');
-const { basename, dirname, isAbsolute, join, relative } = require('path');
+const path = require('path');
+const { basename, dirname, isAbsolute, join, relative } = path;
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
 const { cleanupUnnecessaryFiles } = require('./lib/package-cleanup.cjs');
 const {
@@ -687,6 +688,26 @@ function resolveTarCommand() {
   return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
+function getTarCreateInvocation(archivePath, sourceDir, platform = process.platform) {
+  const pathImpl = platform === 'win32' ? path.win32 : path;
+  return {
+    command: platform === 'win32' ? 'tar.exe' : 'tar',
+    args: platform === 'win32'
+      ? ['-czf', pathImpl.basename(archivePath), '-C', sourceDir, '.']
+      : ['-czf', archivePath, '-C', sourceDir, '.'],
+    options: platform === 'win32'
+      ? { stdio: 'inherit', cwd: pathImpl.dirname(archivePath) }
+      : { stdio: 'inherit' },
+  };
+}
+exports.getTarCreateInvocation = getTarCreateInvocation;
+
+function createTarGzArchive(archivePath, sourceDir) {
+  const invocation = getTarCreateInvocation(archivePath, sourceDir);
+  execFileSync(invocation.command, invocation.args, invocation.options);
+}
+exports.createTarGzArchive = createTarGzArchive;
+
 function collectRegularFiles(rootDir) {
   const files = [];
 
@@ -840,9 +861,7 @@ function createOpenClawSidecarArchive(resourcesDir, openclawRoot, options = {}) 
   rmSync(sidecarRoot, { recursive: true, force: true });
   mkdirSync(sidecarRoot, { recursive: true });
 
-  execFileSync(resolveTarCommand(), ['-czf', payloadPath, '-C', openclawRoot, '.'], {
-    stdio: 'inherit',
-  });
+  createTarGzArchive(payloadPath, openclawRoot);
 
   writeFileSync(
     join(sidecarRoot, 'archive.json'),
