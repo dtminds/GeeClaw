@@ -8,9 +8,12 @@ import { resolveOpenClawSidecarTarget } from './lib/openclaw-sidecar-artifacts.m
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function main() {
+  const target = resolveOpenClawSidecarTarget();
+  process.stdout.write(`Preparing E2E OpenClaw sidecar for ${target}\n`);
+
   const result = await downloadOpenClawSidecar({
     projectRoot: ROOT_DIR,
-    target: resolveOpenClawSidecarTarget(),
+    target,
   });
 
   process.stdout.write(
