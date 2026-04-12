@@ -56,6 +56,26 @@ function resolveTarCommand() {
   return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
+function extractTarGzArchive(archivePath, targetRoot) {
+  if (process.platform === 'win32') {
+    const stagedArchivePath = path.join(targetRoot, path.win32.basename(archivePath));
+    fs.copyFileSync(archivePath, stagedArchivePath);
+    try {
+      execFileSync(resolveTarCommand(), ['-xzf', path.win32.basename(stagedArchivePath)], {
+        stdio: 'inherit',
+        cwd: targetRoot,
+      });
+    } finally {
+      fs.rmSync(stagedArchivePath, { force: true });
+    }
+    return;
+  }
+
+  execFileSync(resolveTarCommand(), ['-xzf', archivePath, '-C', targetRoot], {
+    stdio: 'inherit',
+  });
+}
+
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(filePath));
@@ -95,9 +115,7 @@ export async function downloadOpenClawSidecar({
 
     fs.rmSync(targetRoot, { recursive: true, force: true });
     fs.mkdirSync(targetRoot, { recursive: true });
-    execFileSync(resolveTarCommand(), ['-xzf', downloadPath, '-C', targetRoot], {
-      stdio: 'inherit',
-    });
+    extractTarGzArchive(downloadPath, targetRoot);
 
     const archiveJsonPath = path.join(targetRoot, 'archive.json');
     const payloadPath = path.join(targetRoot, 'payload.tar.gz');

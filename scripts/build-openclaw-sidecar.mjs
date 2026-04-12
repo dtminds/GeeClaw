@@ -52,6 +52,18 @@ function resolveTarCommand() {
   return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
+function createTarGzArchive(archivePath, sourceDir) {
+  const pathImpl = process.platform === 'win32' ? path.win32 : path;
+  const args = process.platform === 'win32'
+    ? ['-czf', pathImpl.basename(archivePath), '-C', sourceDir, '.']
+    : ['-czf', archivePath, '-C', sourceDir, '.'];
+  const options = process.platform === 'win32'
+    ? { stdio: 'inherit', cwd: pathImpl.dirname(archivePath) }
+    : { stdio: 'inherit' };
+
+  execFileSync(resolveTarCommand(), args, options);
+}
+
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(filePath));
@@ -228,9 +240,7 @@ export async function buildOpenClawSidecar({
     }));
     writeShaSums(sidecarRoot, buildFileManifest(sidecarRoot));
 
-    execFileSync(resolveTarCommand(), ['-czf', assetPath, '-C', sidecarRoot, '.'], {
-      stdio: 'inherit',
-    });
+    createTarGzArchive(assetPath, sidecarRoot);
 
     const assetStats = fs.statSync(assetPath);
     const metadataPath = path.join(outputDir, `openclaw-sidecar-${sidecarVersion}-${resolvedTarget.target}.json`);

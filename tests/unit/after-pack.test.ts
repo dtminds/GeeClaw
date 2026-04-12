@@ -398,6 +398,18 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(openclawRoot)).toBe(false);
   });
 
+  it('builds Windows tar invocations without passing absolute drive-letter archive paths', async () => {
+    const { getTarCreateInvocation } = await import('../../scripts/after-pack.cjs');
+
+    expect(
+      getTarCreateInvocation('C:\\tmp\\sidecar\\payload.tar.gz', 'C:\\tmp\\openclaw', 'win32'),
+    ).toEqual({
+      command: 'tar.exe',
+      args: ['-czf', 'payload.tar.gz', '-C', 'C:\\tmp\\openclaw', '.'],
+      options: { stdio: 'inherit', cwd: 'C:\\tmp\\sidecar' },
+    });
+  });
+
   it('copies a prebuilt OpenClaw sidecar into packaged resources when available', async () => {
     const { copyPrebuiltOpenClawSidecar, getPrebuiltOpenClawSidecarRoot } = await import('../../scripts/after-pack.cjs');
 
