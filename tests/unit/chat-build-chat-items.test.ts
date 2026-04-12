@@ -54,4 +54,43 @@ describe('buildChatItems', () => {
     ]);
     expect(items.at(-1)?.isStreaming).toBe(true);
   });
+
+  it('filters process-only history and tool messages before rendering', () => {
+    const items = buildChatItems({
+      messages: [
+        assistantMessage('history-1', 'history', 1),
+        {
+          role: 'assistant',
+          id: 'history-process',
+          content: [{ type: 'toolCall', id: 'history-process', name: 'process', arguments: { action: 'poll' } }],
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'tool-process',
+          toolCallId: 'tool-process',
+          content: [{ type: 'toolCall', id: 'tool-process', name: 'process', arguments: { action: 'log' } }],
+          timestamp: 3,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'tool-bash',
+          toolCallId: 'tool-bash',
+          content: [{ type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } }],
+          timestamp: 4,
+        } as RawMessage,
+      ],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items.map((item) => item.message.id)).toEqual([
+      'history-1',
+      'tool-bash',
+    ]);
+  });
 });

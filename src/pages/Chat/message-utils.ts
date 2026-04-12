@@ -57,6 +57,14 @@ function cleanAssistantText(text: string): string {
   return splitMediaFromOutput(text).text;
 }
 
+function normalizeToolName(name: unknown): string {
+  return typeof name === 'string' ? name.trim().toLowerCase().replace(/[\s-]+/g, '_') : '';
+}
+
+export function shouldHideToolTrace(name: unknown): boolean {
+  return normalizeToolName(name) === 'process';
+}
+
 /**
  * Extract displayable text from a message's content field.
  * Handles both string content and array-of-blocks content.

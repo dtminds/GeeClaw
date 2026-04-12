@@ -6,6 +6,7 @@ import {
 } from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { ContentBlock, RawMessage } from '@/stores/chat';
+import { shouldHideToolTrace } from './message-utils';
 
 export type AssistantPhase = 'commentary' | 'final_answer';
 
@@ -672,6 +673,9 @@ export function shouldRenderStandaloneToolResult(
     return false;
   }
   if (!options.showToolCalls) {
+    return false;
+  }
+  if (shouldHideToolTrace(message.toolName)) {
     return false;
   }
 
