@@ -19,24 +19,6 @@ on:
       - "tsconfig.node.json"
       - "vite.config.ts"
       - "vitest.config.ts"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/check.yml"
-      - ".github/workflows/desktop-ci-dist-lite.yml"
-      - "electron-builder.yml"
-      - "openclaw-runtime/**"
-      - "package.json"
-      - "plugins/openclaw/**"
-      - "pnpm-lock.yaml"
-      - "resources/**"
-      - "scripts/**"
-      - "src/**"
-      - "tsconfig.json"
-      - "tsconfig.node.json"
-      - "vite.config.ts"
-      - "vitest.config.ts"
   workflow_dispatch:
 
 permissions:
