@@ -33,6 +33,19 @@ afterEach(() => {
 });
 
 describe('agent marketplace package validation', () => {
+  it('ignores archive metadata directories when resolving the extracted package root', async () => {
+    const root = createTempRoot('agent-marketplace-package-root-');
+    const extractRoot = join(root, 'extract');
+    const packageDir = join(extractRoot, 'discovery-research-1.0.0');
+    mkdirSync(join(extractRoot, '__MACOSX', 'discovery-research-1.0.0'), { recursive: true });
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(extractRoot, '.DS_Store'), 'ignored', 'utf8');
+
+    const { resolveExtractedPackageDir } = await import('@electron/utils/agent-marketplace-installer');
+
+    await expect(resolveExtractedPackageDir(extractRoot)).resolves.toBe(packageDir);
+  });
+
   it('loads an extracted official package when the catalog agentId and version match', async () => {
     const root = createTempRoot('agent-marketplace-package-');
     const packageDir = join(root, 'discovery-research');
