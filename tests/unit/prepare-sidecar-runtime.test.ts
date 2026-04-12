@@ -40,12 +40,14 @@ describe('prepare sidecar runtime', () => {
     });
 
     expect(calls).toEqual([
+      'prep:mac-binaries',
       'download',
       'build:vite',
       'bundle:openclaw-plugins',
       'bundle:preinstalled-skills',
     ]);
     expect(log).toHaveBeenCalledWith('Preparing sidecar runtime for darwin-arm64');
+    expect(log).toHaveBeenCalledWith('Preparing bundled macOS binaries');
     expect(log).toHaveBeenCalledWith('Building renderer assets');
     expect(log).toHaveBeenCalledWith('Preparing bundled OpenClaw plugins');
     expect(log).toHaveBeenCalledWith('Preparing preinstalled skills');
@@ -100,9 +102,10 @@ describe('prepare sidecar runtime', () => {
     });
 
     expect(downloadSidecar).not.toHaveBeenCalled();
-    expect(runScript).toHaveBeenNthCalledWith(1, 'build:vite');
-    expect(runScript).toHaveBeenNthCalledWith(2, 'bundle:openclaw-plugins');
-    expect(runScript).toHaveBeenNthCalledWith(3, 'bundle:preinstalled-skills');
+    expect(runScript).toHaveBeenNthCalledWith(1, 'prep:mac-binaries');
+    expect(runScript).toHaveBeenNthCalledWith(2, 'build:vite');
+    expect(runScript).toHaveBeenNthCalledWith(3, 'bundle:openclaw-plugins');
+    expect(runScript).toHaveBeenNthCalledWith(4, 'bundle:preinstalled-skills');
     expect(log).toHaveBeenCalledWith(
       `Reusing local sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64')}`,
     );

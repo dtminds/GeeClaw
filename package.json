@@ -98,7 +98,7 @@
         "package:linux": "pnpm run package && electron-builder --config scripts/electron-builder-config.mjs --linux --publish never",
         "package:mac:dir": "pnpm run prep:mac-binaries && pnpm run package && electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null",
         "package:mac:dir:quick": "pnpm run package:quick && electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null",
-        "package:mac:dir:sidecar": "pnpm run prep:mac-binaries && pnpm run prepare:sidecar-runtime:mac:arm64 && electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null",
+        "package:mac:dir:sidecar": "pnpm run prepare:sidecar-runtime:mac:arm64 && electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null",
         "package:mac:dir:quick:sidecar": "pnpm run prepare:sidecar-runtime:mac:arm64 && electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null",
         "release": "pnpm run uv:download && pnpm run node:download && pnpm run package && electron-builder --config scripts/electron-builder-config.mjs --publish always",
         "version:patch": "pnpm version patch",

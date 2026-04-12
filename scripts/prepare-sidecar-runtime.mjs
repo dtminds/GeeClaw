@@ -117,12 +117,22 @@ export async function prepareSidecarRuntime({
   downloadSidecar = downloadOpenClawSidecar,
   log = (message) => process.stdout.write(`${message}\n`),
 } = {}) {
-  log(`Preparing sidecar runtime for ${target}`);
+  const resolvedTarget = parseOpenClawSidecarTarget(target);
 
-  const existingSidecar = findPreparedOpenClawSidecar(projectRoot, target);
+  log(`Preparing sidecar runtime for ${resolvedTarget.target}`);
+
+  if (resolvedTarget.platform === 'darwin') {
+    log('Preparing bundled macOS binaries');
+    await runScript('prep:mac-binaries');
+  } else if (resolvedTarget.platform === 'win32') {
+    log('Preparing bundled Windows binaries');
+    await runScript('prep:win-binaries');
+  }
+
+  const existingSidecar = findPreparedOpenClawSidecar(projectRoot, resolvedTarget.target);
   const result = existingSidecar ?? await downloadSidecar({
     projectRoot,
-    target,
+    target: resolvedTarget.target,
   });
 
   if (existingSidecar) {
