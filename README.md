@@ -335,12 +335,9 @@ pnpm run openclaw-runtime:install  # Refresh the repo-local OpenClaw runtime use
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
 pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar archive into build/prebuilt-sidecar/
-pnpm build                # Full production build (with packaging assets)
-pnpm package              # Package for current platform
-pnpm package:mac          # Package for macOS
+pnpm package:dev          # Prepare local packaging assets for non-sidecar development packaging
+pnpm package:mac:dir      # Build a local macOS dir package against the repo-local runtime
 pnpm package:mac:dir:quick # Fast local macOS dir packaging; reuses existing build/openclaw*, plugins, and skills assets
-pnpm package:win          # Package for Windows
-pnpm package:linux        # Package for Linux
 ```
 
 ### Electron E2E Smoke Test
@@ -394,7 +391,8 @@ To verify a sidecar release artifact locally before running the full release wor
 
 ```bash
 pnpm run openclaw-sidecar:download -- --target darwin-arm64
-pnpm run package:release:resources
+pnpm run build:vite
+pnpm run package:resources
 GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
 ```
 

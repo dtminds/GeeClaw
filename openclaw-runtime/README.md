@@ -180,7 +180,8 @@ pnpm run package:mac:dir
 
 ```bash
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.12-r1
-pnpm run package:release:resources
+pnpm run build:vite
+pnpm run package:resources
 GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
 ```
 
@@ -188,7 +189,8 @@ GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scri
 
 ```bash
 pnpm run openclaw-sidecar:download -- --target darwin-arm64
-pnpm run package:release:resources
+pnpm run build:vite
+pnpm run package:resources
 GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
 ```
 
