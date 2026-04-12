@@ -75,13 +75,18 @@ export function buildChatItems({
   streamingTextStartedAt,
   sessionKey,
 }: BuildChatItemsOptions): ChatRenderItem[] {
-  const items: ChatRenderItem[] = messages
-    .filter((message) => !isHiddenToolOnlyMessage(message))
-    .map((message, index) => ({
+  const items: ChatRenderItem[] = [];
+  messages.forEach((message, index) => {
+    if (isHiddenToolOnlyMessage(message)) {
+      return;
+    }
+
+    items.push({
       key: messageKey(message, index),
       message,
       isStreaming: false,
-    }));
+    });
+  });
 
   const maxLen = Math.max(streamSegments.length, toolMessages.length);
   for (let index = 0; index < maxLen; index += 1) {

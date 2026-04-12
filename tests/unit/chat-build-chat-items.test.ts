@@ -155,4 +155,29 @@ describe('buildChatItems', () => {
 
     expect(items).toHaveLength(0);
   });
+
+  it('keeps history item keys stable when hidden process messages are removed', () => {
+    const items = buildChatItems({
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-process', name: 'process', arguments: { action: 'poll' } }],
+          timestamp: 1,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          content: 'visible assistant message',
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.key).toBe('msg:assistant:2:1');
+  });
 });
