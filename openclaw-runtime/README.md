@@ -144,6 +144,13 @@ pnpm run openclaw-runtime:install
 
 这里的开发态验证始终使用 repo-local `openclaw-runtime/` 安装结果，不会默认下载 sidecar。
 
+例外是 Electron E2E 冒烟测试：
+
+- `pnpm run test:e2e`
+- `pnpm run test:e2e:headed`
+
+这两条命令现在会先下载当前平台的 pinned sidecar，再用 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 启动未打包的 Electron 主进程。这样 E2E 更接近 release 链路，不会为了测试再现场重装一遍 `openclaw-runtime`。
+
 ## 本地打包如何验证升级
 
 如果你要验证“升级后的 OpenClaw 是否能正常打进 GeeClaw 包里”，有两条路径：

@@ -102,6 +102,17 @@ export function getResourcesDir(): string {
   return join(__dirname, '../../resources');
 }
 
+function resolveDevelopmentPrebuiltOpenClawSidecarRoot(): string | null {
+  if (process.env.GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR !== '1') {
+    return null;
+  }
+
+  const normalizedArch = process.arch === 'amd64' ? 'x64' : process.arch;
+  const sidecarRoot = join(process.cwd(), 'build', 'prebuilt-sidecar', `${process.platform}-${normalizedArch}`);
+  const entryPath = join(sidecarRoot, 'openclaw.mjs');
+  return existsSync(entryPath) ? sidecarRoot : null;
+}
+
 /**
  * Get the official agent marketplace catalog path inside resources.
  */
@@ -129,6 +140,11 @@ export function getOpenClawDir(): string {
       return hydratedSidecarRoot;
     }
     return join(process.resourcesPath, 'openclaw');
+  }
+
+  const developmentPrebuiltSidecarRoot = resolveDevelopmentPrebuiltOpenClawSidecarRoot();
+  if (developmentPrebuiltSidecarRoot) {
+    return developmentPrebuiltSidecarRoot;
   }
 
   return join(process.cwd(), 'openclaw-runtime', 'node_modules', 'openclaw');

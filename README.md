@@ -324,7 +324,7 @@ pnpm typecheck            # TypeScript validation
 
 # Testing
 pnpm test                 # Run unit tests
-pnpm run test:e2e         # Run macOS-only Electron smoke E2E
+pnpm run test:e2e         # Run macOS-only Electron smoke E2E (downloads the pinned OpenClaw sidecar first)
 pnpm run test:e2e:headed  # Run the same Electron smoke E2E with a visible window
 pnpm run verify           # Lint + typecheck + unit tests
 
@@ -348,6 +348,7 @@ pnpm package:linux        # Package for Linux
 GeeClaw now includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
 
 - `pnpm run test:e2e` builds the app and launches the real Electron main process from `dist-electron/main/index.js`.
+- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar for the current platform into `build/prebuilt-sidecar/` and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
 - The test uses isolated temporary `HOME` and Electron `userData` directories so it does not touch your normal GeeClaw profile.
 - In E2E mode, GeeClaw skips setup/login/provider gating only. It still starts the real managed OpenClaw/Gateway stack before entering the main UI.
 - The current smoke coverage verifies that the app can boot into the main shell and navigate between Dashboard, Skills, and Channels.

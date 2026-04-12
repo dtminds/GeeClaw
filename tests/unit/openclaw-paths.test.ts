@@ -45,6 +45,7 @@ describe('getOpenClawDir (development)', () => {
     mockIsPackagedGetter.value = false;
     mockGetHydratedOpenClawSidecarRootIfReady.mockReturnValue(null);
     process.cwd = () => '/repo';
+    delete process.env.GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR;
   });
 
   afterEach(() => {
@@ -73,6 +74,18 @@ describe('getOpenClawDir (development)', () => {
     const { getOpenClawDir } = await import('@electron/utils/paths');
 
     expect(getOpenClawDir()).toBe('/repo/openclaw-runtime/node_modules/openclaw');
+  });
+
+  it('prefers the downloaded prebuilt sidecar in development when explicitly enabled', async () => {
+    process.env.GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR = '1';
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/repo/build/prebuilt-sidecar/darwin-arm64/openclaw.mjs'
+    ));
+
+    const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
+
+    expect(getOpenClawDir()).toBe('/repo/build/prebuilt-sidecar/darwin-arm64');
+    expect(getOpenClawEntryPath()).toBe('/repo/build/prebuilt-sidecar/darwin-arm64/openclaw.mjs');
   });
 });
 
