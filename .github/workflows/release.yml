@@ -230,18 +230,40 @@ jobs:
           echo "Removing builder-debug.yml files to avoid duplicate asset upload conflicts..."
           find release-artifacts/ -name "builder-debug.yml" -delete -print || true
 
+      - name: Prepare flattened GitHub Release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf github-release-assets
+          mkdir -p github-release-assets
+
+          while IFS= read -r -d '' file; do
+            filename="$(basename "$file")"
+            destination="github-release-assets/${filename}"
+
+            if [[ -e "$destination" ]]; then
+              echo "Replacing duplicate release asset ${filename}"
+            fi
+
+            cp -f "$file" "$destination"
+          done < <(find release-artifacts -type f -print0 | sort -z)
+
+          echo "=== Flattened GitHub Release assets ==="
+          find github-release-assets -maxdepth 1 -type f -exec ls -lh {} \;
+
       - name: Create GitHub Release (as pre-release)
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') && steps.release_check.outputs.exists != 'true'
         with:
           files: |
-            release-artifacts/**/*.dmg
-            release-artifacts/**/*.zip
-            release-artifacts/**/*.exe
-            release-artifacts/**/*.AppImage
-            release-artifacts/**/*.deb
-            release-artifacts/**/*.rpm
-            release-artifacts/**/*.yml
+            github-release-assets/*.dmg
+            github-release-assets/*.zip
+            github-release-assets/*.exe
+            github-release-assets/*.AppImage
+            github-release-assets/*.deb
+            github-release-assets/*.rpm
+            github-release-assets/*.yml
           draft: false
           prerelease: true
           make_latest: false
@@ -288,13 +310,13 @@ jobs:
 
           TAG="${GITHUB_REF#refs/tags/}"
           files=(
-            release-artifacts/**/*.dmg
-            release-artifacts/**/*.zip
-            release-artifacts/**/*.exe
-            release-artifacts/**/*.AppImage
-            release-artifacts/**/*.deb
-            release-artifacts/**/*.rpm
-            release-artifacts/**/*.yml
+            github-release-assets/*.dmg
+            github-release-assets/*.zip
+            github-release-assets/*.exe
+            github-release-assets/*.AppImage
+            github-release-assets/*.deb
+            github-release-assets/*.rpm
+            github-release-assets/*.yml
           )
 
           if [ "${#files[@]}" -eq 0 ]; then
@@ -368,7 +390,7 @@ jobs:
           mkdir -p staging/releases/${TAG}
 
           # Flatten all platform artifacts into staging directories
-          find release-artifacts/ -type f | while read file; do
+          find release-artifacts/ -type f | sort | while read -r file; do
             filename=$(basename "$file")
             cp "$file" "staging/${CHANNEL}/${filename}"
             cp "$file" "staging/releases/${TAG}/${filename}"
