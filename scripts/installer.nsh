@@ -6,6 +6,61 @@
 !ifndef nsProcess::FindProcess
   !include "nsProcess.nsh"
 !endif
+!include "getProcessInfo.nsh"
+
+Var pid
+Var GeeClawCmdPath
+Var GeeClawFindPath
+Var GeeClawPowerShellPath
+Var GeeClawIsPowerShellAvailable
+
+!macro geeClawInitProcessTools
+  StrCpy $GeeClawCmdPath "$SYSDIR\cmd.exe"
+  StrCpy $GeeClawFindPath "$SYSDIR\find.exe"
+  StrCpy $GeeClawPowerShellPath "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
+!macroend
+
+!macro geeClawDetectPowerShell
+  !insertmacro geeClawInitProcessTools
+  nsExec::Exec `"$GeeClawPowerShellPath" -C "if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"`
+  Pop $GeeClawIsPowerShellAvailable
+
+  ${if} $GeeClawIsPowerShellAvailable == 0
+    nsExec::Exec `"$GeeClawPowerShellPath" -C "if ((Get-ExecutionPolicy -Scope Process) -eq 'Restricted') { exit 1 } else { exit 0 }"`
+    Pop $GeeClawIsPowerShellAvailable
+  ${endif}
+!macroend
+
+!macro geeClawFindAppProcess INSTALL_DIR RETURN
+  !insertmacro geeClawDetectPowerShell
+
+  ${if} ${INSTALL_DIR} == ""
+    ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" ${RETURN}
+  ${elseif} $GeeClawIsPowerShellAvailable == 0
+    nsExec::Exec `"$GeeClawPowerShellPath" -C "if ((Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('${INSTALL_DIR}', 'CurrentCultureIgnoreCase')}).Count -gt 0) { exit 0 } else { exit 1 }"`
+    Pop ${RETURN}
+  ${else}
+    ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" ${RETURN}
+  ${endif}
+!macroend
+
+!macro geeClawKillAppProcess INSTALL_DIR FORCE
+  !insertmacro geeClawDetectPowerShell
+
+  ${if} ${INSTALL_DIR} != ""
+  ${andIf} $GeeClawIsPowerShellAvailable == 0
+    ${if} ${FORCE} == 1
+      StrCpy $R9 "-Force"
+    ${else}
+      StrCpy $R9 ""
+    ${endif}
+
+    nsExec::Exec `"$GeeClawPowerShellPath" -C "Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('${INSTALL_DIR}', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $$_.ProcessId $R9 }"`
+    Pop $R9
+  ${else}
+    ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  ${endif}
+!macroend
 
 !macro customCheckAppRunning
   ; Pre-emptively remove old shortcuts to prevent the Windows "Missing Shortcut"
@@ -16,60 +71,97 @@
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}.lnk"
 
-  ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  ${GetProcessInfo} 0 $pid $1 $2 $3 $4
+  ${if} $3 != "${APP_EXECUTABLE_FILENAME}"
+    !insertmacro geeClawFindAppProcess "$INSTDIR" $R0
 
-  ${if} $R0 == 0
-    ${if} ${isUpdated}
-      # allow app to exit without explicit kill
-      Sleep 1000
-      Goto doStopProcess
-    ${endIf}
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK doStopProcess
-    Quit
-
-    doStopProcess:
-    DetailPrint `Closing running "${PRODUCT_NAME}"...`
-
-    # Silently kill the process using nsProcess instead of taskkill / cmd.exe
-    ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-    
-    # to ensure that files are not "in-use"
-    Sleep 300
-
-    # Retry counter
-    StrCpy $R1 0
-
-    loop:
-      IntOp $R1 $R1 + 1
-
-      ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-      ${if} $R0 == 0
-        # wait to give a chance to exit gracefully
+    ${if} $R0 == 0
+      ${if} ${isUpdated}
+        # allow app to exit without explicit kill
         Sleep 1000
-        ${nsProcess::KillProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-        
-        ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-        ${If} $R0 == 0
-          DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
-          Sleep 2000
+        Goto doStopProcess
+      ${endIf}
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK doStopProcess
+      Quit
+
+      doStopProcess:
+      DetailPrint `Closing running "${PRODUCT_NAME}"...`
+
+      !insertmacro geeClawKillAppProcess "$INSTDIR" 0
+
+      # to ensure that files are not "in-use"
+      Sleep 300
+
+      # Retry counter
+      StrCpy $R1 0
+
+      loop:
+        IntOp $R1 $R1 + 1
+
+        !insertmacro geeClawFindAppProcess "$INSTDIR" $R0
+        ${if} $R0 == 0
+          # wait to give a chance to exit gracefully
+          Sleep 1000
+          !insertmacro geeClawKillAppProcess "$INSTDIR" 1
+
+          !insertmacro geeClawFindAppProcess "$INSTDIR" $R0
+          ${If} $R0 == 0
+            DetailPrint `Waiting for "${PRODUCT_NAME}" to close.`
+            Sleep 2000
+          ${else}
+            Goto not_running
+          ${endIf}
         ${else}
           Goto not_running
         ${endIf}
-      ${else}
-        Goto not_running
-      ${endIf}
 
-      # App likely running with elevated permissions.
-      # Ask user to close it manually
-      ${if} $R1 > 1
-        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY loop
-        Quit
-      ${else}
-        Goto loop
-      ${endIf}
-    not_running:
-      ${nsProcess::Unload}
+        # App likely running with elevated permissions.
+        # Ask user to close it manually
+        ${if} $R1 > 1
+          MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY loop
+          Quit
+        ${else}
+          Goto loop
+        ${endIf}
+      not_running:
+        ${nsProcess::Unload}
+    ${endIf}
   ${endIf}
+!macroend
+
+!macro geeClawHandleOldUninstallResult
+  IfErrors 0 +3
+  DetailPrint `Uninstall was not successful. Not able to launch uninstaller!`
+  Return
+
+  ${if} $R0 == 0
+    Return
+  ${endif}
+
+  !insertmacro geeClawFindAppProcess "$installationDir" $R1
+  ${if} $R1 == 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "$(uninstallFailed): $R0"
+    DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
+    SetErrorLevel 2
+    Quit
+  ${endif}
+
+  DetailPrint `Old GeeClaw uninstaller exited with code $R0, but no running app was detected under "$installationDir". Continuing with installer cleanup.`
+
+  ${if} ${FileExists} "$installationDir\*.*"
+    RMDir /r "$installationDir"
+  ${endif}
+
+  ClearErrors
+  StrCpy $R0 0
+!macroend
+
+!macro customUnInstallCheck
+  !insertmacro geeClawHandleOldUninstallResult
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  !insertmacro geeClawHandleOldUninstallResult
 !macroend
 
 !macro customInstall
