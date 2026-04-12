@@ -62,7 +62,7 @@ import {
   syncUpdatedProviderToRuntime,
 } from '../services/providers/provider-runtime-sync';
 import { validateApiKeyWithProvider } from '../services/providers/provider-validation';
-import { appUpdater } from './updater';
+import { getAppUpdater } from './updater';
 import { updateTrayMenu, type TrayTranslations } from './tray';
 import { proxyAwareFetch } from '../utils/proxy-fetch';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
@@ -70,6 +70,8 @@ import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
 import type { CronSchedule } from '../../src/types/cron';
+
+const appUpdater = getAppUpdater();
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);

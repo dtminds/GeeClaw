@@ -230,40 +230,17 @@ jobs:
           echo "Removing builder-debug.yml files to avoid duplicate asset upload conflicts..."
           find release-artifacts/ -name "builder-debug.yml" -delete -print || true
 
-      - name: Prepare flattened GitHub Release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          rm -rf github-release-assets
-          mkdir -p github-release-assets
-
-          while IFS= read -r -d '' file; do
-            filename="$(basename "$file")"
-            destination="github-release-assets/${filename}"
-
-            if [[ -e "$destination" ]]; then
-              echo "Replacing duplicate release asset ${filename}"
-            fi
-
-            cp -f "$file" "$destination"
-          done < <(find release-artifacts -type f -print0 | sort -z)
-
-          echo "=== Flattened GitHub Release assets ==="
-          find github-release-assets -maxdepth 1 -type f -exec ls -lh {} \;
-
       - name: Create GitHub Release (as pre-release)
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') && steps.release_check.outputs.exists != 'true'
         with:
           files: |
-            github-release-assets/*.dmg
-            github-release-assets/*.zip
-            github-release-assets/*.exe
-            github-release-assets/*.AppImage
-            github-release-assets/*.deb
-            github-release-assets/*.rpm
-            github-release-assets/*.yml
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.zip
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.AppImage
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.rpm
           draft: false
           prerelease: true
           make_latest: false
@@ -310,13 +287,12 @@ jobs:
 
           TAG="${GITHUB_REF#refs/tags/}"
           files=(
-            github-release-assets/*.dmg
-            github-release-assets/*.zip
-            github-release-assets/*.exe
-            github-release-assets/*.AppImage
-            github-release-assets/*.deb
-            github-release-assets/*.rpm
-            github-release-assets/*.yml
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.zip
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.AppImage
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.rpm
           )
 
           if [ "${#files[@]}" -eq 0 ]; then
@@ -332,12 +308,15 @@ jobs:
   # Job: Upload to Alibaba Cloud OSS
   # Uploads all release artifacts to OSS for:
   #   - Official website downloads (via release-info.json)
-  #   - electron-updater auto-update (via {channel}-*.yml)
+  #   - electron-updater auto-update metadata hosted on OSS only
   #
   # Directory structure on OSS (channel-separated):
-  #   latest/          → stable releases (latest.yml, latest-mac.yml, …)
-  #   alpha/           → alpha  releases (alpha.yml,  alpha-mac.yml, …)
-  #   beta/            → beta   releases (beta.yml,   beta-mac.yml,  …)
+  #   latest/                 → shared assets + Windows metadata
+  #   latest/darwin-arm64/    → macOS arm64 metadata + payloads
+  #   latest/darwin-x64/      → macOS x64 metadata + payloads
+  #   beta/                   → shared assets + Windows metadata
+  #   beta/darwin-arm64/      → macOS arm64 metadata + payloads
+  #   beta/darwin-x64/        → macOS x64 metadata + payloads
   #   releases/vX.Y.Z/ → permanent archive, never deleted
   # ──────────────────────────────────────────────────────────────
   upload-oss:
@@ -382,34 +361,68 @@ jobs:
 
       - name: Prepare upload directories
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
           CHANNEL="${{ steps.version.outputs.channel }}"
 
           mkdir -p staging/${CHANNEL}
+          mkdir -p staging/${CHANNEL}/darwin-arm64
+          mkdir -p staging/${CHANNEL}/darwin-x64
           mkdir -p staging/releases/${TAG}
 
-          # Flatten all platform artifacts into staging directories
-          find release-artifacts/ -type f | sort | while read -r file; do
-            filename=$(basename "$file")
+          # Shared channel directory: website downloads + non-mac updater metadata.
+          find release-artifacts -type f | sort | while read -r file; do
+            filename="$(basename "$file")"
+
+            case "$filename" in
+              builder-debug.yml|*-mac.yml)
+                continue
+                ;;
+            esac
+
             cp "$file" "staging/${CHANNEL}/${filename}"
-            cp "$file" "staging/releases/${TAG}/${filename}"
           done
+
+          # macOS updater feeds are architecture-specific and must keep duplicate
+          # metadata names isolated by directory.
+          for target in darwin-arm64 darwin-x64; do
+            source_dir="release-artifacts/release-mac-${target#darwin-}"
+            if [ ! -d "$source_dir" ]; then
+              continue
+            fi
+
+            find "$source_dir" -maxdepth 1 -type f \
+              \( -name "*.dmg" -o -name "*.zip" -o -name "*.yml" \) | sort | while read -r file; do
+                cp "$file" "staging/${CHANNEL}/${target}/$(basename "$file")"
+              done
+          done
+
+          # Preserve original artifact directories in the immutable archive to
+          # avoid metadata filename collisions.
+          cp -R release-artifacts/. "staging/releases/${TAG}/"
 
           echo "=== staging/${CHANNEL}/ ==="
           ls -lh staging/${CHANNEL}/
           echo ""
+          echo "=== staging/${CHANNEL}/darwin-arm64/ ==="
+          ls -lh staging/${CHANNEL}/darwin-arm64/ || true
+          echo ""
+          echo "=== staging/${CHANNEL}/darwin-x64/ ==="
+          ls -lh staging/${CHANNEL}/darwin-x64/ || true
+          echo ""
           echo "=== staging/releases/${TAG}/ ==="
-          ls -lh staging/releases/${TAG}/
+          find staging/releases/${TAG} -maxdepth 2 -type f -exec ls -lh {} \;
 
-      # Note: Do NOT rename yml files. electron-updater (generic provider) always
-      # requests "latest-mac.yml", "latest.yml", etc. regardless of feed URL.
-      # Channel separation is achieved by directory: /alpha/, /beta/, /latest/.
       - name: Verify yml files present
         run: |
           CHANNEL="${{ steps.version.outputs.channel }}"
-          echo "=== staging/${CHANNEL}/ (update metadata) ==="
-          ls -la staging/${CHANNEL}/*.yml 2>/dev/null || echo "No yml files found (check electron-builder outputs)"
+          echo "=== staging/${CHANNEL}/ (shared update metadata) ==="
+          ls -la staging/${CHANNEL}/*.yml 2>/dev/null || echo "No shared yml files found"
+          echo ""
+          echo "=== staging/${CHANNEL}/darwin-arm64/ ==="
+          ls -la staging/${CHANNEL}/darwin-arm64/*.yml 2>/dev/null || echo "No arm64 mac yml files found"
+          echo ""
+          echo "=== staging/${CHANNEL}/darwin-x64/ ==="
+          ls -la staging/${CHANNEL}/darwin-x64/*.yml 2>/dev/null || echo "No x64 mac yml files found"
 
       - name: Generate release-info.json
         run: |
@@ -493,6 +506,38 @@ jobs:
 
           echo "Uploaded channel metadata to ${CHANNEL}/"
 
+      - name: "Upload to OSS: macOS architecture-specific artifacts"
+        run: |
+          CHANNEL="${{ steps.version.outputs.channel }}"
+
+          for target in darwin-arm64 darwin-x64; do
+            find "staging/${CHANNEL}/${target}" -maxdepth 1 -type f ! -name "*.yml" | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:public,max-age=31536000,immutable" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${target}/${filename}"
+            done
+          done
+
+          echo "Uploaded macOS architecture-specific payloads"
+
+      - name: "Upload to OSS: macOS architecture-specific metadata"
+        run: |
+          CHANNEL="${{ steps.version.outputs.channel }}"
+
+          for target in darwin-arm64 darwin-x64; do
+            find "staging/${CHANNEL}/${target}" -maxdepth 1 -type f -name "*.yml" | while read -r file; do
+              filename="$(basename "${file}")"
+              ossutil cp -f \
+                --meta="Cache-Control:no-cache,no-store,must-revalidate" \
+                "${file}" \
+                "oss://xingyun-ai/${CHANNEL}/${target}/${filename}"
+            done
+          done
+
+          echo "Uploaded macOS architecture-specific metadata"
+
       - name: "Upload to OSS: releases/vX.Y.Z/ (archive)"
         run: |
           TAG="${{ steps.version.outputs.tag }}"
@@ -514,6 +559,14 @@ jobs:
           ossutil ls oss://xingyun-ai/${CHANNEL}/ --short
 
           echo ""
+          echo "=== ${CHANNEL}/darwin-arm64/ ==="
+          ossutil ls oss://xingyun-ai/${CHANNEL}/darwin-arm64/ --short || true
+
+          echo ""
+          echo "=== ${CHANNEL}/darwin-x64/ ==="
+          ossutil ls oss://xingyun-ai/${CHANNEL}/darwin-x64/ --short || true
+
+          echo ""
           echo "=== releases/${TAG}/ ==="
           ossutil ls oss://xingyun-ai/releases/${TAG}/ --short
 
@@ -523,14 +576,17 @@ jobs:
           jq . /tmp/release-info.json
 
           echo ""
-          echo "=== Verify update yml ==="
+          echo "=== Verify shared update yml ==="
           if [ "${CHANNEL}" = "latest" ]; then
             YML_PREFIX="latest"
           else
             YML_PREFIX="${CHANNEL}"
           fi
-          echo "electron-updater expects ${YML_PREFIX}-mac.yml, ${YML_PREFIX}.yml, etc. in ${CHANNEL}/:"
-          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short | grep "${YML_PREFIX}.*\\.yml" || echo "(none found)"
+          echo "electron-updater expects ${YML_PREFIX}.yml in ${CHANNEL}/ for shared feeds:"
+          ossutil ls oss://xingyun-ai/${CHANNEL}/ --short | grep "/${YML_PREFIX}\\.yml$" || echo "(none found)"
+          echo "electron-updater expects ${YML_PREFIX}-mac.yml in ${CHANNEL}/darwin-arm64 and ${CHANNEL}/darwin-x64:"
+          ossutil ls oss://xingyun-ai/${CHANNEL}/darwin-arm64/ --short | grep "/${YML_PREFIX}-mac\\.yml$" || echo "(none found)"
+          ossutil ls oss://xingyun-ai/${CHANNEL}/darwin-x64/ --short | grep "/${YML_PREFIX}-mac\\.yml$" || echo "(none found)"
           
           echo ""
           echo "All files uploaded and verified successfully!"

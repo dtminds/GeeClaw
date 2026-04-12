@@ -10,7 +10,7 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { createTray, updateTrayStatus } from './tray';
 import { createMenu } from './menu';
 
-import { appUpdater, registerUpdateHandlers } from './updater';
+import { getAppUpdater, registerUpdateHandlers } from './updater';
 import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
@@ -114,6 +114,7 @@ const gatewayManager = new GatewayManager();
 const clawHubService = new ClawHubService();
 const cliMarketplaceService = new CliMarketplaceService();
 const hostEventBus = new HostEventBus();
+const appUpdater = getAppUpdater();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
