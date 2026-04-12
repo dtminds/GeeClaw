@@ -88,7 +88,7 @@ describe('getOpenClawDir (development)', () => {
 
     mockExistsSync.mockImplementation((value: string) => (
       supportedTarget !== null
-      && value === `/repo/build/prebuilt-sidecar/${supportedTarget}/openclaw.mjs`
+      && value === `/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw.mjs`
     ));
 
     const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
@@ -99,8 +99,8 @@ describe('getOpenClawDir (development)', () => {
       return;
     }
 
-    expect(getOpenClawDir()).toBe(`/repo/build/prebuilt-sidecar/${supportedTarget}`);
-    expect(getOpenClawEntryPath()).toBe(`/repo/build/prebuilt-sidecar/${supportedTarget}/openclaw.mjs`);
+    expect(getOpenClawDir()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}`);
+    expect(getOpenClawEntryPath()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw.mjs`);
   });
 });
 

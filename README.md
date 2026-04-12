@@ -334,7 +334,7 @@ pnpm run openclaw-runtime:prepare  # Ensure the repo-local runtime exists for lo
 pnpm run openclaw-runtime:install  # Refresh the repo-local OpenClaw runtime used by development and non-sidecar packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
-pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar into build/prebuilt-sidecar/
+pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar archive into build/prebuilt-sidecar/
 pnpm build                # Full production build (with packaging assets)
 pnpm package              # Package for current platform
 pnpm package:mac          # Package for macOS
@@ -348,7 +348,7 @@ pnpm package:linux        # Package for Linux
 GeeClaw now includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
 
 - `pnpm run test:e2e` builds the app and launches the real Electron main process from `dist-electron/main/index.js`.
-- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar for the current platform into `build/prebuilt-sidecar/` and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
+- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar archive into `build/prebuilt-sidecar/`, hydrates it into `build/prebuilt-sidecar-runtime/`, and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
 - The test uses isolated temporary `HOME` and Electron `userData` directories so it does not touch your normal GeeClaw profile.
 - In E2E mode, GeeClaw skips setup/login/provider gating only. It still starts the real managed OpenClaw/Gateway stack before entering the main UI.
 - The current smoke coverage verifies that the app can boot into the main shell and navigate between Dashboard, Skills, and Channels.
@@ -399,7 +399,7 @@ GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scri
 ```
 
 - Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
-- The `package:release:*` flows expect the prebuilt sidecar under `build/prebuilt-sidecar/<target>/`.
+- The `package:release:*` flows expect the prebuilt sidecar archive under `build/prebuilt-sidecar/<target>/`.
 - In the packaged app, confirm `Contents/Resources/runtime/openclaw/payload.tar.gz` exists and that the log shows `Using prebuilt OpenClaw sidecar`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`

@@ -7,10 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { downloadOpenClawSidecar } from './download-openclaw-sidecar.mjs';
 import {
   assertPinnedOpenClawSidecarManifest,
-  parseOpenClawSidecarTarget,
   readOpenClawSidecarVersionManifest,
   resolveOpenClawSidecarTarget,
 } from './lib/openclaw-sidecar-artifacts.mjs';
+import {
+  findHydratedOpenClawSidecarRuntime,
+  hydrateOpenClawSidecar,
+  resolvePrebuiltOpenClawSidecarArchiveRoot,
+} from './lib/openclaw-sidecar-runtime.mjs';
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -80,23 +84,18 @@ export async function runPackageManagerScript(scriptName) {
   });
 }
 
-function findPreparedOpenClawSidecar(projectRoot, target) {
-  const resolvedTarget = parseOpenClawSidecarTarget(target);
-  const targetRoot = path.join(projectRoot, 'build', 'prebuilt-sidecar', resolvedTarget.target);
-  const entryPath = path.join(targetRoot, 'openclaw.mjs');
-  const archiveJsonPath = path.join(targetRoot, 'archive.json');
-  const payloadPath = path.join(targetRoot, 'payload.tar.gz');
+function findPreparedOpenClawSidecarArchive(projectRoot, target, version) {
+  const archiveRoot = resolvePrebuiltOpenClawSidecarArchiveRoot(projectRoot, target);
+  const archiveJsonPath = path.join(archiveRoot, 'archive.json');
+  const payloadPath = path.join(archiveRoot, 'payload.tar.gz');
 
-  if (!fs.existsSync(entryPath) || !fs.existsSync(archiveJsonPath) || !fs.existsSync(payloadPath)) {
+  if (!fs.existsSync(archiveJsonPath) || !fs.existsSync(payloadPath)) {
     return null;
   }
 
-  let manifestVersion;
   try {
-    const manifest = assertPinnedOpenClawSidecarManifest(readOpenClawSidecarVersionManifest(projectRoot));
-    manifestVersion = manifest.version;
     const archiveMetadata = JSON.parse(fs.readFileSync(archiveJsonPath, 'utf8'));
-    if (archiveMetadata.version !== manifest.version) {
+    if (archiveMetadata.version !== version) {
       return null;
     }
   } catch {
@@ -104,9 +103,9 @@ function findPreparedOpenClawSidecar(projectRoot, target) {
   }
 
   return {
-    target: resolvedTarget.target,
-    targetRoot,
-    version: manifestVersion,
+    target,
+    targetRoot: archiveRoot,
+    version,
   };
 }
 
@@ -115,28 +114,40 @@ export async function prepareSidecarRuntime({
   target = resolveOpenClawSidecarTarget(),
   runScript = runPackageManagerScript,
   downloadSidecar = downloadOpenClawSidecar,
+  hydrateSidecar = hydrateOpenClawSidecar,
   log = (message) => process.stdout.write(`${message}\n`),
 } = {}) {
-  const resolvedTarget = parseOpenClawSidecarTarget(target);
+  const manifest = assertPinnedOpenClawSidecarManifest(readOpenClawSidecarVersionManifest(projectRoot));
+  const sidecarVersion = manifest.version;
 
-  log(`Preparing sidecar runtime for ${resolvedTarget.target}`);
+  log(`Preparing sidecar runtime for ${target}`);
 
-  if (resolvedTarget.platform === 'darwin') {
+  if (target.startsWith('darwin-')) {
     log('Preparing bundled macOS binaries');
     await runScript('prep:mac-binaries');
-  } else if (resolvedTarget.platform === 'win32') {
+  } else if (target.startsWith('win32-')) {
     log('Preparing bundled Windows binaries');
     await runScript('prep:win-binaries');
   }
 
-  const existingSidecar = findPreparedOpenClawSidecar(projectRoot, resolvedTarget.target);
-  const result = existingSidecar ?? await downloadSidecar({
+  const preparedRuntime = findHydratedOpenClawSidecarRuntime(projectRoot, target, sidecarVersion);
+  const archive = findPreparedOpenClawSidecarArchive(projectRoot, target, sidecarVersion)
+    ?? await downloadSidecar({
     projectRoot,
-    target: resolvedTarget.target,
+    target,
   });
 
-  if (existingSidecar) {
-    log(`Reusing local sidecar runtime ${result.version} for ${result.target} at ${result.targetRoot}`);
+  const runtime = preparedRuntime ?? await hydrateSidecar({
+    projectRoot,
+    target,
+    version: sidecarVersion,
+    archiveRoot: archive.targetRoot,
+  });
+
+  if (preparedRuntime) {
+    log(`Reusing hydrated sidecar runtime ${runtime.version} for ${runtime.target} at ${runtime.runtimeRoot}`);
+  } else {
+    log(`Hydrated sidecar runtime ${runtime.version} for ${runtime.target} at ${runtime.runtimeRoot}`);
   }
 
   log('Building renderer assets');
@@ -148,7 +159,7 @@ export async function prepareSidecarRuntime({
   log('Preparing preinstalled skills');
   await runScript('bundle:preinstalled-skills');
 
-  log(`Prepared sidecar runtime ${result.version} for ${result.target} at ${result.targetRoot}`);
+  log(`Prepared sidecar runtime ${runtime.version} for ${runtime.target} at ${runtime.runtimeRoot}`);
 }
 
 export async function main(argv = process.argv.slice(2)) {

@@ -335,7 +335,7 @@ pnpm run openclaw-runtime:prepare  # 确保本地开发所需的仓库内 runtim
 pnpm run openclaw-runtime:install  # 刷新开发态和非 sidecar 打包使用的仓库内 OpenClaw runtime
 pnpm run bundle:openclaw-plugins  # 重新生成内置 OpenClaw plugin 镜像
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # 构建独立的 OpenClaw sidecar 产物
-pnpm run openclaw-sidecar:download -- --target darwin-x64  # 下载已 pin 的 sidecar 到 build/prebuilt-sidecar/
+pnpm run openclaw-sidecar:download -- --target darwin-x64  # 下载已 pin 的 sidecar archive 到 build/prebuilt-sidecar/
 pnpm build                # 完整生产构建（含打包资源）
 pnpm package              # 为当前平台打包
 pnpm package:mac          # 为 macOS 打包
@@ -349,6 +349,7 @@ pnpm package:linux        # 为 Linux 打包
 GeeClaw 现在提供了基于 Playwright 的 macOS Electron 冒烟测试，用来覆盖桌面主壳启动链路。
 
 - `pnpm run test:e2e` 会先构建应用，再从 `dist-electron/main/index.js` 启动真实的 Electron 主进程。
+- 在 Electron 启动前，E2E 流程会先把当前平台已 pin 的 OpenClaw sidecar archive 下载到 `build/prebuilt-sidecar/`，再解压还原到 `build/prebuilt-sidecar-runtime/`，并带着 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 启动。
 - 测试会使用独立的临时 `HOME` 和 Electron `userData` 目录，不会污染你平时使用的 GeeClaw 配置。
 - E2E 模式只会跳过 setup / 登录 / provider 这几道前置门槛；进入主界面前仍然要求真实的托管 OpenClaw/Gateway 成功启动。
 - 当前 smoke 覆盖会验证应用能够进入主界面，并在 Dashboard、Skills、Channels 之间完成基础导航。
@@ -399,7 +400,7 @@ GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scri
 ```
 
 - 验证其他目标时，把 `darwin-arm64` 换成 `darwin-x64` 或 `win32-x64`。
-- `package:release:*` 流程默认从 `build/prebuilt-sidecar/<target>/` 读取预构建 sidecar。
+- `package:release:*` 流程默认从 `build/prebuilt-sidecar/<target>/` 读取预构建 sidecar archive。
 - 打出来的包里要确认存在 `Contents/Resources/runtime/openclaw/payload.tar.gz`，并且日志里出现 `Using prebuilt OpenClaw sidecar`。
 
 未发布到 npm 的 OpenClaw plugin 也可以直接放到

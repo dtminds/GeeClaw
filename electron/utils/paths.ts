@@ -108,9 +108,12 @@ function resolveDevelopmentPrebuiltOpenClawSidecarRoot(): string | null {
   }
 
   const normalizedArch = process.arch === 'amd64' ? 'x64' : process.arch;
-  const sidecarRoot = join(process.cwd(), 'build', 'prebuilt-sidecar', `${process.platform}-${normalizedArch}`);
-  const entryPath = join(sidecarRoot, 'openclaw.mjs');
-  return existsSync(entryPath) ? sidecarRoot : null;
+  const target = `${process.platform}-${normalizedArch}`;
+  if (!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(target)) {
+    return null;
+  }
+
+  return join(process.cwd(), 'build', 'prebuilt-sidecar-runtime', target);
 }
 
 /**
