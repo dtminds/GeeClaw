@@ -114,6 +114,7 @@ export const test = base.extend<ElectronFixtures>({
         ...process.env,
         ...electronEnv,
         GEECLAW_E2E: '1',
+        GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR: '1',
         GEECLAW_USER_DATA_DIR: userDataDir,
         HOME: homeDir,
         USERPROFILE: homeDir,

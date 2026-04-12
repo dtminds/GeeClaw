@@ -92,16 +92,23 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
-      - name: Restore Electron build caches
+      - name: Restore Electron binary cache
         if: matrix.platform == 'mac'
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-${{ matrix.arch }}-electron-builder-cache-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'electron-builder.yml') }}
+          path: ~/Library/Caches/electron
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-cache-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-electron-builder-cache-
+            ${{ runner.os }}-${{ matrix.arch }}-electron-cache-
+
+      - name: Restore Electron Builder tools cache
+        if: matrix.platform == 'mac'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-builder-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-electron-builder-tools-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -178,7 +185,6 @@ jobs:
       #   if: matrix.platform == 'linux'
       #   env:
       #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: pnpm run package:linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

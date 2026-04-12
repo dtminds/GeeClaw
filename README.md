@@ -324,7 +324,7 @@ pnpm typecheck            # TypeScript validation
 
 # Testing
 pnpm test                 # Run unit tests
-pnpm run test:e2e         # Run macOS-only Electron smoke E2E
+pnpm run test:e2e         # Run macOS-only Electron smoke E2E (downloads the pinned OpenClaw sidecar first)
 pnpm run test:e2e:headed  # Run the same Electron smoke E2E with a visible window
 pnpm run verify           # Lint + typecheck + unit tests
 
@@ -334,13 +334,10 @@ pnpm run openclaw-runtime:prepare  # Ensure the repo-local runtime exists for lo
 pnpm run openclaw-runtime:install  # Refresh the repo-local OpenClaw runtime used by development and non-sidecar packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
 pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
-pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar into build/prebuilt-sidecar/
-pnpm build                # Full production build (with packaging assets)
-pnpm package              # Package for current platform
-pnpm package:mac          # Package for macOS
+pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar archive into build/prebuilt-sidecar/
+pnpm package:dev          # Prepare local packaging assets for non-sidecar development packaging
+pnpm package:mac:dir      # Build a local macOS dir package against the repo-local runtime
 pnpm package:mac:dir:quick # Fast local macOS dir packaging; reuses existing build/openclaw*, plugins, and skills assets
-pnpm package:win          # Package for Windows
-pnpm package:linux        # Package for Linux
 ```
 
 ### Electron E2E Smoke Test
@@ -348,6 +345,7 @@ pnpm package:linux        # Package for Linux
 GeeClaw now includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
 
 - `pnpm run test:e2e` builds the app and launches the real Electron main process from `dist-electron/main/index.js`.
+- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar archive into `build/prebuilt-sidecar/`, hydrates it into `build/prebuilt-sidecar-runtime/`, and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
 - The test uses isolated temporary `HOME` and Electron `userData` directories so it does not touch your normal GeeClaw profile.
 - In E2E mode, GeeClaw skips setup/login/provider gating only. It still starts the real managed OpenClaw/Gateway stack before entering the main UI.
 - The current smoke coverage verifies that the app can boot into the main shell and navigate between Dashboard, Skills, and Channels.
@@ -393,12 +391,13 @@ To verify a sidecar release artifact locally before running the full release wor
 
 ```bash
 pnpm run openclaw-sidecar:download -- --target darwin-arm64
-pnpm run package:release:resources
-pnpm exec electron-builder --mac --arm64 --dir --config.mac.identity=null
+pnpm run build:vite
+pnpm run package:resources
+GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
 ```
 
 - Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
-- The `package:release:*` flows expect the prebuilt sidecar under `build/prebuilt-sidecar/<target>/`.
+- The `package:release:*` flows expect the prebuilt sidecar archive under `build/prebuilt-sidecar/<target>/`.
 - In the packaged app, confirm `Contents/Resources/runtime/openclaw/payload.tar.gz` exists and that the log shows `Using prebuilt OpenClaw sidecar`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`

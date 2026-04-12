@@ -21,6 +21,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 
+export function createOpenClawSidecarLogger(write = (message) => process.stdout.write(`${message}\n`)) {
+  return (message) => {
+    write(`[openclaw-sidecar] ${message}`);
+  };
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -85,6 +91,7 @@ function sha256File(filePath) {
 export async function downloadOpenClawSidecar({
   projectRoot = ROOT_DIR,
   target = resolveOpenClawSidecarTarget(),
+  log = createOpenClawSidecarLogger(),
 } = {}) {
   const resolvedTarget = parseOpenClawSidecarTarget(target);
   const manifest = assertPinnedOpenClawSidecarManifest(readOpenClawSidecarVersionManifest(projectRoot));
@@ -96,6 +103,7 @@ export async function downloadOpenClawSidecar({
   const targetRoot = path.join(projectRoot, 'build', 'prebuilt-sidecar', resolvedTarget.target);
 
   try {
+    log(`Downloading ${asset.name} for ${resolvedTarget.target} from ${downloadUrl}`);
     const headers = { 'user-agent': 'geeclaw-openclaw-sidecar-downloader' };
     if (process.env.GH_TOKEN) {
       headers.authorization = `Bearer ${process.env.GH_TOKEN}`;
@@ -107,14 +115,18 @@ export async function downloadOpenClawSidecar({
     }
 
     await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(downloadPath));
+    log(`Downloaded ${asset.name} to ${downloadPath}`);
 
+    log(`Verifying checksum for ${asset.name}`);
     const actualSha = sha256File(downloadPath);
     if (actualSha !== asset.sha256) {
       throw new Error(`OpenClaw sidecar checksum mismatch for ${resolvedTarget.target}: expected ${asset.sha256}, received ${actualSha}`);
     }
+    log(`Checksum verified for ${asset.name}`);
 
     fs.rmSync(targetRoot, { recursive: true, force: true });
     fs.mkdirSync(targetRoot, { recursive: true });
+    log(`Extracting ${asset.name} into ${targetRoot}`);
     extractTarGzArchive(downloadPath, targetRoot);
 
     const archiveJsonPath = path.join(targetRoot, 'archive.json');
@@ -127,6 +139,7 @@ export async function downloadOpenClawSidecar({
     if (archiveMetadata.version !== manifest.version) {
       throw new Error(`Downloaded OpenClaw sidecar version mismatch: expected ${manifest.version}, received ${archiveMetadata.version}.`);
     }
+    log(`Validated OpenClaw sidecar ${manifest.version} for ${resolvedTarget.target}`);
 
     return {
       target: resolvedTarget.target,

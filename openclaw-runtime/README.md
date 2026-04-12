@@ -117,6 +117,121 @@ pnpm run openclaw-runtime:clean
 - 已安装时直接复用
 - 尚未安装时自动补装
 
+## 本地开发如何验证升级
+
+如果你刚升级了 `openclaw` 版本，先验证 repo-local runtime 本身是否正常：
+
+```bash
+pnpm install
+pnpm run openclaw-runtime:install
+pnpm run openclaw-runtime:prepare
+pnpm dev
+```
+
+建议按这个顺序理解：
+
+1. 修改 [`openclaw-runtime/package.json`](./package.json)
+2. 在 `openclaw-runtime/` 里刷新 lockfile
+3. 回到仓库根目录执行 `pnpm run openclaw-runtime:install`
+4. 用 `pnpm dev` 验证开发态是否能正常启动
+
+如果只是想强制刷新本地 runtime，不需要动 sidecar，直接执行：
+
+```bash
+pnpm run openclaw-runtime:clean
+pnpm run openclaw-runtime:install
+```
+
+这里的开发态验证始终使用 repo-local `openclaw-runtime/` 安装结果，不会默认下载 sidecar。
+
+例外是 Electron E2E 冒烟测试：
+
+- `pnpm run test:e2e`
+- `pnpm run test:e2e:headed`
+
+这两条命令现在会先下载当前平台的 pinned sidecar，再用 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 启动未打包的 Electron 主进程。这样 E2E 更接近 release 链路，不会为了测试再现场重装一遍 `openclaw-runtime`。
+
+## 本地打包如何验证升级
+
+如果你要验证“升级后的 OpenClaw 是否能正常打进 GeeClaw 包里”，有两条路径：
+
+### 1. 普通本地打包链路
+
+这条链路会走：
+
+- `openclaw-runtime/node_modules/openclaw`
+- `scripts/bundle-openclaw.mjs`
+- `build/openclaw`
+- `after-pack` 归档成 `Contents/Resources/runtime/openclaw/payload.tar.gz`
+
+可直接执行：
+
+```bash
+pnpm run package:mac:dir
+```
+
+或者根据需要改成别的平台目标。
+
+### 2. sidecar release 链路
+
+这条链路用来验证 release CI 消费的预构建 sidecar 是否可用。
+
+如果你本地自己构 sidecar：
+
+```bash
+pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.12-r1
+pnpm run build:vite
+pnpm run package:resources
+GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
+```
+
+如果你是验证已经发布的 sidecar：
+
+```bash
+pnpm run openclaw-sidecar:download -- --target darwin-arm64
+pnpm run build:vite
+pnpm run package:resources
+GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
+```
+
+验证其他目标时，把 `darwin-arm64` 换成：
+
+- `darwin-x64`
+- `win32-x64`
+
+验证完成后，重点检查：
+
+- 打包日志里出现 `Using prebuilt OpenClaw sidecar`
+- 包内存在 `Contents/Resources/runtime/openclaw/payload.tar.gz`
+- 不再依赖 `Contents/Resources/openclaw`
+
+## 如何更新 sidecar pin 版本
+
+主 release workflow 读取的是：
+
+- [`runtime-artifacts/openclaw-sidecar/version.json`](../runtime-artifacts/openclaw-sidecar/version.json)
+
+如果 sidecar release 已经发布，要把新的 pin 版本同步回仓库：
+
+```bash
+gh release download openclaw-sidecar-v2026.4.12-r1 \
+  --pattern openclaw-sidecar-version.json \
+  --dir /tmp/openclaw-sidecar-v2026.4.12-r1
+
+cp /tmp/openclaw-sidecar-v2026.4.12-r1/openclaw-sidecar-version.json \
+  ./runtime-artifacts/openclaw-sidecar/version.json
+```
+
+然后提交更新后的：
+
+- [`runtime-artifacts/openclaw-sidecar/version.json`](../runtime-artifacts/openclaw-sidecar/version.json)
+
+注意：
+
+- sidecar 是 release 产物，不是默认开发输入
+- 开发态和普通本地打包默认仍然走 repo-local `openclaw-runtime/`
+- 只有 `package:release:*` 或显式设置 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 时，才会切到 prebuilt sidecar 模式
+
 ## 为什么要这样做
 
 独立 runtime 的收益是把“依赖安装”还给包管理器，把“打包拷贝”限制为纯文件搬运。

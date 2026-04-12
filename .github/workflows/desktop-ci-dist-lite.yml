@@ -89,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build unsigned macOS app bundle
-        run: pnpm run package:mac:dir
+        run: pnpm run package:mac:dir:sidecar
 
       - name: Verify packaged desktop artifacts
         shell: bash
@@ -114,13 +114,29 @@ jobs:
           test -x "${packaged_executable}"
           test -f "${packaged_asar}"
 
+      - name: Collect packaging diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-diagnostics
+
+          if [ -d release ]; then
+            find release -maxdepth 4 \( -type d -o -type f \) | sort > ci-diagnostics/release-tree.txt
+          else
+            echo "release/ not found" > ci-diagnostics/release-tree.txt
+          fi
+
+          if [ -f builder-debug.yml ]; then
+            cp builder-debug.yml ci-diagnostics/builder-debug.yml
+          fi
+
       - name: Upload packaging diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: desktop-ci-dist-lite-macos
           path: |
-            release/**
-            builder-debug.yml
+            ci-diagnostics/**
           if-no-files-found: warn
           retention-days: 7

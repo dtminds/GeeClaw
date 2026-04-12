@@ -449,7 +449,7 @@ describe('chat live rendering', () => {
     expect(screen.getByRole('img', { name: 'underwater-city' })).toHaveAttribute('src', 'https://example.com/underwater-city.png');
   });
 
-  it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
+  it('preserves tool name mapping and icon while keeping the richer summary detail', () => {
     render(
       <ChatMessage
         message={{
