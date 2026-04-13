@@ -329,11 +329,11 @@
   },
   "agentModels": {
     "title": "模型配置",
-    "description": "为聊天、视觉理解、PDF、生图和生视频选择 GeeClaw 应使用的明确 model ref。",
+    "description": "为聊天、视觉理解、PDF、生图和生视频选择 GeeClaw 要使用的模型。",
     "primary": "默认模型",
     "fallbacks": "备用模型",
     "none": "未配置",
-    "selectPrimary": "选择一个 model ref",
+    "selectPrimary": "选择一个模型",
     "selectPrimaryFirst": "请先选择主模型",
     "selectFallbacks": "选择备用模型",
     "fallbackLimit": "最多选择 3 个备用模型",

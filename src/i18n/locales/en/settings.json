@@ -329,11 +329,11 @@
   },
   "agentModels": {
     "title": "Model Config",
-    "description": "Choose the explicit model refs GeeClaw should use for chat, vision, PDF, image generation, and video generation.",
+    "description": "Choose which models GeeClaw should use for chat, vision, PDF, image generation, and video generation.",
     "primary": "Primary Model",
     "fallbacks": "Fallback Models",
     "none": "Not configured",
-    "selectPrimary": "Select a model ref",
+    "selectPrimary": "Select a model",
     "selectPrimaryFirst": "Choose a primary model first",
     "selectFallbacks": "Select fallback models",
     "fallbackLimit": "Up to 3 fallback models",
