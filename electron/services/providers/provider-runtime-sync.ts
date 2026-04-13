@@ -22,9 +22,7 @@ import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { logger } from '../../utils/logger';
 
 const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
-const GOOGLE_OAUTH_DEFAULT_MODEL_REF = `${GOOGLE_OAUTH_RUNTIME_PROVIDER}/gemini-3-flash-preview`;
 const OPENAI_OAUTH_RUNTIME_PROVIDER = 'openai-codex';
-const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4`;
 
 function isUnregisteredProviderType(type: string): boolean {
   return isMultiInstanceProviderType(type);
@@ -198,6 +196,53 @@ function scheduleGatewayRestart(
 
   logger.info(message);
   gatewayManager.debouncedRestart(options?.delayMs);
+}
+
+function readDefaultChatModelSelection(snapshot: Awaited<ReturnType<typeof getDefaultAgentModelConfig>>): {
+  primary: string | null;
+  fallbacks: string[];
+} {
+  if (snapshot && typeof snapshot === 'object' && 'model' in snapshot) {
+    const model = snapshot.model;
+    if (model && typeof model === 'object') {
+      return {
+        primary: typeof model.primary === 'string' && model.primary.trim() ? model.primary.trim() : null,
+        fallbacks: Array.isArray(model.fallbacks) ? model.fallbacks : [],
+      };
+    }
+  }
+
+  return {
+    primary: typeof snapshot?.primary === 'string' && snapshot.primary.trim() ? snapshot.primary.trim() : null,
+    fallbacks: Array.isArray(snapshot?.fallbacks) ? snapshot.fallbacks : [],
+  };
+}
+
+function mapModelRefToRuntimeProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  modelRef?: string | null,
+): string | undefined {
+  if (!modelRef) {
+    return undefined;
+  }
+
+  const configuredProviderKey = getOpenClawProviderKey(config.type, config.id);
+  if (modelRef.startsWith(`${configuredProviderKey}/`)) {
+    return `${runtimeProviderKey}/${modelRef.slice(configuredProviderKey.length + 1)}`;
+  }
+
+  return modelRef;
+}
+
+function mapFallbackRefsToRuntimeProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  fallbackModelRefs: string[],
+): string[] {
+  return fallbackModelRefs.map((fallbackRef) => (
+    mapModelRefToRuntimeProvider(config, runtimeProviderKey, fallbackRef) ?? fallbackRef
+  ));
 }
 
 export async function syncProviderApiKeyToRuntime(
@@ -420,11 +465,12 @@ export async function syncUpdatedProviderToRuntime(
   }
 
   const ock = context.runtimeProviderKey;
-  const { fallbacks } = await getDefaultAgentModelConfig();
+  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
 
   const defaultProviderId = await getDefaultProvider();
-  if (defaultProviderId === config.id) {
-    const modelOverride = getProviderModelRef(config);
+  if (defaultProviderId === config.id && modelSnapshot.primary) {
+    const modelOverride = mapModelRefToRuntimeProvider(config, ock, modelSnapshot.primary);
+    const fallbacks = mapFallbackRefsToRuntimeProvider(config, ock, modelSnapshot.fallbacks);
     if (!isUnregisteredProviderType(config.type)) {
       await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
     } else {
@@ -484,21 +530,23 @@ export async function syncDefaultProviderToRuntime(
 
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
-  const { fallbacks } = await getDefaultAgentModelConfig();
+  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
+  const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary);
+  const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks);
   const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
   const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
 
   if (!isOAuthProvider) {
-    const modelOverride = getProviderModelRef(provider);
-
-    if (isUnregisteredProviderType(provider.type)) {
-      await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
-        api: provider.apiProtocol || 'openai-completions',
-      }, fallbacks);
-    } else {
-      await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
+    if (runtimePrimaryModel) {
+      if (isUnregisteredProviderType(provider.type)) {
+        await setOpenClawDefaultModelWithOverride(ock, runtimePrimaryModel, {
+          baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
+          api: provider.apiProtocol || 'openai-completions',
+        }, runtimeFallbacks);
+      } else {
+        await setOpenClawDefaultModel(ock, runtimePrimaryModel, runtimeFallbacks);
+      }
     }
 
     if (providerKey) {
@@ -522,17 +570,16 @@ export async function syncDefaultProviderToRuntime(
         });
       }
 
-      const primaryBrowserOAuthModel = getConfiguredProviderModels(provider)[0];
-      const modelOverride = primaryBrowserOAuthModel
-        ? (primaryBrowserOAuthModel.startsWith(`${browserOAuthRuntimeProvider}/`)
-          ? primaryBrowserOAuthModel
-          : `${browserOAuthRuntimeProvider}/${primaryBrowserOAuthModel}`)
-        : (browserOAuthRuntimeProvider === GOOGLE_OAUTH_RUNTIME_PROVIDER
-          ? GOOGLE_OAUTH_DEFAULT_MODEL_REF
-          : OPENAI_OAUTH_DEFAULT_MODEL_REF);
+      if (runtimePrimaryModel) {
+        await setOpenClawDefaultModel(browserOAuthRuntimeProvider, runtimePrimaryModel, runtimeFallbacks);
+        logger.info(`Configured openclaw.json for browser OAuth provider "${provider.id}"`);
+        scheduleGatewayRestart(
+          gatewayManager,
+          `Scheduling Gateway restart after provider switch to "${browserOAuthRuntimeProvider}"`,
+        );
+        return;
+      }
 
-      await setOpenClawDefaultModel(browserOAuthRuntimeProvider, modelOverride, fallbacks);
-      logger.info(`Configured openclaw.json for browser OAuth provider "${provider.id}"`);
       scheduleGatewayRestart(
         gatewayManager,
         `Scheduling Gateway restart after provider switch to "${browserOAuthRuntimeProvider}"`,
@@ -552,14 +599,16 @@ export async function syncDefaultProviderToRuntime(
 
     const targetProviderKey = 'minimax-portal';
 
-    await setOpenClawDefaultModelWithOverride(targetProviderKey, getProviderModelRef(provider), {
-      baseUrl,
-      api,
-      authHeader: true,
-      apiKeyEnv: 'minimax-oauth',
-    }, fallbacks);
+    if (runtimePrimaryModel) {
+      await setOpenClawDefaultModelWithOverride(targetProviderKey, runtimePrimaryModel, {
+        baseUrl,
+        api,
+        authHeader: true,
+        apiKeyEnv: 'minimax-oauth',
+      }, runtimeFallbacks);
 
-    logger.info(`Configured openclaw.json for OAuth provider "${provider.type}"`);
+      logger.info(`Configured openclaw.json for OAuth provider "${provider.type}"`);
+    }
 
     try {
       const models = getProviderCatalogModelIds(provider).map((id) => ({ id, name: id, reasoning: false }));
