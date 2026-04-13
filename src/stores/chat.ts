@@ -4,6 +4,7 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
+import { AppError } from '@/lib/error-model';
 import { hostApiFetch } from '@/lib/host-api';
 import {
   cleanUserMessageText,
@@ -168,6 +169,7 @@ let _lastChatEventAt = 0;
 // poll chat.history to surface intermediate tool-call turns.
 let _historyPollTimer: ReturnType<typeof setTimeout> | null = null;
 let _historyStartupRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _historyStartupRetryState: { requestKey: string; attempt: number } | null = null;
 
 // Timer for delayed error finalization. When the Gateway reports a mid-stream
 // error (e.g. "terminated"), it may retry internally and recover. We wait
@@ -175,6 +177,8 @@ let _historyStartupRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const CHAT_TRACE_PREFIX = '[chat-trace]';
+const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
+const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
 function logChatTrace(event: string, details?: Record<string, unknown>): void {
   console.info(`${CHAT_TRACE_PREFIX} ${event}`, {
@@ -272,15 +276,49 @@ function clearHistoryPoll(): void {
   }
 }
 
-function clearHistoryStartupRetry(): void {
+function clearHistoryStartupRetryTimer(): void {
   if (_historyStartupRetryTimer) {
     clearTimeout(_historyStartupRetryTimer);
     _historyStartupRetryTimer = null;
   }
 }
 
+function clearHistoryStartupRetry(): void {
+  clearHistoryStartupRetryTimer();
+  _historyStartupRetryState = null;
+}
+
+function getHistoryStartupErrorCode(error: unknown): string | undefined {
+  if (error instanceof AppError) {
+    const code = error.details?.gatewayErrorCode;
+    return typeof code === 'string' ? code : undefined;
+  }
+  if (error && typeof error === 'object') {
+    const code = (error as { gatewayErrorCode?: unknown }).gatewayErrorCode;
+    if (typeof code === 'string') {
+      return code;
+    }
+    const detailsCode = (error as { details?: { gatewayErrorCode?: unknown } }).details?.gatewayErrorCode;
+    return typeof detailsCode === 'string' ? detailsCode : undefined;
+  }
+  return undefined;
+}
+
 function isHistoryUnavailableDuringGatewayStartup(error: unknown): boolean {
+  const structuredCode = getHistoryStartupErrorCode(error);
+  if (structuredCode === CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE) {
+    return true;
+  }
   return String(error).toLowerCase().includes('chat.history unavailable during gateway startup');
+}
+
+function getHistoryRequestKey(request: {
+  sessionKey: string;
+  desktopSessionId: string;
+  viewMode: ChatViewMode;
+  cronRunId: string;
+}): string {
+  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}`;
 }
 
 function isSameHistoryRequest(
@@ -922,7 +960,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadHistory: async (quiet = false) => {
     const startedAt = Date.now();
-    clearHistoryStartupRetry();
+    clearHistoryStartupRetryTimer();
     const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun } = get();
     logChatTrace('loadHistory:start', {
       quiet,
@@ -933,6 +971,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ...summarizeChatSelection(get()),
     });
     if (!currentSessionKey) {
+      clearHistoryStartupRetry();
       logChatTrace('loadHistory:skip-no-session', {
         quiet,
         durationMs: Date.now() - startedAt,
@@ -976,6 +1015,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
+        clearHistoryStartupRetry();
         set({
           messages: displayMessages,
           thinkingLevel: null,
@@ -987,6 +1027,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
+        clearHistoryStartupRetry();
         set({ messages: [], loading: false, error: String(err) });
       }
       return;
@@ -1000,6 +1041,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         'chat.history',
         { sessionKey: currentSessionKey, limit: 200 },
       );
+      clearHistoryStartupRetry();
       logChatTrace('loadHistory:rpc-resolved', {
         quiet,
         durationMs: Date.now() - startedAt,
@@ -1045,6 +1087,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           return;
         }
+        clearHistoryStartupRetry();
         set({ messages: finalMessages, thinkingLevel, loading: false });
         logChatTrace('loadHistory:applied', {
           quiet,
@@ -1187,6 +1230,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           return;
         }
+        clearHistoryStartupRetry();
         set({ messages: [], loading: false });
         logChatTrace('loadHistory:empty', {
           quiet,
@@ -1200,17 +1244,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const currentState = get();
         const shouldRetrySameRequest = isSameHistoryRequest(request, currentState);
         if (shouldRetrySameRequest) {
+          const requestKey = getHistoryRequestKey(request);
+          const nextAttempt = _historyStartupRetryState?.requestKey === requestKey
+            ? _historyStartupRetryState.attempt + 1
+            : 1;
           const keepLoading = currentState.messages.length === 0;
+          const retryDelayMs = CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS[nextAttempt - 1];
+          if (!retryDelayMs) {
+            clearHistoryStartupRetry();
+            logChatTrace('loadHistory:startup-retry-exhausted', {
+              quiet,
+              durationMs: Date.now() - startedAt,
+              requestSessionKey: request.sessionKey,
+              attempts: nextAttempt - 1,
+              error: String(err),
+              ...summarizeChatSelection(currentState),
+            });
+            set({
+              error: String(err),
+              loading: false,
+              ...(keepLoading ? { messages: [] } : {}),
+            });
+            return;
+          }
+          _historyStartupRetryState = {
+            requestKey,
+            attempt: nextAttempt,
+          };
           set({
             error: null,
             ...(keepLoading ? { loading: true } : {}),
           });
           _historyStartupRetryTimer = setTimeout(() => {
             if (!isSameHistoryRequest(request, get())) {
+              clearHistoryStartupRetry();
               return;
             }
             logChatTrace('loadHistory:startup-retry', {
               quiet,
+              attempt: nextAttempt,
+              retryDelayMs,
               requestSessionKey: request.sessionKey,
               requestDesktopSessionId: request.desktopSessionId,
               requestViewMode: request.viewMode,
@@ -1218,19 +1291,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...summarizeChatSelection(get()),
             });
             void get().loadHistory(true);
-          }, 1000);
+          }, retryDelayMs);
           logChatTrace('loadHistory:startup-unavailable', {
             quiet,
             durationMs: Date.now() - startedAt,
+            attempt: nextAttempt,
             requestSessionKey: request.sessionKey,
             keepLoading,
             retryScheduled: true,
+            retryDelayMs,
             error: String(err),
             ...summarizeChatSelection(currentState),
           });
           return;
         }
       }
+      clearHistoryStartupRetry();
       logChatTrace('loadHistory:error', {
         quiet,
         durationMs: Date.now() - startedAt,

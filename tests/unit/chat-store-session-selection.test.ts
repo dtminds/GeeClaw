@@ -6,6 +6,7 @@ vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
 }));
 
+import { AppError } from '@/lib/error-model';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -260,7 +261,7 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().loading).toBe(false);
   });
 
-  it('retries history loading while gateway startup temporarily blocks chat.history', async () => {
+  it('retries history loading when gateway startup unavailability is surfaced via structured error metadata', async () => {
     vi.useFakeTimers();
 
     hostApiFetchMock.mockImplementation(async (path: string, init?: { method?: string }) => {
@@ -291,7 +292,9 @@ describe('chat store session selection', () => {
         if (method === 'chat.history' && params?.sessionKey === mainSession.gatewaySessionKey) {
           historyCalls += 1;
           if (historyCalls === 1) {
-            throw new Error('chat.history unavailable during gateway startup');
+            throw new AppError('GATEWAY', 'gateway startup still warming history', undefined, {
+              gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+            });
           }
           return {
             messages: [{ id: 'main-msg', role: 'assistant', content: 'main session', timestamp: 1 }],
@@ -317,6 +320,58 @@ describe('chat store session selection', () => {
     ]);
     expect(useChatStore.getState().currentSessionKey).toBe(mainSession.gatewaySessionKey);
     expect(useChatStore.getState().isDraftSession).toBe(false);
+  });
+
+  it('stops retrying chat history after bounded startup attempts and surfaces the error', async () => {
+    vi.useFakeTimers();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [mainSession],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'main',
+      loading: false,
+      messages: [],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === mainSession.gatewaySessionKey) {
+          historyCalls += 1;
+          throw new AppError('GATEWAY', `startup unavailable attempt ${historyCalls}`, undefined, {
+            gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+          });
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().openAgentMainSession('main');
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(historyCalls).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(historyCalls).toBe(3);
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(historyCalls).toBe(4);
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(historyCalls).toBe(4);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().error).toContain('startup unavailable attempt 4');
   });
 
   it('ignores stale history responses after the selected session changes', async () => {

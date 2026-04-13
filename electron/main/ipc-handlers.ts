@@ -1003,6 +1003,14 @@ function registerGatewayHandlers(
     timeoutMs?: number;
   };
 
+  const resolveGatewayRpcErrorCode = (method: string, error: unknown): string | undefined => {
+    const message = String(error).toLowerCase();
+    if (method === 'chat.history' && message.includes('chat.history unavailable during gateway startup')) {
+      return 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
+    }
+    return undefined;
+  };
+
   // Get Gateway status
   ipcMain.handle('gateway:status', async () => {
     await gatewayManager.attachToExistingGatewayIfAvailable({
@@ -1076,6 +1084,7 @@ function registerGatewayHandlers(
       }
       return { success: true, result };
     } catch (error) {
+      const errorCode = resolveGatewayRpcErrorCode(method, error);
       if (shouldTrace) {
         logger.warn('[chat-trace] ipc gateway:rpc:error', {
           at: new Date().toISOString(),
@@ -1089,7 +1098,7 @@ function registerGatewayHandlers(
         });
       }
       logger.warn(`[gateway:rpc] ${method} failed (timeoutMs=${timeoutMs ?? 30000}): ${String(error)}`);
-      return { success: false, error: String(error) };
+      return { success: false, error: String(error), errorCode };
     }
   });
 
