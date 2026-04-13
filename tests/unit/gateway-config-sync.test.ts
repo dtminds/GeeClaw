@@ -186,6 +186,24 @@ describe('syncGatewayConfigBeforeLaunch', () => {
 
     expect(syncOpenClawSsrfPolicySettings).toHaveBeenCalledTimes(1);
   });
+
+  it('continues startup patching when proxy sync fails', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    const { logger } = await import('@electron/utils/logger');
+
+    vi.mocked(syncProxyConfigToOpenClaw).mockRejectedValueOnce(new Error('proxy sync failed'));
+
+    await expect(syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788)).resolves.toBeUndefined();
+
+    expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+    expect(sanitizeOpenClawConfig).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith('Failed to sync proxy config to openclaw.json:', expect.any(Error));
+  });
 });
 
 describe('buildGatewayForkEnv', () => {
