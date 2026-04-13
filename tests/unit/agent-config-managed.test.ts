@@ -825,7 +825,7 @@ describe('managed agent config domain', () => {
   });
 
   it('preserves marketplace model config on the installed agent entry', async () => {
-    const { configDir, homeDir, agentConfig } = await setupManagedPresetFixture({
+    const { configDir, agentConfig } = await setupManagedPresetFixture({
       marketplacePackage: {
         meta: {
           agent: {

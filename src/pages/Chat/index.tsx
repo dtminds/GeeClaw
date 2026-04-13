@@ -99,6 +99,12 @@ interface AgentDefaultModelSnapshot {
   availableModels: AvailableProviderModelGroup[];
 }
 
+interface DefaultModelFetchState {
+  requestKey: string | null;
+  snapshot: AgentDefaultModelSnapshot | null;
+  loaded: boolean;
+}
+
 export function Chat() {
   const { t } = useTranslation('chat');
   const skipNextAutoLoadRef = useRef(false);
@@ -111,8 +117,11 @@ export function Chat() {
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
-  const [defaultModelSnapshot, setDefaultModelSnapshot] = useState<AgentDefaultModelSnapshot | null>(null);
-  const [defaultModelLoaded, setDefaultModelLoaded] = useState(false);
+  const [defaultModelState, setDefaultModelState] = useState<DefaultModelFetchState>({
+    requestKey: null,
+    snapshot: null,
+    loaded: false,
+  });
 
   const messages = useChatStore((s) => s.messages);
   const loading = useChatStore((s) => s.loading);
@@ -153,6 +162,13 @@ export function Chat() {
   const autoScrollSessionId = currentDesktopSessionId
     || (currentViewMode === 'cron' && selectedCronRun ? `cron:${selectedCronRun.jobId}:${selectedCronRun.id}` : currentSessionKey);
   const cronComposerUnavailable = currentViewMode === 'cron' && !selectedCronRun?.sessionKey;
+  const defaultModelRequestKey = isGatewayRunning ? (location.key || location.pathname) : null;
+  const defaultModelSnapshot = defaultModelState.requestKey === defaultModelRequestKey
+    ? defaultModelState.snapshot
+    : null;
+  const defaultModelLoaded = defaultModelRequestKey !== null
+    && defaultModelState.requestKey === defaultModelRequestKey
+    && defaultModelState.loaded;
   const availableModelRefs = useMemo(
     () => new Set(defaultModelSnapshot?.availableModels.flatMap((group) => group.modelRefs) ?? []),
     [defaultModelSnapshot],
@@ -188,36 +204,36 @@ export function Chat() {
       : null;
 
   useEffect(() => {
-    if (!isGatewayRunning) {
-      setDefaultModelSnapshot(null);
-      setDefaultModelLoaded(false);
+    if (!defaultModelRequestKey) {
       return;
     }
 
     let cancelled = false;
-    setDefaultModelLoaded(false);
 
     void hostApiFetch<AgentDefaultModelSnapshot>('/api/agents/default-model')
       .then((snapshot) => {
         if (!cancelled) {
-          setDefaultModelSnapshot(snapshot);
+          setDefaultModelState({
+            requestKey: defaultModelRequestKey,
+            snapshot,
+            loaded: true,
+          });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setDefaultModelSnapshot(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDefaultModelLoaded(true);
+          setDefaultModelState({
+            requestKey: defaultModelRequestKey,
+            snapshot: null,
+            loaded: true,
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isGatewayRunning, location.key]);
+  }, [defaultModelRequestKey]);
 
   // ── Auto-scroll behaviour ──────────────────────────────────────
   const {
@@ -292,6 +308,7 @@ export function Chat() {
     navigate,
     openAgentMainSession,
     requestedAgentId,
+    requestedAgentNavigationKey,
   ]);
 
   // Gateway not running
