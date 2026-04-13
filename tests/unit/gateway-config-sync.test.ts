@@ -107,6 +107,14 @@ vi.mock('@electron/utils/openclaw-config-sanitize', () => ({
   sanitizeOpenClawConfig: vi.fn(async () => {}),
 }));
 
+vi.mock('@electron/utils/openclaw-safety-settings', () => ({
+  syncOpenClawSafetySettings: vi.fn(async () => {}),
+}));
+
+vi.mock('@electron/utils/openclaw-ssrf-policy-settings', () => ({
+  syncOpenClawSsrfPolicySettings: vi.fn(async () => {}),
+}));
+
 vi.mock('@electron/utils/plugin-install', () => ({
   syncBundledPluginLoadPathsToOpenClaw: vi.fn(async () => {}),
   ensureAlwaysEnabledBundledPluginsConfigured: vi.fn(async () => ({
@@ -164,6 +172,20 @@ afterEach(() => {
     rmSync(runtimeDir, { recursive: true, force: true });
   }
   runtimeDirsToCleanup.clear();
+});
+
+describe('syncGatewayConfigBeforeLaunch', () => {
+  it('repairs managed SSRF policy settings before Gateway launch', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const { syncOpenClawSsrfPolicySettings } = await import('@electron/utils/openclaw-ssrf-policy-settings');
+
+    await syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788);
+
+    expect(syncOpenClawSsrfPolicySettings).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('buildGatewayForkEnv', () => {
