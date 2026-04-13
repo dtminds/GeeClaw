@@ -219,7 +219,7 @@ gh release download openclaw-sidecar-v2026.4.12-r1 \
   --dir /tmp/openclaw-sidecar-v2026.4.12-r1
 
 cp /tmp/openclaw-sidecar-v2026.4.12-r1/openclaw-sidecar-version.json \
-  ./openclaw-runtime/version.json
+  ./version.json
 ```
 
 然后提交更新后的：
