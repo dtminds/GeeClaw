@@ -2118,7 +2118,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
     const shouldReloadHistoryForMissingResult = phase === 'result'
-      && !output
+      && output === undefined
       && !get().toolResultHistoryReloadedIds.has(toolCallId);
 
     _lastChatEventAt = Date.now();
