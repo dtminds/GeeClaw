@@ -1744,17 +1744,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
-            logChatTrace('toolresult-final-message', {
-              runId,
-              eventSessionKey,
-              toolCallId: finalMsg.toolCallId,
-              toolName: finalMsg.toolName,
-              timestamp: finalMsg.timestamp,
-              contentType: Array.isArray(finalMsg.content) ? 'blocks' : typeof finalMsg.content,
-              contentPreview: getMessageText(finalMsg.content).slice(0, 500),
-              details: finalMsg.details,
-              isError: finalMsg.isError,
-            });
             const toolFiles: AttachedFileMeta[] = [
               ...extractImagesAsAttachedFiles(finalMsg.content),
             ];
@@ -2030,34 +2019,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       clearErrorRecoveryTimer();
       set({ error: null });
     }
-
-    logChatTrace('tool-stream-event', {
-      runId: event.runId,
-      eventSessionKey,
-      toolCallId,
-      name,
-      phase,
-      status,
-      durationMs,
-      rawOutputType: rawOutput == null
-        ? String(rawOutput)
-        : Array.isArray(rawOutput)
-          ? 'array'
-          : typeof rawOutput,
-      rawOutputPreview: typeof rawOutput === 'string'
-        ? rawOutput.slice(0, 500)
-        : (() => {
-            try {
-              return rawOutput == null ? '' : JSON.stringify(rawOutput).slice(0, 500);
-            } catch {
-              return String(rawOutput).slice(0, 500);
-            }
-          })(),
-      extractedOutputPreview: output?.slice(0, 500),
-      dataKeys: Object.keys(data),
-      hasResultField: Object.prototype.hasOwnProperty.call(data, 'result'),
-      hasPartialResultField: Object.prototype.hasOwnProperty.call(data, 'partialResult'),
-    });
 
     set((s) => {
       const nextToolStreamById = new Map(s.toolStreamById);
