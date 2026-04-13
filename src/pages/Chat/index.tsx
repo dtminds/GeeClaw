@@ -71,12 +71,17 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
   })
   .slice(0, 5);
 
+const consumedRequestedAgentNavigationKeys = new Set<string>();
+
 export function Chat() {
   const { t } = useTranslation('chat');
   const skipNextAutoLoadRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const requestedAgentId = (location.state as { requestedAgentId?: string } | null)?.requestedAgentId ?? '';
+  const requestedAgentNavigationKey = requestedAgentId
+    ? `${location.key || location.pathname}:${requestedAgentId}`
+    : '';
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
@@ -153,30 +158,91 @@ export function Chat() {
     let cancelled = false;
     const hasExistingMessages = useChatStore.getState().messages.length > 0;
     (async () => {
+      const startedAt = Date.now();
+      console.info('[chat-trace] Chat effect:start', {
+        at: new Date().toISOString(),
+        requestedAgentId,
+        requestedAgentNavigationKey,
+        hasExistingMessages,
+        isGatewayRunning,
+        currentSessionKey: useChatStore.getState().currentSessionKey,
+        currentDesktopSessionId: useChatStore.getState().currentDesktopSessionId,
+      });
+      if (requestedAgentNavigationKey && consumedRequestedAgentNavigationKeys.has(requestedAgentNavigationKey)) {
+        console.info('[chat-trace] Chat effect:skip-consumed-requested-agent', {
+          at: new Date().toISOString(),
+          requestedAgentId,
+          requestedAgentNavigationKey,
+          durationMs: Date.now() - startedAt,
+        });
+        return;
+      }
       if (skipNextAutoLoadRef.current && !requestedAgentId) {
+        console.info('[chat-trace] Chat effect:skip-next-auto-load', {
+          at: new Date().toISOString(),
+          requestedAgentId,
+          durationMs: Date.now() - startedAt,
+        });
         skipNextAutoLoadRef.current = false;
         return;
       }
       const fetchAgentsPromise = fetchAgents();
       if (cancelled) return;
       if (requestedAgentId) {
+        if (requestedAgentNavigationKey) {
+          consumedRequestedAgentNavigationKeys.add(requestedAgentNavigationKey);
+        }
+        skipNextAutoLoadRef.current = true;
+        navigate(location.pathname, { replace: true });
         await openAgentMainSession(requestedAgentId);
         if (cancelled) return;
+        console.info('[chat-trace] Chat effect:requested-agent-opened', {
+          at: new Date().toISOString(),
+          requestedAgentId,
+          requestedAgentNavigationKey,
+          durationMs: Date.now() - startedAt,
+          currentSessionKey: useChatStore.getState().currentSessionKey,
+          currentDesktopSessionId: useChatStore.getState().currentDesktopSessionId,
+        });
         void fetchAgentsPromise.catch((error) => {
           console.warn('Failed to refresh agents while opening requested agent session:', error);
         });
-        skipNextAutoLoadRef.current = true;
-        navigate(location.pathname, { replace: true });
         return;
       }
       await fetchAgentsPromise;
       if (cancelled) return;
+      console.info('[chat-trace] Chat effect:fetchAgents-done', {
+        at: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+      });
       await loadSessions();
       if (cancelled) return;
+      console.info('[chat-trace] Chat effect:loadSessions-done', {
+        at: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        currentSessionKey: useChatStore.getState().currentSessionKey,
+        currentDesktopSessionId: useChatStore.getState().currentDesktopSessionId,
+        isDraftSession: useChatStore.getState().isDraftSession,
+      });
       await loadHistory(hasExistingMessages);
+      console.info('[chat-trace] Chat effect:loadHistory-done', {
+        at: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        currentSessionKey: useChatStore.getState().currentSessionKey,
+        currentDesktopSessionId: useChatStore.getState().currentDesktopSessionId,
+        isDraftSession: useChatStore.getState().isDraftSession,
+        messagesCount: useChatStore.getState().messages.length,
+      });
     })();
     return () => {
       cancelled = true;
+      console.info('[chat-trace] Chat effect:cleanup', {
+        at: new Date().toISOString(),
+        currentSessionKey: useChatStore.getState().currentSessionKey,
+        currentDesktopSessionId: useChatStore.getState().currentDesktopSessionId,
+        isDraftSession: useChatStore.getState().isDraftSession,
+        messagesCount: useChatStore.getState().messages.length,
+      });
       // If the user navigates away without sending any messages, remove the
       // empty session so it doesn't linger as a ghost entry in the sidebar.
       cleanupEmptySession();

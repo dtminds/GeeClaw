@@ -644,12 +644,37 @@ export class GatewayManager extends EventEmitter {
    */
   async rpc<T>(method: string, params?: unknown, timeoutMs = 30000): Promise<T> {
     return new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const shouldTrace = method === 'chat.history';
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        if (shouldTrace) {
+          logger.warn('[chat-trace] gatewayManager.rpc:not-connected', {
+            at: new Date().toISOString(),
+            method,
+            timeoutMs,
+            state: this.status.state,
+            sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+              ? (params as Record<string, unknown>).sessionKey
+              : undefined,
+          });
+        }
         reject(new Error('Gateway not connected'));
         return;
       }
 
       const id = crypto.randomUUID();
+      if (shouldTrace) {
+        logger.info('[chat-trace] gatewayManager.rpc:start', {
+          at: new Date().toISOString(),
+          method,
+          requestId: id,
+          timeoutMs,
+          state: this.status.state,
+          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+            ? (params as Record<string, unknown>).sessionKey
+            : undefined,
+        });
+      }
 
       // Set timeout for request
       const timeout = setTimeout(() => {
@@ -658,8 +683,37 @@ export class GatewayManager extends EventEmitter {
 
       // Store pending request
       this.pendingRequests.set(id, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
+        resolve: ((value: unknown) => {
+          if (shouldTrace) {
+            logger.info('[chat-trace] gatewayManager.rpc:resolved', {
+              at: new Date().toISOString(),
+              method,
+              requestId: id,
+              timeoutMs,
+              durationMs: Date.now() - startedAt,
+              sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+                ? (params as Record<string, unknown>).sessionKey
+                : undefined,
+            });
+          }
+          (resolve as (value: unknown) => void)(value);
+        }),
+        reject: ((error: unknown) => {
+          if (shouldTrace) {
+            logger.warn('[chat-trace] gatewayManager.rpc:rejected', {
+              at: new Date().toISOString(),
+              method,
+              requestId: id,
+              timeoutMs,
+              durationMs: Date.now() - startedAt,
+              error: String(error),
+              sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+                ? (params as Record<string, unknown>).sessionKey
+                : undefined,
+            });
+          }
+          reject(error);
+        }),
         timeout,
       });
 
@@ -674,6 +728,16 @@ export class GatewayManager extends EventEmitter {
       try {
         this.ws.send(JSON.stringify(request));
       } catch (error) {
+        if (shouldTrace) {
+          logger.warn('[chat-trace] gatewayManager.rpc:send-error', {
+            at: new Date().toISOString(),
+            method,
+            requestId: id,
+            timeoutMs,
+            durationMs: Date.now() - startedAt,
+            error: String(error),
+          });
+        }
         rejectPendingGatewayRequest(this.pendingRequests, id, new Error(`Failed to send RPC request: ${error}`));
       }
     });

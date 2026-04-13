@@ -14,6 +14,7 @@ let gatewayEventUnsubscribers: Array<() => void> | null = null;
 let gatewayReconcileTimer: ReturnType<typeof setInterval> | null = null;
 let channelWarmupRefreshTimers: Array<ReturnType<typeof setTimeout>> = [];
 let channelStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+const GATEWAY_TRACE_PREFIX = '[chat-trace]';
 
 const CHANNEL_WARMUP_REFRESH_DELAYS_MS = [1500, 5000, 12000, 25000];
 const CHANNEL_STATUS_REFRESH_DEBOUNCE_MS = 400;
@@ -41,6 +42,10 @@ interface GatewayState {
 
 function logGatewayAsyncError(context: string, error: unknown): void {
   console.error(`Failed to ${context}:`, error);
+}
+
+function shouldTraceGatewayRpc(method: string): boolean {
+  return method === 'chat.history';
 }
 
 function clearChannelWarmupRefreshTimers(): void {
@@ -360,11 +365,34 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   },
 
   rpc: async <T>(method: string, params?: unknown, timeoutMs?: number): Promise<T> => {
+    const startedAt = Date.now();
+    if (shouldTraceGatewayRpc(method)) {
+      console.info(`${GATEWAY_TRACE_PREFIX} gatewayStore.rpc:start`, {
+        at: new Date().toISOString(),
+        method,
+        timeoutMs: timeoutMs ?? 30000,
+        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+          ? (params as Record<string, unknown>).sessionKey
+          : undefined,
+      });
+    }
     const response = await invokeIpc<{
       success: boolean;
       result?: T;
       error?: string;
     }>('gateway:rpc', method, params, timeoutMs);
+    if (shouldTraceGatewayRpc(method)) {
+      console.info(`${GATEWAY_TRACE_PREFIX} gatewayStore.rpc:resolved`, {
+        at: new Date().toISOString(),
+        method,
+        timeoutMs: timeoutMs ?? 30000,
+        durationMs: Date.now() - startedAt,
+        success: response.success,
+        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+          ? (params as Record<string, unknown>).sessionKey
+          : undefined,
+      });
+    }
     if (!response.success) {
       throw new Error(response.error || `Gateway RPC failed: ${method}`);
     }

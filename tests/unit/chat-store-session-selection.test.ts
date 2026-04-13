@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostApiFetchMock = vi.fn();
 
@@ -111,6 +111,10 @@ describe('chat store session selection', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('keeps the targeted agent selected when session refresh does not include the newly created main session yet', async () => {
     hostApiFetchMock.mockResolvedValueOnce({
       success: true,
@@ -181,6 +185,43 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().currentAgentId).toBe('main');
   });
 
+  it('refreshes session selection without eagerly loading chat history', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      if (method === 'chat.history') {
+        return { messages: [] };
+      }
+      return {};
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: rpcMock,
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'writer',
+      isDraftSession: false,
+    });
+
+    hostApiFetchMock.mockResolvedValueOnce({
+      sessions: [writerSession, mainSession],
+    });
+
+    await useChatStore.getState().loadSessions();
+
+    expect(useChatStore.getState().currentSessionKey).toBe(writerSession.gatewaySessionKey);
+    expect(useChatStore.getState().currentDesktopSessionId).toBe(writerSession.id);
+    expect(rpcMock).toHaveBeenCalledWith('sessions.list', {});
+    expect(rpcMock).not.toHaveBeenCalledWith('chat.history', expect.anything());
+  });
+
   it('marks the chat as loading while opening an existing agent main session history', async () => {
     const historyDeferred = createDeferred<{ messages: [] }>();
 
@@ -217,6 +258,65 @@ describe('chat store session selection', () => {
     await openPromise;
 
     expect(useChatStore.getState().loading).toBe(false);
+  });
+
+  it('retries history loading while gateway startup temporarily blocks chat.history', async () => {
+    vi.useFakeTimers();
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/api/desktop-sessions/desktop-main' && init?.method === 'PUT') {
+        return { success: true, session: { ...mainSession, lastMessagePreview: 'main session', updatedAt: 1000 } };
+      }
+      return { sessions: [] };
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [mainSession],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'main',
+      loading: false,
+      messages: [],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === mainSession.gatewaySessionKey) {
+          historyCalls += 1;
+          if (historyCalls === 1) {
+            throw new Error('chat.history unavailable during gateway startup');
+          }
+          return {
+            messages: [{ id: 'main-msg', role: 'assistant', content: 'main session', timestamp: 1 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().openAgentMainSession('main');
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(true);
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().error).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(historyCalls).toBe(2);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'main-msg', content: 'main session' }),
+    ]);
+    expect(useChatStore.getState().currentSessionKey).toBe(mainSession.gatewaySessionKey);
+    expect(useChatStore.getState().isDraftSession).toBe(false);
   });
 
   it('ignores stale history responses after the selected session changes', async () => {

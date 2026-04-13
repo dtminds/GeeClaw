@@ -1048,10 +1048,46 @@ function registerGatewayHandlers(
 
   // Gateway RPC call
   ipcMain.handle('gateway:rpc', async (_, method: string, params?: unknown, timeoutMs?: number) => {
+    const startedAt = Date.now();
+    const shouldTrace = method === 'chat.history';
+    if (shouldTrace) {
+      logger.info('[chat-trace] ipc gateway:rpc:start', {
+        at: new Date().toISOString(),
+        method,
+        timeoutMs: timeoutMs ?? 30000,
+        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+          ? (params as Record<string, unknown>).sessionKey
+          : undefined,
+      });
+    }
     try {
       const result = await gatewayManager.rpc(method, params, timeoutMs);
+      if (shouldTrace) {
+        logger.info('[chat-trace] ipc gateway:rpc:resolved', {
+          at: new Date().toISOString(),
+          method,
+          timeoutMs: timeoutMs ?? 30000,
+          durationMs: Date.now() - startedAt,
+          success: true,
+          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+            ? (params as Record<string, unknown>).sessionKey
+            : undefined,
+        });
+      }
       return { success: true, result };
     } catch (error) {
+      if (shouldTrace) {
+        logger.warn('[chat-trace] ipc gateway:rpc:error', {
+          at: new Date().toISOString(),
+          method,
+          timeoutMs: timeoutMs ?? 30000,
+          durationMs: Date.now() - startedAt,
+          error: String(error),
+          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
+            ? (params as Record<string, unknown>).sessionKey
+            : undefined,
+        });
+      }
       logger.warn(`[gateway:rpc] ${method} failed (timeoutMs=${timeoutMs ?? 30000}): ${String(error)}`);
       return { success: false, error: String(error) };
     }
