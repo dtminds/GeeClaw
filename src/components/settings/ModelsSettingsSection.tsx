@@ -115,7 +115,9 @@ function ModelSlotEditor(props: {
 
   const handlePrimaryChange = (value: string) => {
     const primary = value || null;
-    const filteredFallbacks = props.slot.fallbacks.filter((ref) => ref !== primary);
+    const filteredFallbacks = primary
+      ? props.slot.fallbacks.filter((ref) => ref !== primary)
+      : [];
     props.onChange({
       ...props.slot,
       configured: props.optional ? true : Boolean(primary || filteredFallbacks.length > 0),
@@ -128,6 +130,8 @@ function ModelSlotEditor(props: {
   const sectionDescription = t(`agentModels.sections.${props.slotKey}.description`);
   const fallbackSummary = props.slot.fallbacks.length > 0
     ? props.slot.fallbacks.join(', ')
+    : !props.slot.primary
+      ? t('agentModels.selectPrimaryFirst')
     : t('agentModels.none');
 
   return (
@@ -204,7 +208,7 @@ function ModelSlotEditor(props: {
                   <button
                     type="button"
                     aria-label={t('agentModels.selectFallbacks')}
-                    disabled={fallbackCandidates.length === 0}
+                    disabled={!props.slot.primary || fallbackCandidates.length === 0}
                     className="modal-field-surface relative h-[44px] w-full rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                   >
                     <span className="block min-w-0 truncate text-left font-mono text-[12px] leading-[42px]">

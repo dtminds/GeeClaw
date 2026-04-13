@@ -103,6 +103,49 @@ describe('ModelsSettingsSection', () => {
     expect(fallbackTrigger).toHaveTextContent('agentModels.none');
   });
 
+  it('disables fallback selection until a primary model is chosen', async () => {
+    hostApiFetchMock.mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: null,
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      availableModels: [
+        {
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          modelRefs: ['openai/gpt-5.4', 'openai/gpt-5.4-mini', 'openai/o3'],
+        },
+      ],
+    });
+
+    render(<ModelsSettingsSection />);
+
+    const fallbackTrigger = await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+    expect(fallbackTrigger).toBeDisabled();
+    expect(fallbackTrigger).toHaveTextContent('agentModels.selectPrimaryFirst');
+  });
+
   it('does not render the auto mode helper block for optional model slots', async () => {
     render(<ModelsSettingsSection />);
 
@@ -135,6 +178,26 @@ describe('ModelsSettingsSection', () => {
     expect(fallbackTrigger).toHaveTextContent('openai/gpt-5.4-mini, openai/o3, openai/o4-mini');
     expect(screen.queryAllByText('3')).toHaveLength(0);
     expect(fourthFallback).toHaveAttribute('data-disabled');
+  });
+
+  it('clears fallback models when the primary model is removed', async () => {
+    render(<ModelsSettingsSection />);
+
+    const selects = await screen.findAllByRole('combobox');
+    const primarySelect = selects[0] as HTMLSelectElement;
+
+    const fallbackTrigger = await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+    fireEvent.pointerDown(fallbackTrigger, { button: 0, ctrlKey: false });
+
+    const firstFallback = await screen.findByRole('menuitemcheckbox', { name: /openai\/gpt-5\.4-mini/ });
+    fireEvent.click(firstFallback);
+    expect(fallbackTrigger).toHaveTextContent('openai/gpt-5.4-mini');
+
+    fireEvent.keyDown(document.activeElement ?? fallbackTrigger, { key: 'Escape' });
+    fireEvent.change(primarySelect, { target: { value: '' } });
+
+    expect(fallbackTrigger).toBeDisabled();
+    expect(fallbackTrigger).toHaveTextContent('agentModels.selectPrimaryFirst');
   });
 
   it('renders the fallback dropdown above the settings dialog layer', async () => {

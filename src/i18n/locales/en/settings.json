@@ -334,6 +334,7 @@
     "fallbacks": "Fallback Models",
     "none": "Not configured",
     "selectPrimary": "Select a model ref",
+    "selectPrimaryFirst": "Choose a primary model first",
     "selectFallbacks": "Select fallback models",
     "fallbackLimit": "Up to 3 fallback models",
     "configureFallbacks": "Configure Fallbacks",
