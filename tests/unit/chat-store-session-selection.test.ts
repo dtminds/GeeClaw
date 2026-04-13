@@ -716,4 +716,5 @@ describe('chat store session selection', () => {
     expect(messages[1]?.id).toBe('new-msg');
     expect(messages[1]?.content).toBe('newer optimistic message');
   });
+
 });

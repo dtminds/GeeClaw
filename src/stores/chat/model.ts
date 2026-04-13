@@ -121,5 +121,6 @@ export interface ToolStreamEntry {
   durationMs?: number;
   startedAt: number;
   updatedAt: number;
+  historyReloadRequestedAt?: number;
   message: RawMessage;
 }

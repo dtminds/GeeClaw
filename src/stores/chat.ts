@@ -107,6 +107,7 @@ interface ChatState {
   toolStreamById: Map<string, ToolStreamEntry>;
   toolStreamOrder: string[];
   toolMessages: RawMessage[];
+  toolResultHistoryReloadedIds: Set<string>;
   pendingFinal: boolean;
   lastUserMessageAt: number | null;
   /** Images collected from tool results, attached to the next assistant message */
@@ -201,6 +202,7 @@ function createEmptyToolRuntimeState() {
     toolStreamById: new Map<string, ToolStreamEntry>(),
     toolStreamOrder: [] as string[],
     toolMessages: [] as RawMessage[],
+    toolResultHistoryReloadedIds: new Set<string>(),
   };
 }
 
@@ -532,6 +534,80 @@ function syncToolMessages(
     .filter((message): message is RawMessage => Boolean(message));
 }
 
+function collectPersistedToolCallIds(messages: RawMessage[]): Set<string> {
+  const persisted = new Set<string>();
+
+  for (const message of messages) {
+    if (!message) continue;
+
+    if (isToolResultRole(message.role) && message.toolCallId) {
+      persisted.add(message.toolCallId);
+    }
+
+    for (const status of message._toolStatuses || []) {
+      const toolCallId = status.toolCallId || status.id;
+      if (!toolCallId) continue;
+      if (status.status !== 'running' || typeof status.result === 'string') {
+        persisted.add(toolCallId);
+      }
+    }
+  }
+
+  return persisted;
+}
+
+function reconcileToolRuntimeWithHistory(
+  toolStreamOrder: string[],
+  toolStreamById: Map<string, ToolStreamEntry>,
+  toolResultHistoryReloadedIds: Set<string>,
+  messages: RawMessage[],
+): {
+  toolStreamOrder: string[];
+  toolStreamById: Map<string, ToolStreamEntry>;
+  toolMessages: RawMessage[];
+  toolResultHistoryReloadedIds: Set<string>;
+} {
+  const persistedToolCallIds = collectPersistedToolCallIds(messages);
+  if (persistedToolCallIds.size === 0) {
+    return {
+      toolStreamOrder,
+      toolStreamById,
+      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
+      toolResultHistoryReloadedIds,
+    };
+  }
+
+  let changed = false;
+  const nextToolStreamOrder = toolStreamOrder.filter((toolCallId) => {
+    const keep = !persistedToolCallIds.has(toolCallId);
+    if (!keep) changed = true;
+    return keep;
+  });
+
+  if (!changed) {
+    return {
+      toolStreamOrder,
+      toolStreamById,
+      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
+      toolResultHistoryReloadedIds,
+    };
+  }
+
+  const nextToolStreamById = new Map(toolStreamById);
+  const nextReloadedIds = new Set(toolResultHistoryReloadedIds);
+  for (const toolCallId of persistedToolCallIds) {
+    nextToolStreamById.delete(toolCallId);
+    nextReloadedIds.delete(toolCallId);
+  }
+
+  return {
+    toolStreamOrder: nextToolStreamOrder,
+    toolStreamById: nextToolStreamById,
+    toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
+    toolResultHistoryReloadedIds: nextReloadedIds,
+  };
+}
+
 /** Extract media file refs from [media attached: <path> (<mime>) | ...] patterns */
 // ── Store ────────────────────────────────────────────────────────
 
@@ -548,6 +624,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   toolStreamById: new Map<string, ToolStreamEntry>(),
   toolStreamOrder: [],
   toolMessages: [],
+  toolResultHistoryReloadedIds: new Set<string>(),
   pendingFinal: false,
   lastUserMessageAt: null,
   pendingToolImages: [],
@@ -1010,12 +1087,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({
+        set((state) => ({
           messages: displayMessages,
           thinkingLevel: null,
           loading: false,
           error: null,
-        });
+          ...reconcileToolRuntimeWithHistory(
+            state.toolStreamOrder,
+            state.toolStreamById,
+            state.toolResultHistoryReloadedIds,
+            displayMessages,
+          ),
+        }));
       } catch (err) {
         console.warn('Failed to load cron run history:', err);
         if (!isSameHistoryRequest(request, get())) {
@@ -1082,7 +1165,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: finalMessages, thinkingLevel, loading: false, error: null });
+        set((state) => ({
+          messages: finalMessages,
+          thinkingLevel,
+          loading: false,
+          error: null,
+          ...reconcileToolRuntimeWithHistory(
+            state.toolStreamOrder,
+            state.toolStreamById,
+            state.toolResultHistoryReloadedIds,
+            finalMessages,
+          ),
+        }));
         logChatTrace('loadHistory:applied', {
           quiet,
           durationMs: Date.now() - startedAt,
@@ -2011,6 +2105,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? ((data.isError === true || outputLooksErrored) ? 'error' : 'completed')
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
+    const shouldReloadHistoryForMissingResult = phase === 'result'
+      && output === undefined
+      && !get().toolResultHistoryReloadedIds.has(toolCallId);
 
     _lastChatEventAt = Date.now();
     clearHistoryPoll();
@@ -2023,6 +2120,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const nextToolStreamById = new Map(s.toolStreamById);
       const nextToolStreamOrder = [...s.toolStreamOrder];
+      const nextToolResultHistoryReloadedIds = new Set(s.toolResultHistoryReloadedIds);
       let nextStreamSegments = s.streamSegments;
       let nextStreamingText = s.streamingText;
       let nextStreamingTextStartedAt = s.streamingTextStartedAt;
@@ -2048,6 +2146,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           durationMs,
           startedAt,
           updatedAt: Date.now(),
+          historyReloadRequestedAt: shouldReloadHistoryForMissingResult ? Date.now() : undefined,
           message: {} as RawMessage,
         };
         nextToolStreamOrder.push(toolCallId);
@@ -2060,7 +2159,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           status: mergeToolStatus(entry.status, status),
           durationMs: durationMs ?? entry.durationMs,
           updatedAt: Date.now(),
+          historyReloadRequestedAt: shouldReloadHistoryForMissingResult
+            ? (entry.historyReloadRequestedAt ?? Date.now())
+            : entry.historyReloadRequestedAt,
         };
+      }
+
+      if (shouldReloadHistoryForMissingResult) {
+        nextToolResultHistoryReloadedIds.add(toolCallId);
       }
 
       entry.message = buildToolStreamMessage(entry);
@@ -2078,9 +2184,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamSegments: nextStreamSegments,
         toolStreamById: nextToolStreamById,
         toolStreamOrder: nextToolStreamOrder,
+        toolResultHistoryReloadedIds: nextToolResultHistoryReloadedIds,
         toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
       };
     });
+
+    if (shouldReloadHistoryForMissingResult) {
+      void get().loadHistory(true);
+    }
   },
 
   handleAgentDeleted: async (agentId: string) => {
