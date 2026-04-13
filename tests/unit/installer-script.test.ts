@@ -23,6 +23,11 @@ describe('installer.nsh', () => {
     expect(installer).toContain('Sleep 5000');
   });
 
+  it('does not pre-emptively delete shortcuts before upgrade install', () => {
+    expect(installer).not.toContain('Delete "$DESKTOP\\${PRODUCT_NAME}.lnk"');
+    expect(installer).not.toContain('Delete "$SMPROGRAMS\\${PRODUCT_NAME}.lnk"');
+  });
+
   it('moves the old install out of the way and skips the legacy uninstaller retry loop', () => {
     expect(installer).toContain('Rename "$INSTDIR" "$INSTDIR._stale_$R8"');
     expect(installer).toContain('DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" UninstallString');
