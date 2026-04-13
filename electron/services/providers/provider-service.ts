@@ -27,7 +27,13 @@ import {
   storeApiKey,
 } from '../../utils/secure-storage';
 import type { ProviderWithKeyInfo } from '../../shared/providers/types';
+import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import {
+  getDefaultAgentModelConfig,
+  updateDefaultAgentModelConfig,
+} from '../../utils/agent-config';
 import { logger } from '../../utils/logger';
+import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
 
 function maskApiKey(apiKey: string | null): string | null {
   if (!apiKey) return null;
@@ -47,6 +53,32 @@ function logLegacyProviderApiUsage(method: string, replacement: string): void {
   logger.warn(
     `[provider-migration] Legacy provider API "${method}" is deprecated. Migrate to "${replacement}".`,
   );
+}
+
+async function seedDefaultAgentModelFromAccount(account: ProviderAccount): Promise<void> {
+  const configuredModels = getConfiguredProviderModels(account);
+  const primaryModel = configuredModels[0];
+  if (!primaryModel) {
+    return;
+  }
+
+  const current = await getDefaultAgentModelConfig();
+  if (current.model.primary || current.model.fallbacks.length > 0) {
+    return;
+  }
+
+  const providerKey = getOpenClawProviderKeyForType(account.vendorId, account.id);
+  await updateDefaultAgentModelConfig({
+    model: {
+      configured: true,
+      primary: `${providerKey}/${primaryModel}`,
+      fallbacks: [],
+    },
+    imageModel: current.imageModel,
+    pdfModel: current.pdfModel,
+    imageGenerationModel: current.imageGenerationModel,
+    videoGenerationModel: current.videoGenerationModel,
+  });
 }
 
 export class ProviderService {
@@ -76,6 +108,7 @@ export class ProviderService {
     if (apiKey !== undefined && apiKey.trim()) {
       await storeApiKey(account.id, apiKey.trim());
     }
+    await seedDefaultAgentModelFromAccount(account);
     return (await getProviderAccount(account.id)) ?? account;
   }
 

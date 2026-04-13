@@ -24,6 +24,7 @@ import type { ProviderAccount } from '../../shared/providers/types';
 import { logger } from '../../utils/logger';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
+import { normalizeProviderModelList } from '../../shared/providers/config-models';
 
 const legacyProviderRoutesWarned = new Set<string>();
 
@@ -125,11 +126,22 @@ export async function handleProviderRoutes(
         return true;
       }
 
-      // Guard: block deletion if any agent fallback model refs belong to this provider.
+      // Guard: block deletion if any configured default model slot still points at this provider.
       if (existing) {
         const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
-        const { fallbacks } = await getDefaultAgentModelConfig();
-        const blocking = fallbacks.filter((ref) => ref.startsWith(`${providerKey}/`));
+        const modelConfig = await getDefaultAgentModelConfig();
+        const blocking = normalizeProviderModelList([
+          modelConfig.model.primary,
+          ...modelConfig.model.fallbacks,
+          modelConfig.imageModel.primary,
+          ...modelConfig.imageModel.fallbacks,
+          modelConfig.pdfModel.primary,
+          ...modelConfig.pdfModel.fallbacks,
+          modelConfig.imageGenerationModel.primary,
+          ...modelConfig.imageGenerationModel.fallbacks,
+          modelConfig.videoGenerationModel.primary,
+          ...modelConfig.videoGenerationModel.fallbacks,
+        ]).filter((ref) => ref.startsWith(`${providerKey}/`));
         if (blocking.length > 0) {
           sendJson(res, 400, {
             success: false,
