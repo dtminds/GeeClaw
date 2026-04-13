@@ -196,31 +196,24 @@ function ModelSlotEditor(props: {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-[13px] font-medium text-muted-foreground">
-                  {t('agentModels.fallbacks')}
-                </label>
-                <span className="text-[12px] text-muted-foreground">
-                  {props.slot.fallbacks.length}
-                </span>
-              </div>
+              <label className="text-[13px] font-medium text-muted-foreground">
+                {t('agentModels.fallbacks')}
+              </label>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
                     aria-label={t('agentModels.selectFallbacks')}
                     disabled={fallbackCandidates.length === 0}
-                    className="modal-field-surface h-[44px] w-full justify-between rounded-xl border px-3 text-[13px] text-foreground"
+                    className="modal-field-surface relative h-[44px] w-full rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left font-mono text-[12px]">
+                    <span className="block min-w-0 truncate text-left font-mono text-[12px] leading-[42px]">
                       {fallbackSummary}
                     </span>
-                    <span className="ml-3 shrink-0 text-[12px] text-muted-foreground">
-                      {props.slot.fallbacks.length}
+                    <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+                      <ChevronDown className="h-4 w-4" />
                     </span>
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                  </Button>
+                  </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content

@@ -102,7 +102,7 @@ describe('ModelsSettingsSection', () => {
     fireEvent.click(thirdFallback);
 
     expect(fallbackTrigger).toHaveTextContent('openai/gpt-5.4-mini, openai/o3, openai/o4-mini');
-    expect(fallbackTrigger).toHaveTextContent('3');
+    expect(screen.queryAllByText('3')).toHaveLength(0);
     expect(fourthFallback).toHaveAttribute('data-disabled');
   });
 
