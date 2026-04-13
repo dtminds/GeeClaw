@@ -105,4 +105,14 @@ describe('ModelsSettingsSection', () => {
     expect(fallbackTrigger).toHaveTextContent('3');
     expect(fourthFallback).toHaveAttribute('data-disabled');
   });
+
+  it('renders the fallback dropdown above the settings dialog layer', async () => {
+    render(<ModelsSettingsSection />);
+
+    const fallbackTrigger = await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+    fireEvent.pointerDown(fallbackTrigger, { button: 0, ctrlKey: false });
+
+    const menu = await screen.findByRole('menu');
+    expect(menu.className).toContain('z-[130]');
+  });
 });

@@ -228,7 +228,7 @@ function ModelSlotEditor(props: {
                     align="start"
                     sideOffset={8}
                     collisionPadding={12}
-                    className="z-50 min-w-[320px] max-w-[min(520px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=bottom]:animate-in data-[side=bottom]:slide-in-from-top-2 dark:border-white/10 dark:bg-card"
+                    className="z-[130] min-w-[320px] max-w-[min(520px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=bottom]:animate-in data-[side=bottom]:slide-in-from-top-2 dark:border-white/10 dark:bg-card"
                     onCloseAutoFocus={(event) => {
                       event.preventDefault();
                     }}
