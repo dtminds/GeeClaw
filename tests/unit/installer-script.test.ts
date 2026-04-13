@@ -6,6 +6,12 @@ import { describe, expect, it } from 'vitest';
 describe('installer.nsh', () => {
   const installer = readFileSync(join(process.cwd(), 'scripts/installer.nsh'), 'utf8');
 
+  it('shows installer and uninstaller details by default', () => {
+    expect(installer).toContain('!macro customHeader');
+    expect(installer).toContain('ShowInstDetails show');
+    expect(installer).toContain('ShowUninstDetails show');
+  });
+
   it('kills lingering processes from the existing install directory before overwrite', () => {
     expect(installer).toContain("Get-CimInstance -ClassName Win32_Process");
     expect(installer).toContain('GetCurrentProcessId()');
@@ -39,5 +45,19 @@ describe('installer.nsh', () => {
     expect(installer).toContain('!macro customUnInstallCheck');
     expect(installer).toContain('Old uninstaller exited with code $R0. Continuing with overwrite install...');
     expect(installer).toContain('ClearErrors');
+  });
+
+  it('preserves managed OpenClaw state during uninstall prompts', () => {
+    expect(installer).toContain('Your .openclaw-geeclaw folder (managed OpenClaw state) will be preserved.');
+    expect(installer).not.toContain('.geeclaw folder (GeeClaw-managed OpenClaw state)');
+  });
+
+  it('retries AppData cleanup after stopping lingering app processes during uninstall', () => {
+    expect(installer).toContain('${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0');
+    expect(installer).toContain('taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"');
+    expect(installer).toContain('IfFileExists "$LOCALAPPDATA\\geeclaw\\*.*" 0 _cu_localDone');
+    expect(installer).toContain('cmd.exe /c rd /s /q "$LOCALAPPDATA\\geeclaw"');
+    expect(installer).toContain('IfFileExists "$APPDATA\\geeclaw\\*.*" 0 _cu_roamingDone');
+    expect(installer).toContain('cmd.exe /c rd /s /q "$APPDATA\\geeclaw"');
   });
 });

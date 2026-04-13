@@ -1,11 +1,17 @@
 ; GeeClaw Custom NSIS Installer/Uninstaller Script
 ;
 ; Install: enables long paths.
-; Uninstall: optionally deletes GeeClaw-managed user data.
+; Uninstall: optionally deletes GeeClaw app data while preserving managed OpenClaw state.
 
 !ifndef nsProcess::FindProcess
   !include "nsProcess.nsh"
 !endif
+
+!macro customHeader
+  ; Show install details by default so users can see what stage is running.
+  ShowInstDetails show
+  ShowUninstDetails show
+!macroend
 
 !macro customCheckAppRunning
   ; Make stage logs visible on assisted installers (defaults to hidden).
@@ -155,16 +161,62 @@
 !macroend
 
 !macro customUnInstall
-  ; Ask user if they want to completely remove all user data
+  ; Ask user if they want to remove GeeClaw app data while preserving the
+  ; managed OpenClaw state directory (~/.openclaw-geeclaw).
   MessageBox MB_YESNO|MB_ICONQUESTION \
-    "Do you want to completely remove all GeeClaw user data?$\r$\n$\r$\nThis will delete:$\r$\n  • .geeclaw folder (GeeClaw-managed OpenClaw state)$\r$\n  • AppData\Local\geeclaw (local app data)$\r$\n  • AppData\Roaming\geeclaw (roaming app data)$\r$\n$\r$\nSelect 'No' to keep your data for future reinstallation." \
+    "Do you want to remove GeeClaw application data?$\r$\n$\r$\nThis will delete:$\r$\n  • .geeclaw folder (GeeClaw settings, logs, and installed terminal shims)$\r$\n  • AppData\Local\geeclaw (local app data)$\r$\n  • AppData\Roaming\geeclaw (roaming app data)$\r$\n$\r$\nYour .openclaw-geeclaw folder (managed OpenClaw state) will be preserved.$\r$\nSelect 'No' to keep all data for future reinstallation." \
     /SD IDNO IDYES _cu_removeData IDNO _cu_skipRemove
 
   _cu_removeData:
-    ; --- Always remove current user's data first ---
+    ; Kill lingering GeeClaw processes so app data files are no longer locked.
+    ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+    ${if} $R0 == 0
+      nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
+      Pop $0
+      Pop $1
+    ${endIf}
+    ${nsProcess::Unload}
+
+    ; Also kill the bundled Gateway if it detached from the Electron process tree.
+    nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+    Pop $0
+    Pop $1
+
+    ; Give Windows a moment to release file handles after process shutdown.
+    Sleep 2000
+
+    ; --- Always remove current user's app data first ---
     RMDir /r "$PROFILE\.geeclaw"
     RMDir /r "$LOCALAPPDATA\geeclaw"
     RMDir /r "$APPDATA\geeclaw"
+
+    ; Retry AppData cleanup if files were still in use on the first attempt.
+    IfFileExists "$LOCALAPPDATA\geeclaw\*.*" 0 _cu_localDone
+      Sleep 3000
+      RMDir /r "$LOCALAPPDATA\geeclaw"
+      IfFileExists "$LOCALAPPDATA\geeclaw\*.*" 0 _cu_localDone
+        nsExec::ExecToStack 'cmd.exe /c rd /s /q "$LOCALAPPDATA\geeclaw"'
+        Pop $0
+        Pop $1
+    _cu_localDone:
+
+    IfFileExists "$APPDATA\geeclaw\*.*" 0 _cu_roamingDone
+      Sleep 3000
+      RMDir /r "$APPDATA\geeclaw"
+      IfFileExists "$APPDATA\geeclaw\*.*" 0 _cu_roamingDone
+        nsExec::ExecToStack 'cmd.exe /c rd /s /q "$APPDATA\geeclaw"'
+        Pop $0
+        Pop $1
+    _cu_roamingDone:
+
+    IfFileExists "$PROFILE\.geeclaw\*.*" 0 _cu_profileDone
+      Sleep 2000
+      RMDir /r "$PROFILE\.geeclaw"
+      IfFileExists "$PROFILE\.geeclaw\*.*" 0 _cu_profileDone
+        nsExec::ExecToStack 'cmd.exe /c rd /s /q "$PROFILE\.geeclaw"'
+        Pop $0
+        Pop $1
+    _cu_profileDone:
 
     ; --- For per-machine (all users) installs, enumerate all user profiles ---
     StrCpy $R0 0
@@ -176,12 +228,12 @@
     ReadRegStr $R2 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$R1" "ProfileImagePath"
     StrCmp $R2 "" _cu_enumNext
 
-    ExpandEnvStrings $R2 $R2
-    StrCmp $R2 $PROFILE _cu_enumNext
+    ExpandEnvStrings $R3 $R2
+    StrCmp $R3 $PROFILE _cu_enumNext
 
-    RMDir /r "$R2\.geeclaw"
-    RMDir /r "$R2\AppData\Local\geeclaw"
-    RMDir /r "$R2\AppData\Roaming\geeclaw"
+    RMDir /r "$R3\.geeclaw"
+    RMDir /r "$R3\AppData\Local\geeclaw"
+    RMDir /r "$R3\AppData\Roaming\geeclaw"
 
   _cu_enumNext:
     IntOp $R0 $R0 + 1
