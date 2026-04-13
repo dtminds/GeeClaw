@@ -10,7 +10,12 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('--profile "$PROFILE_NAME"');
     expect(script).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
     expect(script).toContain('$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
+    expect(script).toContain('GEECLAW_USER_DATA_DIR');
+    expect(script).toContain('runtime/openclaw-sidecar/openclaw.mjs');
+    expect(script).toContain('CLI="$SIDECAR_CLI"');
     expect(script).not.toContain('$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs');
+    expect(script).toContain('CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"');
+    expect(script).toContain('CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"');
     expect(script).toContain('Resources/bin"');
     expect(script).toContain('Resources/bin/bin');
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
@@ -23,6 +28,10 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"');
     expect(script).toContain('--profile "%PROFILE_NAME%"');
     expect(script).toContain('"%NODE_EXE%" "%OPENCLAW_ENTRY%"');
+    expect(script).toContain('GEECLAW_USER_DATA_DIR');
+    expect(script).toContain('runtime\\openclaw-sidecar\\openclaw.mjs');
+    expect(script).toContain('set "OPENCLAW_ENTRY=%SIDECAR_ENTRY%"');
+    expect(script).toContain('set "OPENCLAW_ENTRY=%LEGACY_ENTRY%"');
     expect(script).toContain(':finish');
     expect(script).not.toContain('GeeClaw.exe');
   });
@@ -34,6 +43,10 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('export OPENCLAW_CONFIG_PATH=');
     expect(script).toContain('--profile "$PROFILE_NAME"');
     expect(script).toContain('exec "$NODE_EXE" "$OPENCLAW_ENTRY"');
+    expect(script).toContain('GEECLAW_USER_DATA_DIR');
+    expect(script).toContain('runtime/openclaw-sidecar/openclaw.mjs');
+    expect(script).toContain('OPENCLAW_ENTRY="$SIDECAR_ENTRY"');
+    expect(script).toContain('OPENCLAW_ENTRY="$LEGACY_ENTRY"');
     expect(script).not.toContain('ELECTRON_RUN_AS_NODE=1 exec');
   });
 

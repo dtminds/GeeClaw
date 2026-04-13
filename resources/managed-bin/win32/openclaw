@@ -17,7 +17,20 @@ export OPENCLAW_EMBEDDED_IN="GeeClaw"
 export OPENCLAW_STATE_DIR="${USERPROFILE:-$HOME}/.openclaw-geeclaw"
 export OPENCLAW_CONFIG_PATH="${OPENCLAW_STATE_DIR}/openclaw.json"
 NODE_EXE="$INSTALL_DIR/resources/bin/node.exe"
-OPENCLAW_ENTRY="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
+LEGACY_ENTRY="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
+if [ -n "${GEECLAW_USER_DATA_DIR:-}" ]; then
+  USER_DATA_DIR="$GEECLAW_USER_DATA_DIR"
+elif [ -n "${APPDATA:-}" ]; then
+  USER_DATA_DIR="$APPDATA/GeeClaw"
+else
+  USER_DATA_DIR="${USERPROFILE:-$HOME}/AppData/Roaming/GeeClaw"
+fi
+SIDECAR_ENTRY="$USER_DATA_DIR/runtime/openclaw-sidecar/openclaw.mjs"
+if [ -f "$SIDECAR_ENTRY" ]; then
+  OPENCLAW_ENTRY="$SIDECAR_ENTRY"
+else
+  OPENCLAW_ENTRY="$LEGACY_ENTRY"
+fi
 PROFILE_NAME="geeclaw"
 PROFILE_ARG=""
 PREV_WAS_PROFILE=0

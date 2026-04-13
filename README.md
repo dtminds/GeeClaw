@@ -182,6 +182,7 @@ Notes:
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
 - On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
 - The managed `openclaw` wrappers also pin `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`, `OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`, and default to `--profile geeclaw` so terminal usage matches GeeClaw's managed runtime.
+- In packaged builds, those wrappers prefer the hydrated OpenClaw sidecar under the app's user-data runtime directory and fall back to the legacy bundled `resources/openclaw` layout when the sidecar has not been materialized yet.
 
 ### OpenCLI Browser Bridge Check
 
