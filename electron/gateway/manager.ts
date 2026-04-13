@@ -6,7 +6,6 @@ import { app } from 'electron';
 import path from 'path';
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
-import { extractGatewayRpcSessionKey } from '../../shared/gateway-rpc';
 import { PORTS } from '../utils/config';
 import { JsonRpcNotification, isNotification, isResponse } from './protocol';
 import { logger } from '../utils/logger';
@@ -645,33 +644,12 @@ export class GatewayManager extends EventEmitter {
    */
   async rpc<T>(method: string, params?: unknown, timeoutMs = 30000): Promise<T> {
     return new Promise((resolve, reject) => {
-      const startedAt = Date.now();
-      const shouldTrace = method === 'chat.history';
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        if (shouldTrace) {
-          logger.warn('[chat-trace] gatewayManager.rpc:not-connected', {
-            at: new Date().toISOString(),
-            method,
-            timeoutMs,
-            state: this.status.state,
-            sessionKey: extractGatewayRpcSessionKey(params),
-          });
-        }
         reject(new Error('Gateway not connected'));
         return;
       }
 
       const id = crypto.randomUUID();
-      if (shouldTrace) {
-        logger.info('[chat-trace] gatewayManager.rpc:start', {
-          at: new Date().toISOString(),
-          method,
-          requestId: id,
-          timeoutMs,
-          state: this.status.state,
-          sessionKey: extractGatewayRpcSessionKey(params),
-        });
-      }
 
       // Set timeout for request
       const timeout = setTimeout(() => {
@@ -680,33 +658,8 @@ export class GatewayManager extends EventEmitter {
 
       // Store pending request
       this.pendingRequests.set(id, {
-        resolve: ((value: unknown) => {
-          if (shouldTrace) {
-            logger.info('[chat-trace] gatewayManager.rpc:resolved', {
-              at: new Date().toISOString(),
-              method,
-              requestId: id,
-              timeoutMs,
-              durationMs: Date.now() - startedAt,
-              sessionKey: extractGatewayRpcSessionKey(params),
-            });
-          }
-          (resolve as (value: unknown) => void)(value);
-        }),
-        reject: ((error: unknown) => {
-          if (shouldTrace) {
-            logger.warn('[chat-trace] gatewayManager.rpc:rejected', {
-              at: new Date().toISOString(),
-              method,
-              requestId: id,
-              timeoutMs,
-              durationMs: Date.now() - startedAt,
-              error: String(error),
-              sessionKey: extractGatewayRpcSessionKey(params),
-            });
-          }
-          reject(error);
-        }),
+        resolve: resolve as (value: unknown) => void,
+        reject,
         timeout,
       });
 
@@ -721,16 +674,6 @@ export class GatewayManager extends EventEmitter {
       try {
         this.ws.send(JSON.stringify(request));
       } catch (error) {
-        if (shouldTrace) {
-          logger.warn('[chat-trace] gatewayManager.rpc:send-error', {
-            at: new Date().toISOString(),
-            method,
-            requestId: id,
-            timeoutMs,
-            durationMs: Date.now() - startedAt,
-            error: String(error),
-          });
-        }
         rejectPendingGatewayRequest(this.pendingRequests, id, new Error(`Failed to send RPC request: ${error}`));
       }
     });

@@ -69,7 +69,6 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
-import { extractGatewayRpcSessionKey } from '../../shared/gateway-rpc';
 import type { CronSchedule } from '../../src/types/cron';
 
 const appUpdater = getAppUpdater();
@@ -1057,41 +1056,11 @@ function registerGatewayHandlers(
 
   // Gateway RPC call
   ipcMain.handle('gateway:rpc', async (_, method: string, params?: unknown, timeoutMs?: number) => {
-    const startedAt = Date.now();
-    const shouldTrace = method === 'chat.history';
-    if (shouldTrace) {
-        logger.info('[chat-trace] ipc gateway:rpc:start', {
-          at: new Date().toISOString(),
-          method,
-          timeoutMs: timeoutMs ?? 30000,
-          sessionKey: extractGatewayRpcSessionKey(params),
-        });
-      }
     try {
       const result = await gatewayManager.rpc(method, params, timeoutMs);
-      if (shouldTrace) {
-        logger.info('[chat-trace] ipc gateway:rpc:resolved', {
-          at: new Date().toISOString(),
-          method,
-          timeoutMs: timeoutMs ?? 30000,
-          durationMs: Date.now() - startedAt,
-          success: true,
-          sessionKey: extractGatewayRpcSessionKey(params),
-        });
-      }
       return { success: true, result };
     } catch (error) {
       const errorCode = resolveGatewayRpcErrorCode(method, error);
-      if (shouldTrace) {
-        logger.warn('[chat-trace] ipc gateway:rpc:error', {
-          at: new Date().toISOString(),
-          method,
-          timeoutMs: timeoutMs ?? 30000,
-          durationMs: Date.now() - startedAt,
-          error: String(error),
-          sessionKey: extractGatewayRpcSessionKey(params),
-        });
-      }
       logger.warn(`[gateway:rpc] ${method} failed (timeoutMs=${timeoutMs ?? 30000}): ${String(error)}`);
       return { success: false, error: String(error), errorCode };
     }

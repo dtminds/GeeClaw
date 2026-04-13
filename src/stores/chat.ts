@@ -176,16 +176,10 @@ let _historyStartupRetryState: { requestKey: string; attempt: number } | null = 
 // before committing the error to give the recovery path a chance.
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
-const CHAT_TRACE_PREFIX = '[chat-trace]';
 const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
 const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
-function logChatTrace(event: string, details?: Record<string, unknown>): void {
-  console.info(`${CHAT_TRACE_PREFIX} ${event}`, {
-    at: new Date().toISOString(),
-    ...details,
-  });
-}
+function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
 function summarizeChatSelection(
   state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
@@ -1750,6 +1744,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
+            logChatTrace('toolresult-final-message', {
+              runId,
+              eventSessionKey,
+              toolCallId: finalMsg.toolCallId,
+              toolName: finalMsg.toolName,
+              timestamp: finalMsg.timestamp,
+              contentType: Array.isArray(finalMsg.content) ? 'blocks' : typeof finalMsg.content,
+              contentPreview: getMessageText(finalMsg.content).slice(0, 500),
+              details: finalMsg.details,
+              isError: finalMsg.isError,
+            });
             const toolFiles: AttachedFileMeta[] = [
               ...extractImagesAsAttachedFiles(finalMsg.content),
             ];
@@ -2025,6 +2030,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
       clearErrorRecoveryTimer();
       set({ error: null });
     }
+
+    logChatTrace('tool-stream-event', {
+      runId: event.runId,
+      eventSessionKey,
+      toolCallId,
+      name,
+      phase,
+      status,
+      durationMs,
+      rawOutputType: rawOutput == null
+        ? String(rawOutput)
+        : Array.isArray(rawOutput)
+          ? 'array'
+          : typeof rawOutput,
+      rawOutputPreview: typeof rawOutput === 'string'
+        ? rawOutput.slice(0, 500)
+        : (() => {
+            try {
+              return rawOutput == null ? '' : JSON.stringify(rawOutput).slice(0, 500);
+            } catch {
+              return String(rawOutput).slice(0, 500);
+            }
+          })(),
+      extractedOutputPreview: output?.slice(0, 500),
+      dataKeys: Object.keys(data),
+      hasResultField: Object.prototype.hasOwnProperty.call(data, 'result'),
+      hasPartialResultField: Object.prototype.hasOwnProperty.call(data, 'partialResult'),
+    });
 
     set((s) => {
       const nextToolStreamById = new Map(s.toolStreamById);
