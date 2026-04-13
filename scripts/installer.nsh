@@ -29,7 +29,7 @@
       Sleep 8000
       ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
       ${if} $R0 != 0
-        nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+        nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
         Pop $0
         Pop $1
         Goto done_killing
@@ -61,7 +61,7 @@
     ${endIf}
 
     ; Also kill the bundled Gateway in case it detached from the main process.
-    nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+    nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
     Pop $0
     Pop $1
 
@@ -85,7 +85,7 @@
   nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
   Pop $0
   Pop $1
-  nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+  nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
   Pop $0
   Pop $1
 
@@ -178,7 +178,7 @@
     ${nsProcess::Unload}
 
     ; Also kill the bundled Gateway if it detached from the Electron process tree.
-    nsExec::ExecToStack 'taskkill /F /IM openclaw-gateway.exe'
+    nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
     Pop $0
     Pop $1
 
@@ -191,28 +191,28 @@
     RMDir /r "$APPDATA\geeclaw"
 
     ; Retry AppData cleanup if files were still in use on the first attempt.
-    IfFileExists "$LOCALAPPDATA\geeclaw\*.*" 0 _cu_localDone
+    IfFileExists "$LOCALAPPDATA\geeclaw\" 0 _cu_localDone
       Sleep 3000
       RMDir /r "$LOCALAPPDATA\geeclaw"
-      IfFileExists "$LOCALAPPDATA\geeclaw\*.*" 0 _cu_localDone
+      IfFileExists "$LOCALAPPDATA\geeclaw\" 0 _cu_localDone
         nsExec::ExecToStack 'cmd.exe /c rd /s /q "$LOCALAPPDATA\geeclaw"'
         Pop $0
         Pop $1
     _cu_localDone:
 
-    IfFileExists "$APPDATA\geeclaw\*.*" 0 _cu_roamingDone
+    IfFileExists "$APPDATA\geeclaw\" 0 _cu_roamingDone
       Sleep 3000
       RMDir /r "$APPDATA\geeclaw"
-      IfFileExists "$APPDATA\geeclaw\*.*" 0 _cu_roamingDone
+      IfFileExists "$APPDATA\geeclaw\" 0 _cu_roamingDone
         nsExec::ExecToStack 'cmd.exe /c rd /s /q "$APPDATA\geeclaw"'
         Pop $0
         Pop $1
     _cu_roamingDone:
 
-    IfFileExists "$PROFILE\.geeclaw\*.*" 0 _cu_profileDone
+    IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone
       Sleep 2000
       RMDir /r "$PROFILE\.geeclaw"
-      IfFileExists "$PROFILE\.geeclaw\*.*" 0 _cu_profileDone
+      IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone
         nsExec::ExecToStack 'cmd.exe /c rd /s /q "$PROFILE\.geeclaw"'
         Pop $0
         Pop $1

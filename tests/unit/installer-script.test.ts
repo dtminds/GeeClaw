@@ -24,7 +24,7 @@ describe('installer.nsh', () => {
   it('waits for the auto-update quit flow and cleans up helper processes before install', () => {
     expect(installer).toContain('Waiting for "${PRODUCT_NAME}" to finish shutting down...');
     expect(installer).toContain('Sleep 8000');
-    expect(installer).toContain("taskkill /F /IM openclaw-gateway.exe");
+    expect(installer).toContain("taskkill /F /T /IM openclaw-gateway.exe");
     expect(installer).toContain("taskkill /F /T /IM \"${APP_EXECUTABLE_FILENAME}\"");
     expect(installer).toContain('Sleep 5000');
   });
@@ -55,9 +55,10 @@ describe('installer.nsh', () => {
   it('retries AppData cleanup after stopping lingering app processes during uninstall', () => {
     expect(installer).toContain('${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0');
     expect(installer).toContain('taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"');
-    expect(installer).toContain('IfFileExists "$LOCALAPPDATA\\geeclaw\\*.*" 0 _cu_localDone');
+    expect(installer).toContain(String.raw`IfFileExists "$LOCALAPPDATA\geeclaw\" 0 _cu_localDone`);
     expect(installer).toContain('cmd.exe /c rd /s /q "$LOCALAPPDATA\\geeclaw"');
-    expect(installer).toContain('IfFileExists "$APPDATA\\geeclaw\\*.*" 0 _cu_roamingDone');
+    expect(installer).toContain(String.raw`IfFileExists "$APPDATA\geeclaw\" 0 _cu_roamingDone`);
     expect(installer).toContain('cmd.exe /c rd /s /q "$APPDATA\\geeclaw"');
+    expect(installer).toContain(String.raw`IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone`);
   });
 });
