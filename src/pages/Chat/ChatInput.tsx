@@ -11,6 +11,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { EditorContent, Node as TiptapNode, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Square, X, FileText, Film, Music, FileArchive, File, Loader2, ArrowUp, Plus, Package2, Search, ChevronDown, Check, Shield, Terminal } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
@@ -66,6 +67,11 @@ interface ChatInputProps {
   onStop?: () => void;
   disabled?: boolean;
   disabledPlaceholder?: string;
+  disabledHint?: string;
+  disabledAction?: {
+    to: string;
+    label: string;
+  } | null;
   sending?: boolean;
   isEmpty?: boolean;
 }
@@ -604,6 +610,8 @@ export const ChatInput = memo(function ChatInput({
   onStop,
   disabled = false,
   disabledPlaceholder,
+  disabledHint,
+  disabledAction,
   sending = false,
   isEmpty = false,
 }: ChatInputProps) {
@@ -1514,6 +1522,20 @@ export const ChatInput = memo(function ChatInput({
 
         <div className={`rounded-[20px] border border-border/60 bg-popover/98 px-1 py-1.5 transition-[border-color,box-shadow] shadow-[0_12px_30px_-12px_rgba(28,28,32,0.18)] ${dragOver ? 'border-primary/80' : 'focus-within:border-primary/25'}`}>
           <div className="relative">
+            {disabled && disabledHint && disabledAction ? (
+              <div className="mx-2 mb-2 flex flex-col gap-3 rounded-2xl border border-dashed border-black/8 bg-black/[0.025] px-4 py-3 dark:border-white/10 dark:bg-white/[0.035] sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[13px] leading-6 text-muted-foreground">
+                  {disabledHint}
+                </p>
+                <Link
+                  to={disabledAction.to}
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-foreground px-4 text-[12px] font-medium text-background transition-opacity hover:opacity-90"
+                >
+                  {disabledAction.label}
+                </Link>
+              </div>
+            ) : null}
+
             {skillPickerVisible && (
               <div className="absolute bottom-full left-0 right-0 z-20 mb-4 overflow-hidden rounded-[22px] border border-black/8 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-card">
                 <div className="px-3 py-2 text-[12px]">
