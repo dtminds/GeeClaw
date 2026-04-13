@@ -90,6 +90,17 @@ describe('ModelsSettingsSection', () => {
     expect(fallbackTrigger).toHaveTextContent('agentModels.none');
   });
 
+  it('does not render the auto mode helper block for optional model slots', async () => {
+    render(<ModelsSettingsSection />);
+
+    await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+
+    expect(screen.queryByText('agentModels.sections.imageModel.autoHelp')).not.toBeInTheDocument();
+    expect(screen.queryByText('agentModels.sections.pdfModel.autoHelp')).not.toBeInTheDocument();
+    expect(screen.queryByText('agentModels.sections.imageGenerationModel.autoHelp')).not.toBeInTheDocument();
+    expect(screen.queryByText('agentModels.sections.videoGenerationModel.autoHelp')).not.toBeInTheDocument();
+  });
+
   it('uses a compact fallback dropdown that caps selections at three and summarizes them inline', async () => {
     const { container } = render(<ModelsSettingsSection />);
 

@@ -257,11 +257,7 @@ function ModelSlotEditor(props: {
             </div>
           </div>
         </div>
-      ) : (
-        <div className="mt-5 rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-4 text-[13px] leading-6 text-muted-foreground dark:border-white/10 dark:bg-white/[0.03]">
-          {t(`agentModels.sections.${props.slotKey}.autoHelp`)}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
