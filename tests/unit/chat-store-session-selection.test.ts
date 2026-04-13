@@ -751,7 +751,7 @@ describe('chat store session selection', () => {
                 id: 'persisted-user',
                 role: 'user',
                 content: 'same user message',
-                timestamp: optimisticSentAtMs / 1000 + 10,
+                timestamp: optimisticSentAtMs / 1000 + 2,
               },
             ],
           };
@@ -768,7 +768,7 @@ describe('chat store session selection', () => {
     expect(messages[0]?.content).toBe('same user message');
   });
 
-  it('does not treat far-away matching user text as a duplicate when appending the optimistic message', async () => {
+  it('does not treat an older matching user text as a duplicate when appending the optimistic message', async () => {
     const optimisticSentAtMs = 1_700_000_000_000;
     useChatStore.setState({
       ...useChatStore.getState(),
@@ -798,13 +798,18 @@ describe('chat store session selection', () => {
         if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
           return {
             messages: [
-              { id: 'old-user', role: 'user', content: 'same user message', timestamp: 1 },
-              { id: 'assistant-1', role: 'assistant', content: 'reply 1', timestamp: 2 },
-              { id: 'assistant-2', role: 'assistant', content: 'reply 2', timestamp: 3 },
-              { id: 'assistant-3', role: 'assistant', content: 'reply 3', timestamp: 4 },
-              { id: 'assistant-4', role: 'assistant', content: 'reply 4', timestamp: 5 },
-              { id: 'assistant-5', role: 'assistant', content: 'reply 5', timestamp: 6 },
-              { id: 'assistant-6', role: 'assistant', content: 'reply 6', timestamp: 7 },
+              {
+                id: 'old-user',
+                role: 'user',
+                content: 'same user message',
+                timestamp: optimisticSentAtMs / 1000 - 12,
+              },
+              {
+                id: 'assistant-1',
+                role: 'assistant',
+                content: 'reply 1',
+                timestamp: optimisticSentAtMs / 1000 - 11,
+              },
             ],
           };
         }
@@ -815,7 +820,7 @@ describe('chat store session selection', () => {
     await useChatStore.getState().loadHistory(true);
 
     const messages = useChatStore.getState().messages;
-    expect(messages).toHaveLength(8);
+    expect(messages).toHaveLength(3);
     expect(messages.at(-1)?.id).toBe('optimistic-user');
     expect(messages.at(-1)?.content).toBe('same user message');
   });

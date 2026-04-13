@@ -92,13 +92,20 @@ export function hasEquivalentUserMessage(
 
   const candidateText = getMessageText(candidate.content).trim();
   const candidateAttachments = getMessageAttachmentFingerprint(candidate);
-  const recentMessages = messages.slice(-6);
+  const candidateTs = candidate.timestamp ? toMs(candidate.timestamp) : null;
+  const recentMessages = messages.slice(-20);
 
-  return recentMessages.some((message) => (
-    message.role === 'user'
-    && getMessageText(message.content).trim() === candidateText
-    && getMessageAttachmentFingerprint(message) === candidateAttachments
-  ));
+  return recentMessages.some((message) => {
+    if (message.role !== 'user') return false;
+    if (getMessageText(message.content).trim() !== candidateText) return false;
+    if (getMessageAttachmentFingerprint(message) !== candidateAttachments) return false;
+
+    if (candidateTs != null && message.timestamp != null) {
+      return Math.abs(toMs(message.timestamp) - candidateTs) < 10_000;
+    }
+
+    return true;
+  });
 }
 
 export function stripRenderedPrefixFromStreamingText(
