@@ -25,6 +25,7 @@ import {
 } from '../utils/skill-config';
 import { sanitizeOpenClawConfig } from '../utils/openclaw-config-sanitize';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
+import { syncOpenClawSsrfPolicySettings } from '../utils/openclaw-ssrf-policy-settings';
 import {
   ensureAlwaysEnabledBundledPluginsConfigured,
   syncBundledPluginLoadPathsToOpenClaw,
@@ -531,6 +532,12 @@ export async function syncGatewayConfigBeforeLaunch(
     await syncOpenClawSafetySettings(appSettings);
   } catch (err) {
     logger.warn('Failed to sync safety settings to openclaw.json:', err);
+  }
+
+  try {
+    await syncOpenClawSsrfPolicySettings();
+  } catch (err) {
+    logger.warn('Failed to sync SSRF policy settings to openclaw.json:', err);
   }
 
   try {

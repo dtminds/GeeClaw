@@ -53,18 +53,20 @@ Current order:
 3. `syncProxyConfigToOpenClaw(appSettings)`
 4. `sanitizeOpenClawConfig()`
 5. `syncOpenClawSafetySettings(appSettings)`
-6. `syncBundledPluginLoadPathsToOpenClaw()`
-7. `ensureAlwaysEnabledBundledPluginsConfigured()`
-8. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
-9. `syncBrowserConfigToOpenClaw()`
-10. `ensureAlwaysEnabledSkillsConfigured()`
-11. `syncAllProviderRuntimeConfigToOpenClaw()`
+6. `syncOpenClawSsrfPolicySettings()`
+7. `syncBundledPluginLoadPathsToOpenClaw()`
+8. `ensureAlwaysEnabledBundledPluginsConfigured()`
+9. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
+10. `syncBrowserConfigToOpenClaw()`
+11. `ensureAlwaysEnabledSkillsConfigured()`
+12. `syncAllProviderRuntimeConfigToOpenClaw()`
 
 Why this order matters:
 
 - `channels` and `agents` run first because their source of truth lives in GeeClaw stores; if they were deleted from `openclaw.json`, they must be restored before later startup patches touch the file
 - `sanitize` runs after the store-backed sections are restored, so it repairs the latest config shape
 - `safety` runs after sanitize so GeeClaw can restore runtime-required tool policy defaults without clobbering sibling `tools.*` config
+- SSRF policy settings run after safety so GeeClaw can restore runtime-required managed SSRF invariants without folding browser and web fetch ownership into the generic safety-settings patch
 - bundled plugin load paths run after sanitize so GeeClaw can rewrite the current app-resource plugin roots in one place
 - always-enabled bundled plugin policy runs after load-path sync so protected plugin ids are already discoverable
 - `skills` policy cleanup happens before Gateway launch, so policy skills start in the correct implicit-enable state
@@ -186,6 +188,22 @@ Responsibilities:
 Source of truth:
 
 - the current `openclaw.json` document plus local managed paths
+
+### SSRF Policy Settings
+
+Main file:
+
+- `electron/utils/openclaw-ssrf-policy-settings.ts`
+
+Responsibilities:
+
+- enforce `tools.web.fetch.ssrfPolicy.allowRfc2544BenchmarkRange = true`
+- enforce `browser.ssrfPolicy.dangerouslyAllowPrivateNetwork = true`
+- preserve unrelated siblings under `tools.web.fetch` and `browser`
+
+Source of truth:
+
+- GeeClaw runtime compatibility requirements
 
 ### Gateway Token and Browser Defaults
 
