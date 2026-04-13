@@ -4,6 +4,7 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
+import { AppError } from '@/lib/error-model';
 import { hostApiFetch } from '@/lib/host-api';
 import {
   cleanUserMessageText,
@@ -167,11 +168,30 @@ let _lastChatEventAt = 0;
 // If no streaming events arrive within a few seconds, we periodically
 // poll chat.history to surface intermediate tool-call turns.
 let _historyPollTimer: ReturnType<typeof setTimeout> | null = null;
+let _historyStartupRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _historyStartupRetryState: { requestKey: string; attempt: number } | null = null;
 
 // Timer for delayed error finalization. When the Gateway reports a mid-stream
 // error (e.g. "terminated"), it may retry internally and recover. We wait
 // before committing the error to give the recovery path a chance.
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
+const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+
+function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
+
+function summarizeChatSelection(
+  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
+): Record<string, unknown> {
+  return {
+    currentSessionKey: state.currentSessionKey,
+    currentDesktopSessionId: state.currentDesktopSessionId,
+    currentAgentId: state.currentAgentId,
+    isDraftSession: state.isDraftSession,
+    currentViewMode: state.currentViewMode,
+  };
+}
 
 function createEmptyToolRuntimeState() {
   return {
@@ -248,6 +268,51 @@ function clearHistoryPoll(): void {
     clearTimeout(_historyPollTimer);
     _historyPollTimer = null;
   }
+}
+
+function clearHistoryStartupRetryTimer(): void {
+  if (_historyStartupRetryTimer) {
+    clearTimeout(_historyStartupRetryTimer);
+    _historyStartupRetryTimer = null;
+  }
+}
+
+function clearHistoryStartupRetry(): void {
+  clearHistoryStartupRetryTimer();
+  _historyStartupRetryState = null;
+}
+
+function getHistoryStartupErrorCode(error: unknown): string | undefined {
+  if (error instanceof AppError) {
+    const code = error.details?.gatewayErrorCode;
+    return typeof code === 'string' ? code : undefined;
+  }
+  if (error && typeof error === 'object') {
+    const code = (error as { gatewayErrorCode?: unknown }).gatewayErrorCode;
+    if (typeof code === 'string') {
+      return code;
+    }
+    const detailsCode = (error as { details?: { gatewayErrorCode?: unknown } }).details?.gatewayErrorCode;
+    return typeof detailsCode === 'string' ? detailsCode : undefined;
+  }
+  return undefined;
+}
+
+function isHistoryUnavailableDuringGatewayStartup(error: unknown): boolean {
+  const structuredCode = getHistoryStartupErrorCode(error);
+  if (structuredCode === CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE) {
+    return true;
+  }
+  return String(error).toLowerCase().includes('chat.history unavailable during gateway startup');
+}
+
+function getHistoryRequestKey(request: {
+  sessionKey: string;
+  desktopSessionId: string;
+  viewMode: ChatViewMode;
+  cronRunId: string;
+}): string {
+  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}`;
 }
 
 function isSameHistoryRequest(
@@ -505,11 +570,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Load desktop sessions ──
 
   loadSessions: async () => {
+    const startedAt = Date.now();
     try {
       const previousGatewayKey = get().currentSessionKey;
       const previousDesktopSessionId = get().currentDesktopSessionId;
       const previousIsDraft = get().isDraftSession;
       const previousDesktopSessions = get().desktopSessions;
+      logChatTrace('loadSessions:start', {
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessionsCount: previousDesktopSessions.length,
+        ...summarizeChatSelection(get()),
+      });
       let desktopSessions: DesktopSessionSummary[] = [];
       let preferredMainSessionKey = '';
       let sessionTokenInfoByKey = get().sessionTokenInfoByKey;
@@ -561,11 +634,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         selectedCronRun: null,
         sessionTokenInfoByKey,
       });
+      logChatTrace('loadSessions:done', {
+        durationMs: Date.now() - startedAt,
+        preferredMainSessionKey,
+        desktopSessionsCount: desktopSessions.length,
+        activeSessionId: activeSession?.id ?? '',
+        activeSessionKey: activeSession?.gatewaySessionKey ?? '',
+        tokenInfoCount: Object.keys(sessionTokenInfoByKey).length,
+        ...summarizeChatSelection(get()),
+      });
 
-      if (activeSession?.gatewaySessionKey && activeSession.gatewaySessionKey !== previousGatewayKey) {
-        get().loadHistory();
-      }
     } catch (err) {
+      logChatTrace('loadSessions:error', {
+        durationMs: Date.now() - startedAt,
+        error: String(err),
+        ...summarizeChatSelection(get()),
+      });
       console.warn('Failed to load sessions:', err);
     }
   },
@@ -595,9 +679,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Open agent main session ──
 
   openAgentMainSession: async (agentId: string) => {
+    const startedAt = Date.now();
     const normalizedAgentId = agentId || 'main';
     const mainSessionKey = resolveMainSessionKeyForKnownAgent(normalizedAgentId);
     const existingMainSession = get().desktopSessions.find((session) => session.gatewaySessionKey === mainSessionKey);
+    logChatTrace('openAgentMainSession:start', {
+      agentId,
+      normalizedAgentId,
+      mainSessionKey,
+      existingMainSessionId: existingMainSession?.id ?? '',
+      ...summarizeChatSelection(get()),
+    });
 
     if (existingMainSession) {
       set({
@@ -616,6 +708,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastUserMessageAt: null,
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
+      });
+      logChatTrace('openAgentMainSession:reuse-existing', {
+        durationMs: Date.now() - startedAt,
+        selectedSessionId: existingMainSession.id,
+        selectedSessionKey: existingMainSession.gatewaySessionKey,
+        ...summarizeChatSelection(get()),
       });
       await get().loadHistory(true);
       return;
@@ -641,8 +739,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
       }));
+      logChatTrace('openAgentMainSession:created', {
+        durationMs: Date.now() - startedAt,
+        createdSessionId: createdMainSession.id,
+        createdSessionKey: createdMainSession.gatewaySessionKey,
+        ...summarizeChatSelection(get()),
+      });
       await get().loadHistory(true);
     } catch (createError) {
+      logChatTrace('openAgentMainSession:error', {
+        durationMs: Date.now() - startedAt,
+        error: String(createError),
+        ...summarizeChatSelection(get()),
+      });
       console.warn(`Failed to create main session for agent ${normalizedAgentId}:`, createError);
     }
   },
@@ -652,6 +761,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   switchSession: (desktopSessionId: string) => {
     const target = get().desktopSessions.find((session) => session.id === desktopSessionId);
     if (!target) return;
+    logChatTrace('switchSession:start', {
+      targetSessionId: desktopSessionId,
+      targetSessionKey: target.gatewaySessionKey,
+      ...summarizeChatSelection(get()),
+    });
     set({
       isDraftSession: false,
       currentDesktopSessionId: target.id,
@@ -667,6 +781,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
+    });
+    logChatTrace('switchSession:selected', {
+      targetSessionId: target.id,
+      targetSessionKey: target.gatewaySessionKey,
+      ...summarizeChatSelection(get()),
     });
     get().loadHistory();
   },
@@ -696,6 +815,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Delete desktop session ──
 
   deleteSession: async (desktopSessionId: string) => {
+    logChatTrace('deleteSession:start', {
+      desktopSessionId,
+      ...summarizeChatSelection(get()),
+      desktopSessionsCount: get().desktopSessions.length,
+    });
     try {
       await deleteDesktopSessionRequest(desktopSessionId);
     } catch (err) {
@@ -742,6 +866,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
+    logChatTrace('deleteSession:done', {
+      deletedSessionId: desktopSessionId,
+      nextSessionId: next?.id ?? '',
+      nextSessionKey: next?.gatewaySessionKey ?? '',
+      remainingCount: remaining.length,
+      ...summarizeChatSelection(get()),
+    });
 
     if (currentDesktopSessionId === desktopSessionId && next?.gatewaySessionKey) {
       await get().loadHistory();
@@ -776,11 +907,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── New temporary session ──
 
   newTemporarySession: async (agentId?: string) => {
+    const nextAgentId = agentId || get().currentAgentId || 'main';
+    logChatTrace('newTemporarySession:start', {
+      requestedAgentId: agentId ?? '',
+      resolvedAgentId: nextAgentId,
+      ...summarizeChatSelection(get()),
+    });
     set({
       isDraftSession: true,
       currentDesktopSessionId: '',
       currentSessionKey: '',
-      currentAgentId: agentId || get().currentAgentId || 'main',
+      currentAgentId: nextAgentId,
       currentViewMode: 'session',
       selectedCronRun: null,
       messages: [],
@@ -792,6 +929,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
+    logChatTrace('newTemporarySession:selected', summarizeChatSelection(get()));
   },
 
   // ── Cleanup empty session on navigate away ──
@@ -802,14 +940,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (desktopSessions.length <= 1) return;
     const currentSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
     if (!currentSession || isMainSessionKey(currentSession.gatewaySessionKey)) return;
+    logChatTrace('cleanupEmptySession:delete-current', {
+      currentDesktopSessionId,
+      currentSessionKey: currentSession.gatewaySessionKey,
+      desktopSessionsCount: desktopSessions.length,
+      messagesCount: messages.length,
+      ...summarizeChatSelection(get()),
+    });
     await get().deleteSession(currentDesktopSessionId);
   },
 
   // ── Load chat history ──
 
   loadHistory: async (quiet = false) => {
+    const startedAt = Date.now();
+    clearHistoryStartupRetryTimer();
     const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun } = get();
+    logChatTrace('loadHistory:start', {
+      quiet,
+      requestSessionKey: currentSessionKey,
+      requestDesktopSessionId: currentDesktopSessionId,
+      requestViewMode: currentViewMode,
+      requestCronRunId: selectedCronRun?.id ?? '',
+      ...summarizeChatSelection(get()),
+    });
     if (!currentSessionKey) {
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:skip-no-session', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        ...summarizeChatSelection(get()),
+      });
       if (!quiet) set({ loading: false });
       return;
     }
@@ -848,6 +1009,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
+        clearHistoryStartupRetry();
         set({
           messages: displayMessages,
           thinkingLevel: null,
@@ -859,6 +1021,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
+        clearHistoryStartupRetry();
         set({ messages: [], loading: false, error: String(err) });
       }
       return;
@@ -872,6 +1035,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         'chat.history',
         { sessionKey: currentSessionKey, limit: 200 },
       );
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:rpc-resolved', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        requestSessionKey: currentSessionKey,
+        rawMessagesCount: Array.isArray(data?.messages) ? data.messages.length : 0,
+        thinkingLevel: data?.thinkingLevel ? String(data.thinkingLevel) : '',
+      });
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
 
@@ -902,9 +1073,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         if (!isSameHistoryRequest(request, get())) {
+          logChatTrace('loadHistory:stale-before-apply', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            ...summarizeChatSelection(get()),
+          });
           return;
         }
-        set({ messages: finalMessages, thinkingLevel, loading: false });
+        clearHistoryStartupRetry();
+        set({ messages: finalMessages, thinkingLevel, loading: false, error: null });
+        logChatTrace('loadHistory:applied', {
+          quiet,
+          durationMs: Date.now() - startedAt,
+          requestSessionKey: request.sessionKey,
+          finalMessagesCount: finalMessages.length,
+          pendingFinal: get().pendingFinal,
+          sending: get().sending,
+          ...summarizeChatSelection(get()),
+        });
 
         void tokenInfoPromise.then((tokenInfoResult) => {
           if (!isSameHistoryRequest(request, get())) {
@@ -1029,11 +1216,98 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       } else {
         if (!isSameHistoryRequest(request, get())) {
+          logChatTrace('loadHistory:stale-empty', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            ...summarizeChatSelection(get()),
+          });
           return;
         }
-        set({ messages: [], loading: false });
+        clearHistoryStartupRetry();
+        set({ messages: [], loading: false, error: null });
+        logChatTrace('loadHistory:empty', {
+          quiet,
+          durationMs: Date.now() - startedAt,
+          requestSessionKey: request.sessionKey,
+          ...summarizeChatSelection(get()),
+        });
       }
     } catch (err) {
+      if (isHistoryUnavailableDuringGatewayStartup(err)) {
+        const currentState = get();
+        const shouldRetrySameRequest = isSameHistoryRequest(request, currentState);
+        if (shouldRetrySameRequest) {
+          const requestKey = getHistoryRequestKey(request);
+          const nextAttempt = _historyStartupRetryState?.requestKey === requestKey
+            ? _historyStartupRetryState.attempt + 1
+            : 1;
+          const keepLoading = currentState.messages.length === 0;
+          const retryDelayMs = CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS[nextAttempt - 1];
+          if (!retryDelayMs) {
+            clearHistoryStartupRetry();
+            logChatTrace('loadHistory:startup-retry-exhausted', {
+              quiet,
+              durationMs: Date.now() - startedAt,
+              requestSessionKey: request.sessionKey,
+              attempts: nextAttempt - 1,
+              error: String(err),
+              ...summarizeChatSelection(currentState),
+            });
+            set({
+              error: String(err),
+              loading: false,
+              ...(keepLoading ? { messages: [] } : {}),
+            });
+            return;
+          }
+          _historyStartupRetryState = {
+            requestKey,
+            attempt: nextAttempt,
+          };
+          set({
+            error: null,
+            loading: keepLoading,
+          });
+          _historyStartupRetryTimer = setTimeout(() => {
+            if (!isSameHistoryRequest(request, get())) {
+              clearHistoryStartupRetry();
+              return;
+            }
+            logChatTrace('loadHistory:startup-retry', {
+              quiet,
+              attempt: nextAttempt,
+              retryDelayMs,
+              requestSessionKey: request.sessionKey,
+              requestDesktopSessionId: request.desktopSessionId,
+              requestViewMode: request.viewMode,
+              requestCronRunId: request.cronRunId,
+              ...summarizeChatSelection(get()),
+            });
+            void get().loadHistory(true);
+          }, retryDelayMs);
+          logChatTrace('loadHistory:startup-unavailable', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            attempt: nextAttempt,
+            requestSessionKey: request.sessionKey,
+            keepLoading,
+            retryScheduled: true,
+            retryDelayMs,
+            error: String(err),
+            ...summarizeChatSelection(currentState),
+          });
+          return;
+        }
+      }
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:error', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        requestSessionKey: request.sessionKey,
+        error: String(err),
+        ...summarizeChatSelection(get()),
+      });
       console.warn('Failed to load chat history:', err);
       if (!isSameHistoryRequest(request, get())) {
         return;
@@ -1127,6 +1401,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentSessionKey: createdSession.gatewaySessionKey,
         currentAgentId: getAgentIdFromSessionKey(createdSession.gatewaySessionKey),
       }));
+      logChatTrace('sendMessage:created-session-for-draft', {
+        createdSessionId: createdSession.id,
+        createdSessionKey: createdSession.gatewaySessionKey,
+        draftAgentId,
+        ...summarizeChatSelection(get()),
+      });
       currentSessionKey = createdSession.gatewaySessionKey;
       currentDesktopSessionId = createdSession.id;
       isDraftSession = false;
@@ -1227,6 +1507,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
       clearHistoryPoll();
+      logChatTrace('sendMessage:safety-timeout', {
+        sessionKey: state.currentSessionKey,
+        desktopSessionId: state.currentDesktopSessionId,
+        lastChatEventAgeMs: Date.now() - _lastChatEventAt,
+        pendingFinal: state.pendingFinal,
+        streamingTextLength: state.streamingText.length,
+        toolMessagesCount: state.toolMessages.length,
+        streamSegmentsCount: state.streamSegments.length,
+        ...summarizeChatSelection(state),
+      });
       set({
         error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
         sending: false,
@@ -1294,6 +1584,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!result.success) {
         const errorMsg = result.error || 'Failed to send message';
         if (isRecoverableChatSendTimeout(errorMsg)) {
+          logChatTrace('sendMessage:recoverable-timeout', {
+            error: errorMsg,
+            sessionKey: currentSessionKey,
+            desktopSessionId: currentDesktopSessionId,
+            ...summarizeChatSelection(get()),
+          });
           console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
           set({ error: errorMsg });
         } else {
@@ -1306,6 +1602,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (err) {
       const errStr = String(err);
       if (isRecoverableChatSendTimeout(errStr)) {
+        logChatTrace('sendMessage:recoverable-timeout', {
+          error: errStr,
+          sessionKey: currentSessionKey,
+          desktopSessionId: currentDesktopSessionId,
+          ...summarizeChatSelection(get()),
+        });
         console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
         set({ error: errStr });
       } else {

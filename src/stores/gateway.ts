@@ -3,6 +3,7 @@
  * Uses Host API + SSE for lifecycle/status and a direct renderer WebSocket for runtime RPC.
  */
 import { create } from 'zustand';
+import { AppError } from '@/lib/error-model';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
@@ -364,9 +365,13 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
       success: boolean;
       result?: T;
       error?: string;
+      errorCode?: string;
     }>('gateway:rpc', method, params, timeoutMs);
     if (!response.success) {
-      throw new Error(response.error || `Gateway RPC failed: ${method}`);
+      throw new AppError('GATEWAY', response.error || `Gateway RPC failed: ${method}`, response, {
+        gatewayMethod: method,
+        gatewayErrorCode: response.errorCode,
+      });
     }
     return response.result as T;
   },

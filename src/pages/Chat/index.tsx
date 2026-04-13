@@ -28,6 +28,7 @@ import wecomIcon from '@/assets/channels/wecom.svg';
 import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 import { buildChatItems } from './build-chat-items';
+import { createRequestedAgentNavigationCache } from './requested-agent-navigation-cache';
 import { useSettingsStore } from '@/stores/settings';
 import { CHANNEL_ICONS, CHANNEL_NAMES, getPrimaryChannels, type ChannelType } from '@/types/channel';
 
@@ -71,12 +72,17 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
   })
   .slice(0, 5);
 
+const consumedRequestedAgentNavigationKeys = createRequestedAgentNavigationCache(128);
+
 export function Chat() {
   const { t } = useTranslation('chat');
   const skipNextAutoLoadRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const requestedAgentId = (location.state as { requestedAgentId?: string } | null)?.requestedAgentId ?? '';
+  const requestedAgentNavigationKey = requestedAgentId
+    ? `${location.key || location.pathname}:${requestedAgentId}`
+    : '';
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
@@ -153,6 +159,9 @@ export function Chat() {
     let cancelled = false;
     const hasExistingMessages = useChatStore.getState().messages.length > 0;
     (async () => {
+      if (requestedAgentNavigationKey && consumedRequestedAgentNavigationKeys.has(requestedAgentNavigationKey)) {
+        return;
+      }
       if (skipNextAutoLoadRef.current && !requestedAgentId) {
         skipNextAutoLoadRef.current = false;
         return;
@@ -160,13 +169,16 @@ export function Chat() {
       const fetchAgentsPromise = fetchAgents();
       if (cancelled) return;
       if (requestedAgentId) {
+        if (requestedAgentNavigationKey) {
+          consumedRequestedAgentNavigationKeys.add(requestedAgentNavigationKey);
+        }
+        skipNextAutoLoadRef.current = true;
+        navigate(location.pathname, { replace: true });
         await openAgentMainSession(requestedAgentId);
         if (cancelled) return;
         void fetchAgentsPromise.catch((error) => {
           console.warn('Failed to refresh agents while opening requested agent session:', error);
         });
-        skipNextAutoLoadRef.current = true;
-        navigate(location.pathname, { replace: true });
         return;
       }
       await fetchAgentsPromise;
