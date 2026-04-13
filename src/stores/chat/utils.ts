@@ -75,6 +75,32 @@ export function hasEquivalentFinalAssistantMessage(
   });
 }
 
+function getMessageAttachmentFingerprint(message: RawMessage): string {
+  const attachments = (message._attachedFiles || [])
+    .map((file) => file.filePath || file.url || file.fileName || '')
+    .filter(Boolean)
+    .sort();
+
+  return attachments.join('|');
+}
+
+export function hasEquivalentUserMessage(
+  messages: RawMessage[],
+  candidate: RawMessage,
+): boolean {
+  if (candidate.role !== 'user') return false;
+
+  const candidateText = getMessageText(candidate.content).trim();
+  const candidateAttachments = getMessageAttachmentFingerprint(candidate);
+  const recentMessages = messages.slice(-6);
+
+  return recentMessages.some((message) => (
+    message.role === 'user'
+    && getMessageText(message.content).trim() === candidateText
+    && getMessageAttachmentFingerprint(message) === candidateAttachments
+  ));
+}
+
 export function stripRenderedPrefixFromStreamingText(
   fullText: string,
   streamSegments: Array<{ text: string; ts: number }>,

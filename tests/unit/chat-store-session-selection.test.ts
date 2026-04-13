@@ -716,4 +716,107 @@ describe('chat store session selection', () => {
     expect(messages[1]?.id).toBe('new-msg');
     expect(messages[1]?.content).toBe('newer optimistic message');
   });
+
+  it('does not append an optimistic user message when history already contains the same user text', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: 'same user message',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: 'same user message',
+                timestamp: optimisticSentAtMs / 1000 + 10,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe('persisted-user');
+    expect(messages[0]?.content).toBe('same user message');
+  });
+
+  it('does not treat far-away matching user text as a duplicate when appending the optimistic message', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: 'same user message',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              { id: 'old-user', role: 'user', content: 'same user message', timestamp: 1 },
+              { id: 'assistant-1', role: 'assistant', content: 'reply 1', timestamp: 2 },
+              { id: 'assistant-2', role: 'assistant', content: 'reply 2', timestamp: 3 },
+              { id: 'assistant-3', role: 'assistant', content: 'reply 3', timestamp: 4 },
+              { id: 'assistant-4', role: 'assistant', content: 'reply 4', timestamp: 5 },
+              { id: 'assistant-5', role: 'assistant', content: 'reply 5', timestamp: 6 },
+              { id: 'assistant-6', role: 'assistant', content: 'reply 6', timestamp: 7 },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(8);
+    expect(messages.at(-1)?.id).toBe('optimistic-user');
+    expect(messages.at(-1)?.content).toBe('same user message');
+  });
 });
