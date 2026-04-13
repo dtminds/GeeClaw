@@ -1,11 +1,11 @@
 /**
  * Model configuration settings section.
  */
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { trackUiEvent } from '@/lib/telemetry';
 import { hostApiFetch } from '@/lib/host-api';
@@ -54,6 +54,8 @@ const SLOT_ORDER: ModelSlotKey[] = [
   'videoGenerationModel',
 ];
 
+const MAX_FALLBACK_MODELS = 3;
+
 function cloneDraft(snapshot: AgentDefaultModelSnapshot): ModelConfigDraft {
   return {
     model: { ...snapshot.model, fallbacks: [...snapshot.model.fallbacks] },
@@ -87,7 +89,6 @@ function ModelSlotEditor(props: {
   onChange: (next: AgentModelSlotState) => void;
 }) {
   const { t } = useTranslation('settings');
-  const [fallbackDialogOpen, setFallbackDialogOpen] = useState(false);
   const allModelRefs = useMemo(
     () => buildAvailableModelRefs(props.availableModels),
     [props.availableModels],
@@ -98,6 +99,10 @@ function ModelSlotEditor(props: {
   );
 
   const toggleFallback = (modelRef: string) => {
+    const selected = props.slot.fallbacks.includes(modelRef);
+    if (!selected && props.slot.fallbacks.length >= MAX_FALLBACK_MODELS) {
+      return;
+    }
     const nextFallbacks = props.slot.fallbacks.includes(modelRef)
       ? props.slot.fallbacks.filter((ref) => ref !== modelRef)
       : [...props.slot.fallbacks, modelRef];
@@ -121,6 +126,9 @@ function ModelSlotEditor(props: {
 
   const sectionTitle = t(`agentModels.sections.${props.slotKey}.title`);
   const sectionDescription = t(`agentModels.sections.${props.slotKey}.description`);
+  const fallbackSummary = props.slot.fallbacks.length > 0
+    ? props.slot.fallbacks.join(', ')
+    : t('agentModels.selectFallbacks');
 
   return (
     <div className="modal-section-surface rounded-3xl border p-5">
@@ -161,69 +169,102 @@ function ModelSlotEditor(props: {
 
       {!props.optional || props.slot.configured ? (
         <div className="mt-5 space-y-5">
-          <div className="space-y-2">
-            <label className="text-[13px] font-medium text-muted-foreground">
-              {t('agentModels.primary')}
-            </label>
-            <div className="relative">
-              <select
-                value={props.slot.primary ?? ''}
-                onChange={(event) => handlePrimaryChange(event.target.value)}
-                className="modal-field-surface h-[44px] w-full appearance-none rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none"
-              >
-                <option value="">{t('agentModels.selectPrimary')}</option>
-                {props.availableModels.map((group) => (
-                  <optgroup key={group.providerId} label={group.providerName}>
-                    {group.modelRefs.map((modelRef) => (
-                      <option key={modelRef} value={modelRef}>{modelRef}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
-                <ChevronDown className="h-4 w-4" />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
               <label className="text-[13px] font-medium text-muted-foreground">
-                {t('agentModels.fallbacks')}
+                {t('agentModels.primary')}
               </label>
-              <span className="text-[12px] text-muted-foreground">
-                {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.length : t('agentModels.none')}
-              </span>
-            </div>
-            <div className="modal-field-surface rounded-2xl border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-                  {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.map((modelRef) => (
-                    <span
-                      key={modelRef}
-                      className="inline-flex items-center rounded-full border border-black/8 bg-black/[0.03] px-3 py-1 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.04]"
-                    >
-                      {modelRef}
-                    </span>
-                  )) : (
-                    <span className="text-[13px] text-muted-foreground">
-                      {t('agentModels.noFallbacksSelected')}
-                    </span>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setFallbackDialogOpen(true)}
-                  className="surface-hover rounded-full border-black/10 px-4 text-[12px] dark:border-white/10"
+              <div className="relative">
+                <select
+                  value={props.slot.primary ?? ''}
+                  onChange={(event) => handlePrimaryChange(event.target.value)}
+                  className="modal-field-surface h-[44px] w-full appearance-none rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none"
                 >
-                  {t('agentModels.configureFallbacks')}
-                </Button>
+                  <option value="">{t('agentModels.selectPrimary')}</option>
+                  {props.availableModels.map((group) => (
+                    <optgroup key={group.providerId} label={group.providerName}>
+                      {group.modelRefs.map((modelRef) => (
+                        <option key={modelRef} value={modelRef}>{modelRef}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+                  <ChevronDown className="h-4 w-4" />
+                </div>
               </div>
             </div>
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {t(`agentModels.sections.${props.slotKey}.fallbackHelp`)}
-            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[13px] font-medium text-muted-foreground">
+                  {t('agentModels.fallbacks')}
+                </label>
+                <span className="text-[12px] text-muted-foreground">
+                  {props.slot.fallbacks.length}
+                </span>
+              </div>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={t('agentModels.selectFallbacks')}
+                    disabled={fallbackCandidates.length === 0}
+                    className="modal-field-surface h-[44px] w-full justify-between rounded-xl border px-3 text-[13px] text-foreground"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left font-mono text-[12px]">
+                      {fallbackSummary}
+                    </span>
+                    <span className="ml-3 shrink-0 text-[12px] text-muted-foreground">
+                      {props.slot.fallbacks.length}
+                    </span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className="z-50 min-w-[320px] max-w-[min(520px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none data-[side=bottom]:animate-in data-[side=bottom]:slide-in-from-top-2 dark:border-white/10 dark:bg-card"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    <DropdownMenu.Label className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      {t('agentModels.fallbackLimit')}
+                    </DropdownMenu.Label>
+                    <DropdownMenu.Separator className="mx-2 my-1 h-px bg-black/8 dark:bg-white/10" />
+                    {fallbackCandidates.map((modelRef) => {
+                      const selected = props.slot.fallbacks.includes(modelRef);
+                      const disabled = !selected && props.slot.fallbacks.length >= MAX_FALLBACK_MODELS;
+                      return (
+                        <DropdownMenu.CheckboxItem
+                          key={modelRef}
+                          checked={selected}
+                          disabled={disabled}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                          }}
+                          onCheckedChange={() => toggleFallback(modelRef)}
+                          className="relative mx-1 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 pl-8 text-[13px] text-foreground outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent/60"
+                        >
+                          <DropdownMenu.ItemIndicator className="absolute left-3 inline-flex items-center justify-center">
+                            <Check className="h-3.5 w-3.5" />
+                          </DropdownMenu.ItemIndicator>
+                          <span className="truncate font-mono text-[12px]">{modelRef}</span>
+                        </DropdownMenu.CheckboxItem>
+                      );
+                    })}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                {t(`agentModels.sections.${props.slotKey}.fallbackHelp`)}
+              </p>
+            </div>
           </div>
         </div>
       ) : (
@@ -231,67 +272,6 @@ function ModelSlotEditor(props: {
           {t(`agentModels.sections.${props.slotKey}.autoHelp`)}
         </div>
       )}
-
-      <Dialog open={fallbackDialogOpen} onOpenChange={setFallbackDialogOpen}>
-        <DialogContent className="modal-card-surface max-w-2xl rounded-3xl border p-0 shadow-none">
-          <DialogHeader className="border-b border-black/6 px-6 py-5 dark:border-white/10">
-            <DialogTitle className="modal-title text-[18px]">
-              {t('agentModels.fallbackPickerTitle', { section: sectionTitle })}
-            </DialogTitle>
-            <DialogDescription className="modal-description">
-              {t('agentModels.fallbackPickerDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 px-6 py-5">
-            <div className="flex flex-wrap gap-2">
-              {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.map((modelRef) => (
-                <span
-                  key={modelRef}
-                  className="inline-flex items-center rounded-full border border-black/8 bg-black/[0.03] px-3 py-1.5 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.04]"
-                >
-                  {modelRef}
-                </span>
-              )) : (
-                <span className="text-[13px] text-muted-foreground">
-                  {t('agentModels.noFallbacksSelected')}
-                </span>
-              )}
-            </div>
-            <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-              {fallbackCandidates.map((modelRef) => {
-                const selected = props.slot.fallbacks.includes(modelRef);
-                return (
-                  <button
-                    key={modelRef}
-                    type="button"
-                    onClick={() => toggleFallback(modelRef)}
-                    className={[
-                      'flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors',
-                      selected
-                        ? 'border-black/90 bg-black/90 text-white dark:border-white dark:bg-white dark:text-black'
-                        : 'border-black/8 bg-black/[0.03] text-foreground hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]',
-                    ].join(' ')}
-                  >
-                    <span className="font-mono text-[12px]">{modelRef}</span>
-                    <span className="text-[12px] font-medium">
-                      {selected ? t('agentModels.selected') : t('agentModels.select')}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                onClick={() => setFallbackDialogOpen(false)}
-                className="rounded-full px-5"
-              >
-                {t('agentModels.done')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

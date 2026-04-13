@@ -334,6 +334,8 @@
     "fallbacks": "备用模型",
     "none": "未配置",
     "selectPrimary": "选择一个 model ref",
+    "selectFallbacks": "选择备用模型",
+    "fallbackLimit": "最多选择 3 个备用模型",
     "configureFallbacks": "配置备用模型",
     "fallbackPickerTitle": "为“{{section}}”选择备用模型",
     "fallbackPickerDescription": "只有当主模型不可用时，才会按顺序尝试这些备用模型。",

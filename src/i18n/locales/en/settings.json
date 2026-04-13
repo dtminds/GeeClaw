@@ -334,6 +334,8 @@
     "fallbacks": "Fallback Models",
     "none": "Not configured",
     "selectPrimary": "Select a model ref",
+    "selectFallbacks": "Select fallback models",
+    "fallbackLimit": "Up to 3 fallback models",
     "configureFallbacks": "Configure Fallbacks",
     "fallbackPickerTitle": "Choose fallback models for {{section}}",
     "fallbackPickerDescription": "These models are only used when the primary model is unavailable.",

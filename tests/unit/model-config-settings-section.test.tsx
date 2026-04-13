@@ -63,7 +63,7 @@ describe('ModelsSettingsSection', () => {
         {
           providerId: 'openai',
           providerName: 'OpenAI',
-          modelRefs: ['openai/gpt-5.4', 'openai/gpt-5.4-mini', 'openai/o3'],
+          modelRefs: ['openai/gpt-5.4', 'openai/gpt-5.4-mini', 'openai/o3', 'openai/o4-mini', 'openai/o1'],
         },
       ],
     });
@@ -83,15 +83,26 @@ describe('ModelsSettingsSection', () => {
     expect(container.querySelector('.pointer-events-none .lucide-chevron-down')).not.toBeNull();
   });
 
-  it('keeps fallback candidates collapsed until the picker dialog is opened', async () => {
-    render(<ModelsSettingsSection />);
+  it('uses a compact fallback dropdown that caps selections at three and summarizes them inline', async () => {
+    const { container } = render(<ModelsSettingsSection />);
 
-    const configureButton = await screen.findByRole('button', { name: 'agentModels.configureFallbacks' });
-    expect(screen.queryByRole('button', { name: /openai\/gpt-5\.4-mini/ })).not.toBeInTheDocument();
+    const fallbackTrigger = await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+    expect(container.querySelector('.md\\:grid-cols-2')).not.toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    fireEvent.click(configureButton);
+    fireEvent.pointerDown(fallbackTrigger, { button: 0, ctrlKey: false });
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /openai\/gpt-5\.4-mini/ })).toBeInTheDocument();
+    const firstFallback = await screen.findByRole('menuitemcheckbox', { name: /openai\/gpt-5\.4-mini/ });
+    const secondFallback = screen.getByRole('menuitemcheckbox', { name: /openai\/o3/ });
+    const thirdFallback = screen.getByRole('menuitemcheckbox', { name: /openai\/o4-mini/ });
+    const fourthFallback = screen.getByRole('menuitemcheckbox', { name: /openai\/o1/ });
+
+    fireEvent.click(firstFallback);
+    fireEvent.click(secondFallback);
+    fireEvent.click(thirdFallback);
+
+    expect(fallbackTrigger).toHaveTextContent('openai/gpt-5.4-mini, openai/o3, openai/o4-mini');
+    expect(fallbackTrigger).toHaveTextContent('3');
+    expect(fourthFallback).toHaveAttribute('data-disabled');
   });
 });
