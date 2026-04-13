@@ -93,15 +93,17 @@ export function hasEquivalentUserMessage(
   const candidateText = getMessageText(candidate.content).trim();
   const candidateAttachments = getMessageAttachmentFingerprint(candidate);
   const candidateTs = candidate.timestamp ? toMs(candidate.timestamp) : null;
-  const recentMessages = messages.slice(-20);
+  const recentMessages = messages.slice(-3);
 
   return recentMessages.some((message) => {
     if (message.role !== 'user') return false;
     if (getMessageText(message.content).trim() !== candidateText) return false;
     if (getMessageAttachmentFingerprint(message) !== candidateAttachments) return false;
 
-    if (candidateTs != null && message.timestamp != null) {
-      return Math.abs(toMs(message.timestamp) - candidateTs) < 10_000;
+    if (candidateTs != null) {
+      if (message.timestamp == null) return false;
+      const messageTs = toMs(message.timestamp);
+      return messageTs >= candidateTs - 2_000 && messageTs <= candidateTs + 10_000;
     }
 
     return true;

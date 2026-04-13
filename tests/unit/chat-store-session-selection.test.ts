@@ -824,4 +824,61 @@ describe('chat store session selection', () => {
     expect(messages.at(-1)?.id).toBe('optimistic-user');
     expect(messages.at(-1)?.content).toBe('same user message');
   });
+
+  it('keeps a new optimistic user message when the previous run sent the same text shortly before', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'prev-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 5,
+              },
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: '上一轮回复',
+                timestamp: optimisticSentAtMs / 1000 - 4,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.at(-1)?.id).toBe('optimistic-user');
+    expect(messages.at(-1)?.content).toBe('你好');
+  });
 });
