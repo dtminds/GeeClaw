@@ -178,7 +178,7 @@ export async function buildOpenClawSidecar({
     ? version
     : readOpenClawSidecarVersionManifest(projectRoot).version;
   if (!sidecarVersion) {
-    throw new Error('OpenClaw sidecar version is required. Pass --version or pin runtime-artifacts/openclaw-sidecar/version.json.');
+    throw new Error('OpenClaw sidecar version is required. Pass --version or pin openclaw-runtime/version.json.');
   }
 
   const afterPack = await import('./after-pack.cjs');

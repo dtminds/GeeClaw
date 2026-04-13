@@ -15,16 +15,17 @@ describe('openclaw sidecar artifact manifest helpers', () => {
     }
   });
 
-  it('prefers the generated build manifest over the tracked runtime-artifacts manifest', async () => {
+  it('prefers the generated build manifest over the tracked openclaw-runtime manifest', async () => {
     const {
       getOpenClawSidecarVersionManifestPath,
+      getTrackedOpenClawSidecarVersionManifestPath,
       readOpenClawSidecarVersionManifest,
     } = await import('../../scripts/lib/openclaw-sidecar-artifacts.mjs');
 
     const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-manifest-'));
     tempDirs.push(projectRoot);
 
-    const trackedRoot = join(projectRoot, 'runtime-artifacts', 'openclaw-sidecar');
+    const trackedRoot = join(projectRoot, 'openclaw-runtime');
     const buildRoot = join(projectRoot, 'build');
     mkdirSync(trackedRoot, { recursive: true });
     mkdirSync(buildRoot, { recursive: true });
@@ -50,6 +51,9 @@ describe('openclaw sidecar artifact manifest helpers', () => {
 
     expect(getOpenClawSidecarVersionManifestPath(projectRoot)).toBe(
       join(buildRoot, 'openclaw-sidecar-version.json'),
+    );
+    expect(getTrackedOpenClawSidecarVersionManifestPath(projectRoot)).toBe(
+      join(trackedRoot, 'version.json'),
     );
     expect(readOpenClawSidecarVersionManifest(projectRoot)).toMatchObject({
       version: '2026.4.10-r2',

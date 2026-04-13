@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const DEFAULT_OPENCLAW_SIDECAR_REPO = 'dtminds/GeeClaw';
-export const TRACKED_OPENCLAW_SIDECAR_VERSION_PATH = path.join('runtime-artifacts', 'openclaw-sidecar', 'version.json');
+export const TRACKED_OPENCLAW_SIDECAR_VERSION_PATH = path.join('openclaw-runtime', 'version.json');
 export const GENERATED_OPENCLAW_SIDECAR_VERSION_PATH = path.join('build', 'openclaw-sidecar-version.json');
 export const SUPPORTED_OPENCLAW_SIDECAR_TARGETS = new Set([
   'darwin-arm64',
@@ -80,7 +80,7 @@ export function normalizeOpenClawSidecarVersionManifest(manifest, manifestPath =
 
 export function assertPinnedOpenClawSidecarManifest(manifest) {
   if (!manifest.enabled) {
-    throw new Error('OpenClaw sidecar manifest is disabled. Enable runtime-artifacts/openclaw-sidecar/version.json to consume prebuilt sidecars.');
+    throw new Error('OpenClaw sidecar manifest is disabled. Enable openclaw-runtime/version.json to consume prebuilt sidecars.');
   }
   if (!manifest.version) {
     throw new Error('OpenClaw sidecar manifest is missing version.');
