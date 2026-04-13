@@ -91,6 +91,23 @@ async function setupManagedPresetFixture(options?: {
     files?: Record<string, string>;
     skills?: Record<string, Record<string, string>>;
   };
+  providerAccounts?: Record<string, {
+    id: string;
+    vendorId: string;
+    label: string;
+    authMode: 'api_key' | 'oauth_device' | 'oauth_browser' | 'local';
+    apiProtocol?: string;
+    baseUrl?: string;
+    models?: string[];
+    model?: string;
+    fallbackModels?: string[];
+    fallbackAccountIds?: string[];
+    enabled: boolean;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  defaultProviderAccountId?: string;
 }) {
   const homeDir = mkdtempSync(join(tmpdir(), 'managed-agent-install-'));
   tempDirs.push(homeDir);
@@ -167,6 +184,10 @@ async function setupManagedPresetFixture(options?: {
   }
 
   const storeState: Record<string, unknown> = {};
+  const providerStoreState: Record<string, unknown> = {
+    providerAccounts: options?.providerAccounts ?? {},
+    defaultProviderAccountId: options?.defaultProviderAccountId,
+  };
   vi.doMock('@electron/services/agents/store-instance', () => ({
     getGeeClawAgentStore: vi.fn(async () => ({
       get: (key: string) => storeState[key],
@@ -175,6 +196,17 @@ async function setupManagedPresetFixture(options?: {
       },
       delete: (key: string) => {
         delete storeState[key];
+      },
+    })),
+  }));
+  vi.doMock('@electron/services/providers/store-instance', () => ({
+    getGeeClawProviderStore: vi.fn(async () => ({
+      get: (key: string) => providerStoreState[key],
+      set: (key: string, value: unknown) => {
+        providerStoreState[key] = JSON.parse(JSON.stringify(value));
+      },
+      delete: (key: string) => {
+        delete providerStoreState[key];
       },
     })),
   }));
@@ -331,7 +363,15 @@ async function setupManagedPresetFixture(options?: {
   }));
 
   const agentConfig = await import('@electron/utils/agent-config');
-  return { homeDir, configDir, storeState, agentConfig, deleteDesktopSessionsForAgent, marketplaceState };
+  return {
+    homeDir,
+    configDir,
+    storeState,
+    providerStoreState,
+    agentConfig,
+    deleteDesktopSessionsForAgent,
+    marketplaceState,
+  };
 }
 
 afterEach(() => {
@@ -785,7 +825,7 @@ describe('managed agent config domain', () => {
   });
 
   it('preserves marketplace model config on the installed agent entry', async () => {
-    const { configDir, agentConfig } = await setupManagedPresetFixture({
+    const { configDir, homeDir, agentConfig } = await setupManagedPresetFixture({
       marketplacePackage: {
         meta: {
           agent: {
@@ -818,6 +858,214 @@ describe('managed agent config domain', () => {
       primary: 'openrouter/stock-pro',
       fallbacks: ['openrouter/stock-lite'],
     });
+  });
+
+  it('returns the expanded default model snapshot with auto-mode optional sections', async () => {
+    const { configDir, homeDir, agentConfig } = await setupManagedPresetFixture({
+      providerAccounts: {
+        'openai-account': {
+          id: 'openai-account',
+          vendorId: 'openai',
+          label: 'OpenAI',
+          authMode: 'api_key',
+          models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-image-1'],
+          enabled: true,
+          isDefault: true,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+        'openrouter-account': {
+          id: 'openrouter-account',
+          vendorId: 'openrouter',
+          label: 'OpenRouter',
+          authMode: 'api_key',
+          models: ['qwen/qwen-2.5-vl-72b-instruct:free'],
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+      },
+    });
+
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      agents: {
+        defaults: {
+          workspace: getExpectedWorkspacePath(homeDir, 'main'),
+          model: {
+            primary: 'openai/gpt-5.4',
+            fallbacks: ['openai/gpt-5.4-mini'],
+          },
+          imageGenerationModel: {
+            primary: 'openai/gpt-image-1',
+            fallbacks: [],
+          },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    await expect(agentConfig.getDefaultAgentModelConfig()).resolves.toMatchObject({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      availableModels: expect.arrayContaining([
+        expect.objectContaining({
+          providerId: 'openai-account',
+          modelRefs: expect.arrayContaining([
+            'openai/gpt-5.4',
+            'openai/gpt-5.4-mini',
+            'openai/gpt-image-1',
+          ]),
+        }),
+      ]),
+    });
+  });
+
+  it('writes explicit model refs, omits auto sections, and registers referenced defaults models', async () => {
+    const { configDir, agentConfig } = await setupManagedPresetFixture({
+      providerAccounts: {
+        'openai-account': {
+          id: 'openai-account',
+          vendorId: 'openai',
+          label: 'OpenAI',
+          authMode: 'api_key',
+          models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-image-1'],
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+        'openrouter-account': {
+          id: 'openrouter-account',
+          vendorId: 'openrouter',
+          label: 'OpenRouter',
+          authMode: 'api_key',
+          models: ['qwen/qwen-2.5-vl-72b-instruct:free'],
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+        'qwen-account': {
+          id: 'qwen-account',
+          vendorId: 'qwen',
+          label: 'Qwen',
+          authMode: 'api_key',
+          models: ['wan2.6-t2v'],
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+      },
+    });
+
+    await expect(agentConfig.updateDefaultAgentModelConfig({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: true,
+        primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+    })).resolves.toMatchObject({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+      },
+      pdfModel: {
+        configured: true,
+        primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+      },
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        defaults?: {
+          workspace?: string;
+          models?: Record<string, { alias?: string }>;
+          model?: { primary?: string; fallbacks?: string[] };
+          imageModel?: { primary?: string; fallbacks?: string[] };
+          pdfModel?: { primary?: string; fallbacks?: string[] };
+          imageGenerationModel?: { primary?: string; fallbacks?: string[] };
+          videoGenerationModel?: { primary?: string; fallbacks?: string[] };
+        };
+      };
+    };
+
+    expect(config.agents?.defaults?.model).toEqual({
+      primary: 'openai/gpt-5.4',
+      fallbacks: ['openai/gpt-5.4-mini'],
+    });
+    expect(config.agents?.defaults?.imageModel).toBeUndefined();
+    expect(config.agents?.defaults?.pdfModel).toEqual({
+      primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+      fallbacks: [],
+    });
+    expect(config.agents?.defaults?.imageGenerationModel).toEqual({
+      primary: 'openai/gpt-image-1',
+      fallbacks: [],
+    });
+    expect(config.agents?.defaults?.videoGenerationModel).toBeUndefined();
+    expect(config.agents?.defaults?.models).toEqual(expect.objectContaining({
+      'openai/gpt-5.4': expect.objectContaining({ alias: expect.any(String) }),
+      'openai/gpt-5.4-mini': expect.objectContaining({ alias: expect.any(String) }),
+      'openrouter/qwen/qwen-2.5-vl-72b-instruct:free': expect.objectContaining({ alias: expect.any(String) }),
+      'openai/gpt-image-1': expect.objectContaining({ alias: expect.any(String) }),
+    }));
   });
 
   it('clears active managed restrictions after unmanage', async () => {

@@ -23,7 +23,7 @@ vi.mock('@electron/utils/agent-config', () => ({
   listAgentsSnapshot: vi.fn(),
   updateAgentName: vi.fn(),
   updateAgentPersona: vi.fn(),
-  updateDefaultAgentFallbacks: vi.fn(),
+  updateDefaultAgentModelConfig: vi.fn(),
 }));
 
 vi.mock('@electron/api/route-utils', () => ({

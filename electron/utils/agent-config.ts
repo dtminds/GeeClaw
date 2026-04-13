@@ -62,12 +62,22 @@ const PRESET_AGENT_SECTION_END = '<!-- preset_agent_instruction:end -->';
 
 interface AgentModelConfig {
   primary?: string;
+  fallbacks?: string[];
   [key: string]: unknown;
+}
+
+interface AgentModelRegistryEntry extends Record<string, unknown> {
+  alias?: string;
 }
 
 interface AgentDefaultsConfig {
   workspace?: string;
   model?: string | AgentModelConfig;
+  models?: Record<string, AgentModelRegistryEntry>;
+  imageModel?: string | AgentModelConfig;
+  pdfModel?: string | AgentModelConfig;
+  imageGenerationModel?: string | AgentModelConfig;
+  videoGenerationModel?: string | AgentModelConfig;
   [key: string]: unknown;
 }
 
@@ -244,10 +254,29 @@ export interface AvailableProviderModelGroup {
   modelRefs: string[];
 }
 
+export interface AgentModelSlotSnapshot {
+  configured: boolean;
+  primary: string | null;
+  fallbacks: string[];
+}
+
 export interface DefaultAgentModelConfigSnapshot {
+  model: AgentModelSlotSnapshot;
+  imageModel: AgentModelSlotSnapshot;
+  pdfModel: AgentModelSlotSnapshot;
+  imageGenerationModel: AgentModelSlotSnapshot;
+  videoGenerationModel: AgentModelSlotSnapshot;
   primary: string | null;
   fallbacks: string[];
   availableModels: AvailableProviderModelGroup[];
+}
+
+export interface DefaultAgentModelConfigUpdate {
+  model: AgentModelSlotSnapshot;
+  imageModel: AgentModelSlotSnapshot;
+  pdfModel: AgentModelSlotSnapshot;
+  imageGenerationModel: AgentModelSlotSnapshot;
+  videoGenerationModel: AgentModelSlotSnapshot;
 }
 
 const PERSONA_FILE_MAP = {
@@ -831,6 +860,169 @@ function readDefaultAgentModelConfig(
   return { primary: null, fallbacks: [] };
 }
 
+function readOptionalAgentModelConfig(
+  config: AgentConfigDocument,
+  key: keyof Pick<AgentDefaultsConfig, 'imageModel' | 'pdfModel' | 'imageGenerationModel' | 'videoGenerationModel'>,
+): AgentModelSlotSnapshot {
+  const defaults = (
+    config.agents && typeof config.agents === 'object'
+      ? (config.agents as AgentsConfig).defaults
+      : undefined
+  );
+  const modelConfig = defaults?.[key];
+
+  if (typeof modelConfig === 'string') {
+    const primary = modelConfig.trim() || null;
+    return {
+      configured: Boolean(primary),
+      primary,
+      fallbacks: [],
+    };
+  }
+
+  if (modelConfig && typeof modelConfig === 'object') {
+    const primary = typeof modelConfig.primary === 'string' && modelConfig.primary.trim()
+      ? modelConfig.primary.trim()
+      : null;
+    const fallbacks = normalizeProviderModelList(
+      Array.isArray((modelConfig as Record<string, unknown>).fallbacks)
+        ? ((modelConfig as Record<string, unknown>).fallbacks as Array<string | null | undefined>)
+        : [],
+    );
+
+    return {
+      configured: Boolean(primary || fallbacks.length > 0),
+      primary,
+      fallbacks,
+    };
+  }
+
+  return {
+    configured: false,
+    primary: null,
+    fallbacks: [],
+  };
+}
+
+function buildDefaultAgentModelSnapshot(config: AgentConfigDocument): Omit<DefaultAgentModelConfigSnapshot, 'availableModels'> {
+  const model = readDefaultAgentModelConfig(config);
+  const imageModel = readOptionalAgentModelConfig(config, 'imageModel');
+  const pdfModel = readOptionalAgentModelConfig(config, 'pdfModel');
+  const imageGenerationModel = readOptionalAgentModelConfig(config, 'imageGenerationModel');
+  const videoGenerationModel = readOptionalAgentModelConfig(config, 'videoGenerationModel');
+
+  return {
+    model: {
+      configured: Boolean(model.primary || model.fallbacks.length > 0),
+      primary: model.primary,
+      fallbacks: model.fallbacks,
+    },
+    imageModel,
+    pdfModel,
+    imageGenerationModel,
+    videoGenerationModel,
+    primary: model.primary,
+    fallbacks: model.fallbacks,
+  };
+}
+
+function validateAgentModelSlot(
+  slot: AgentModelSlotSnapshot,
+  label: string,
+  availableRefs: Set<string>,
+  options?: { allowEmptyPrimary?: boolean },
+): AgentModelSlotSnapshot {
+  const configured = Boolean(slot?.configured);
+  const primary = typeof slot?.primary === 'string' && slot.primary.trim() ? slot.primary.trim() : null;
+  const fallbacks = normalizeProviderModelList(slot?.fallbacks ?? []);
+
+  if (!configured) {
+    if (!options?.allowEmptyPrimary && fallbacks.length > 0) {
+      throw new Error(`${label} requires a primary model`);
+    }
+    return {
+      configured: false,
+      primary: null,
+      fallbacks: [],
+    };
+  }
+
+  if (!primary) {
+    if (options?.allowEmptyPrimary && fallbacks.length === 0) {
+      return {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      };
+    }
+    throw new Error(`${label} requires a primary model`);
+  }
+
+  if (!availableRefs.has(primary)) {
+    throw new Error(`Unknown ${label} primary model: ${primary}`);
+  }
+
+  const invalidFallbacks = fallbacks.filter((modelRef) => !availableRefs.has(modelRef));
+  if (invalidFallbacks.length > 0) {
+    throw new Error(`Unknown ${label} fallback models: ${invalidFallbacks.join(', ')}`);
+  }
+
+  return {
+    configured: true,
+    primary,
+    fallbacks,
+  };
+}
+
+function createModelAliasBase(modelRef: string): string {
+  const tail = modelRef.split('/').pop() || modelRef;
+  const normalized = tail.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalized || 'model';
+}
+
+function ensureDefaultModelRegistry(
+  defaults: AgentDefaultsConfig,
+  referencedModelRefs: string[],
+): void {
+  const existing = (
+    defaults.models && typeof defaults.models === 'object' && !Array.isArray(defaults.models)
+      ? { ...defaults.models }
+      : {}
+  ) as Record<string, AgentModelRegistryEntry>;
+
+  const usedAliases = new Set(
+    Object.values(existing)
+      .map((entry) => (entry && typeof entry.alias === 'string' ? entry.alias.trim() : ''))
+      .filter(Boolean),
+  );
+
+  for (const modelRef of referencedModelRefs) {
+    const current = existing[modelRef];
+    if (current && typeof current.alias === 'string' && current.alias.trim()) {
+      continue;
+    }
+
+    const baseAlias = createModelAliasBase(modelRef);
+    let alias = baseAlias;
+    let suffix = 2;
+    while (usedAliases.has(alias)) {
+      alias = `${baseAlias}-${suffix}`;
+      suffix += 1;
+    }
+    usedAliases.add(alias);
+    existing[modelRef] = {
+      ...(current && typeof current === 'object' ? current : {}),
+      alias,
+    };
+  }
+
+  if (Object.keys(existing).length > 0) {
+    defaults.models = existing;
+  } else {
+    delete defaults.models;
+  }
+}
+
 function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
   return normalizeProviderModelList(
     (getProviderRegistryConfig(providerId)?.models ?? []).map((model) => {
@@ -1303,38 +1495,78 @@ export async function listConfiguredAgentIds(): Promise<string[]> {
 
 export async function getDefaultAgentModelConfig(): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const { primary, fallbacks } = readDefaultAgentModelConfig(config);
   return {
-    primary,
-    fallbacks,
+    ...buildDefaultAgentModelSnapshot(config),
     availableModels: await listAvailableProviderModelGroups(),
   };
 }
 
-export async function updateDefaultAgentFallbacks(
-  fallbacks: string[],
+export async function updateDefaultAgentModelConfig(
+  nextConfig: DefaultAgentModelConfigUpdate,
 ): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const normalizedFallbacks = normalizeProviderModelList(fallbacks);
   const availableModels = await listAvailableProviderModelGroups();
   const availableRefs = new Set(availableModels.flatMap((provider) => provider.modelRefs));
-  const invalidRefs = normalizedFallbacks.filter((modelRef) => !availableRefs.has(modelRef));
-
-  if (invalidRefs.length > 0) {
-    throw new Error(`Unknown fallback models: ${invalidRefs.join(', ')}`);
-  }
 
   const defaults = (
     config.agents && typeof config.agents === 'object'
       ? (((config.agents as AgentsConfig).defaults ?? {}) as AgentDefaultsConfig)
       : {}
   );
-  const current = readDefaultAgentModelConfig(config);
+  const model = validateAgentModelSlot(nextConfig.model, 'chat model', availableRefs, { allowEmptyPrimary: true });
+  const imageModel = validateAgentModelSlot(nextConfig.imageModel, 'image model', availableRefs);
+  const pdfModel = validateAgentModelSlot(nextConfig.pdfModel, 'pdf model', availableRefs);
+  const imageGenerationModel = validateAgentModelSlot(
+    nextConfig.imageGenerationModel,
+    'image generation model',
+    availableRefs,
+  );
+  const videoGenerationModel = validateAgentModelSlot(
+    nextConfig.videoGenerationModel,
+    'video generation model',
+    availableRefs,
+  );
 
-  defaults.model = {
-    primary: current.primary ?? undefined,
-    fallbacks: normalizedFallbacks,
-  };
+  if (model.configured) {
+    defaults.model = {
+      primary: model.primary ?? undefined,
+      fallbacks: model.fallbacks,
+    };
+  } else {
+    delete defaults.model;
+  }
+
+  for (const [key, slot] of [
+    ['imageModel', imageModel],
+    ['pdfModel', pdfModel],
+    ['imageGenerationModel', imageGenerationModel],
+    ['videoGenerationModel', videoGenerationModel],
+  ] as const) {
+    if (slot.configured) {
+      defaults[key] = {
+        primary: slot.primary ?? undefined,
+        fallbacks: slot.fallbacks,
+      };
+    } else {
+      delete defaults[key];
+    }
+  }
+
+  ensureDefaultModelRegistry(
+    defaults,
+    normalizeProviderModelList([
+      model.primary,
+      ...model.fallbacks,
+      imageModel.primary,
+      ...imageModel.fallbacks,
+      pdfModel.primary,
+      ...pdfModel.fallbacks,
+      imageGenerationModel.primary,
+      ...imageGenerationModel.fallbacks,
+      videoGenerationModel.primary,
+      ...videoGenerationModel.fallbacks,
+    ]),
+  );
 
   config.agents = {
     ...(config.agents && typeof config.agents === 'object' ? (config.agents as AgentsConfig) : {}),
@@ -1344,10 +1576,32 @@ export async function updateDefaultAgentFallbacks(
   await persistAgentConfigAndPatchRuntime(config);
 
   return {
-    primary: current.primary,
-    fallbacks: normalizedFallbacks,
+    model,
+    imageModel,
+    pdfModel,
+    imageGenerationModel,
+    videoGenerationModel,
+    primary: model.primary,
+    fallbacks: model.fallbacks,
     availableModels,
   };
+}
+
+export async function updateDefaultAgentFallbacks(
+  fallbacks: string[],
+): Promise<DefaultAgentModelConfigSnapshot> {
+  const current = await getDefaultAgentModelConfig();
+  return await updateDefaultAgentModelConfig({
+    model: {
+      configured: Boolean(current.model.primary || fallbacks.length > 0),
+      primary: current.model.primary,
+      fallbacks,
+    },
+    imageModel: current.imageModel,
+    pdfModel: current.pdfModel,
+    imageGenerationModel: current.imageGenerationModel,
+    videoGenerationModel: current.videoGenerationModel,
+  });
 }
 
 export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummary[]> {
