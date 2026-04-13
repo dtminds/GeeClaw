@@ -1088,7 +1088,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: finalMessages, thinkingLevel, loading: false });
+        set({ messages: finalMessages, thinkingLevel, loading: false, error: null });
         logChatTrace('loadHistory:applied', {
           quiet,
           durationMs: Date.now() - startedAt,
@@ -1231,7 +1231,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: [], loading: false });
+        set({ messages: [], loading: false, error: null });
         logChatTrace('loadHistory:empty', {
           quiet,
           durationMs: Date.now() - startedAt,

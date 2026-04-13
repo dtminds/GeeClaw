@@ -429,6 +429,41 @@ describe('chat store session selection', () => {
     ]);
   });
 
+  it('clears stale errors after a successful quiet history reload', async () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [{ id: 'existing-msg', role: 'assistant', content: 'existing session', timestamp: 1 }],
+      error: 'previous transient failure',
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 2 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
+    ]);
+    expect(useChatStore.getState().error).toBeNull();
+  });
+
   it('ignores stale history responses after the selected session changes', async () => {
     const historyDeferred = createDeferred<{ messages: Array<{ id: string; role: 'assistant'; content: string; timestamp: number }> }>();
 
