@@ -261,9 +261,6 @@ function ModelSlotEditor(props: {
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {t(`agentModels.sections.${props.slotKey}.fallbackHelp`)}
-              </p>
             </div>
           </div>
         </div>
