@@ -180,7 +180,7 @@ function ModelSlotEditor(props: {
                   onChange={(event) => handlePrimaryChange(event.target.value)}
                   className="modal-field-surface h-[44px] w-full appearance-none rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none"
                 >
-                  <option value="">{t('agentModels.selectPrimary')}</option>
+                  <option value="" disabled hidden>{t('agentModels.selectPrimary')}</option>
                   {props.availableModels.map((group) => (
                     <optgroup key={group.providerId} label={group.providerName}>
                       {group.modelRefs.map((modelRef) => (

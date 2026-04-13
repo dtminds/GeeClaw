@@ -83,6 +83,19 @@ describe('ModelsSettingsSection', () => {
     expect(container.querySelector('.pointer-events-none .lucide-chevron-down')).not.toBeNull();
   });
 
+  it('uses the model ref prompt as a placeholder instead of a selectable option', async () => {
+    render(<ModelsSettingsSection />);
+
+    const selects = await screen.findAllByRole('combobox');
+    const select = selects[0] as HTMLSelectElement;
+    const placeholderOption = Array.from(select.options).find((option) => option.value === '');
+
+    expect(placeholderOption).toBeDefined();
+    expect(placeholderOption?.disabled).toBe(true);
+    expect(placeholderOption?.hidden).toBe(true);
+    expect(Array.from(select.options).filter((option) => option.text === 'agentModels.selectPrimary')).toHaveLength(1);
+  });
+
   it('shows the unconfigured label when no fallback model is selected', async () => {
     render(<ModelsSettingsSection />);
 
