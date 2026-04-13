@@ -163,6 +163,12 @@
 !macro customUnInstall
   ; Kill lingering GeeClaw processes so uninstalling app files does not depend
   ; on the user's choice about preserving data directories.
+  System::Call 'kernel32::GetCurrentProcessId() i .R2'
+  System::Call 'kernel32::SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR") i .R3'
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $R2 -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith(($$env:TARGET_INSTDIR.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+  Pop $0
+  Pop $1
+
   ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
   ${if} $R0 == 0
     nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
@@ -211,7 +217,7 @@
     _cu_roamingDone:
 
     IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone
-      Sleep 2000
+      Sleep 3000
       RMDir /r "$PROFILE\.geeclaw"
       IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone
         nsExec::ExecToStack 'cmd.exe /c rd /s /q "$PROFILE\.geeclaw"'

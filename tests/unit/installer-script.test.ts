@@ -54,12 +54,15 @@ describe('installer.nsh', () => {
 
   it('retries AppData cleanup after stopping lingering app processes during uninstall', () => {
     expect(installer).toContain('${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0');
+    expect(installer).toContain('SetEnvironmentVariable(t "TARGET_INSTDIR", t "$INSTDIR")');
+    expect(installer).toContain(String.raw`$$env:TARGET_INSTDIR.TrimEnd('\') + '\'`);
     expect(installer).toContain('taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"');
     expect(installer).toContain(String.raw`IfFileExists "$LOCALAPPDATA\geeclaw\" 0 _cu_localDone`);
     expect(installer).toContain('cmd.exe /c rd /s /q "$LOCALAPPDATA\\geeclaw"');
     expect(installer).toContain(String.raw`IfFileExists "$APPDATA\geeclaw\" 0 _cu_roamingDone`);
     expect(installer).toContain('cmd.exe /c rd /s /q "$APPDATA\\geeclaw"');
     expect(installer).toContain(String.raw`IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone`);
+    expect(installer).toContain('Sleep 3000');
   });
 
   it('stops lingering processes before asking whether to remove app data', () => {
