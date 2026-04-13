@@ -8,7 +8,6 @@ type BootstrapState = {
   loginAndContinue: ReturnType<typeof vi.fn>;
   submitInviteCodeAndContinue: ReturnType<typeof vi.fn>;
   skipInviteCodeAndContinue: ReturnType<typeof vi.fn>;
-  continueAfterProvider: ReturnType<typeof vi.fn>;
   logoutToLogin: ReturnType<typeof vi.fn>;
   retry: ReturnType<typeof vi.fn>;
 };
@@ -19,7 +18,6 @@ const bootstrapState: BootstrapState = {
   loginAndContinue: vi.fn(),
   submitInviteCodeAndContinue: vi.fn(),
   skipInviteCodeAndContinue: vi.fn(),
-  continueAfterProvider: vi.fn(),
   logoutToLogin: vi.fn(),
   retry: vi.fn(),
 };
@@ -78,10 +76,6 @@ vi.mock('@/components/layout/TitleBar', () => ({
   TitleBar: () => <div data-testid="title-bar" />,
 }));
 
-vi.mock('@/pages/Setup', () => ({
-  ProviderContent: () => <div data-testid="provider-content" />,
-}));
-
 vi.mock('@/stores/bootstrap', () => ({
   useBootstrapStore: (selector: (state: BootstrapState) => unknown) => selector(bootstrapState),
 }));
@@ -101,7 +95,6 @@ describe('Startup invite code gate', () => {
     bootstrapState.loginAndContinue.mockReset();
     bootstrapState.submitInviteCodeAndContinue.mockReset().mockResolvedValue(undefined);
     bootstrapState.skipInviteCodeAndContinue.mockReset().mockResolvedValue(undefined);
-    bootstrapState.continueAfterProvider.mockReset();
     bootstrapState.logoutToLogin.mockReset().mockResolvedValue(undefined);
     bootstrapState.retry.mockReset();
   });
@@ -149,17 +142,5 @@ describe('Startup invite code gate', () => {
     await waitFor(() => {
       expect(bootstrapState.skipInviteCodeAndContinue).toHaveBeenCalledTimes(1);
     });
-  });
-
-  it('uses a vertical scroll container for the provider setup phase', async () => {
-    bootstrapState.phase = 'needs_provider';
-
-    const { Startup } = await import('@/pages/Startup');
-    render(<Startup />);
-
-    const scrollContainer = screen.getByTestId('startup-content-scroll-container');
-    expect(scrollContainer).toHaveClass('min-h-0');
-    expect(scrollContainer).toHaveClass('overflow-y-auto');
-    expect(scrollContainer).not.toHaveClass('justify-center');
   });
 });

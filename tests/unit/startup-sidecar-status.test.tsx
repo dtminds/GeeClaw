@@ -8,7 +8,6 @@ type BootstrapState = {
   loginAndContinue: ReturnType<typeof vi.fn>;
   submitInviteCodeAndContinue: ReturnType<typeof vi.fn>;
   skipInviteCodeAndContinue: ReturnType<typeof vi.fn>;
-  continueAfterProvider: ReturnType<typeof vi.fn>;
   logoutToLogin: ReturnType<typeof vi.fn>;
   retry: ReturnType<typeof vi.fn>;
 };
@@ -26,7 +25,6 @@ const bootstrapState: BootstrapState = {
   loginAndContinue: vi.fn(),
   submitInviteCodeAndContinue: vi.fn(),
   skipInviteCodeAndContinue: vi.fn(),
-  continueAfterProvider: vi.fn(),
   logoutToLogin: vi.fn(),
   retry: vi.fn(),
 };
@@ -88,10 +86,6 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('@/components/layout/TitleBar', () => ({
   TitleBar: () => <div data-testid="title-bar" />,
-}));
-
-vi.mock('@/pages/Setup', () => ({
-  ProviderContent: () => <div data-testid="provider-content" />,
 }));
 
 vi.mock('@/stores/bootstrap', () => ({
