@@ -75,41 +75,6 @@ export function hasEquivalentFinalAssistantMessage(
   });
 }
 
-function getMessageAttachmentFingerprint(message: RawMessage): string {
-  const attachments = (message._attachedFiles || [])
-    .map((file) => file.filePath || file.url || file.fileName || '')
-    .filter(Boolean)
-    .sort();
-
-  return attachments.join('|');
-}
-
-export function hasEquivalentUserMessage(
-  messages: RawMessage[],
-  candidate: RawMessage,
-): boolean {
-  if (candidate.role !== 'user') return false;
-
-  const candidateText = getMessageText(candidate.content).trim();
-  const candidateAttachments = getMessageAttachmentFingerprint(candidate);
-  const candidateTs = candidate.timestamp ? toMs(candidate.timestamp) : null;
-  const recentMessages = messages.slice(-3);
-
-  return recentMessages.some((message) => {
-    if (message.role !== 'user') return false;
-    if (getMessageText(message.content).trim() !== candidateText) return false;
-    if (getMessageAttachmentFingerprint(message) !== candidateAttachments) return false;
-
-    if (candidateTs != null) {
-      if (message.timestamp == null) return false;
-      const messageTs = toMs(message.timestamp);
-      return messageTs >= candidateTs - 2_000 && messageTs <= candidateTs + 10_000;
-    }
-
-    return true;
-  });
-}
-
 export function stripRenderedPrefixFromStreamingText(
   fullText: string,
   streamSegments: Array<{ text: string; ts: number }>,

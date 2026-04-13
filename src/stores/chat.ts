@@ -48,7 +48,6 @@ import {
   getLatestMessagePreview,
   getMessageText,
   getToolCallInput,
-  hasEquivalentUserMessage,
   hasEquivalentFinalAssistantMessage,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
@@ -1150,7 +1149,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const optimistic = [...currentMsgs].reverse().find(
               (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
             );
-            if (optimistic && !hasEquivalentUserMessage(enrichedMessages, optimistic)) {
+            if (optimistic) {
               finalMessages = [...enrichedMessages, optimistic];
             }
           }
