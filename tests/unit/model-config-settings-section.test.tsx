@@ -83,6 +83,13 @@ describe('ModelsSettingsSection', () => {
     expect(container.querySelector('.pointer-events-none .lucide-chevron-down')).not.toBeNull();
   });
 
+  it('shows the unconfigured label when no fallback model is selected', async () => {
+    render(<ModelsSettingsSection />);
+
+    const fallbackTrigger = await screen.findByRole('button', { name: 'agentModels.selectFallbacks' });
+    expect(fallbackTrigger).toHaveTextContent('agentModels.none');
+  });
+
   it('uses a compact fallback dropdown that caps selections at three and summarizes them inline', async () => {
     const { container } = render(<ModelsSettingsSection />);
 

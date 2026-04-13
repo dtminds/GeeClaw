@@ -128,7 +128,7 @@ function ModelSlotEditor(props: {
   const sectionDescription = t(`agentModels.sections.${props.slotKey}.description`);
   const fallbackSummary = props.slot.fallbacks.length > 0
     ? props.slot.fallbacks.join(', ')
-    : t('agentModels.selectFallbacks');
+    : t('agentModels.none');
 
   return (
     <div className="modal-section-surface rounded-3xl border p-5">
