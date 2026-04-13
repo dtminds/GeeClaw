@@ -69,6 +69,7 @@ import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
 import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
+import { extractGatewayRpcSessionKey } from '../../shared/gateway-rpc';
 import type { CronSchedule } from '../../src/types/cron';
 
 const appUpdater = getAppUpdater();
@@ -1059,15 +1060,13 @@ function registerGatewayHandlers(
     const startedAt = Date.now();
     const shouldTrace = method === 'chat.history';
     if (shouldTrace) {
-      logger.info('[chat-trace] ipc gateway:rpc:start', {
-        at: new Date().toISOString(),
-        method,
-        timeoutMs: timeoutMs ?? 30000,
-        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-          ? (params as Record<string, unknown>).sessionKey
-          : undefined,
-      });
-    }
+        logger.info('[chat-trace] ipc gateway:rpc:start', {
+          at: new Date().toISOString(),
+          method,
+          timeoutMs: timeoutMs ?? 30000,
+          sessionKey: extractGatewayRpcSessionKey(params),
+        });
+      }
     try {
       const result = await gatewayManager.rpc(method, params, timeoutMs);
       if (shouldTrace) {
@@ -1077,9 +1076,7 @@ function registerGatewayHandlers(
           timeoutMs: timeoutMs ?? 30000,
           durationMs: Date.now() - startedAt,
           success: true,
-          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-            ? (params as Record<string, unknown>).sessionKey
-            : undefined,
+          sessionKey: extractGatewayRpcSessionKey(params),
         });
       }
       return { success: true, result };
@@ -1092,9 +1089,7 @@ function registerGatewayHandlers(
           timeoutMs: timeoutMs ?? 30000,
           durationMs: Date.now() - startedAt,
           error: String(error),
-          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-            ? (params as Record<string, unknown>).sessionKey
-            : undefined,
+          sessionKey: extractGatewayRpcSessionKey(params),
         });
       }
       logger.warn(`[gateway:rpc] ${method} failed (timeoutMs=${timeoutMs ?? 30000}): ${String(error)}`);

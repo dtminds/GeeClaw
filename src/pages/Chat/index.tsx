@@ -28,6 +28,7 @@ import wecomIcon from '@/assets/channels/wecom.svg';
 import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 import { buildChatItems } from './build-chat-items';
+import { createRequestedAgentNavigationCache } from './requested-agent-navigation-cache';
 import { useSettingsStore } from '@/stores/settings';
 import { CHANNEL_ICONS, CHANNEL_NAMES, getPrimaryChannels, type ChannelType } from '@/types/channel';
 
@@ -71,7 +72,7 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
   })
   .slice(0, 5);
 
-const consumedRequestedAgentNavigationKeys = new Set<string>();
+const consumedRequestedAgentNavigationKeys = createRequestedAgentNavigationCache(128);
 
 export function Chat() {
   const { t } = useTranslation('chat');

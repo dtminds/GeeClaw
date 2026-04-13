@@ -8,6 +8,7 @@ import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { subscribeHostEvent } from '@/lib/host-events';
+import { extractGatewayRpcSessionKey } from '../../shared/gateway-rpc';
 import type { GatewayStatus } from '../types/gateway';
 
 let gatewayInitPromise: Promise<void> | null = null;
@@ -372,9 +373,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
         at: new Date().toISOString(),
         method,
         timeoutMs: timeoutMs ?? 30000,
-        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-          ? (params as Record<string, unknown>).sessionKey
-          : undefined,
+        sessionKey: extractGatewayRpcSessionKey(params),
       });
     }
     const response = await invokeIpc<{
@@ -390,9 +389,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
         timeoutMs: timeoutMs ?? 30000,
         durationMs: Date.now() - startedAt,
         success: response.success,
-        sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-          ? (params as Record<string, unknown>).sessionKey
-          : undefined,
+        sessionKey: extractGatewayRpcSessionKey(params),
       });
     }
     if (!response.success) {

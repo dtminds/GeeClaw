@@ -6,6 +6,7 @@ import { app } from 'electron';
 import path from 'path';
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
+import { extractGatewayRpcSessionKey } from '../../shared/gateway-rpc';
 import { PORTS } from '../utils/config';
 import { JsonRpcNotification, isNotification, isResponse } from './protocol';
 import { logger } from '../utils/logger';
@@ -653,9 +654,7 @@ export class GatewayManager extends EventEmitter {
             method,
             timeoutMs,
             state: this.status.state,
-            sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-              ? (params as Record<string, unknown>).sessionKey
-              : undefined,
+            sessionKey: extractGatewayRpcSessionKey(params),
           });
         }
         reject(new Error('Gateway not connected'));
@@ -670,9 +669,7 @@ export class GatewayManager extends EventEmitter {
           requestId: id,
           timeoutMs,
           state: this.status.state,
-          sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-            ? (params as Record<string, unknown>).sessionKey
-            : undefined,
+          sessionKey: extractGatewayRpcSessionKey(params),
         });
       }
 
@@ -691,9 +688,7 @@ export class GatewayManager extends EventEmitter {
               requestId: id,
               timeoutMs,
               durationMs: Date.now() - startedAt,
-              sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-                ? (params as Record<string, unknown>).sessionKey
-                : undefined,
+              sessionKey: extractGatewayRpcSessionKey(params),
             });
           }
           (resolve as (value: unknown) => void)(value);
@@ -707,9 +702,7 @@ export class GatewayManager extends EventEmitter {
               timeoutMs,
               durationMs: Date.now() - startedAt,
               error: String(error),
-              sessionKey: typeof params === 'object' && params && 'sessionKey' in (params as Record<string, unknown>)
-                ? (params as Record<string, unknown>).sessionKey
-                : undefined,
+              sessionKey: extractGatewayRpcSessionKey(params),
             });
           }
           reject(error);

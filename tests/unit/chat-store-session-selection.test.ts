@@ -374,6 +374,61 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().error).toContain('startup unavailable attempt 4');
   });
 
+  it('keeps existing messages visible while startup retries run in the background', async () => {
+    vi.useFakeTimers();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [{ id: 'existing-msg', role: 'assistant', content: 'existing session', timestamp: 1 }],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          historyCalls += 1;
+          if (historyCalls === 1) {
+            throw new AppError('GATEWAY', 'startup unavailable while existing messages are visible', undefined, {
+              gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+            });
+          }
+          return {
+            messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 2 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    const loadPromise = useChatStore.getState().loadHistory();
+    await Promise.resolve();
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'existing-msg', content: 'existing session' }),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await loadPromise;
+
+    expect(historyCalls).toBe(2);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
+    ]);
+  });
+
   it('ignores stale history responses after the selected session changes', async () => {
     const historyDeferred = createDeferred<{ messages: Array<{ id: string; role: 'assistant'; content: string; timestamp: number }> }>();
 

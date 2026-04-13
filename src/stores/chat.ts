@@ -1273,7 +1273,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           };
           set({
             error: null,
-            ...(keepLoading ? { loading: true } : {}),
+            loading: keepLoading,
           });
           _historyStartupRetryTimer = setTimeout(() => {
             if (!isSameHistoryRequest(request, get())) {
