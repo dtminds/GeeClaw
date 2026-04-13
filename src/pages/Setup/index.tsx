@@ -7,25 +7,18 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertCircle,
-  Eye,
-  EyeOff,
   RefreshCw,
   CheckCircle2,
   XCircle,
   ExternalLink,
-  Copy,
 } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
@@ -34,8 +27,6 @@ import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { toast } from 'sonner';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
-import { subscribeHostEvent } from '@/lib/host-events';
-import { normalizeOAuthFlowPayload, type OAuthFlowData } from '@/lib/oauth-flow';
 
 interface SetupStep {
   id: string;
@@ -78,6 +69,18 @@ interface DefaultSkill {
   id: string;
   name: string;
   description: string;
+}
+
+type InstallStatus = 'pending' | 'installing' | 'completed' | 'failed';
+
+interface SkillInstallState extends DefaultSkill {
+  status: InstallStatus;
+}
+
+interface InstallingContentProps {
+  skills: DefaultSkill[];
+  onComplete: (installedSkillIds: string[]) => void;
+  onSkip: () => void;
 }
 
 const defaultSkills: DefaultSkill[] = [

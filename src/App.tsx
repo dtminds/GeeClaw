@@ -231,7 +231,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/chat" element={<Chat />} />
-            <Route path="/models" element={<Navigate to="/settings/models" replace />} />
+            <Route path="/models" element={<Navigate to="/settings/model-providers" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/agents" element={<Navigate to="/dashboard" replace />} />

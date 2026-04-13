@@ -2,7 +2,8 @@ import type { Location } from 'react-router-dom';
 
 export type SettingsModalSection =
   | 'appearance'
-  | 'models'
+  | 'modelProviders'
+  | 'modelConfig'
   | 'webSearch'
   | 'safety'
   | 'gateway'
@@ -14,7 +15,8 @@ export type SettingsModalSection =
 
 const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
   appearance: 'appearance',
-  models: 'models',
+  modelProviders: 'model-providers',
+  modelConfig: 'model-config',
   webSearch: 'web-search',
   safety: 'safety',
   gateway: 'gateway',
@@ -55,6 +57,8 @@ export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/environment')) return 'environment';
   if (pathname.startsWith('/settings/general')) return 'general';
   if (pathname.startsWith('/settings/app')) return 'appearance';
-  if (pathname.startsWith('/settings/models')) return 'models';
+  if (pathname.startsWith('/settings/model-providers')) return 'modelProviders';
+  if (pathname.startsWith('/settings/model-config')) return 'modelConfig';
+  if (pathname.startsWith('/settings/models')) return 'modelProviders';
   return 'appearance';
 }

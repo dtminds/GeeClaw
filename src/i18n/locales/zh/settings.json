@@ -250,7 +250,8 @@
       "protocol": "协议",
       "modelId": "模型 ID",
       "modelIds": "模型列表",
-      "modelIdsHelp": "每行一个模型 ID，定义该提供商下可用的模型",
+      "modelIdsHelp": "逐个添加模型 ID，定义该提供商下可用的模型",
+      "addModel": "添加模型",
       "fallbackModels": "回退模型",
       "fallbackProviders": "跨模型提供商回退",
       "fallbackModelIds": "同模型提供商回退模型 ID",
@@ -291,7 +292,7 @@
       "failedAdd": "添加提供商失败",
       "deleted": "提供商已删除",
       "failedDelete": "删除提供商失败",
-      "blockedByFallback": "该提供商的模型（{{refs}}）仍配置在备用模型中，请先从备用模型配置中移除再删除",
+      "blockedByFallback": "该提供商的模型（{{refs}}）仍配置在模型配置中，请先移除相关引用后再删除",
       "defaultUpdated": "默认提供商已更新",
       "failedDefault": "设置默认失败",
       "updated": "提供商已更新",
@@ -328,27 +329,53 @@
   },
   "agentModels": {
     "title": "模型配置",
+    "description": "为聊天、视觉理解、PDF、生图和生视频选择 GeeClaw 应使用的明确 model ref。",
     "primary": "默认模型",
     "fallbacks": "备用模型",
     "none": "未配置",
-    "primaryHelp": "当前默认模型提供商的第一个模型会作为 Agent 的默认模型",
-    "configureFallbacks": "配置备用模型",
+    "selectPrimary": "选择一个 model ref",
+    "emptyState": "当前还没有可用模型。请先到“模型服务商”中添加并配置至少一个模型。",
+    "save": "保存",
     "refresh": "刷新",
-    "dialog": {
-      "title": "配置 Agent Fallback",
-      "desc": "Fallback 是 Agent 级别配置。这里填写的每一项都必须已经定义在下方某个 provider 的模型列表中",
-      "fallbacksLabel": "Fallback 模型引用",
-      "fallbacksEmpty": "请从下方可用模型中点击选择",
-      "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeeclaw/kimi-k2.5",
-      "fallbacksHelp": "每行一个完整 model ref，例如 provider/model-id。",
-      "available": "当前可用模型",
-      "availableHelp": "这些是当前已经定义的模型，点击可设置为备用模型",
-      "save": "保存 Fallback"
+    "mode": {
+      "auto": "自动",
+      "custom": "自定义"
+    },
+    "sections": {
+      "model": {
+        "title": "聊天模型",
+        "description": "普通聊天必需。如果这里为空，GeeClaw 可以进入聊天页，但不能发送消息。",
+        "fallbackHelp": "只有当主聊天模型不可用时，才会尝试这些备用模型。"
+      },
+      "imageModel": {
+        "title": "视觉模型",
+        "description": "用于图片理解和多模态推理，在需要专门视觉模型时使用。",
+        "autoHelp": "自动模式不会写入这一段，让 OpenClaw 回退到默认聊天模型链路。",
+        "fallbackHelp": "主视觉模型失败后，会继续尝试这些备用模型。"
+      },
+      "pdfModel": {
+        "title": "PDF 模型",
+        "description": "用于 PDF 专用理解场景，在需要专门文档模型时使用。",
+        "autoHelp": "自动模式不会写入这一段。OpenClaw 会先回退到视觉模型，再回退到聊天模型。",
+        "fallbackHelp": "主 PDF 模型失败后，会继续尝试这些备用模型。"
+      },
+      "imageGenerationModel": {
+        "title": "生图模型",
+        "description": "用于图片生成工作流。",
+        "autoHelp": "自动模式不会写入这一段，生图模型由 OpenClaw 自行处理。",
+        "fallbackHelp": "主生图模型失败后，会继续尝试这些备用模型。"
+      },
+      "videoGenerationModel": {
+        "title": "生视频模型",
+        "description": "用于视频生成工作流。",
+        "autoHelp": "自动模式不会写入这一段，生视频模型由 OpenClaw 自行处理。",
+        "fallbackHelp": "主生视频模型失败后，会继续尝试这些备用模型。"
+      }
     },
     "toast": {
-      "saved": "Agent fallback 模型已更新",
-      "failedSave": "保存 Agent fallback 模型失败",
-      "failedLoad": "加载 Agent 默认模型失败"
+      "saved": "模型配置已更新",
+      "failedSave": "保存模型配置失败",
+      "failedLoad": "加载模型配置失败"
     }
   },
   "gateway": {

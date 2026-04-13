@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   Check,
-  Star,
   X,
   Loader2,
   ExternalLink,
@@ -115,6 +114,78 @@ function getAuthModeLabel(
   }
 }
 
+function ProviderModelListEditor(props: {
+  value: string[];
+  placeholder: string;
+  helpText: string;
+  buttonLabel: string;
+  onChange: (next: string[]) => void;
+}) {
+  const [pendingValue, setPendingValue] = useState('');
+
+  const handleAdd = () => {
+    const nextValue = pendingValue.trim();
+    if (!nextValue) {
+      return;
+    }
+    props.onChange(normalizeProviderModelList([...props.value, nextValue]));
+    setPendingValue('');
+  };
+
+  const handleRemove = (modelId: string) => {
+    props.onChange(props.value.filter((value) => value !== modelId));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {props.value.map((modelId) => (
+          <span
+            key={modelId}
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-black/[0.04] px-3 py-1.5 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.06]"
+          >
+            {modelId}
+            <button
+              type="button"
+              onClick={() => handleRemove(modelId)}
+              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-foreground"
+              aria-label={`Remove ${modelId}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={pendingValue}
+          onChange={(event) => setPendingValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder={props.placeholder}
+          className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          className="surface-hover rounded-full border-black/10 px-4 dark:border-white/10"
+          onClick={handleAdd}
+          disabled={!pendingValue.trim()}
+        >
+          {props.buttonLabel}
+        </Button>
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        {props.helpText}
+      </p>
+    </div>
+  );
+}
+
 type ProviderSidebarEntry =
   | {
       key: string;
@@ -125,7 +196,6 @@ type ProviderSidebarEntry =
       item: ProviderListItem;
       title: string;
       subtitle: string;
-      isDefault: boolean;
     }
   | {
       key: string;
@@ -144,13 +214,11 @@ export function ProvidersSettings() {
     statuses,
     accounts,
     vendors,
-    defaultAccountId,
     loading,
     refreshProviderSnapshot,
     createAccount,
     removeAccount,
     updateAccount,
-    setDefaultAccount,
     validateAccountApiKey,
   } = useProviderStore();
 
@@ -159,14 +227,13 @@ export function ProvidersSettings() {
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<ProviderListItem | null>(null);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
-  const [, setDefaultingAccountId] = useState<string | null>(null);
   const vendorMap = useMemo(
     () => new Map(vendors.map((vendor) => [vendor.id, vendor])),
     [vendors],
   );
   const displayProviders = useMemo(
-    () => buildProviderListItems(accounts, statuses, vendors, defaultAccountId),
-    [accounts, statuses, vendors, defaultAccountId],
+    () => buildProviderListItems(accounts, statuses, vendors, null),
+    [accounts, statuses, vendors],
   );
   const existingVendorIds = useMemo(
     () => new Set(displayProviders.map((item) => item.account.vendorId)),
@@ -194,11 +261,8 @@ export function ProvidersSettings() {
         const vendorName = vendorId === 'custom'
           ? t('aiProviders.custom')
           : (vendor?.name || typeInfo?.name || vendorId);
-        const vendorItems = [...(itemsByVendor.get(vendorId) || [])].sort((left, right) => {
-          if (left.account.id === defaultAccountId) return -1;
-          if (right.account.id === defaultAccountId) return 1;
-          return right.account.updatedAt.localeCompare(left.account.updatedAt);
-        });
+        const vendorItems = [...(itemsByVendor.get(vendorId) || [])]
+          .sort((left, right) => right.account.updatedAt.localeCompare(left.account.updatedAt));
 
         if (vendorItems.length === 0) {
           sidebarItems.push({
@@ -233,14 +297,13 @@ export function ProvidersSettings() {
             item,
             title: vendorName,
             subtitle: subtitleSegments.join(' · '),
-            isDefault: item.account.id === defaultAccountId,
           });
         }
       }
 
       return sidebarItems;
     },
-    [defaultAccountId, displayProviders, t, vendorMap, vendors],
+    [displayProviders, t, vendorMap, vendors],
   );
   const selectedProviderEntry = useMemo<ProviderSidebarEntry | null>(
     () => {
@@ -255,11 +318,7 @@ export function ProvidersSettings() {
         }
       }
 
-      return (
-        providerSidebarItems.find((item) => item.kind === 'account' && item.isDefault)
-        || providerSidebarItems.find((item) => item.kind === 'account')
-        || providerSidebarItems[0]
-      );
+      return providerSidebarItems.find((item) => item.kind === 'account') || providerSidebarItems[0];
     },
     [providerSidebarItems, selectedProviderKey],
   );
@@ -301,11 +360,6 @@ export function ProvidersSettings() {
         updatedAt: new Date().toISOString(),
       }, effectiveApiKey);
 
-      // Auto-set as default if no default is currently configured
-      if (!defaultAccountId) {
-        await setDefaultAccount(id);
-      }
-
       setSelectedProviderKey(id);
       setAddDialogInitialType(null);
       setShowAddDialog(false);
@@ -336,19 +390,6 @@ export function ProvidersSettings() {
     } finally {
       setDeletingAccountId(null);
       setPendingDeleteItem(null);
-    }
-  };
-
-  const handleSetDefault = async (providerId: string) => {
-    setDefaultingAccountId(providerId);
-    try {
-      await setDefaultAccount(providerId);
-      setSelectedProviderKey(providerId);
-      toast.success(t('aiProviders.toast.defaultUpdated'));
-    } catch (error) {
-      toast.error(`${t('aiProviders.toast.failedDefault')}: ${error}`);
-    } finally {
-      setDefaultingAccountId(null);
     }
   };
 
@@ -419,12 +460,6 @@ export function ProvidersSettings() {
                         <div className="min-w-0 flex-1 truncate text-[14px] font-normal text-foreground">
                           {entry.title}
                         </div>
-                        {entry.kind === 'account' && entry.isDefault ? (
-                          <Star
-                            className="mr-1 h-3.5 w-3.5 shrink-0 fill-current text-amber-500"
-                            aria-label={t('aiProviders.card.default')}
-                          />
-                        ) : null}
                       </button>
 
                       <span
@@ -447,9 +482,7 @@ export function ProvidersSettings() {
               {selectedProvider ? (
                 <ProviderCard
                   item={selectedProvider}
-                  isDefault={selectedProvider.account.id === defaultAccountId}
                   onDelete={() => setPendingDeleteItem(selectedProvider)}
-                  onSetDefault={() => handleSetDefault(selectedProvider.account.id)}
                   onSaveAccount={async (updates, newApiKey) => {
                     const nextUpdates: Partial<ProviderAccount> = { ...updates };
                     const touchedProviderConfig = (
@@ -555,9 +588,7 @@ export function ProvidersSettings() {
 
 interface ProviderCardProps {
   item: ProviderListItem;
-  isDefault: boolean;
   onDelete: () => void;
-  onSetDefault: () => void;
   onSaveAccount: (updates: Partial<ProviderAccount>, newApiKey?: string) => Promise<void>;
   onRefresh: () => Promise<void>;
   onValidateKey: (
@@ -683,9 +714,7 @@ function ProviderInactiveCard({
 
 function ProviderCard({
   item,
-  isDefault,
   onDelete,
-  onSetDefault,
   onSaveAccount,
   onRefresh,
   onValidateKey,
@@ -757,7 +786,6 @@ function ProviderCard({
   const sectionClassName = 'border-t border-black/6 pt-5 dark:border-white/10';
   const subtlePanelClassName = 'rounded-2xl border border-black/8 bg-black/[0.025] dark:border-white/10 dark:bg-white/[0.03]';
   const inputClassName = 'field-focus-ring h-[40px] rounded-xl border border-black/8 bg-black/[0.025] font-mono text-[13px] shadow-none dark:border-white/10 dark:bg-white/[0.03]';
-  const textAreaClassName = 'field-focus-ring min-h-24 w-full rounded-xl border border-black/8 bg-black/[0.025] px-3 py-2 text-[13px] font-mono outline-none shadow-none dark:border-white/10 dark:bg-white/[0.03]';
 
   useEffect(() => {
     setNewKey('');
@@ -989,14 +1017,6 @@ function ProviderCard({
                   <h3 className="truncate text-[22px] font-semibold text-foreground">
                     {vendor?.name || account.vendorId}
                   </h3>
-                  {isDefault ? (
-                    <span
-                      className="inline-flex items-center justify-center text-amber-600 dark:text-amber-400"
-                      title={t('aiProviders.card.default')}
-                    >
-                      <Star className="h-4 w-4 fill-current" />
-                    </span>
-                  ) : null}
                 </div>
                 {account.label && account.label !== (vendor?.name || account.vendorId) && (
                 <p className="text-[12px] text-muted-foreground">
@@ -1018,23 +1038,12 @@ function ProviderCard({
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
-              {!isDefault ? (
-                <Button
-                  variant="ghost"
-                  className="h-9 px-3 text-[13px] text-muted-foreground"
-                  onClick={onSetDefault}
-                  title={t('aiProviders.card.setDefault')}
-                >
-                  {t('aiProviders.card.setDefault')}
-                </Button>
-              ) : null}
               <Button
                 variant="ghost"
                 size="icon"
-                disabled={isDefault}
-                className="h-9 w-9 rounded-full text-muted-foreground hover:bg-black/[0.04] hover:text-destructive dark:hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-30"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:bg-black/[0.04] hover:text-destructive dark:hover:bg-white/[0.06]"
                 onClick={onDelete}
-                title={isDefault ? t('aiProviders.card.deleteDisabledDefault') : t('aiProviders.card.delete')}
+                title={t('aiProviders.card.delete')}
               >
                 <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
               </Button>
@@ -1323,15 +1332,13 @@ function ProviderCard({
               )}
               {showModelIdField && (
                 <div className="space-y-1.5">
-                  <textarea
-                    value={modelsText}
-                    onChange={(e) => setModelsText(e.target.value)}
+                  <ProviderModelListEditor
+                    value={normalizedDraftModels}
                     placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
-                    className={textAreaClassName}
+                    helpText={t('aiProviders.dialog.modelIdsHelp')}
+                    buttonLabel={t('aiProviders.dialog.addModel')}
+                    onChange={(nextModels) => setModelsText(nextModels.join('\n'))}
                   />
-                  <p className="text-[12px] text-muted-foreground">
-                    {t('aiProviders.dialog.modelIdsHelp')}
-                  </p>
                 </div>
               )}
             </div>
@@ -1540,15 +1547,13 @@ function AddProviderDialog({
       setOauthError(null);
     };
 
-    const handleSuccess = async (data: unknown) => {
+    const handleSuccess = async () => {
       setOauthFlowing(false);
       setOauthData(null);
       setManualCodeInput('');
       setValidationError(null);
 
       const { onClose: close, t: translate } = latestRef.current;
-      const payload = (data as { accountId?: string } | undefined) || undefined;
-      const accountId = payload?.accountId || pendingOAuthRef.current?.accountId;
 
       // device-oauth.ts already saved the provider config to the backend,
       // including the dynamically resolved baseUrl for the region (e.g. CN vs Global).
@@ -1557,12 +1562,6 @@ function AddProviderDialog({
       try {
         const store = useProviderStore.getState();
         await store.refreshProviderSnapshot();
-
-        // In Settings, adding another OAuth account should not unexpectedly
-        // replace the user's current default provider.
-        if (!store.defaultAccountId && accountId) {
-          await store.setDefaultAccount(accountId);
-        }
       } catch (err) {
         console.error('Failed to refresh providers after OAuth:', err);
       }
@@ -1977,19 +1976,16 @@ function AddProviderDialog({
                 {showModelIdField && (
                   <div className="space-y-2">
                     <Label htmlFor="modelIds" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.modelIds')}</Label>
-                    <textarea
-                      id="modelIds"
+                    <ProviderModelListEditor
+                      value={normalizeProviderModelList(modelsText.split('\n'))}
                       placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
-                      value={modelsText}
-                      onChange={(e) => {
-                        setModelsText(e.target.value);
+                      helpText={t('aiProviders.dialog.modelIdsHelp')}
+                      buttonLabel={t('aiProviders.dialog.addModel')}
+                      onChange={(nextModels) => {
+                        setModelsText(nextModels.join('\n'));
                         setValidationError(null);
                       }}
-                      className="modal-field-surface field-focus-ring min-h-28 w-full rounded-xl border px-3 py-2 font-mono text-[13px] outline-none"
                     />
-                    <p className="text-[12px] text-muted-foreground">
-                      {t('aiProviders.dialog.modelIdsHelp')}
-                    </p>
                   </div>
                 )}
                 {/* Device OAuth Trigger — only shown when in OAuth mode */}

@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Loader2,
   Sparkles,
 } from 'lucide-react';

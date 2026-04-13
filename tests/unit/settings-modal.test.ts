@@ -18,6 +18,14 @@ describe('settings modal paths', () => {
     expect(getSettingsModalPath('webSearch')).toBe('/settings/web-search');
   });
 
+  it('builds the model provider settings path', () => {
+    expect(getSettingsModalPath('modelProviders')).toBe('/settings/model-providers');
+  });
+
+  it('builds the model config settings path', () => {
+    expect(getSettingsModalPath('modelConfig')).toBe('/settings/model-config');
+  });
+
   it('builds the cli marketplace settings path', () => {
     expect(getSettingsModalPath('cliMarketplace')).toBe('/settings/cli-marketplace');
   });
@@ -40,6 +48,15 @@ describe('settings modal paths', () => {
   it('resolves the web search settings section from the route', () => {
     expect(resolveSettingsSection('/settings/web-search')).toBe('webSearch');
     expect(resolveSettingsSection('/settings/web-search/providers')).toBe('webSearch');
+  });
+
+  it('resolves the model provider settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/model-providers')).toBe('modelProviders');
+    expect(resolveSettingsSection('/settings/models')).toBe('modelProviders');
+  });
+
+  it('resolves the model config settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/model-config')).toBe('modelConfig');
   });
 
   it('resolves the cli marketplace settings section from the route', () => {

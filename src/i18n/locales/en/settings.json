@@ -250,7 +250,8 @@
       "protocol": "Protocol",
       "modelId": "Model ID",
       "modelIds": "Models",
-      "modelIdsHelp": "One model ID per line. These become the models configured under this provider.",
+      "modelIdsHelp": "Add model IDs one by one. These become the models configured under this provider.",
+      "addModel": "Add model",
       "fallbackModels": "Fallback Models",
       "fallbackProviders": "Fallback Providers",
       "fallbackModelIds": "Fallback Model IDs",
@@ -291,7 +292,7 @@
       "failedAdd": "Failed to add provider",
       "deleted": "Provider deleted",
       "failedDelete": "Failed to delete provider",
-      "blockedByFallback": "Cannot delete: model(s) {{refs}} from this provider are configured as Agent Fallbacks. Please remove them from Model Settings first.",
+      "blockedByFallback": "Cannot delete: model(s) {{refs}} from this provider are still referenced in Model Config. Remove those references first.",
       "defaultUpdated": "Default provider updated",
       "failedDefault": "Failed to set default",
       "updated": "Provider updated",
@@ -327,28 +328,54 @@
     }
   },
   "agentModels": {
-    "title": "Agent Model Defaults",
+    "title": "Model Config",
+    "description": "Choose the explicit model refs GeeClaw should use for chat, vision, PDF, image generation, and video generation.",
     "primary": "Primary Model",
     "fallbacks": "Fallback Models",
     "none": "Not configured",
-    "primaryHelp": "The current default provider's first configured model is used as the agent primary model.",
-    "configureFallbacks": "Configure Fallbacks",
+    "selectPrimary": "Select a model ref",
+    "emptyState": "No provider models are available yet. Add and configure at least one model under Model Providers first.",
+    "save": "Save",
     "refresh": "Refresh",
-    "dialog": {
-      "title": "Configure Agent Fallbacks",
-      "desc": "Fallback models are agent-level settings. Every entry must already exist under one of the configured providers below.",
-      "fallbacksLabel": "Fallback Model Refs",
-      "fallbacksEmpty": "Click a model below to add it as a fallback",
-      "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeeclaw/kimi-k2.5",
-      "fallbacksHelp": "Use one full model ref per line, for example provider/model-id.",
-      "available": "Available Provider Models",
-      "availableHelp": "These are the model refs currently defined under your providers and allowed for fallback use.",
-      "save": "Save Fallbacks"
+    "mode": {
+      "auto": "Automatic",
+      "custom": "Custom"
+    },
+    "sections": {
+      "model": {
+        "title": "Chat Model",
+        "description": "Required for normal chat. If this is empty, GeeClaw can open chat but cannot send messages.",
+        "fallbackHelp": "Fallbacks are used only when the primary chat model is unavailable."
+      },
+      "imageModel": {
+        "title": "Vision Model",
+        "description": "Used for image understanding and multimodal reasoning when GeeClaw needs a dedicated vision-capable model.",
+        "autoHelp": "Automatic mode omits this section and lets OpenClaw fall back to the default chat model chain.",
+        "fallbackHelp": "Fallbacks are attempted after the primary vision model."
+      },
+      "pdfModel": {
+        "title": "PDF Model",
+        "description": "Used for PDF-specific understanding when you want a dedicated model for documents.",
+        "autoHelp": "Automatic mode omits this section. OpenClaw falls back to the Vision Model, then to the Chat Model.",
+        "fallbackHelp": "Fallbacks are attempted after the primary PDF model."
+      },
+      "imageGenerationModel": {
+        "title": "Image Generation Model",
+        "description": "Used for image generation workflows.",
+        "autoHelp": "Automatic mode omits this section and leaves image generation unmanaged.",
+        "fallbackHelp": "Fallbacks are attempted after the primary image generation model."
+      },
+      "videoGenerationModel": {
+        "title": "Video Generation Model",
+        "description": "Used for video generation workflows.",
+        "autoHelp": "Automatic mode omits this section and leaves video generation unmanaged.",
+        "fallbackHelp": "Fallbacks are attempted after the primary video generation model."
+      }
     },
     "toast": {
-      "saved": "Agent fallback models updated",
-      "failedSave": "Failed to save agent fallback models",
-      "failedLoad": "Failed to load agent model defaults"
+      "saved": "Model configuration updated",
+      "failedSave": "Failed to save model configuration",
+      "failedLoad": "Failed to load model configuration"
     }
   },
   "gateway": {

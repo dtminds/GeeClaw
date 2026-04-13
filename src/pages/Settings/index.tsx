@@ -64,6 +64,7 @@ import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ModelsSettingsSection } from '@/components/settings/ModelsSettingsSection';
+import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { OpenCliSettingsSection } from '@/components/settings/OpenCliSettingsSection';
 import { McpSettingsSection } from '@/components/settings/McpSettingsSection';
 import { CliMarketplaceSettingsSection } from '@/components/settings/CliMarketplaceSettingsSection';
@@ -1379,7 +1380,8 @@ export function Settings({ embedded = false }: SettingsProps) {
   const modalState = getSettingsModalState(location);
   const settingsGroups: Array<{ key: SettingsModalSection; title: string; icon: React.ReactNode }> = [
     { key: 'appearance', title: t('appearance.title'), icon: <Palette className="h-4 w-4" /> },
-    { key: 'models', title: t('common:sidebar.models', 'Models'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
+    { key: 'modelProviders', title: t('aiProviders.title'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
+    { key: 'modelConfig', title: t('agentModels.title'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
     { key: 'webSearch', title: t('nav.webSearch'), icon: <Search className="h-4 w-4" /> },
     { key: 'environment', title: t('nav.environment'), icon: <Key className="h-4 w-4" /> },
     { key: 'gateway', title: t('nav.gateway'), icon: <HugeiconsIcon icon={AiProgrammingIcon} size={16} strokeWidth={1.9} /> },
@@ -1454,7 +1456,8 @@ export function Settings({ embedded = false }: SettingsProps) {
           {section === 'environment' && <EnvironmentSettingsSection />}
           {section === 'webSearch' && <WebSearchSettingsSection />}
           {section === 'general' && <AppSettingsPanel section="general" />}
-          {section === 'models' && <ModelsSettingsSection />}
+          {section === 'modelProviders' && <ProvidersSettings />}
+          {section === 'modelConfig' && <ModelsSettingsSection />}
         </div>
       </section>
     </div>
