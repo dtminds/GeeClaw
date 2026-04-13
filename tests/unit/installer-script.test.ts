@@ -61,4 +61,21 @@ describe('installer.nsh', () => {
     expect(installer).toContain('cmd.exe /c rd /s /q "$APPDATA\\geeclaw"');
     expect(installer).toContain(String.raw`IfFileExists "$PROFILE\.geeclaw\" 0 _cu_profileDone`);
   });
+
+  it('stops lingering processes before asking whether to remove app data', () => {
+    const customUninstallStart = installer.indexOf('!macro customUnInstall\n');
+    const uninstallBlock = installer.slice(
+      customUninstallStart,
+      installer.indexOf('!macroend', customUninstallStart),
+    );
+    const promptIndex = uninstallBlock.indexOf('MessageBox MB_YESNO|MB_ICONQUESTION');
+    const appKillIndex = uninstallBlock.indexOf('taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"');
+    const gatewayKillIndex = uninstallBlock.indexOf('taskkill /F /T /IM openclaw-gateway.exe');
+
+    expect(promptIndex).toBeGreaterThan(-1);
+    expect(appKillIndex).toBeGreaterThan(-1);
+    expect(gatewayKillIndex).toBeGreaterThan(-1);
+    expect(appKillIndex).toBeLessThan(promptIndex);
+    expect(gatewayKillIndex).toBeLessThan(promptIndex);
+  });
 });

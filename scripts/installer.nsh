@@ -161,6 +161,24 @@
 !macroend
 
 !macro customUnInstall
+  ; Kill lingering GeeClaw processes so uninstalling app files does not depend
+  ; on the user's choice about preserving data directories.
+  ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  ${if} $R0 == 0
+    nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
+    Pop $0
+    Pop $1
+  ${endIf}
+  ${nsProcess::Unload}
+
+  ; Also kill the bundled Gateway if it detached from the Electron process tree.
+  nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
+  Pop $0
+  Pop $1
+
+  ; Give Windows a moment to release file handles after process shutdown.
+  Sleep 2000
+
   ; Ask user if they want to remove GeeClaw app data while preserving the
   ; managed OpenClaw state directory (~/.openclaw-geeclaw).
   MessageBox MB_YESNO|MB_ICONQUESTION \
@@ -168,23 +186,6 @@
     /SD IDNO IDYES _cu_removeData IDNO _cu_skipRemove
 
   _cu_removeData:
-    ; Kill lingering GeeClaw processes so app data files are no longer locked.
-    ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-    ${if} $R0 == 0
-      nsExec::ExecToStack 'taskkill /F /T /IM "${APP_EXECUTABLE_FILENAME}"'
-      Pop $0
-      Pop $1
-    ${endIf}
-    ${nsProcess::Unload}
-
-    ; Also kill the bundled Gateway if it detached from the Electron process tree.
-    nsExec::ExecToStack 'taskkill /F /T /IM openclaw-gateway.exe'
-    Pop $0
-    Pop $1
-
-    ; Give Windows a moment to release file handles after process shutdown.
-    Sleep 2000
-
     ; --- Always remove current user's app data first ---
     RMDir /r "$PROFILE\.geeclaw"
     RMDir /r "$LOCALAPPDATA\geeclaw"
