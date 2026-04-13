@@ -2,7 +2,7 @@
  * Model configuration settings section.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
+import { ChevronDown, Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -159,20 +159,25 @@ function ModelSlotEditor(props: {
             <label className="text-[13px] font-medium text-muted-foreground">
               {t('agentModels.primary')}
             </label>
-            <select
-              value={props.slot.primary ?? ''}
-              onChange={(event) => handlePrimaryChange(event.target.value)}
-              className="modal-field-surface h-[44px] w-full rounded-xl border px-3 text-[13px] text-foreground outline-none"
-            >
-              <option value="">{t('agentModels.selectPrimary')}</option>
-              {props.availableModels.map((group) => (
-                <optgroup key={group.providerId} label={group.providerName}>
-                  {group.modelRefs.map((modelRef) => (
-                    <option key={modelRef} value={modelRef}>{modelRef}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={props.slot.primary ?? ''}
+                onChange={(event) => handlePrimaryChange(event.target.value)}
+                className="modal-field-surface h-[44px] w-full appearance-none rounded-xl border px-3 pr-10 text-[13px] text-foreground outline-none"
+              >
+                <option value="">{t('agentModels.selectPrimary')}</option>
+                {props.availableModels.map((group) => (
+                  <optgroup key={group.providerId} label={group.providerName}>
+                    {group.modelRefs.map((modelRef) => (
+                      <option key={modelRef} value={modelRef}>{modelRef}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
