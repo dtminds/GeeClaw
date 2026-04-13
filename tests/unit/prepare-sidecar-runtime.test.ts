@@ -19,9 +19,9 @@ describe('prepare sidecar runtime', () => {
     const { prepareSidecarRuntime } = await import('../../scripts/prepare-sidecar-runtime.mjs');
     const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-runtime-'));
     tempDirs.push(projectRoot);
-    mkdirSync(join(projectRoot, 'runtime-artifacts', 'openclaw-sidecar'), { recursive: true });
+    mkdirSync(join(projectRoot, 'openclaw-runtime'), { recursive: true });
     writeFileSync(
-      join(projectRoot, 'runtime-artifacts', 'openclaw-sidecar', 'version.json'),
+      join(projectRoot, 'openclaw-runtime', 'version.json'),
       JSON.stringify({
         enabled: true,
         version: '2026.4.10-r2',
@@ -95,12 +95,12 @@ describe('prepare sidecar runtime', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-runtime-'));
     tempDirs.push(projectRoot);
 
-    mkdirSync(join(projectRoot, 'runtime-artifacts', 'openclaw-sidecar'), { recursive: true });
+    mkdirSync(join(projectRoot, 'openclaw-runtime'), { recursive: true });
     mkdirSync(join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64'), { recursive: true });
     mkdirSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64'), { recursive: true });
 
     writeFileSync(
-      join(projectRoot, 'runtime-artifacts', 'openclaw-sidecar', 'version.json'),
+      join(projectRoot, 'openclaw-runtime', 'version.json'),
       JSON.stringify({
         enabled: true,
         version: '2026.4.10-r2',

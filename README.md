@@ -358,7 +358,7 @@ Packaging now uses the repo-local `openclaw-runtime/` install as the single sour
 
 In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
 
-For release CI, GeeClaw now requires a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. If that tracked pin file is disabled, missing, or missing the current target asset, the release workflow fails fast instead of falling back to a local runtime rebuild.
+For release CI, GeeClaw now requires a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`openclaw-runtime/version.json`](openclaw-runtime/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. If that tracked pin file is disabled, missing, or missing the current target asset, the release workflow fails fast instead of falling back to a local runtime rebuild.
 
 ### OpenClaw Runtime Workflow
 
@@ -381,11 +381,11 @@ gh release download openclaw-sidecar-v2026.4.10-r1 \
   --pattern openclaw-sidecar-version.json \
   --dir /tmp/openclaw-sidecar-v2026.4.10-r1
 cp /tmp/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-version.json \
-  runtime-artifacts/openclaw-sidecar/version.json
+  openclaw-runtime/version.json
 ```
 
 - Replace the tag with the exact sidecar release tag you want to pin.
-- Commit the updated [`runtime-artifacts/openclaw-sidecar/version.json`](runtime-artifacts/openclaw-sidecar/version.json) alongside the release change that should consume it.
+- Commit the updated [`openclaw-runtime/version.json`](openclaw-runtime/version.json) alongside the release change that should consume it.
 
 To verify a sidecar release artifact locally before running the full release workflow:
 

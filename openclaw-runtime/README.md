@@ -209,7 +209,7 @@ GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scri
 
 主 release workflow 读取的是：
 
-- [`runtime-artifacts/openclaw-sidecar/version.json`](../runtime-artifacts/openclaw-sidecar/version.json)
+- [`openclaw-runtime/version.json`](./version.json)
 
 如果 sidecar release 已经发布，要把新的 pin 版本同步回仓库：
 
@@ -219,12 +219,12 @@ gh release download openclaw-sidecar-v2026.4.12-r1 \
   --dir /tmp/openclaw-sidecar-v2026.4.12-r1
 
 cp /tmp/openclaw-sidecar-v2026.4.12-r1/openclaw-sidecar-version.json \
-  ./runtime-artifacts/openclaw-sidecar/version.json
+  ./version.json
 ```
 
 然后提交更新后的：
 
-- [`runtime-artifacts/openclaw-sidecar/version.json`](../runtime-artifacts/openclaw-sidecar/version.json)
+- [`openclaw-runtime/version.json`](./version.json)
 
 注意：
 
