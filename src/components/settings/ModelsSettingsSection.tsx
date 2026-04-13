@@ -1,6 +1,14 @@
 /**
  * Model configuration settings section.
  */
+import {
+  AiImageIcon,
+  AiVideoIcon,
+  AiVisionRecognitionIcon,
+  ChatBotIcon,
+  Pdf02Icon,
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
@@ -55,6 +63,13 @@ const SLOT_ORDER: ModelSlotKey[] = [
 ];
 
 const MAX_FALLBACK_MODELS = 3;
+const SLOT_ICONS = {
+  model: ChatBotIcon,
+  imageModel: AiVisionRecognitionIcon,
+  pdfModel: Pdf02Icon,
+  imageGenerationModel: AiImageIcon,
+  videoGenerationModel: AiVideoIcon,
+} satisfies Record<ModelSlotKey, Parameters<typeof HugeiconsIcon>[0]['icon']>;
 
 function cloneDraft(snapshot: AgentDefaultModelSnapshot): ModelConfigDraft {
   return {
@@ -138,7 +153,16 @@ function ModelSlotEditor(props: {
     <div className="modal-section-surface rounded-3xl border p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1.5">
-          <h3 className="text-[18px] font-semibold text-foreground">{sectionTitle}</h3>
+          <h3 className="flex items-center gap-2 text-[18px] font-semibold text-foreground">
+            <HugeiconsIcon
+              icon={SLOT_ICONS[props.slotKey]}
+              size={16}
+              strokeWidth={1.8}
+              data-testid={`model-slot-icon-${props.slotKey}`}
+              className="shrink-0 text-muted-foreground"
+            />
+            <span>{sectionTitle}</span>
+          </h3>
           <p className="text-[13px] leading-6 text-muted-foreground">{sectionDescription}</p>
         </div>
         {props.optional ? (

@@ -83,6 +83,16 @@ describe('ModelsSettingsSection', () => {
     expect(container.querySelector('.pointer-events-none .lucide-chevron-down')).not.toBeNull();
   });
 
+  it('shows a hugeicon in each model section title', async () => {
+    render(<ModelsSettingsSection />);
+
+    expect(await screen.findByTestId('model-slot-icon-model')).toBeInTheDocument();
+    expect(screen.getByTestId('model-slot-icon-imageModel')).toBeInTheDocument();
+    expect(screen.getByTestId('model-slot-icon-pdfModel')).toBeInTheDocument();
+    expect(screen.getByTestId('model-slot-icon-imageGenerationModel')).toBeInTheDocument();
+    expect(screen.getByTestId('model-slot-icon-videoGenerationModel')).toBeInTheDocument();
+  });
+
   it('uses the model ref prompt as a placeholder instead of a selectable option', async () => {
     render(<ModelsSettingsSection />);
 
