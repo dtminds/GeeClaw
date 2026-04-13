@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Loader2, RefreshCw, Save, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { trackUiEvent } from '@/lib/telemetry';
 import { hostApiFetch } from '@/lib/host-api';
@@ -86,9 +87,14 @@ function ModelSlotEditor(props: {
   onChange: (next: AgentModelSlotState) => void;
 }) {
   const { t } = useTranslation('settings');
+  const [fallbackDialogOpen, setFallbackDialogOpen] = useState(false);
   const allModelRefs = useMemo(
     () => buildAvailableModelRefs(props.availableModels),
     [props.availableModels],
+  );
+  const fallbackCandidates = useMemo(
+    () => allModelRefs.filter((modelRef) => modelRef !== props.slot.primary),
+    [allModelRefs, props.slot.primary],
   );
 
   const toggleFallback = (modelRef: string) => {
@@ -189,25 +195,31 @@ function ModelSlotEditor(props: {
                 {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.length : t('agentModels.none')}
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {allModelRefs.filter((modelRef) => modelRef !== props.slot.primary).map((modelRef) => {
-                const selected = props.slot.fallbacks.includes(modelRef);
-                return (
-                  <button
-                    key={modelRef}
-                    type="button"
-                    onClick={() => toggleFallback(modelRef)}
-                    className={[
-                      'inline-flex items-center rounded-full border px-3 py-1.5 font-mono text-[12px] transition-colors',
-                      selected
-                        ? 'border-black/90 bg-black/90 text-white dark:border-white dark:bg-white dark:text-black'
-                        : 'border-black/8 bg-black/[0.03] text-foreground hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]',
-                    ].join(' ')}
-                  >
-                    {modelRef}
-                  </button>
-                );
-              })}
+            <div className="modal-field-surface rounded-2xl border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                  {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.map((modelRef) => (
+                    <span
+                      key={modelRef}
+                      className="inline-flex items-center rounded-full border border-black/8 bg-black/[0.03] px-3 py-1 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.04]"
+                    >
+                      {modelRef}
+                    </span>
+                  )) : (
+                    <span className="text-[13px] text-muted-foreground">
+                      {t('agentModels.noFallbacksSelected')}
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFallbackDialogOpen(true)}
+                  className="surface-hover rounded-full border-black/10 px-4 text-[12px] dark:border-white/10"
+                >
+                  {t('agentModels.configureFallbacks')}
+                </Button>
+              </div>
             </div>
             <p className="text-[12px] leading-5 text-muted-foreground">
               {t(`agentModels.sections.${props.slotKey}.fallbackHelp`)}
@@ -219,6 +231,67 @@ function ModelSlotEditor(props: {
           {t(`agentModels.sections.${props.slotKey}.autoHelp`)}
         </div>
       )}
+
+      <Dialog open={fallbackDialogOpen} onOpenChange={setFallbackDialogOpen}>
+        <DialogContent className="modal-card-surface max-w-2xl rounded-3xl border p-0 shadow-none">
+          <DialogHeader className="border-b border-black/6 px-6 py-5 dark:border-white/10">
+            <DialogTitle className="modal-title text-[18px]">
+              {t('agentModels.fallbackPickerTitle', { section: sectionTitle })}
+            </DialogTitle>
+            <DialogDescription className="modal-description">
+              {t('agentModels.fallbackPickerDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="flex flex-wrap gap-2">
+              {props.slot.fallbacks.length > 0 ? props.slot.fallbacks.map((modelRef) => (
+                <span
+                  key={modelRef}
+                  className="inline-flex items-center rounded-full border border-black/8 bg-black/[0.03] px-3 py-1.5 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.04]"
+                >
+                  {modelRef}
+                </span>
+              )) : (
+                <span className="text-[13px] text-muted-foreground">
+                  {t('agentModels.noFallbacksSelected')}
+                </span>
+              )}
+            </div>
+            <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+              {fallbackCandidates.map((modelRef) => {
+                const selected = props.slot.fallbacks.includes(modelRef);
+                return (
+                  <button
+                    key={modelRef}
+                    type="button"
+                    onClick={() => toggleFallback(modelRef)}
+                    className={[
+                      'flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors',
+                      selected
+                        ? 'border-black/90 bg-black/90 text-white dark:border-white dark:bg-white dark:text-black'
+                        : 'border-black/8 bg-black/[0.03] text-foreground hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]',
+                    ].join(' ')}
+                  >
+                    <span className="font-mono text-[12px]">{modelRef}</span>
+                    <span className="text-[12px] font-medium">
+                      {selected ? t('agentModels.selected') : t('agentModels.select')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setFallbackDialogOpen(false)}
+                className="rounded-full px-5"
+              >
+                {t('agentModels.done')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
