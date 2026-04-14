@@ -163,4 +163,90 @@ describe('handleProviderRoutes', () => {
       }),
     );
   });
+
+  it('blocks provider updates that would remove a referenced model ref', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    providerServiceStub.getAccount.mockResolvedValueOnce({
+      id: 'openrouter',
+      vendorId: 'openrouter',
+      authMode: 'api_key',
+      label: 'OpenRouter',
+      models: [],
+      metadata: {
+        modelCatalog: {
+          disabledBuiltinModelIds: [],
+          disabledCustomModelIds: [],
+          builtinModelOverrides: [],
+          customModels: [{ id: 'google/gemini-3-flash-preview', name: 'google/gemini-3-flash-preview', reasoning: false }],
+        },
+      },
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-14T00:00:00.000Z',
+      updatedAt: '2026-04-14T00:00:00.000Z',
+    });
+    getOpenClawProviderKeyForTypeMock.mockReturnValueOnce('openrouter');
+    getDefaultAgentModelConfigMock.mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'openrouter/google/gemini-3-flash-preview',
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'openrouter/google/gemini-3-flash-preview',
+      fallbacks: [],
+      availableModels: [],
+    });
+    parseJsonBodyMock.mockResolvedValueOnce({
+      updates: {
+        metadata: {
+          modelCatalog: {
+            disabledBuiltinModelIds: [],
+            disabledCustomModelIds: [],
+            builtinModelOverrides: [],
+            customModels: [],
+          },
+        },
+      },
+    });
+
+    const handled = await handleProviderRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/provider-accounts/openrouter'),
+      { gatewayManager: {} } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(providerServiceStub.updateAccount).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      400,
+      expect.objectContaining({
+        success: false,
+        blockedByFallback: true,
+        blockingRefs: ['openrouter/google/gemini-3-flash-preview'],
+        error: 'BLOCKED_BY_FALLBACK:openrouter/google/gemini-3-flash-preview',
+      }),
+    );
+  });
 });

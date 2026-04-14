@@ -21,12 +21,37 @@ import { validateApiKeyWithProvider } from '../../services/providers/provider-va
 import { getProviderService } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
 import type { ProviderAccount } from '../../shared/providers/types';
+import { getProviderDefinition } from '../../shared/providers/registry';
+import { resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
 import { logger } from '../../utils/logger';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
 import { normalizeProviderModelList } from '../../shared/providers/config-models';
 
 const legacyProviderRoutesWarned = new Set<string>();
+
+function collectConfiguredModelRefs(modelConfig: Awaited<ReturnType<typeof getDefaultAgentModelConfig>>): string[] {
+  return normalizeProviderModelList([
+    modelConfig.model.primary,
+    ...modelConfig.model.fallbacks,
+    modelConfig.imageModel.primary,
+    ...modelConfig.imageModel.fallbacks,
+    modelConfig.pdfModel.primary,
+    ...modelConfig.pdfModel.fallbacks,
+    modelConfig.imageGenerationModel.primary,
+    ...modelConfig.imageGenerationModel.fallbacks,
+    modelConfig.videoGenerationModel.primary,
+    ...modelConfig.videoGenerationModel.fallbacks,
+  ]);
+}
+
+function getEffectiveAccountModelRefs(account: ProviderAccount, providerKey: string): string[] {
+  return normalizeProviderModelList(
+    resolveEffectiveProviderModelEntries(account, getProviderDefinition(account.vendorId)).map((model) => (
+      `${providerKey}/${model.id}`
+    )),
+  );
+}
 
 export async function handleProviderRoutes(
   req: IncomingMessage,
@@ -97,6 +122,30 @@ export async function handleProviderRoutes(
         sendJson(res, 404, { success: false, error: 'Provider account not found' });
         return true;
       }
+
+      const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
+      const currentModelConfig = await getDefaultAgentModelConfig();
+      const blockingRefs = collectConfiguredModelRefs(currentModelConfig)
+        .filter((ref) => ref.startsWith(`${providerKey}/`));
+      if (blockingRefs.length > 0) {
+        const nextAccount: ProviderAccount = {
+          ...existing,
+          ...body.updates,
+          id: accountId,
+        };
+        const nextEffectiveRefs = new Set(getEffectiveAccountModelRefs(nextAccount, providerKey));
+        const removedBlockingRefs = blockingRefs.filter((ref) => !nextEffectiveRefs.has(ref));
+        if (removedBlockingRefs.length > 0) {
+          sendJson(res, 400, {
+            success: false,
+            blockedByFallback: true,
+            blockingRefs: removedBlockingRefs,
+            error: `BLOCKED_BY_FALLBACK:${removedBlockingRefs.join(',')}`,
+          });
+          return true;
+        }
+      }
+
       const nextAccount = await providerService.updateAccount(accountId, body.updates, body.apiKey);
       await syncUpdatedProviderToRuntime(providerAccountToConfig(nextAccount), body.apiKey, ctx.gatewayManager);
       sendJson(res, 200, { success: true, account: nextAccount });
@@ -130,18 +179,8 @@ export async function handleProviderRoutes(
       if (existing) {
         const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
         const modelConfig = await getDefaultAgentModelConfig();
-        const blocking = normalizeProviderModelList([
-          modelConfig.model.primary,
-          ...modelConfig.model.fallbacks,
-          modelConfig.imageModel.primary,
-          ...modelConfig.imageModel.fallbacks,
-          modelConfig.pdfModel.primary,
-          ...modelConfig.pdfModel.fallbacks,
-          modelConfig.imageGenerationModel.primary,
-          ...modelConfig.imageGenerationModel.fallbacks,
-          modelConfig.videoGenerationModel.primary,
-          ...modelConfig.videoGenerationModel.fallbacks,
-        ]).filter((ref) => ref.startsWith(`${providerKey}/`));
+        const blocking = collectConfiguredModelRefs(modelConfig)
+          .filter((ref) => ref.startsWith(`${providerKey}/`));
         if (blocking.length > 0) {
           sendJson(res, 400, {
             success: false,

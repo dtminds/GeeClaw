@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const updateAccountMock = vi.fn(async () => undefined);
 const refreshProviderSnapshotMock = vi.fn(async () => undefined);
+const hostApiFetchMock = vi.fn();
 
 const providerState = {
   statuses: [{
@@ -64,7 +65,7 @@ vi.mock('@/lib/api-client', () => ({
 }));
 
 vi.mock('@/lib/host-api', () => ({
-  hostApiFetch: vi.fn(),
+  hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
 }));
 
 vi.mock('@/lib/host-events', () => ({
@@ -92,6 +93,35 @@ vi.mock('react-i18next', async (importOriginal) => {
 describe('ProvidersSettings model editor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete providerState.accounts[0].metadata;
+    hostApiFetchMock.mockResolvedValue({
+      model: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      availableModels: [],
+    });
   });
 
   it('adds a structured provider model through the modal and saves it on the account', async () => {
@@ -152,5 +182,73 @@ describe('ProvidersSettings model editor', () => {
         },
       },
     }), undefined);
-  });
+  }, 10000);
+
+  it('disables toggle and delete for models referenced by model config', async () => {
+    providerState.accounts[0].metadata = {
+      modelCatalog: {
+        disabledBuiltinModelIds: [],
+        disabledCustomModelIds: [],
+        builtinModelOverrides: [],
+        customModels: [{
+          id: 'google/gemini-3-flash-preview',
+          name: 'google/gemini-3-flash-preview',
+          reasoning: false,
+        }],
+      },
+    };
+    hostApiFetchMock.mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'openrouter/google/gemini-3-flash-preview',
+        fallbacks: ['openrouter/openai/gpt-5.4'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      availableModels: [{
+        providerId: 'openrouter',
+        modelRefs: [
+          'openrouter/openai/gpt-5.4',
+          'openrouter/google/gemini-3-flash-preview',
+        ],
+      }],
+    });
+
+    const { ProvidersSettings } = await import('@/components/settings/ProvidersSettings');
+    render(<ProvidersSettings />);
+
+    await screen.findAllByText('OpenRouter');
+
+    const switches = await screen.findAllByRole('switch');
+    expect(switches[0]).toBeDisabled();
+    expect(switches[1]).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'aiProviders.models.editModel' }), {
+        button: 0,
+        ctrlKey: false,
+      });
+    });
+
+    const removeItem = await screen.findByRole('menuitem', { name: 'aiProviders.models.removeModel' });
+    expect(removeItem).toHaveAttribute('data-disabled');
+  }, 10000);
 });

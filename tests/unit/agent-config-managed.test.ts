@@ -102,6 +102,14 @@ async function setupManagedPresetFixture(options?: {
     model?: string;
     fallbackModels?: string[];
     fallbackAccountIds?: string[];
+    metadata?: {
+      modelCatalog?: {
+        disabledBuiltinModelIds?: string[];
+        disabledCustomModelIds?: string[];
+        customModels?: Array<string | { id: string; name?: string; reasoning?: boolean; input?: Array<'text' | 'image'>; contextWindow?: number; maxTokens?: number }>;
+        builtinModelOverrides?: Array<string | { id: string; name?: string; reasoning?: boolean; input?: Array<'text' | 'image'>; contextWindow?: number; maxTokens?: number }>;
+      };
+    };
     enabled: boolean;
     isDefault: boolean;
     createdAt: string;
@@ -1060,6 +1068,41 @@ describe('managed agent config domain', () => {
     });
     expect(config.agents?.defaults?.videoGenerationModel).toBeUndefined();
     expect(config.agents?.defaults).not.toHaveProperty('models');
+  });
+
+  it('does not expose disabled built-in provider models in available model refs', async () => {
+    const { agentConfig } = await setupManagedPresetFixture({
+      providerAccounts: {
+        'google-account': {
+          id: 'google-account',
+          vendorId: 'google',
+          label: 'Google',
+          authMode: 'api_key',
+          models: [],
+          metadata: {
+            modelCatalog: {
+              disabledBuiltinModelIds: ['gemini-3.1-pro-preview'],
+              disabledCustomModelIds: [],
+              builtinModelOverrides: [],
+              customModels: [],
+            },
+          },
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+      },
+    });
+
+    await expect(agentConfig.getDefaultAgentModelConfig()).resolves.toMatchObject({
+      availableModels: expect.arrayContaining([
+        expect.objectContaining({
+          providerId: 'google-account',
+          modelRefs: ['google/gemini-3-flash-preview', 'google/gemini-3.1-flash-lite-preview'],
+        }),
+      ]),
+    });
   });
 
   it('clears active managed restrictions after unmanage', async () => {

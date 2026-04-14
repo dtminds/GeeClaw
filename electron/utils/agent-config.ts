@@ -19,7 +19,6 @@ import {
   shouldReplaceAgentAvatarOnMarketplaceSync,
 } from './agent-avatar';
 import {
-  getDefaultProviderModelEntries,
   normalizeProviderModelList,
   resolveEffectiveProviderModelEntries,
 } from '../shared/providers/config-models';
@@ -973,18 +972,6 @@ function validateAgentModelSlot(
   };
 }
 
-function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
-  return normalizeProviderModelList(
-    getDefaultProviderModelEntries(getProviderDefinition(providerId)).map((model) => {
-      const modelId = typeof model?.id === 'string' ? model.id.trim() : '';
-      if (!modelId) {
-        return undefined;
-      }
-      return `${providerKey}/${modelId}`;
-    }),
-  );
-}
-
 function getConfiguredProviderModelRefs(
   provider: { id: string; type: string; models?: string[]; model?: string; fallbackModels?: string[]; metadata?: unknown },
   providerKey: string,
@@ -1002,10 +989,7 @@ async function listAvailableProviderModelGroups(): Promise<AvailableProviderMode
   return providers
     .map((provider) => {
       const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id);
-      const modelRefs = normalizeProviderModelList([
-        ...getConfiguredProviderModelRefs(provider, providerKey),
-        ...getRegistryProviderModelRefs(provider.type, providerKey),
-      ]);
+      const modelRefs = getConfiguredProviderModelRefs(provider, providerKey);
 
       return {
         providerId: provider.id,

@@ -118,6 +118,38 @@ type ProviderModelListItem = {
   enabled: boolean;
 };
 
+type AgentModelSlotReferenceSnapshot = {
+  primary: string | null;
+  fallbacks: string[];
+};
+
+type AgentDefaultModelReferenceSnapshot = {
+  model: AgentModelSlotReferenceSnapshot;
+  imageModel: AgentModelSlotReferenceSnapshot;
+  pdfModel: AgentModelSlotReferenceSnapshot;
+  imageGenerationModel: AgentModelSlotReferenceSnapshot;
+  videoGenerationModel: AgentModelSlotReferenceSnapshot;
+  availableModels: Array<{
+    providerId: string;
+    modelRefs: string[];
+  }>;
+};
+
+function collectReferencedModelRefs(snapshot: AgentDefaultModelReferenceSnapshot): Set<string> {
+  return new Set(normalizeProviderModelList([
+    snapshot.model.primary,
+    ...snapshot.model.fallbacks,
+    snapshot.imageModel.primary,
+    ...snapshot.imageModel.fallbacks,
+    snapshot.pdfModel.primary,
+    ...snapshot.pdfModel.fallbacks,
+    snapshot.imageGenerationModel.primary,
+    ...snapshot.imageGenerationModel.fallbacks,
+    snapshot.videoGenerationModel.primary,
+    ...snapshot.videoGenerationModel.fallbacks,
+  ]));
+}
+
 function getProviderModelCatalogMode(typeInfo?: Pick<ProviderTypeInfo, 'modelCatalogMode'>): ProviderModelCatalogMode {
   return typeInfo?.modelCatalogMode ?? 'builtin-only';
 }
@@ -450,6 +482,7 @@ function ProviderModelConfigSection(props: {
   providerType?: ProviderType | string;
   providerEmoji?: string;
   canAddCustomModels: boolean;
+  referencedModelIds?: Set<string>;
   onAdd: () => void;
   onToggle: (item: ProviderModelListItem, enabled: boolean) => void;
   onEdit: (item: ProviderModelListItem) => void;
@@ -483,6 +516,7 @@ function ProviderModelConfigSection(props: {
         <div className="space-y-2 p-2 rounded-xl border border-black/8 bg-card dark:border-white/10">
           {props.items.map((item) => {
             const canManageRow = item.source === 'custom';
+            const isReferenced = props.referencedModelIds?.has(item.id) ?? false;
             return (
             <div
               key={`${item.source}:${item.id}`}
@@ -553,7 +587,8 @@ function ProviderModelConfigSection(props: {
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
                           onSelect={() => props.onDelete(item)}
-                          className="flex cursor-default items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-destructive outline-none transition-colors data-[highlighted]:bg-destructive/10"
+                          disabled={isReferenced}
+                          className="flex cursor-default items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-destructive outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-destructive/10"
                         >
                           <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
                           {t('aiProviders.models.removeModel')}
@@ -565,6 +600,7 @@ function ProviderModelConfigSection(props: {
                 <Switch
                   checked={item.enabled}
                   onCheckedChange={(checked) => props.onToggle(item, checked)}
+                  disabled={isReferenced}
                   aria-label={item.enabled ? t('aiProviders.list.enabled') : t('aiProviders.list.disabled')}
                 />
               </div>
@@ -1146,6 +1182,7 @@ function ProviderCard({
   const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
   const [manualCodeInput, setManualCodeInput] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [referencedModelIds, setReferencedModelIds] = useState<Set<string>>(new Set());
 
   const effectiveDocsUrl = codePlanPreset && arkMode === 'codeplan'
     ? (typeInfo?.codePlanDocsUrl || providerDocsUrl)
@@ -1220,6 +1257,50 @@ function ProviderCard({
   useEffect(() => {
     setAuthModeSelection(account.authMode === 'api_key' ? 'apikey' : 'oauth');
   }, [account.authMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReferencedModelIds = async () => {
+      try {
+        const snapshot = await hostApiFetch<AgentDefaultModelReferenceSnapshot>('/api/agents/default-model');
+        if (cancelled) {
+          return;
+        }
+
+        const selectedRefs = collectReferencedModelRefs(snapshot);
+        const group = snapshot.availableModels.find((item) => item.providerId === account.id);
+        if (!group) {
+          setReferencedModelIds(new Set());
+          return;
+        }
+
+        const nextReferencedModelIds = new Set<string>();
+        for (const modelRef of group.modelRefs) {
+          if (!selectedRefs.has(modelRef)) {
+            continue;
+          }
+          const separatorIndex = modelRef.indexOf('/');
+          if (separatorIndex === -1 || separatorIndex === modelRef.length - 1) {
+            continue;
+          }
+          nextReferencedModelIds.add(modelRef.slice(separatorIndex + 1));
+        }
+
+        setReferencedModelIds(nextReferencedModelIds);
+      } catch {
+        if (!cancelled) {
+          setReferencedModelIds(new Set());
+        }
+      }
+    };
+
+    void loadReferencedModelIds();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account.id]);
 
   const resetDrafts = () => {
     setNewKey('');
@@ -1405,7 +1486,15 @@ function ProviderCard({
       setShowKey(false);
       toast.success(t('aiProviders.toast.updated'));
     } catch (error) {
-      toast.error(`${t('aiProviders.toast.failedUpdate')}: ${error}`);
+      const message = String(error);
+      if (message.includes('BLOCKED_BY_FALLBACK:')) {
+        const refs = message.split('BLOCKED_BY_FALLBACK:')[1] ?? '';
+        toast.error(t('aiProviders.toast.blockedByFallback', { refs }), {
+          duration: 6000,
+        });
+      } else {
+        toast.error(`${t('aiProviders.toast.failedUpdate')}: ${error}`);
+      }
     } finally {
       setSaving(false);
       setValidating(false);
@@ -1760,6 +1849,7 @@ function ProviderCard({
                   providerType={account.vendorId}
                   providerEmoji={vendor?.icon || typeInfo?.icon}
                   canAddCustomModels={canAddCustomModels}
+                  referencedModelIds={referencedModelIds}
                   onAdd={() => setModelDialogState({ mode: 'add', index: null })}
                   onToggle={(item, enabled) => {
                     if (item.source === 'builtin') {
@@ -2591,13 +2681,13 @@ function AddProviderDialog({
                 )}
 
                 {showModelIdField ? (
-                  <ProviderModelConfigSection
-                    title={t('aiProviders.sections.model')}
-                    emptyLabel={t('aiProviders.models.empty')}
-                    items={modelListItems}
-                    providerType={selectedType}
-                    providerEmoji={typeInfo?.icon}
-                    canAddCustomModels={canAddCustomModels}
+                <ProviderModelConfigSection
+                  title={t('aiProviders.sections.model')}
+                  emptyLabel={t('aiProviders.models.empty')}
+                  items={modelListItems}
+                  providerType={selectedType}
+                  providerEmoji={typeInfo?.icon}
+                  canAddCustomModels={canAddCustomModels}
                     onAdd={() => setModelDialogState({ mode: 'add', index: null })}
                     onToggle={(item, enabled) => {
                       if (item.source === 'builtin') {
