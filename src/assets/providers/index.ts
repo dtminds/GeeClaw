@@ -18,6 +18,7 @@ export const providerIcons: Record<string, string> = {
     geekai: custom,
     ark,
     moonshot,
+    'moonshot-global': moonshot,
     siliconflow,
     'minimax-portal': minimaxPortal,
     'minimax-portal-cn': minimaxPortal,

@@ -33,6 +33,7 @@ import {
   AiSecurity02Icon,
   ComputerTerminal01Icon,
   AiProgrammingIcon,
+  AiChipIcon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1380,7 +1381,7 @@ export function Settings({ embedded = false }: SettingsProps) {
   const modalState = getSettingsModalState(location);
   const settingsGroups: Array<{ key: SettingsModalSection; title: string; icon: React.ReactNode }> = [
     { key: 'appearance', title: t('appearance.title'), icon: <Palette className="h-4 w-4" /> },
-    { key: 'modelProviders', title: t('aiProviders.title'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
+    { key: 'modelProviders', title: t('aiProviders.title'), icon: <HugeiconsIcon icon={AiChipIcon} size={16} strokeWidth={1.9} /> },
     { key: 'modelConfig', title: t('agentModels.title'), icon: <HugeiconsIcon icon={CpuSettingsIcon} size={16} strokeWidth={1.9} /> },
     { key: 'webSearch', title: t('nav.webSearch'), icon: <Search className="h-4 w-4" /> },
     { key: 'environment', title: t('nav.environment'), icon: <Key className="h-4 w-4" /> },
