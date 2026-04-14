@@ -18,7 +18,7 @@ import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc, toUserMessage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { buildProviderListItems, hasConfiguredCredentials } from '@/lib/provider-accounts';
-import { getConfiguredProviderModels, getProviderIconUrl, shouldInvertInDark } from '@/lib/providers';
+import { getEffectiveProviderModelEntries, getProviderIconUrl, shouldInvertInDark } from '@/lib/providers';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -903,7 +903,7 @@ export const ChatInput = memo(function ChatInput({
         continue;
       }
 
-      const models = getConfiguredProviderModels(item.account);
+      const models = getEffectiveProviderModelEntries(item.account, item.vendor).map((model) => model.id);
 
       if (models.length === 0) {
         continue;

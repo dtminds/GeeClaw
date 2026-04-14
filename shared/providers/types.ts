@@ -6,6 +6,7 @@ export const PROVIDER_TYPES = [
   'geekai',
   'ark',
   'moonshot',
+  'moonshot-global',
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
@@ -22,6 +23,7 @@ export const BUILTIN_PROVIDER_TYPES = [
   'geekai',
   'ark',
   'moonshot',
+  'moonshot-global',
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
@@ -53,6 +55,10 @@ export type ProviderVendorCategory =
   | 'local'
   | 'custom';
 
+export type ProviderModelCatalogMode =
+  | 'builtin-only'
+  | 'runtime-editable';
+
 export interface ProviderConfig {
   id: string;
   name: string;
@@ -66,6 +72,7 @@ export interface ProviderConfig {
   fallbackModels?: string[];
   /** @deprecated legacy provider-level fallback field kept for migration compatibility */
   fallbackProviderIds?: string[];
+  metadata?: ProviderAccount['metadata'];
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -91,6 +98,7 @@ export interface ProviderTypeInfo {
   modelIdPlaceholder?: string;
   defaultModelId?: string;
   defaultModels?: ProviderConfiguredModel[];
+  modelCatalogMode?: ProviderModelCatalogMode;
   isOAuth?: boolean;
   supportsApiKey?: boolean;
   apiKeyUrl?: string;
@@ -124,6 +132,18 @@ export interface ProviderBackendConfig {
   apiKeyEnv: string;
   models?: ProviderModelEntry[];
   headers?: Record<string, string>;
+}
+
+export interface ProviderModelCatalogState {
+  disabledBuiltinModelIds?: string[];
+  disabledCustomModelIds?: string[];
+  customModels?: ProviderConfiguredModel[];
+  /**
+   * Legacy compatibility layer for previously edited built-in models.
+   * New UI no longer exposes built-in editing, but we keep existing values
+   * until the user removes them by resetting/toggling models.
+   */
+  builtinModelOverrides?: ProviderConfiguredModel[];
 }
 
 export interface ProviderDefinition extends ProviderTypeInfo {
@@ -163,6 +183,8 @@ export interface ProviderAccount {
     region?: string;
     email?: string;
     resourceUrl?: string;
+    modelCatalog?: ProviderModelCatalogState;
+    /** @deprecated legacy field kept for migration compatibility */
     customModels?: string[];
   };
   createdAt: string;

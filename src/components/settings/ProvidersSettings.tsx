@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Eye,
   EyeOff,
@@ -15,11 +16,13 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
+  MoreHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -36,11 +39,15 @@ import {
   type ProviderTypeInfo,
   getProviderIconUrl,
   getConfiguredProviderModelEntries,
-  getConfiguredProviderModels,
+  getEffectiveProviderModelEntries,
+  normalizeProviderModelEntries,
+  normalizeProviderModelList,
   providerModelEntriesEqual,
   resolveProviderApiKeyForSave,
   shouldShowProviderModelId,
   shouldInvertInDark,
+  type ProviderModelCatalogMode,
+  type ProviderModelCatalogState,
   type ProviderModelEntry,
   getDefaultProviderModelEntries,
 } from '@/lib/providers';
@@ -97,21 +104,129 @@ function createProviderModelEntry(
   };
 }
 
+type ProviderModelCatalogDraft = {
+  disabledBuiltinModelIds: string[];
+  disabledCustomModelIds: string[];
+  customModels: ProviderModelEntry[];
+  builtinModelOverrides: ProviderModelEntry[];
+};
+
+type ProviderModelListItem = {
+  id: string;
+  model: ProviderModelEntry;
+  source: 'builtin' | 'custom';
+  enabled: boolean;
+};
+
+function getProviderModelCatalogMode(typeInfo?: Pick<ProviderTypeInfo, 'modelCatalogMode'>): ProviderModelCatalogMode {
+  return typeInfo?.modelCatalogMode ?? 'builtin-only';
+}
+
+function normalizeProviderModelCatalogDraft(
+  value?: ProviderModelCatalogState | null,
+): ProviderModelCatalogDraft {
+  return {
+    disabledBuiltinModelIds: normalizeProviderModelList(value?.disabledBuiltinModelIds),
+    disabledCustomModelIds: normalizeProviderModelList(value?.disabledCustomModelIds),
+    customModels: normalizeProviderModelEntries(value?.customModels),
+    builtinModelOverrides: normalizeProviderModelEntries(value?.builtinModelOverrides),
+  };
+}
+
+function buildProviderModelCatalogDraft(
+  provider: Pick<ProviderAccount, 'metadata' | 'models' | 'model' | 'fallbackModels'>,
+  typeInfo?: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'>,
+): ProviderModelCatalogDraft {
+  const explicitState = provider.metadata?.modelCatalog;
+  if (explicitState) {
+    return normalizeProviderModelCatalogDraft(explicitState);
+  }
+
+  const builtinModels = getDefaultProviderModelEntries(typeInfo);
+  const builtinById = new Map(builtinModels.map((model) => [model.id, model] as const));
+  const legacyEntries = getConfiguredProviderModelEntries(provider);
+  const customModels: ProviderModelEntry[] = [];
+  const builtinModelOverrides: ProviderModelEntry[] = [];
+
+  for (const entry of legacyEntries) {
+    const builtinEntry = builtinById.get(entry.id);
+    if (!builtinEntry) {
+      customModels.push(entry);
+      continue;
+    }
+    if (!providerModelEntriesEqual([builtinEntry], [entry])) {
+      builtinModelOverrides.push(entry);
+    }
+  }
+
+  return {
+    disabledBuiltinModelIds: [],
+    disabledCustomModelIds: [],
+    customModels,
+    builtinModelOverrides,
+  };
+}
+
+function buildProviderEffectiveModelEntries(
+  typeInfo: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
+  draft: ProviderModelCatalogDraft,
+): ProviderModelEntry[] {
+  const builtinModels = getDefaultProviderModelEntries(typeInfo);
+  const builtinOverrideMap = new Map(draft.builtinModelOverrides.map((model) => [model.id, model] as const));
+  const disabledBuiltinModelIds = new Set(draft.disabledBuiltinModelIds);
+  const disabledCustomModelIds = new Set(draft.disabledCustomModelIds);
+
+  return normalizeProviderModelEntries([
+    ...builtinModels
+      .map((model) => ({
+        ...model,
+        ...(builtinOverrideMap.get(model.id) ?? {}),
+      }))
+      .filter((model) => !disabledBuiltinModelIds.has(model.id)),
+    ...draft.customModels.filter((model) => !disabledCustomModelIds.has(model.id)),
+  ]);
+}
+
+function buildProviderModelListItems(
+  typeInfo: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
+  draft: ProviderModelCatalogDraft,
+): ProviderModelListItem[] {
+  const builtinModels = getDefaultProviderModelEntries(typeInfo);
+  const builtinOverrideMap = new Map(draft.builtinModelOverrides.map((model) => [model.id, model] as const));
+  const disabledBuiltinModelIds = new Set(draft.disabledBuiltinModelIds);
+  const disabledCustomModelIds = new Set(draft.disabledCustomModelIds);
+
+  return [
+    ...builtinModels.map((model) => ({
+      id: model.id,
+      model: {
+        ...model,
+        ...(builtinOverrideMap.get(model.id) ?? {}),
+      },
+      source: 'builtin' as const,
+      enabled: !disabledBuiltinModelIds.has(model.id),
+    })),
+    ...draft.customModels.map((model) => ({
+      id: model.id,
+      model,
+      source: 'custom' as const,
+      enabled: !disabledCustomModelIds.has(model.id),
+    })),
+  ];
+}
+
 function getProviderDraftState(
   account: ProviderAccount,
   configuredModels: string[],
-  configuredModelEntries: ProviderModelEntry[],
   typeInfo?: ProviderTypeInfo,
 ): {
   baseUrl: string;
   apiProtocol: ProviderAccount['apiProtocol'];
-  modelEntries: ProviderModelEntry[];
   arkMode: CodePlanMode;
 } {
   return {
     baseUrl: account.baseUrl || '',
     apiProtocol: account.apiProtocol || 'openai-completions',
-    modelEntries: configuredModelEntries,
     arkMode: isProviderCodePlanMode(
       account.baseUrl,
       configuredModels,
@@ -331,12 +446,14 @@ function ProviderModelDialog(props: {
 function ProviderModelConfigSection(props: {
   title: string;
   emptyLabel: string;
-  models: ProviderModelEntry[];
+  items: ProviderModelListItem[];
   providerType?: ProviderType | string;
   providerEmoji?: string;
+  canAddCustomModels: boolean;
   onAdd: () => void;
-  onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
+  onToggle: (item: ProviderModelListItem, enabled: boolean) => void;
+  onEdit: (item: ProviderModelListItem) => void;
+  onDelete: (item: ProviderModelListItem) => void;
 }) {
   const { t } = useTranslation('settings');
   const providerIconUrl = props.providerType ? getProviderIconUrl(props.providerType) : undefined;
@@ -346,26 +463,30 @@ function ProviderModelConfigSection(props: {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[14px] font-bold text-foreground/80">{props.title}</p>
-        <button
-          type="button"
-          onClick={props.onAdd}
-          aria-label={t('aiProviders.models.addModel')}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <HugeiconsIcon icon={AddCircleIcon} className="h-4 w-4" />
-        </button>
+        {props.canAddCustomModels ? (
+          <button
+            type="button"
+            onClick={props.onAdd}
+            aria-label={t('aiProviders.models.addModel')}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <HugeiconsIcon icon={AddCircleIcon} className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
-      {props.models.length === 0 ? (
+      {props.items.length === 0 ? (
         <div className="modal-field-surface rounded-2xl border border-dashed px-4 py-5 text-[13px] text-muted-foreground">
           {props.emptyLabel}
         </div>
       ) : (
         <div className="space-y-2 p-2 rounded-xl border border-black/8 bg-card dark:border-white/10">
-          {props.models.map((model, index) => (
+          {props.items.map((item) => {
+            const canManageRow = item.source === 'custom';
+            return (
             <div
-              key={`${model.id}-${index}`}
-              className="flex items-center justify-between gap-4"
+              key={`${item.source}:${item.id}`}
+              className="flex items-center justify-between gap-4 rounded-xl px-2 py-1.5"
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl">
@@ -380,14 +501,20 @@ function ProviderModelConfigSection(props: {
                   )}
                 </span>
                 <div className="flex min-w-0 items-center gap-1">
-                  <p className="truncate font-mono text-[13px] font-medium text-foreground">{model.id}</p>
+                  <p className={cn(
+                    'truncate font-mono text-[13px] font-medium',
+                    item.enabled ? 'text-foreground' : 'text-muted-foreground line-through',
+                  )}
+                  >
+                    {item.model.id}
+                  </p>
                   <span
                     title={t('aiProviders.models.modalities.text')}
                     className="inline-flex shrink-0 items-center justify-center text-foreground/70 dark:text-foreground/75"
                   >
                     <HugeiconsIcon icon={TextSquareIcon} className="h-4 w-4" />
                   </span>
-                  {model.input?.includes('image') ? (
+                  {item.model.input?.includes('image') ? (
                     <span
                       title={t('aiProviders.models.modalities.image')}
                       className="inline-flex shrink-0 items-center justify-center text-foreground/70 dark:text-foreground/75"
@@ -397,26 +524,53 @@ function ProviderModelConfigSection(props: {
                   ) : null}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => props.onEdit(index)}
-                  aria-label={t('aiProviders.models.editModel')}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
-                >
-                  <HugeiconsIcon icon={FileEditIcon} className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onDelete(index)}
-                  aria-label={t('aiProviders.models.removeModel')}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-destructive dark:hover:bg-white/[0.08]"
-                >
-                  <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
-                </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {canManageRow ? (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        aria-label={t('aiProviders.models.editModel')}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        side="bottom"
+                        align="end"
+                        sideOffset={8}
+                        collisionPadding={12}
+                        className="z-[150] min-w-[148px] overflow-hidden rounded-2xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.1)] outline-none dark:border-white/10 dark:bg-card"
+                      >
+                        <DropdownMenu.Item
+                          onSelect={() => props.onEdit(item)}
+                          className="flex cursor-default items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-foreground outline-none transition-colors data-[highlighted]:bg-accent/60"
+                        >
+                          <HugeiconsIcon icon={FileEditIcon} className="h-4 w-4" />
+                          {t('aiProviders.models.editModel')}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => props.onDelete(item)}
+                          className="flex cursor-default items-center gap-2 rounded-xl px-3 py-2 text-[13px] text-destructive outline-none transition-colors data-[highlighted]:bg-destructive/10"
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                          {t('aiProviders.models.removeModel')}
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                ) : null}
+                <Switch
+                  checked={item.enabled}
+                  onCheckedChange={(checked) => props.onToggle(item, checked)}
+                  aria-label={item.enabled ? t('aiProviders.list.enabled') : t('aiProviders.list.disabled')}
+                />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -574,7 +728,7 @@ export function ProvidersSettings() {
     apiKey: string,
     options?: {
       baseUrl?: string;
-      models?: ProviderModelEntry[];
+      modelCatalog?: ProviderModelCatalogState;
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
     }
@@ -592,7 +746,8 @@ export function ProvidersSettings() {
         apiProtocol: type === 'custom' || type === 'ollama'
           ? (options?.apiProtocol || 'openai-completions')
           : undefined,
-        models: options?.models,
+        models: [],
+        metadata: options?.modelCatalog ? { modelCatalog: options.modelCatalog } : undefined,
         enabled: true,
         isDefault: false,
         createdAt: new Date().toISOString(),
@@ -961,26 +1116,27 @@ function ProviderCard({
 }: ProviderCardProps) {
   const { t, i18n } = useTranslation('settings');
   const { account, vendor, status } = item;
-  const configuredModels = useMemo(
-    () => getConfiguredProviderModels(account),
-    [account],
-  );
-  const configuredModelEntries = useMemo(
-    () => getConfiguredProviderModelEntries(account),
-    [account],
-  );
   const typeInfo = PROVIDER_TYPE_INFO.find((provider) => provider.id === account.vendorId);
+  const modelCatalogMode = getProviderModelCatalogMode(typeInfo);
+  const configuredModelEntries = useMemo(
+    () => getEffectiveProviderModelEntries(account, typeInfo),
+    [account, typeInfo],
+  );
+  const initialModelCatalog = useMemo(
+    () => buildProviderModelCatalogDraft(account, typeInfo),
+    [account, typeInfo],
+  );
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
   const codePlanPreset = getProviderCodePlanPreset(typeInfo);
   const draftState = useMemo(
-    () => getProviderDraftState(account, configuredModels, configuredModelEntries, typeInfo),
-    [account, configuredModelEntries, configuredModels, typeInfo],
+    () => getProviderDraftState(account, configuredModelEntries.map((model) => model.id), typeInfo),
+    [account, configuredModelEntries, typeInfo],
   );
   const [newKey, setNewKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(draftState.baseUrl);
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>(draftState.apiProtocol);
-  const [modelEntries, setModelEntries] = useState(draftState.modelEntries);
+  const [modelCatalog, setModelCatalog] = useState<ProviderModelCatalogDraft>(initialModelCatalog);
   const [showKey, setShowKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1016,11 +1172,23 @@ function ProviderCard({
   const currentApiProtocol = account.apiProtocol || 'openai-completions';
   const hasBaseUrlChange = Boolean(typeInfo?.showBaseUrl) && (baseUrl.trim() || undefined) !== currentBaseUrl;
   const hasProtocolChange = canEditProtocol && apiProtocol !== currentApiProtocol;
-  const hasModelChange = showModelIdField && !providerModelEntriesEqual(modelEntries, configuredModelEntries);
+  const effectiveModelEntries = useMemo(
+    () => buildProviderEffectiveModelEntries(typeInfo, modelCatalog),
+    [modelCatalog, typeInfo],
+  );
+  const modelListItems = useMemo(
+    () => buildProviderModelListItems(typeInfo, modelCatalog),
+    [modelCatalog, typeInfo],
+  );
+  const canAddCustomModels = modelCatalogMode === 'runtime-editable';
+  const hasModelChange = showModelIdField && (
+    !providerModelEntriesEqual(effectiveModelEntries, configuredModelEntries)
+    || JSON.stringify(modelCatalog) !== JSON.stringify(initialModelCatalog)
+  );
   const authModeChangeNeedsSave = usesApiKeyAuth && account.authMode !== 'api_key';
   const missingApiKeyForModeSwitch = authModeChangeNeedsSave && !apiKeyConfigured && !newKey.trim();
   const hasPendingChanges = Boolean(newKey.trim()) || hasBaseUrlChange || hasProtocolChange || hasModelChange || authModeChangeNeedsSave;
-  const missingRequiredModel = showModelIdField && modelEntries.length === 0;
+  const missingRequiredModel = showModelIdField && effectiveModelEntries.length === 0;
   const hasEditableFields = canEditModelConfig || usesApiKeyAuth || authModeChangeNeedsSave;
   const headerLink = usesApiKeyAuth && typeInfo?.apiKeyUrl
     ? { href: typeInfo.apiKeyUrl, label: t('aiProviders.oauth.getApiKey') }
@@ -1035,7 +1203,7 @@ function ProviderCard({
     setShowKey(false);
     setBaseUrl(draftState.baseUrl);
     setApiProtocol(draftState.apiProtocol);
-    setModelEntries(draftState.modelEntries);
+    setModelCatalog(initialModelCatalog);
     setArkMode(draftState.arkMode);
     setModelDialogState(null);
     setOauthFlowing(false);
@@ -1046,7 +1214,7 @@ function ProviderCard({
     draftState.apiProtocol,
     draftState.arkMode,
     draftState.baseUrl,
-    draftState.modelEntries,
+    initialModelCatalog,
   ]);
 
   useEffect(() => {
@@ -1058,7 +1226,7 @@ function ProviderCard({
     setShowKey(false);
     setBaseUrl(draftState.baseUrl);
     setApiProtocol(draftState.apiProtocol);
-    setModelEntries(draftState.modelEntries);
+    setModelCatalog(initialModelCatalog);
     setArkMode(draftState.arkMode);
     setAuthModeSelection(account.authMode === 'api_key' ? 'apikey' : 'oauth');
     setModelDialogState(null);
@@ -1212,7 +1380,11 @@ function ProviderCard({
         updates.apiProtocol = apiProtocol || 'openai-completions';
       }
       if (hasModelChange) {
-        updates.models = modelEntries;
+        updates.models = [];
+        updates.metadata = {
+          ...account.metadata,
+          modelCatalog,
+        };
       }
       if (authModeChangeNeedsSave) {
         updates.authMode = 'api_key';
@@ -1495,15 +1667,20 @@ function ProviderCard({
                       if (nextMode === 'apikey') {
                         setArkMode('apikey');
                         setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                          if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
-                            setModelEntries(getDefaultProviderModelEntries(typeInfo));
-                          }
+                        if (effectiveModelEntries.length === 1 && effectiveModelEntries[0]?.id === codePlanPreset.modelId) {
+                          setModelCatalog(initialModelCatalog);
+                        }
                         return;
                       }
 
                       setArkMode('codeplan');
                       setBaseUrl(codePlanPreset.baseUrl);
-                      setModelEntries([createProviderModelEntry(codePlanPreset.modelId)]);
+                      setModelCatalog({
+                        disabledBuiltinModelIds: getDefaultProviderModelEntries(typeInfo).map((model) => model.id),
+                        disabledCustomModelIds: [],
+                        customModels: [createProviderModelEntry(codePlanPreset.modelId)],
+                        builtinModelOverrides: [],
+                      });
                     }}
                     options={[
                       { value: 'apikey', label: t('aiProviders.authModes.apiKey') },
@@ -1579,12 +1756,35 @@ function ProviderCard({
                 <ProviderModelConfigSection
                   title={t('aiProviders.sections.model')}
                   emptyLabel={t('aiProviders.models.empty')}
-                  models={modelEntries}
+                  items={modelListItems}
                   providerType={account.vendorId}
                   providerEmoji={vendor?.icon || typeInfo?.icon}
+                  canAddCustomModels={canAddCustomModels}
                   onAdd={() => setModelDialogState({ mode: 'add', index: null })}
-                  onEdit={(index) => setModelDialogState({ mode: 'edit', index, model: modelEntries[index] })}
-                  onDelete={(index) => setModelEntries((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                  onToggle={(item, enabled) => {
+                    if (item.source === 'builtin') {
+                      setModelCatalog((current) => ({
+                        ...current,
+                        disabledBuiltinModelIds: enabled
+                          ? current.disabledBuiltinModelIds.filter((id) => id !== item.id)
+                          : normalizeProviderModelList([...current.disabledBuiltinModelIds, item.id]),
+                      }));
+                      return;
+                    }
+
+                    setModelCatalog((current) => ({
+                      ...current,
+                      disabledCustomModelIds: enabled
+                        ? current.disabledCustomModelIds.filter((id) => id !== item.id)
+                        : normalizeProviderModelList([...current.disabledCustomModelIds, item.id]),
+                    }));
+                  }}
+                  onEdit={(item) => setModelDialogState({ mode: 'edit', index: null, model: item.model })}
+                  onDelete={(item) => setModelCatalog((current) => ({
+                    ...current,
+                    customModels: current.customModels.filter((model) => model.id !== item.id),
+                    disabledCustomModelIds: current.disabledCustomModelIds.filter((id) => id !== item.id),
+                  }))}
                 />
               ) : null}
             </div>
@@ -1682,24 +1882,16 @@ function ProviderCard({
           initialValue={modelDialogState.model}
           onClose={() => setModelDialogState(null)}
           onSave={(nextModel) => {
-            setModelEntries((current) => {
-              const nextEntries = [...current];
-              if (modelDialogState.mode === 'edit' && modelDialogState.index !== null) {
-                nextEntries[modelDialogState.index] = nextModel;
-              } else {
-                nextEntries.push(nextModel);
-              }
+            setModelCatalog((current) => {
+              const nextEntries = current.customModels
+                .filter((entry) => entry.id !== modelDialogState.model?.id)
+                .concat(nextModel);
 
-              const dedupedEntries: ProviderModelEntry[] = [];
-              const seen = new Set<string>();
-              for (const entry of nextEntries) {
-                if (!entry.id || seen.has(entry.id)) {
-                  continue;
-                }
-                seen.add(entry.id);
-                dedupedEntries.push(entry);
-              }
-              return dedupedEntries;
+              return {
+                ...current,
+                customModels: normalizeProviderModelEntries(nextEntries),
+                disabledCustomModelIds: current.disabledCustomModelIds.filter((id) => id !== nextModel.id),
+              };
             });
             setModelDialogState(null);
           }}
@@ -1720,7 +1912,7 @@ interface AddProviderDialogProps {
     apiKey: string,
     options?: {
       baseUrl?: string;
-      models?: ProviderModelEntry[];
+      modelCatalog?: ProviderModelCatalogState;
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
     }
@@ -1750,7 +1942,7 @@ function AddProviderDialog({
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>('openai-completions');
-  const [modelEntries, setModelEntries] = useState<ProviderModelEntry[]>([]);
+  const [modelCatalog, setModelCatalog] = useState<ProviderModelCatalogDraft>(normalizeProviderModelCatalogDraft());
   const [arkMode, setArkMode] = useState<CodePlanMode>('apikey');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1767,6 +1959,16 @@ function AddProviderDialog({
   const [authMode, setAuthMode] = useState<'oauth' | 'apikey'>('apikey');
 
   const typeInfo = PROVIDER_TYPE_INFO.find((t) => t.id === selectedType);
+  const modelCatalogMode = getProviderModelCatalogMode(typeInfo);
+  const canAddCustomModels = modelCatalogMode === 'runtime-editable';
+  const modelListItems = useMemo(
+    () => buildProviderModelListItems(typeInfo, modelCatalog),
+    [modelCatalog, typeInfo],
+  );
+  const effectiveModelEntries = useMemo(
+    () => buildProviderEffectiveModelEntries(typeInfo, modelCatalog),
+    [modelCatalog, typeInfo],
+  );
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
   const codePlanPreset = getProviderCodePlanPreset(typeInfo);
@@ -1796,7 +1998,7 @@ function AddProviderDialog({
     setApiKey('');
     setBaseUrl(initialTypeInfo?.defaultBaseUrl || '');
     setApiProtocol('openai-completions');
-    setModelEntries(getDefaultProviderModelEntries(initialTypeInfo));
+    setModelCatalog(normalizeProviderModelCatalogDraft());
     setArkMode('apikey');
     setValidationError(null);
   }, [initialType, t]);
@@ -1981,7 +2183,7 @@ function AddProviderDialog({
       }
 
       const requiresModel = showModelIdField;
-      if (requiresModel && modelEntries.length === 0) {
+      if (requiresModel && effectiveModelEntries.length === 0) {
         setValidationError(t('aiProviders.toast.modelRequired'));
         setSaving(false);
         return;
@@ -1996,7 +2198,7 @@ function AddProviderDialog({
           apiProtocol: selectedType === 'custom' || selectedType === 'ollama'
             ? apiProtocol
             : undefined,
-          models: modelEntries,
+          modelCatalog,
           authMode: useOAuthFlow ? (preferredOAuthMode || 'oauth_device') : selectedType === 'ollama'
             ? 'local'
             : (isOAuth && supportsApiKey && authMode === 'apikey')
@@ -2036,7 +2238,7 @@ function AddProviderDialog({
                     setName(type.id === 'custom' ? t('aiProviders.custom') : type.name);
                     setBaseUrl(type.defaultBaseUrl || '');
                     setApiProtocol('openai-completions');
-                    setModelEntries(getDefaultProviderModelEntries(type));
+                    setModelCatalog(normalizeProviderModelCatalogDraft());
                     setArkMode('apikey');
                   }}
                     className="surface-hover rounded-2xl border border-black/5 p-4 text-center transition-colors group dark:border-white/5"
@@ -2071,7 +2273,7 @@ function AddProviderDialog({
                         setValidationError(null);
                         setBaseUrl('');
                         setApiProtocol('openai-completions');
-                        setModelEntries([]);
+                        setModelCatalog(normalizeProviderModelCatalogDraft());
                         setArkMode('apikey');
                       }}
                       className="text-info text-[13px] font-medium hover:opacity-80"
@@ -2147,8 +2349,8 @@ function AddProviderDialog({
                         if (nextMode === 'apikey') {
                           setArkMode('apikey');
                           setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                          if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
-                            setModelEntries(getDefaultProviderModelEntries(typeInfo));
+                          if (effectiveModelEntries.length === 1 && effectiveModelEntries[0]?.id === codePlanPreset.modelId) {
+                            setModelCatalog(normalizeProviderModelCatalogDraft());
                           }
                           setValidationError(null);
                           return;
@@ -2156,7 +2358,12 @@ function AddProviderDialog({
 
                         setArkMode('codeplan');
                         setBaseUrl(codePlanPreset.baseUrl);
-                        setModelEntries([createProviderModelEntry(codePlanPreset.modelId)]);
+                        setModelCatalog({
+                          disabledBuiltinModelIds: getDefaultProviderModelEntries(typeInfo).map((model) => model.id),
+                          disabledCustomModelIds: [],
+                          customModels: [createProviderModelEntry(codePlanPreset.modelId)],
+                          builtinModelOverrides: [],
+                        });
                         setValidationError(null);
                       }}
                       options={[
@@ -2387,12 +2594,35 @@ function AddProviderDialog({
                   <ProviderModelConfigSection
                     title={t('aiProviders.sections.model')}
                     emptyLabel={t('aiProviders.models.empty')}
-                    models={modelEntries}
+                    items={modelListItems}
                     providerType={selectedType}
                     providerEmoji={typeInfo?.icon}
+                    canAddCustomModels={canAddCustomModels}
                     onAdd={() => setModelDialogState({ mode: 'add', index: null })}
-                    onEdit={(index) => setModelDialogState({ mode: 'edit', index, model: modelEntries[index] })}
-                    onDelete={(index) => setModelEntries((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                    onToggle={(item, enabled) => {
+                      if (item.source === 'builtin') {
+                        setModelCatalog((current) => ({
+                          ...current,
+                          disabledBuiltinModelIds: enabled
+                            ? current.disabledBuiltinModelIds.filter((id) => id !== item.id)
+                            : normalizeProviderModelList([...current.disabledBuiltinModelIds, item.id]),
+                        }));
+                        return;
+                      }
+
+                      setModelCatalog((current) => ({
+                        ...current,
+                        disabledCustomModelIds: enabled
+                          ? current.disabledCustomModelIds.filter((id) => id !== item.id)
+                          : normalizeProviderModelList([...current.disabledCustomModelIds, item.id]),
+                      }));
+                    }}
+                    onEdit={(item) => setModelDialogState({ mode: 'edit', index: null, model: item.model })}
+                    onDelete={(item) => setModelCatalog((current) => ({
+                      ...current,
+                      customModels: current.customModels.filter((model) => model.id !== item.id),
+                      disabledCustomModelIds: current.disabledCustomModelIds.filter((id) => id !== item.id),
+                    }))}
                   />
                 ) : null}
               </div>
@@ -2403,7 +2633,7 @@ function AddProviderDialog({
                 <Button
                   onClick={handleAdd}
                   className={cn("modal-primary-button px-8", useOAuthFlow && "hidden")}
-                  disabled={!selectedType || saving || (showModelIdField && modelEntries.length === 0)}
+                  disabled={!selectedType || saving || (showModelIdField && effectiveModelEntries.length === 0)}
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -2426,24 +2656,16 @@ function AddProviderDialog({
           initialValue={modelDialogState.model}
           onClose={() => setModelDialogState(null)}
           onSave={(nextModel) => {
-            setModelEntries((current) => {
-              const nextEntries = [...current];
-              if (modelDialogState.mode === 'edit' && modelDialogState.index !== null) {
-                nextEntries[modelDialogState.index] = nextModel;
-              } else {
-                nextEntries.push(nextModel);
-              }
+            setModelCatalog((current) => {
+              const nextEntries = current.customModels
+                .filter((entry) => entry.id !== modelDialogState.model?.id)
+                .concat(nextModel);
 
-              const dedupedEntries: ProviderModelEntry[] = [];
-              const seen = new Set<string>();
-              for (const entry of nextEntries) {
-                if (!entry.id || seen.has(entry.id)) {
-                  continue;
-                }
-                seen.add(entry.id);
-                dedupedEntries.push(entry);
-              }
-              return dedupedEntries;
+              return {
+                ...current,
+                customModels: normalizeProviderModelEntries(nextEntries),
+                disabledCustomModelIds: current.disabledCustomModelIds.filter((id) => id !== nextModel.id),
+              };
             });
             setValidationError(null);
             setModelDialogState(null);

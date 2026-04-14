@@ -212,7 +212,7 @@
       "editModel": "Edit model",
       "removeModel": "Remove model",
       "empty": "No models added yet",
-      "help": "Add the models available under this provider so the model config page can reference them.",
+      "help": "Manage the models available under this provider so the model config page can reference them.",
       "modalities": {
         "text": "Text",
         "image": "Image"

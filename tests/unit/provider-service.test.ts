@@ -225,14 +225,14 @@ describe('ProviderService.createAccount', () => {
     expect(updateDefaultAgentModelConfigMock).not.toHaveBeenCalled();
   });
 
-  it('skips seeding when the provider has no configured models', async () => {
+  it('skips seeding when the provider has no effective models', async () => {
     const { ProviderService } = await import('@electron/services/providers/provider-service');
     const service = new ProviderService();
 
     await service.createAccount({
-      id: 'openai',
-      vendorId: 'openai',
-      label: 'OpenAI',
+      id: 'custom',
+      vendorId: 'custom',
+      label: 'Custom',
       authMode: 'api_key',
       models: [],
       enabled: true,

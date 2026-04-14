@@ -36,9 +36,10 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'ANTHROPIC_API_KEY',
     defaultModelId: 'claude-sonnet-4-6',
     defaultModels: [
-      createDefaultProviderModel('claude-opus-4-6', { supportsImage: true }),
-      createDefaultProviderModel('claude-sonnet-4-6', { supportsImage: true }),
+      createDefaultProviderModel('claude-opus-4-6'),
+      createDefaultProviderModel('claude-sonnet-4-6'),
     ],
+    modelCatalogMode: 'builtin-only',
     showModelId: true,
     modelIdPlaceholder: 'claude-sonnet-4-6',
     docsUrl: 'https://platform.claude.com/docs/en/api/overview',
@@ -56,7 +57,8 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     category: 'official',
     envVar: 'OPENAI_API_KEY',
     defaultModelId: 'gpt-5.4',
-    defaultModels: [createDefaultProviderModel('gpt-5.4', { supportsImage: true }),],
+    defaultModels: [createDefaultProviderModel('gpt-5.4'),],
+    modelCatalogMode: 'builtin-only',
     isOAuth: true,
     supportsApiKey: true,
     showModelId: true,
@@ -83,10 +85,11 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'GEMINI_API_KEY',
     defaultModelId: 'gemini-3-flash-preview',
     defaultModels: [
-      createDefaultProviderModel('gemini-3-flash-preview', { supportsImage: true }),
-      createDefaultProviderModel('gemini-3.1-pro-preview', { supportsImage: true }),
-      createDefaultProviderModel('gemini-3.1-flash-lite-preview', { supportsImage: true }),
+      createDefaultProviderModel('gemini-3-flash-preview'),
+      createDefaultProviderModel('gemini-3.1-pro-preview'),
+      createDefaultProviderModel('gemini-3.1-flash-lite-preview'),
     ],
+    modelCatalogMode: 'builtin-only',
     isOAuth: true,
     supportsApiKey: true,
     showModelId: true,
@@ -107,6 +110,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'openai/gpt-5.4',
     defaultModelId: 'openai/gpt-5.4',
     defaultModels: [createDefaultProviderModel('openai/gpt-5.4', { supportsImage: true })],
+    modelCatalogMode: 'runtime-editable',
     docsUrl: 'https://openrouter.ai/models',
     category: 'compatible',
     envVar: 'OPENROUTER_API_KEY',
@@ -137,6 +141,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'MiniMax-M2.7',
     defaultModelId: 'MiniMax-M2.7',
     defaultModels: [createDefaultProviderModel('MiniMax-M2.7', { supportsImage: true })],
+    modelCatalogMode: 'builtin-only',
     apiKeyUrl: 'https://platform.minimaxi.com/',
     category: 'official',
     envVar: 'MINIMAX_CN_API_KEY',
@@ -161,6 +166,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'kimi-k2.5',
     defaultModelId: 'kimi-k2.5',
     defaultModels: [createDefaultProviderModel('kimi-k2.5', { contextWindow: 256000, maxTokens: 8192 })],
+    modelCatalogMode: 'runtime-editable',
     docsUrl: 'https://platform.moonshot.cn/',
     category: 'official',
     envVar: 'MOONSHOT_API_KEY',
@@ -197,6 +203,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'deepseek-ai/DeepSeek-V3',
     defaultModelId: 'deepseek-ai/DeepSeek-V3',
     defaultModels: [createDefaultProviderModel('deepseek-ai/DeepSeek-V3')],
+    modelCatalogMode: 'runtime-editable',
     docsUrl: 'https://docs.siliconflow.cn/cn/userguide/introduction',
     category: 'compatible',
     envVar: 'SILICONFLOW_API_KEY',
@@ -223,6 +230,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'MiniMax-M2.7',
     defaultModelId: 'MiniMax-M2.7',
     defaultModels: [createDefaultProviderModel('MiniMax-M2.7')],
+    modelCatalogMode: 'builtin-only',
     apiKeyUrl: 'https://platform.minimax.io',
     category: 'official',
     envVar: 'MINIMAX_API_KEY',
@@ -247,6 +255,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     showBaseUrl: true,
     defaultModelId: 'qwen3.6-plus',
     defaultModels: [createDefaultProviderModel('qwen3.6-plus')],
+    modelCatalogMode: 'runtime-editable',
     showModelId: true,
     modelIdPlaceholder: 'qwen3.6-plus',
     apiKeyUrl: 'https://bailian.console.aliyun.com/',
@@ -277,6 +286,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     showBaseUrl: true,
     showModelId: true,
     modelIdPlaceholder: 'ep-20260228000000-xxxxx',
+    modelCatalogMode: 'runtime-editable',
     docsUrl: 'https://www.volcengine.com/',
     codePlanPresetBaseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     codePlanPresetModelId: 'ark-code-latest',
@@ -303,6 +313,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'your-model-id',
     defaultModelId: 'qwen3.5-flash',
     defaultModels: [createDefaultProviderModel('qwen3.5-flash')],
+    modelCatalogMode: 'runtime-editable',
     category: 'compatible',
     envVar: 'GEEKAI_API_KEY',
     supportedAuthModes: ['api_key'],
@@ -345,6 +356,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     modelIdPlaceholder: 'qwen3:latest',
     defaultModelId: 'qwen3:latest',
     defaultModels: [createDefaultProviderModel('qwen3:latest')],
+    modelCatalogMode: 'runtime-editable',
     category: 'local',
     supportedAuthModes: ['local'],
     defaultAuthMode: 'local',
@@ -359,6 +371,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     showBaseUrl: true,
     showModelId: true,
     modelIdPlaceholder: 'your-provider/model-id',
+    modelCatalogMode: 'runtime-editable',
     docsUrl: 'https://icnnp7d0dymg.feishu.cn/wiki/BmiLwGBcEiloZDkdYnGc8RWnn6d#Ee1ldfvKJoVGvfxc32mcILwenth',
     docsUrlZh: 'https://icnnp7d0dymg.feishu.cn/wiki/BmiLwGBcEiloZDkdYnGc8RWnn6d#IWQCdfe5fobGU3xf3UGcgbLynGh',
     category: 'custom',
@@ -367,6 +380,17 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     supportsMultipleAccounts: true,
   },
 ];
+
+for (const definition of PROVIDER_DEFINITIONS) {
+  const supportsRuntimeEditableModels = definition.id === 'custom'
+    || definition.id === 'ollama'
+    || Boolean(definition.providerConfig);
+  if (definition.modelCatalogMode === 'runtime-editable' && !supportsRuntimeEditableModels) {
+    throw new Error(
+      `[providers] ${definition.id} cannot use runtime-editable model catalog without runtime config support`,
+    );
+  }
+}
 
 const PROVIDER_DEFINITION_MAP = new Map(
   PROVIDER_DEFINITIONS.map((definition) => [definition.id, definition]),

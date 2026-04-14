@@ -1,9 +1,10 @@
 import type { GatewayManager } from '../../gateway/manager';
 import {
-  getConfiguredProviderModelEntries,
-  getConfiguredProviderModels,
+  getDefaultProviderModelEntries,
   normalizeProviderModelEntries,
+  resolveEffectiveProviderModelEntries,
 } from '../../shared/providers/config-models';
+import { getProviderDefinition } from '../../shared/providers/registry';
 import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from './provider-store';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
@@ -108,7 +109,8 @@ async function getBrowserOAuthRuntimeProvider(config: ProviderConfig): Promise<s
 
 export function getProviderModelRef(config: ProviderConfig, providerKeyOverride?: string): string | undefined {
   const providerKey = providerKeyOverride ?? getOpenClawProviderKey(config.type, config.id);
-  const configuredModels = getConfiguredProviderModels(config);
+  const configuredModels = resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type))
+    .map((model) => model.id);
 
   if (configuredModels.length > 0) {
     const primaryModel = configuredModels[0];
@@ -132,10 +134,10 @@ export function getProviderCatalogModelRefs(config: ProviderConfig): string[] {
   const results: string[] = [];
   const seen = new Set<string>();
 
-  for (const model of getConfiguredProviderModels(config)) {
-    const modelRef = model.startsWith(`${providerKey}/`)
-      ? model
-      : `${providerKey}/${model}`;
+  for (const model of resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type))) {
+    const modelRef = model.id.startsWith(`${providerKey}/`)
+      ? model.id
+      : `${providerKey}/${model.id}`;
 
     if (seen.has(modelRef)) {
       continue;
@@ -160,7 +162,7 @@ export function getProviderCatalogModelIds(config: ProviderConfig): string[] {
 export function getProviderCatalogModelEntries(config: ProviderConfig) {
   const providerKey = getOpenClawProviderKey(config.type, config.id);
 
-  return getConfiguredProviderModelEntries(config).map((model) => {
+  return resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type)).map((model) => {
     const normalizedId = model.id.startsWith(`${providerKey}/`)
       ? model.id.slice(providerKey.length + 1)
       : model.id;
@@ -177,7 +179,9 @@ export function getProviderCatalogModelEntries(config: ProviderConfig) {
 }
 
 function getDeclaredProviderModelEntries(config: ProviderConfig) {
-  const registryModels = normalizeProviderModelEntries(getProviderConfig(config.type)?.models ?? []);
+  const registryModels = normalizeProviderModelEntries(
+    getDefaultProviderModelEntries(getProviderDefinition(config.type)),
+  );
   const configuredModels = getProviderCatalogModelEntries(config);
   const mergedById = new Map<string, Record<string, unknown>>();
   const orderedIds: string[] = [];

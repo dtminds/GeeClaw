@@ -18,8 +18,12 @@ import {
   resolveMarketplaceAvatarPresetId,
   shouldReplaceAgentAvatarOnMarketplaceSync,
 } from './agent-avatar';
-import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
-import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
+import {
+  getDefaultProviderModelEntries,
+  normalizeProviderModelList,
+  resolveEffectiveProviderModelEntries,
+} from '../shared/providers/config-models';
+import { getProviderDefinition } from '../shared/providers/registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { mapWithConcurrency } from './promise-pool';
@@ -971,7 +975,7 @@ function validateAgentModelSlot(
 
 function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
   return normalizeProviderModelList(
-    (getProviderRegistryConfig(providerId)?.models ?? []).map((model) => {
+    getDefaultProviderModelEntries(getProviderDefinition(providerId)).map((model) => {
       const modelId = typeof model?.id === 'string' ? model.id.trim() : '';
       if (!modelId) {
         return undefined;
@@ -982,12 +986,12 @@ function getRegistryProviderModelRefs(providerId: string, providerKey: string): 
 }
 
 function getConfiguredProviderModelRefs(
-  provider: { id: string; type: string; models?: string[]; model?: string; fallbackModels?: string[] },
+  provider: { id: string; type: string; models?: string[]; model?: string; fallbackModels?: string[]; metadata?: unknown },
   providerKey: string,
 ): string[] {
   return normalizeProviderModelList(
-    getConfiguredProviderModels(provider).map((model) => (
-      model.startsWith(`${providerKey}/`) ? model : `${providerKey}/${model}`
+    resolveEffectiveProviderModelEntries(provider, getProviderDefinition(provider.type)).map((model) => (
+      model.id.startsWith(`${providerKey}/`) ? model.id : `${providerKey}/${model.id}`
     )),
   );
 }

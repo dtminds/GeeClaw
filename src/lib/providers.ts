@@ -3,6 +3,14 @@ import {
   getProviderTypeInfo as getSharedProviderTypeInfo,
   getProviderUiInfoList,
 } from '../../shared/providers/registry.ts';
+import {
+  getConfiguredProviderModelEntries as getSharedConfiguredProviderModelEntries,
+  getConfiguredProviderModels as getSharedConfiguredProviderModels,
+  getDefaultProviderModelEntries as getSharedDefaultProviderModelEntries,
+  normalizeProviderModelEntries as normalizeSharedProviderModelEntries,
+  normalizeProviderModelList as normalizeSharedProviderModelList,
+  resolveEffectiveProviderModelEntries as resolveSharedEffectiveProviderModelEntries,
+} from '../../shared/providers/config-models.ts';
 export {
   BUILTIN_PROVIDER_TYPES,
   OLLAMA_PLACEHOLDER_API_KEY,
@@ -11,6 +19,8 @@ export {
   type ProviderAuthMode,
   type ProviderCodePlanPreset,
   type ProviderConfig,
+  type ProviderModelCatalogMode,
+  type ProviderModelCatalogState,
   type ProviderConfiguredModel,
   type ProviderModelEntry,
   type ProviderModelInputModality,
@@ -27,7 +37,6 @@ import {
   type ProviderConfig,
   type ProviderConfiguredModel,
   type ProviderModelEntry,
-  type ProviderModelInputModality,
   type ProviderType,
   type ProviderTypeInfo,
 } from '../../shared/providers/types.ts';
@@ -80,15 +89,7 @@ export function shouldShowProviderModelId(
 export function getDefaultProviderModelEntries(
   provider: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
 ): ProviderModelEntry[] {
-  if (provider?.defaultModels && provider.defaultModels.length > 0) {
-    return normalizeProviderModelEntries(provider.defaultModels);
-  }
-
-  if (provider?.defaultModelId) {
-    return normalizeProviderModelEntries([provider.defaultModelId]);
-  }
-
-  return [];
+  return getSharedDefaultProviderModelEntries(provider);
 }
 
 export function resolveProviderModelForSave(
@@ -148,92 +149,13 @@ export function resolveProviderApiKeyForSave(type: ProviderType | string, apiKey
 }
 
 export function normalizeProviderModelList(models?: Iterable<string | null | undefined>): string[] {
-  const seen = new Set<string>();
-  const results: string[] = [];
-
-  for (const value of models ?? []) {
-    const normalized = typeof value === 'string' ? value.trim() : '';
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    results.push(normalized);
-  }
-
-  return results;
-}
-
-function normalizeProviderModelModalities(
-  input?: Iterable<ProviderModelInputModality | null | undefined>,
-): ProviderModelInputModality[] | undefined {
-  const normalized = Array.from(new Set(
-    Array.from(input ?? [])
-      .filter((value): value is ProviderModelInputModality => value === 'text' || value === 'image'),
-  ));
-
-  if (normalized.length === 0 || (normalized.length === 1 && normalized[0] === 'text')) {
-    return undefined;
-  }
-
-  return normalized.includes('image') ? ['text', 'image'] : ['text'];
-}
-
-function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined;
-  }
-  const normalized = Math.floor(value);
-  return normalized > 0 ? normalized : undefined;
+  return normalizeSharedProviderModelList(models);
 }
 
 export function normalizeProviderModelEntries(
   models?: Iterable<ProviderConfiguredModel | null | undefined>,
 ): ProviderModelEntry[] {
-  const seen = new Set<string>();
-  const results: ProviderModelEntry[] = [];
-
-  for (const value of models ?? []) {
-    const id = typeof value === 'string'
-      ? value.trim()
-      : (typeof value?.id === 'string' ? value.id.trim() : '');
-    if (!id || seen.has(id)) {
-      continue;
-    }
-    seen.add(id);
-
-    if (typeof value === 'string') {
-      results.push({
-        id,
-        name: id,
-        reasoning: false,
-      });
-      continue;
-    }
-
-    const input = normalizeProviderModelModalities(value?.input);
-    const contextWindow = normalizeOptionalPositiveInteger(value?.contextWindow);
-    const maxTokens = normalizeOptionalPositiveInteger(value?.maxTokens);
-    const {
-      id: _ignoredId,
-      name: _ignoredName,
-      reasoning: _ignoredReasoning,
-      input: _ignoredInput,
-      contextWindow: _ignoredContextWindow,
-      maxTokens: _ignoredMaxTokens,
-      ...rest
-    } = value ?? {};
-    results.push({
-      ...rest,
-      id,
-      name: typeof value?.name === 'string' && value.name.trim() ? value.name.trim() : id,
-      reasoning: typeof value?.reasoning === 'boolean' ? value.reasoning : false,
-      ...(input ? { input } : {}),
-      ...(contextWindow ? { contextWindow } : {}),
-      ...(maxTokens ? { maxTokens } : {}),
-    });
-  }
-
-  return results;
+  return normalizeSharedProviderModelEntries(models);
 }
 
 export function providerModelEntriesEqual(
@@ -249,25 +171,18 @@ export function providerModelEntriesEqual(
 export function getConfiguredProviderModels(
   provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels'>,
 ): string[] {
-  if (provider.models && provider.models.length > 0) {
-    return normalizeProviderModelEntries(provider.models).map((model) => model.id);
-  }
-
-  return normalizeProviderModelList([
-    provider.model,
-    ...(provider.fallbackModels ?? []),
-  ]);
+  return getSharedConfiguredProviderModels(provider);
 }
 
 export function getConfiguredProviderModelEntries(
   provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels'>,
 ): ProviderModelEntry[] {
-  if (provider.models && provider.models.length > 0) {
-    return normalizeProviderModelEntries(provider.models);
-  }
+  return getSharedConfiguredProviderModelEntries(provider);
+}
 
-  return normalizeProviderModelEntries([
-    provider.model,
-    ...(provider.fallbackModels ?? []),
-  ]);
+export function getEffectiveProviderModelEntries(
+  provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels' | 'metadata'>,
+  typeInfo: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
+): ProviderModelEntry[] {
+  return resolveSharedEffectiveProviderModelEntries(provider, typeInfo);
 }

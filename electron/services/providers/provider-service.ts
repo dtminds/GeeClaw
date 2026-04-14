@@ -27,7 +27,7 @@ import {
   storeApiKey,
 } from '../../utils/secure-storage';
 import type { ProviderWithKeyInfo } from '../../shared/providers/types';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import { resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
 import {
   getDefaultAgentModelConfig,
   updateDefaultAgentModelConfig,
@@ -56,7 +56,8 @@ function logLegacyProviderApiUsage(method: string, replacement: string): void {
 }
 
 async function seedDefaultAgentModelFromAccount(account: ProviderAccount): Promise<void> {
-  const configuredModels = getConfiguredProviderModels(account);
+  const configuredModels = resolveEffectiveProviderModelEntries(account, getProviderDefinition(account.vendorId))
+    .map((model) => model.id);
   const primaryModel = configuredModels[0];
   if (!primaryModel) {
     return;

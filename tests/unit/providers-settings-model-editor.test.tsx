@@ -132,14 +132,25 @@ describe('ProvidersSettings model editor', () => {
     });
 
     expect(updateAccountMock).toHaveBeenCalledWith('openrouter', expect.objectContaining({
-      models: [{
-        id: 'google/gemini-3-flash-preview',
-        name: 'google/gemini-3-flash-preview',
-        reasoning: false,
-        input: ['text', 'image'],
-        contextWindow: 1048576,
-        maxTokens: 65536,
-      }],
+      model: undefined,
+      models: [],
+      fallbackModels: [],
+      fallbackAccountIds: [],
+      metadata: {
+        modelCatalog: {
+          disabledBuiltinModelIds: [],
+          disabledCustomModelIds: [],
+          builtinModelOverrides: [],
+          customModels: [{
+            id: 'google/gemini-3-flash-preview',
+            name: 'google/gemini-3-flash-preview',
+            reasoning: false,
+            input: ['text', 'image'],
+            contextWindow: 1048576,
+            maxTokens: 65536,
+          }],
+        },
+      },
     }), undefined);
   });
 });

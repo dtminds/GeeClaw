@@ -1,9 +1,9 @@
 import type { ProviderAccount, ProviderConfig, ProviderType } from '../../shared/providers/types';
-import { getConfiguredProviderModelEntries } from '../../shared/providers/config-models';
+import { getConfiguredProviderModelEntries, resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
 import { getProviderDefinition } from '../../shared/providers/registry';
 import { getGeeClawProviderStore } from './store-instance';
 
-const PROVIDER_STORE_SCHEMA_VERSION = 2;
+const PROVIDER_STORE_SCHEMA_VERSION = 3;
 
 function inferAuthMode(type: ProviderType): ProviderAccount['authMode'] {
   if (type === 'ollama') {
@@ -35,6 +35,7 @@ export function providerConfigToAccount(
     model: config.model,
     fallbackModels: config.fallbackModels,
     fallbackAccountIds: config.fallbackProviderIds,
+    metadata: config.metadata,
     enabled: config.enabled,
     isDefault: options?.isDefault ?? false,
     createdAt: config.createdAt,
@@ -49,10 +50,11 @@ export function providerAccountToConfig(account: ProviderAccount): ProviderConfi
     type: account.vendorId,
     baseUrl: account.baseUrl,
     apiProtocol: account.apiProtocol,
-    models: getConfiguredProviderModelEntries(account),
+    models: resolveEffectiveProviderModelEntries(account, getProviderDefinition(account.vendorId)),
     model: account.model,
     fallbackModels: account.fallbackModels,
     fallbackProviderIds: account.fallbackAccountIds,
+    metadata: account.metadata,
     enabled: account.enabled,
     createdAt: account.createdAt,
     updatedAt: account.updatedAt,

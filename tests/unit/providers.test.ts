@@ -325,19 +325,16 @@ describe('provider metadata', () => {
         id: 'gemini-3-flash-preview',
         name: 'gemini-3-flash-preview',
         reasoning: false,
-        input: ['text', 'image'],
       },
       {
         id: 'gemini-3.1-pro-preview',
         name: 'gemini-3.1-pro-preview',
         reasoning: false,
-        input: ['text', 'image'],
       },
       {
         id: 'gemini-3.1-flash-lite-preview',
         name: 'gemini-3.1-flash-lite-preview',
         reasoning: false,
-        input: ['text', 'image'],
       },
     ]);
   });
