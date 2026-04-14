@@ -56,10 +56,10 @@ type ModelConfigDraft = Pick<
 
 const SLOT_ORDER: ModelSlotKey[] = [
   'model',
-  'imageModel',
-  'pdfModel',
   'imageGenerationModel',
   'videoGenerationModel',
+  'imageModel',
+  'pdfModel',
 ];
 
 const MAX_FALLBACK_MODELS = 3;
@@ -404,20 +404,6 @@ export function ModelsSettingsSection() {
                 onChange={(nextSlot) => updateSlot('model', nextSlot)}
               />
               <ModelSlotEditor
-                slotKey="imageModel"
-                slot={draft.imageModel}
-                availableModels={availableModels}
-                optional
-                onChange={(nextSlot) => updateSlot('imageModel', nextSlot)}
-              />
-              <ModelSlotEditor
-                slotKey="pdfModel"
-                slot={draft.pdfModel}
-                availableModels={availableModels}
-                optional
-                onChange={(nextSlot) => updateSlot('pdfModel', nextSlot)}
-              />
-              <ModelSlotEditor
                 slotKey="imageGenerationModel"
                 slot={draft.imageGenerationModel}
                 availableModels={availableModels}
@@ -430,6 +416,20 @@ export function ModelsSettingsSection() {
                 availableModels={availableModels}
                 optional
                 onChange={(nextSlot) => updateSlot('videoGenerationModel', nextSlot)}
+              />
+              <ModelSlotEditor
+                slotKey="imageModel"
+                slot={draft.imageModel}
+                availableModels={availableModels}
+                optional
+                onChange={(nextSlot) => updateSlot('imageModel', nextSlot)}
+              />
+              <ModelSlotEditor
+                slotKey="pdfModel"
+                slot={draft.pdfModel}
+                availableModels={availableModels}
+                optional
+                onChange={(nextSlot) => updateSlot('pdfModel', nextSlot)}
               />
             </div>
           )}

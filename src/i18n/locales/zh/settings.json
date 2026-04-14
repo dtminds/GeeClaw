@@ -329,7 +329,7 @@
   },
   "agentModels": {
     "title": "模型配置",
-    "description": "为聊天、视觉理解、PDF、生图和生视频选择 GeeClaw 要使用的模型。",
+    "description": "为聊天、生图、生视频、视觉理解和 PDF 选择 GeeClaw 要使用的模型。",
     "primary": "默认模型",
     "fallbacks": "备用模型",
     "none": "未配置",
@@ -354,19 +354,19 @@
     "sections": {
       "model": {
         "title": "聊天模型",
-        "description": "普通聊天必需。如果这里为空，GeeClaw 可以进入聊天页，但不能发送消息。",
+        "description": "和 Agent 交流的核心模型，必须正确配置，不可缺失",
         "fallbackHelp": "只有当主聊天模型不可用时，才会尝试这些备用模型。"
       },
       "imageModel": {
-        "title": "视觉模型",
-        "description": "用于图片理解和多模态推理，在需要专门视觉模型时使用。",
+        "title": "视觉理解模型",
+        "description": "用于图片理解和多模态推理，在需要专门视觉理解模型时使用。",
         "autoHelp": "自动模式不会写入这一段，让 OpenClaw 回退到默认聊天模型链路。",
-        "fallbackHelp": "主视觉模型失败后，会继续尝试这些备用模型。"
+        "fallbackHelp": "主视觉理解模型失败后，会继续尝试这些备用模型。"
       },
       "pdfModel": {
         "title": "PDF 模型",
         "description": "用于 PDF 专用理解场景，在需要专门文档模型时使用。",
-        "autoHelp": "自动模式不会写入这一段。OpenClaw 会先回退到视觉模型，再回退到聊天模型。",
+        "autoHelp": "自动模式不会写入这一段。OpenClaw 会先回退到视觉理解模型，再回退到聊天模型。",
         "fallbackHelp": "主 PDF 模型失败后，会继续尝试这些备用模型。"
       },
       "imageGenerationModel": {

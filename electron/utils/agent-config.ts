@@ -66,14 +66,9 @@ interface AgentModelConfig {
   [key: string]: unknown;
 }
 
-interface AgentModelRegistryEntry extends Record<string, unknown> {
-  alias?: string;
-}
-
 interface AgentDefaultsConfig {
   workspace?: string;
   model?: string | AgentModelConfig;
-  models?: Record<string, AgentModelRegistryEntry>;
   imageModel?: string | AgentModelConfig;
   pdfModel?: string | AgentModelConfig;
   imageGenerationModel?: string | AgentModelConfig;
@@ -974,55 +969,6 @@ function validateAgentModelSlot(
   };
 }
 
-function createModelAliasBase(modelRef: string): string {
-  const tail = modelRef.split('/').pop() || modelRef;
-  const normalized = tail.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return normalized || 'model';
-}
-
-function ensureDefaultModelRegistry(
-  defaults: AgentDefaultsConfig,
-  referencedModelRefs: string[],
-): void {
-  const existing = (
-    defaults.models && typeof defaults.models === 'object' && !Array.isArray(defaults.models)
-      ? { ...defaults.models }
-      : {}
-  ) as Record<string, AgentModelRegistryEntry>;
-
-  const usedAliases = new Set(
-    Object.values(existing)
-      .map((entry) => (entry && typeof entry.alias === 'string' ? entry.alias.trim() : ''))
-      .filter(Boolean),
-  );
-
-  for (const modelRef of referencedModelRefs) {
-    const current = existing[modelRef];
-    if (current && typeof current.alias === 'string' && current.alias.trim()) {
-      continue;
-    }
-
-    const baseAlias = createModelAliasBase(modelRef);
-    let alias = baseAlias;
-    let suffix = 2;
-    while (usedAliases.has(alias)) {
-      alias = `${baseAlias}-${suffix}`;
-      suffix += 1;
-    }
-    usedAliases.add(alias);
-    existing[modelRef] = {
-      ...(current && typeof current === 'object' ? current : {}),
-      alias,
-    };
-  }
-
-  if (Object.keys(existing).length > 0) {
-    defaults.models = existing;
-  } else {
-    delete defaults.models;
-  }
-}
-
 function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
   return normalizeProviderModelList(
     (getProviderRegistryConfig(providerId)?.models ?? []).map((model) => {
@@ -1552,21 +1498,7 @@ export async function updateDefaultAgentModelConfig(
     }
   }
 
-  ensureDefaultModelRegistry(
-    defaults,
-    normalizeProviderModelList([
-      model.primary,
-      ...model.fallbacks,
-      imageModel.primary,
-      ...imageModel.fallbacks,
-      pdfModel.primary,
-      ...pdfModel.fallbacks,
-      imageGenerationModel.primary,
-      ...imageGenerationModel.fallbacks,
-      videoGenerationModel.primary,
-      ...videoGenerationModel.fallbacks,
-    ]),
-  );
+  delete defaults.models;
 
   config.agents = {
     ...(config.agents && typeof config.agents === 'object' ? (config.agents as AgentsConfig) : {}),

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelsSettingsSection } from '@/components/settings/ModelsSettingsSection';
 
@@ -91,6 +91,26 @@ describe('ModelsSettingsSection', () => {
     expect(screen.getByTestId('model-slot-icon-pdfModel')).toBeInTheDocument();
     expect(screen.getByTestId('model-slot-icon-imageGenerationModel')).toBeInTheDocument();
     expect(screen.getByTestId('model-slot-icon-videoGenerationModel')).toBeInTheDocument();
+  });
+
+  it('renders model sections in the expected top-to-bottom order', async () => {
+    const { container } = render(<ModelsSettingsSection />);
+
+    await screen.findByTestId('model-slot-icon-model');
+
+    const icons = [
+      container.querySelector('[data-testid="model-slot-icon-model"]'),
+      container.querySelector('[data-testid="model-slot-icon-imageGenerationModel"]'),
+      container.querySelector('[data-testid="model-slot-icon-videoGenerationModel"]'),
+      container.querySelector('[data-testid="model-slot-icon-imageModel"]'),
+      container.querySelector('[data-testid="model-slot-icon-pdfModel"]'),
+    ];
+
+    expect(icons.every(Boolean)).toBe(true);
+    expect((icons[0] as HTMLElement).compareDocumentPosition(icons[1] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((icons[1] as HTMLElement).compareDocumentPosition(icons[2] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((icons[2] as HTMLElement).compareDocumentPosition(icons[3] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect((icons[3] as HTMLElement).compareDocumentPosition(icons[4] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('uses the model ref prompt as a placeholder instead of a selectable option', async () => {
@@ -188,6 +208,79 @@ describe('ModelsSettingsSection', () => {
     expect(fallbackTrigger).toHaveTextContent('openai/gpt-5.4-mini, openai/o3, openai/o4-mini');
     expect(screen.queryAllByText('3')).toHaveLength(0);
     expect(fourthFallback).toHaveAttribute('data-disabled');
+  });
+
+  it('saves optional slots as automatic mode when switched back from custom', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return {
+          model: {
+            configured: true,
+            primary: 'openai/gpt-5.4',
+            fallbacks: [],
+          },
+          imageModel: {
+            configured: false,
+            primary: null,
+            fallbacks: [],
+          },
+          pdfModel: {
+            configured: false,
+            primary: null,
+            fallbacks: [],
+          },
+          imageGenerationModel: {
+            configured: true,
+            primary: 'openai/gpt-image-1',
+            fallbacks: [],
+          },
+          videoGenerationModel: {
+            configured: false,
+            primary: null,
+            fallbacks: [],
+          },
+          availableModels: [
+            {
+              providerId: 'openai',
+              providerName: 'OpenAI',
+              modelRefs: ['openai/gpt-5.4', 'openai/gpt-image-1'],
+            },
+          ],
+        };
+      }
+
+      return {
+        ...JSON.parse(String(init.body)),
+        availableModels: [
+          {
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            modelRefs: ['openai/gpt-5.4', 'openai/gpt-image-1'],
+          },
+        ],
+      };
+    });
+
+    render(<ModelsSettingsSection />);
+
+    const imageGenerationModeGroup = await screen.findByRole('group', { name: 'agentModels.sections.imageGenerationModel.title' });
+
+    fireEvent.click(within(imageGenerationModeGroup).getByRole('button', { name: 'agentModels.mode.auto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'agentModels.save' }));
+
+    await screen.findByRole('button', { name: 'agentModels.save' });
+
+    expect(hostApiFetchMock).toHaveBeenLastCalledWith('/api/agents/default-model', expect.objectContaining({
+      method: 'PUT',
+      body: expect.any(String),
+    }));
+    expect(JSON.parse(hostApiFetchMock.mock.lastCall?.[1]?.body as string)).toMatchObject({
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+    });
   });
 
   it('clears fallback models when the primary model is removed', async () => {

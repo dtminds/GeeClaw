@@ -65,6 +65,9 @@ function sanitizeAgentListEntry(entry: Record<string, unknown>): Record<string, 
 
 function sanitizeStoredAgentsConfig(agents: Record<string, unknown>): Record<string, unknown> {
   const nextAgents = cloneValue(agents);
+  if (nextAgents.defaults && typeof nextAgents.defaults === 'object') {
+    delete (nextAgents.defaults as Record<string, unknown>).models;
+  }
   if (Array.isArray(nextAgents.list)) {
     nextAgents.list = nextAgents.list
       .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
@@ -171,11 +174,6 @@ function applyStoredAgentRuntimeConfig(
         : {}
     ) as Record<string, unknown>;
     const stored = cloneValue(storedAgents);
-    const existingDefaults = (
-      currentAgents.defaults && typeof currentAgents.defaults === 'object'
-        ? cloneValue(currentAgents.defaults as Record<string, unknown>)
-        : {}
-    ) as Record<string, unknown>;
     const storedDefaults = (
       stored.defaults && typeof stored.defaults === 'object'
         ? cloneValue(stored.defaults as Record<string, unknown>)
@@ -183,7 +181,7 @@ function applyStoredAgentRuntimeConfig(
     ) as Record<string, unknown>;
 
     const nextAgents = { ...currentAgents };
-    const nextDefaults = { ...existingDefaults, ...storedDefaults };
+    const nextDefaults = { ...storedDefaults };
     const migratedMainWorkspace = readLegacyMainWorkspace(
       Array.isArray(stored.list)
         ? stored.list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')

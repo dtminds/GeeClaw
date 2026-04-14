@@ -329,7 +329,7 @@
   },
   "agentModels": {
     "title": "Model Config",
-    "description": "Choose which models GeeClaw should use for chat, vision, PDF, image generation, and video generation.",
+    "description": "Choose which models GeeClaw should use for chat, image generation, video generation, vision understanding, and PDF.",
     "primary": "Primary Model",
     "fallbacks": "Fallback Models",
     "none": "Not configured",
@@ -358,15 +358,15 @@
         "fallbackHelp": "Fallbacks are used only when the primary chat model is unavailable."
       },
       "imageModel": {
-        "title": "Vision Model",
-        "description": "Used for image understanding and multimodal reasoning when GeeClaw needs a dedicated vision-capable model.",
+        "title": "Vision Understanding Model",
+        "description": "Used for image understanding and multimodal reasoning when GeeClaw needs a dedicated vision understanding model.",
         "autoHelp": "Automatic mode omits this section and lets OpenClaw fall back to the default chat model chain.",
-        "fallbackHelp": "Fallbacks are attempted after the primary vision model."
+        "fallbackHelp": "Fallbacks are attempted after the primary vision understanding model."
       },
       "pdfModel": {
         "title": "PDF Model",
         "description": "Used for PDF-specific understanding when you want a dedicated model for documents.",
-        "autoHelp": "Automatic mode omits this section. OpenClaw falls back to the Vision Model, then to the Chat Model.",
+        "autoHelp": "Automatic mode omits this section. OpenClaw falls back to the Vision Understanding Model, then to the Chat Model.",
         "fallbackHelp": "Fallbacks are attempted after the primary PDF model."
       },
       "imageGenerationModel": {

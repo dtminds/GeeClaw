@@ -1036,7 +1036,6 @@ describe('managed agent config domain', () => {
       agents?: {
         defaults?: {
           workspace?: string;
-          models?: Record<string, { alias?: string }>;
           model?: { primary?: string; fallbacks?: string[] };
           imageModel?: { primary?: string; fallbacks?: string[] };
           pdfModel?: { primary?: string; fallbacks?: string[] };
@@ -1060,12 +1059,7 @@ describe('managed agent config domain', () => {
       fallbacks: [],
     });
     expect(config.agents?.defaults?.videoGenerationModel).toBeUndefined();
-    expect(config.agents?.defaults?.models).toEqual(expect.objectContaining({
-      'openai/gpt-5.4': expect.objectContaining({ alias: expect.any(String) }),
-      'openai/gpt-5.4-mini': expect.objectContaining({ alias: expect.any(String) }),
-      'openrouter/qwen/qwen-2.5-vl-72b-instruct:free': expect.objectContaining({ alias: expect.any(String) }),
-      'openai/gpt-image-1': expect.objectContaining({ alias: expect.any(String) }),
-    }));
+    expect(config.agents?.defaults).not.toHaveProperty('models');
   });
 
   it('clears active managed restrictions after unmanage', async () => {
