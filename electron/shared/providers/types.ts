@@ -39,6 +39,8 @@ export type ProviderProtocol =
   | 'openai-responses'
   | 'anthropic-messages';
 
+export type ProviderModelInputModality = 'text' | 'image';
+
 export type ProviderAuthMode =
   | 'api_key'
   | 'oauth_device'
@@ -57,7 +59,7 @@ export interface ProviderConfig {
   type: ProviderType;
   baseUrl?: string;
   apiProtocol?: ProviderProtocol;
-  models?: string[];
+  models?: ProviderConfiguredModel[];
   /** @deprecated legacy single-model field kept for migration compatibility */
   model?: string;
   /** @deprecated legacy provider-level fallback field kept for migration compatibility */
@@ -100,7 +102,13 @@ export interface ProviderTypeInfo {
 export interface ProviderModelEntry extends Record<string, unknown> {
   id: string;
   name: string;
+  reasoning?: boolean;
+  input?: ProviderModelInputModality[];
+  contextWindow?: number;
+  maxTokens?: number;
 }
+
+export type ProviderConfiguredModel = string | ProviderModelEntry;
 
 export interface ProviderBackendConfig {
   baseUrl: string;
@@ -126,7 +134,7 @@ export interface ProviderAccount {
   authMode: ProviderAuthMode;
   baseUrl?: string;
   apiProtocol?: ProviderProtocol;
-  models?: string[];
+  models?: ProviderConfiguredModel[];
   /** @deprecated legacy single-model field kept for migration compatibility */
   model?: string;
   /** @deprecated legacy provider-level fallback field kept for migration compatibility */

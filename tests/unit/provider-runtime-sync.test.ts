@@ -48,6 +48,27 @@ describe('provider runtime model catalogs', () => {
     ]);
   });
 
+  it('extracts ids from structured provider model entries', () => {
+    const config = providerConfig({
+      models: [
+        { id: 'gpt-4.1', name: 'gpt-4.1', reasoning: false, input: ['text'] },
+        { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini', reasoning: false, input: ['text', 'image'] },
+        { id: 'geekai/gpt-4.1-nano', name: 'geekai/gpt-4.1-nano', reasoning: false },
+      ],
+    });
+
+    expect(getProviderCatalogModelRefs(config)).toEqual([
+      'geekai/gpt-4.1',
+      'geekai/gpt-4.1-mini',
+      'geekai/gpt-4.1-nano',
+    ]);
+    expect(getProviderCatalogModelIds(config)).toEqual([
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+    ]);
+  });
+
   it('preserves existing multi-instance runtime provider keys', () => {
     expect(getOpenClawProviderKey('custom', 'custom-a1b2c3d4')).toBe('custom-a1b2c3d4');
     expect(getOpenClawProviderKey('ollama', 'ollama-a1b2c3d4')).toBe('ollama-a1b2c3d4');

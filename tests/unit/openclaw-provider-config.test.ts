@@ -260,6 +260,58 @@ describe('removeProviderFromOpenClaw', () => {
     expect(plugins.entries?.['minimax-portal-auth']).toBeUndefined();
   });
 
+  it('writes structured provider model metadata into openclaw.json', async () => {
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('openrouter', [
+      {
+        id: 'google/gemini-3-flash-preview',
+        name: 'google/gemini-3-flash-preview',
+        reasoning: false,
+        input: ['text', 'image'],
+        contextWindow: 1048576,
+        maxTokens: 65536,
+      },
+      {
+        id: 'openai/gpt-5.4',
+        name: 'openai/gpt-5.4',
+        reasoning: false,
+        input: ['text'],
+      },
+    ], {
+      baseUrl: 'https://openrouter.ai/api/v1',
+      api: 'openai-completions',
+      apiKeyEnv: 'OPENROUTER_API_KEY',
+    });
+
+    const config = await readOpenClawJson();
+    const providers = ((config.models as { providers?: Record<string, unknown> })?.providers ?? {}) as Record<string, {
+      baseUrl?: string;
+      api?: string;
+      models?: Array<Record<string, unknown>>;
+    }>;
+
+    expect(providers.openrouter).toMatchObject({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      api: 'openai-completions',
+    });
+    expect(providers.openrouter?.models).toEqual([
+      {
+        id: 'google/gemini-3-flash-preview',
+        name: 'google/gemini-3-flash-preview',
+        reasoning: false,
+        input: ['text', 'image'],
+        contextWindow: 1048576,
+        maxTokens: 65536,
+      },
+      {
+        id: 'openai/gpt-5.4',
+        name: 'openai/gpt-5.4',
+        reasoning: false,
+      },
+    ]);
+  });
+
   it('maps MiniMax OAuth default-model writes to the canonical minimax plugin id', async () => {
     await writeOpenClawJson({
       plugins: {

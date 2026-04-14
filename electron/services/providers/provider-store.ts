@@ -1,5 +1,5 @@
 import type { ProviderAccount, ProviderConfig, ProviderType } from '../../shared/providers/types';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import { getConfiguredProviderModelEntries } from '../../shared/providers/config-models';
 import { getProviderDefinition } from '../../shared/providers/registry';
 import { getGeeClawProviderStore } from './store-instance';
 
@@ -31,7 +31,7 @@ export function providerConfigToAccount(
     apiProtocol: config.apiProtocol || (config.type === 'custom' || config.type === 'ollama'
       ? 'openai-completions'
       : getProviderDefinition(config.type)?.providerConfig?.api),
-    models: getConfiguredProviderModels(config),
+    models: getConfiguredProviderModelEntries(config),
     model: config.model,
     fallbackModels: config.fallbackModels,
     fallbackAccountIds: config.fallbackProviderIds,
@@ -49,7 +49,7 @@ export function providerAccountToConfig(account: ProviderAccount): ProviderConfi
     type: account.vendorId,
     baseUrl: account.baseUrl,
     apiProtocol: account.apiProtocol,
-    models: getConfiguredProviderModels(account),
+    models: getConfiguredProviderModelEntries(account),
     model: account.model,
     fallbackModels: account.fallbackModels,
     fallbackProviderIds: account.fallbackAccountIds,

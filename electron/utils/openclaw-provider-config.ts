@@ -19,6 +19,8 @@ import {
   discoverOpenClawAgentIds,
   removeProviderProfilesFromOpenClaw,
 } from './openclaw-auth';
+import type { ProviderConfiguredModel } from '../shared/providers/types';
+import { normalizeProviderModelEntries } from '../shared/providers/config-models';
 
 function getOAuthPluginBinding(provider: string): { activeId: string; legacyIds: string[] } {
   if (provider === 'minimax-portal') {
@@ -251,7 +253,7 @@ type ProviderEntryBuildOptions = {
   apiKeyEnv?: string;
   headers?: Record<string, string>;
   authHeader?: boolean;
-  modelIds?: string[];
+  models?: ProviderConfiguredModel[];
   includeRegistryModels?: boolean;
   mergeExistingModels?: boolean;
 };
@@ -275,18 +277,26 @@ function extractFallbackModelIds(provider: string, fallbackModels: string[]): st
 function mergeProviderModels(
   ...groups: Array<Array<Record<string, unknown>>>
 ): Array<Record<string, unknown>> {
-  const merged: Array<Record<string, unknown>> = [];
-  const seen = new Set<string>();
+  const mergedById = new Map<string, Record<string, unknown>>();
+  const orderedIds: string[] = [];
 
   for (const group of groups) {
     for (const item of group) {
       const id = typeof item?.id === 'string' ? item.id : '';
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      merged.push(item);
+      if (!id) continue;
+      if (!mergedById.has(id)) {
+        orderedIds.push(id);
+      }
+      mergedById.set(id, {
+        ...(mergedById.get(id) ?? {}),
+        ...item,
+      });
     }
   }
-  return merged;
+
+  return orderedIds
+    .map((id) => mergedById.get(id))
+    .filter((item): item is Record<string, unknown> => Boolean(item));
 }
 
 function withDefaultModelFlags(model: Record<string, unknown>): Record<string, unknown> {
@@ -298,6 +308,19 @@ function withDefaultModelFlags(model: Record<string, unknown>): Record<string, u
     ...model,
     reasoning: false,
   };
+}
+
+function normalizeRuntimeProviderModels(
+  models?: Iterable<ProviderConfiguredModel | null | undefined>,
+): Array<Record<string, unknown>> {
+  return normalizeProviderModelEntries(models).map((model) => ({
+    id: model.id,
+    name: model.name,
+    reasoning: typeof model.reasoning === 'boolean' ? model.reasoning : false,
+    ...(model.input ? { input: model.input } : {}),
+    ...(typeof model.contextWindow === 'number' ? { contextWindow: model.contextWindow } : {}),
+    ...(typeof model.maxTokens === 'number' ? { maxTokens: model.maxTokens } : {}),
+  }));
 }
 
 function upsertOpenClawProviderEntry(
@@ -320,7 +343,7 @@ function upsertOpenClawProviderEntry(
   const registryModels = options.includeRegistryModels
     ? ((getProviderConfig(provider)?.models ?? []).map((m) => withDefaultModelFlags({ ...m })) as Array<Record<string, unknown>>)
     : [];
-  const runtimeModels = (options.modelIds ?? []).map((id) => withDefaultModelFlags({ id, name: id }));
+  const runtimeModels = normalizeRuntimeProviderModels(options.models).map((model) => withDefaultModelFlags(model));
 
   const nextProvider: Record<string, unknown> = {
     ...existingProvider,
@@ -376,7 +399,7 @@ function ensureMoonshotKimiWebSearchCnBaseUrl(config: Record<string, unknown>, p
 
 export async function syncProviderConfigToOpenClaw(
   provider: string,
-  modelIds: string[] = [],
+  models: ProviderConfiguredModel[] = [],
   override: RuntimeProviderConfigOverride
 ): Promise<void> {
   await mutateOpenClawConfigDocument<void>((config) => {
@@ -388,7 +411,7 @@ export async function syncProviderConfigToOpenClaw(
         api: override.api,
         apiKeyEnv: override.apiKeyEnv,
         headers: override.headers,
-        modelIds,
+        models,
         includeRegistryModels: true,
       });
     }
@@ -435,7 +458,7 @@ export async function setOpenClawDefaultModelWithOverride(
         apiKeyEnv: override.apiKeyEnv,
         headers: override.headers,
         authHeader: override.authHeader,
-        modelIds: [modelId, ...fallbackModelIds],
+        models: [modelId, ...fallbackModelIds],
       });
     }
 
@@ -492,7 +515,7 @@ export async function updateAgentModelProvider(
   entry: {
     baseUrl?: string;
     api?: string;
-    models?: Array<{ id: string; name: string; reasoning?: boolean }>;
+    models?: ProviderConfiguredModel[];
     apiKey?: string;
     authHeader?: boolean;
   }
@@ -520,14 +543,20 @@ export async function updateAgentModelProvider(
       ? (existing.models as Array<Record<string, unknown>>)
       : [];
 
-    const mergedModels = (entry.models ?? []).map((m) => {
+    const mergedModels = normalizeRuntimeProviderModels(entry.models).map((m) => {
       const prev = existingModels.find((e) => e.id === m.id);
-      return withDefaultModelFlags(prev ? { ...prev, id: m.id, name: m.name } : { ...m });
+      return withDefaultModelFlags(prev ? { ...prev, ...m } : { ...m });
     });
 
     if (entry.baseUrl !== undefined) existing.baseUrl = entry.baseUrl;
     if (entry.api !== undefined) existing.api = entry.api;
-    if (mergedModels.length > 0) existing.models = mergedModels;
+    if (entry.models !== undefined) {
+      if (mergedModels.length > 0) {
+        existing.models = mergedModels;
+      } else {
+        delete existing.models;
+      }
+    }
     if (entry.apiKey !== undefined) existing.apiKey = entry.apiKey;
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
 

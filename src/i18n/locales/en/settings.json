@@ -207,6 +207,35 @@
       "model": "Model Settings",
       "fallback": "Fallback Settings"
     },
+    "models": {
+      "addModel": "Add model",
+      "editModel": "Edit model",
+      "removeModel": "Remove model",
+      "empty": "No models added yet",
+      "help": "Add the models available under this provider so the model config page can reference them.",
+      "modalities": {
+        "text": "Text",
+        "image": "Image"
+      },
+      "contextWindowShort": "Context",
+      "maxTokensShort": "Max output",
+      "dialog": {
+        "addTitle": "Add model",
+        "editTitle": "Edit model",
+        "id": "Model name",
+        "advanced": "Advanced options",
+        "save": "Save",
+        "contextWindow": "Context Window",
+        "maxTokens": "Max Tokens",
+        "modalities": {
+          "title": "Supported modalities",
+          "text": "Text",
+          "textHint": "Enabled by default",
+          "image": "Image",
+          "imageHint": "Turn this on only if the model supports image understanding"
+        }
+      }
+    },
     "add": "Add Provider",
     "addAccount": "Add Account",
     "custom": "Custom",

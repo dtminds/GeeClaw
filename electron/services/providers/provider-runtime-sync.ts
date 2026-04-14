@@ -1,5 +1,9 @@
 import type { GatewayManager } from '../../gateway/manager';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import {
+  getConfiguredProviderModelEntries,
+  getConfiguredProviderModels,
+  normalizeProviderModelEntries,
+} from '../../shared/providers/config-models';
 import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from './provider-store';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
@@ -153,32 +157,46 @@ export function getProviderCatalogModelIds(config: ProviderConfig): string[] {
     ));
 }
 
-function getRegistryProviderModelIds(config: ProviderConfig): string[] {
-  return (getProviderConfig(config.type)?.models ?? [])
-    .map((model) => (typeof model?.id === 'string' ? model.id.trim() : ''))
-    .filter(Boolean);
+export function getProviderCatalogModelEntries(config: ProviderConfig) {
+  const providerKey = getOpenClawProviderKey(config.type, config.id);
+
+  return getConfiguredProviderModelEntries(config).map((model) => {
+    const normalizedId = model.id.startsWith(`${providerKey}/`)
+      ? model.id.slice(providerKey.length + 1)
+      : model.id;
+    const normalizedName = model.name === model.id
+      ? normalizedId
+      : model.name;
+
+    return {
+      ...model,
+      id: normalizedId,
+      name: normalizedName,
+    };
+  });
 }
 
-function getDeclaredProviderModelIds(config: ProviderConfig): string[] {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
-  const results: string[] = [];
-  const seen = new Set<string>();
+function getDeclaredProviderModelEntries(config: ProviderConfig) {
+  const registryModels = normalizeProviderModelEntries(getProviderConfig(config.type)?.models ?? []);
+  const configuredModels = getProviderCatalogModelEntries(config);
+  const mergedById = new Map<string, Record<string, unknown>>();
+  const orderedIds: string[] = [];
 
-  for (const modelId of [
-    ...getRegistryProviderModelIds(config),
-    ...getProviderCatalogModelIds(config),
-  ]) {
-    const normalized = modelId.startsWith(`${providerKey}/`)
-      ? modelId.slice(providerKey.length + 1)
-      : modelId;
-    if (!normalized || seen.has(normalized)) {
-      continue;
+  for (const group of [registryModels, configuredModels]) {
+    for (const model of group) {
+      if (!mergedById.has(model.id)) {
+        orderedIds.push(model.id);
+      }
+      mergedById.set(model.id, {
+        ...(mergedById.get(model.id) ?? {}),
+        ...model,
+      });
     }
-    seen.add(normalized);
-    results.push(normalized);
   }
 
-  return results;
+  return orderedIds
+    .map((id) => mergedById.get(id))
+    .filter((model): model is NonNullable<typeof model> => Boolean(model));
 }
 
 function scheduleGatewayRestart(
@@ -356,7 +374,7 @@ async function syncRuntimeProviderConfig(
 ): Promise<void> {
   await syncProviderConfigToOpenClaw(
     context.runtimeProviderKey,
-    getProviderCatalogModelIds(config),
+    getProviderCatalogModelEntries(config),
     {
       baseUrl: normalizeProviderBaseUrl(config, config.baseUrl || context.meta?.baseUrl, context.api),
       api: context.api,
@@ -372,7 +390,7 @@ async function syncAgentProviderModelCatalog(
   context: RuntimeProviderSyncContext,
   apiKey: string | undefined,
 ): Promise<void> {
-  const models = getDeclaredProviderModelIds(config).map((id) => ({ id, name: id, reasoning: false }));
+  const models = getDeclaredProviderModelEntries(config);
   const baseUrl = normalizeProviderBaseUrl(
     config,
     config.baseUrl || context.meta?.baseUrl,
@@ -611,13 +629,12 @@ export async function syncDefaultProviderToRuntime(
     }
 
     try {
-      const models = getProviderCatalogModelIds(provider).map((id) => ({ id, name: id, reasoning: false }));
       await updateAgentModelProvider(targetProviderKey, {
         baseUrl,
         api,
         authHeader: true,
         apiKey: 'minimax-oauth',
-        models,
+        models: getDeclaredProviderModelEntries(provider),
       });
     } catch (err) {
       logger.warn(`Failed to update models.json for OAuth provider "${targetProviderKey}":`, err);

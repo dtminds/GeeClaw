@@ -16,6 +16,8 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     category: 'official',
     envVar: 'ANTHROPIC_API_KEY',
     defaultModelId: 'claude-opus-4-6',
+    showModelId: true,
+    showModelIdInDevModeOnly: true,
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
     supportsMultipleAccounts: true,

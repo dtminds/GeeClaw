@@ -13,6 +13,8 @@ import {
   ExternalLink,
   Copy,
   XCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +35,13 @@ import {
   type ProviderType,
   type ProviderTypeInfo,
   getProviderIconUrl,
+  getConfiguredProviderModelEntries,
   getConfiguredProviderModels,
-  normalizeProviderModelList,
+  providerModelEntriesEqual,
   resolveProviderApiKeyForSave,
   shouldShowProviderModelId,
   shouldInvertInDark,
+  type ProviderModelEntry,
 } from '@/lib/providers';
 import {
   buildProviderAccountId,
@@ -53,7 +57,13 @@ import { useSettingsStore } from '@/stores/settings';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
 import { normalizeOAuthFlowPayload, type OAuthFlowData } from '@/lib/oauth-flow';
-import { Delete02Icon } from '@hugeicons/core-free-icons';
+import {
+  AddCircleIcon,
+  Delete02Icon,
+  FileEditIcon,
+  Image02Icon,
+  TextSquareIcon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
 function getProtocolBaseUrlPlaceholder(
@@ -65,28 +75,42 @@ function getProtocolBaseUrlPlaceholder(
   return 'https://api.example.com/v1';
 }
 
-function providerModelsEqual(a?: string[], b?: string[]): boolean {
-  const left = normalizeProviderModelList(a);
-  const right = normalizeProviderModelList(b);
-  return left.length === right.length && left.every((model, index) => model === right[index]);
-}
-
 type CodePlanMode = 'apikey' | 'codeplan';
+
+function createProviderModelEntry(
+  id: string,
+  options?: {
+    supportsImage?: boolean;
+    contextWindow?: number;
+    maxTokens?: number;
+  },
+): ProviderModelEntry {
+  const normalizedId = id.trim();
+  return {
+    id: normalizedId,
+    name: normalizedId,
+    reasoning: false,
+    ...(options?.supportsImage ? { input: ['text', 'image'] as const } : {}),
+    ...(typeof options?.contextWindow === 'number' ? { contextWindow: options.contextWindow } : {}),
+    ...(typeof options?.maxTokens === 'number' ? { maxTokens: options.maxTokens } : {}),
+  };
+}
 
 function getProviderDraftState(
   account: ProviderAccount,
   configuredModels: string[],
+  configuredModelEntries: ProviderModelEntry[],
   typeInfo?: ProviderTypeInfo,
 ): {
   baseUrl: string;
   apiProtocol: ProviderAccount['apiProtocol'];
-  modelsText: string;
+  modelEntries: ProviderModelEntry[];
   arkMode: CodePlanMode;
 } {
   return {
     baseUrl: account.baseUrl || '',
     apiProtocol: account.apiProtocol || 'openai-completions',
-    modelsText: configuredModels.join('\n'),
+    modelEntries: configuredModelEntries,
     arkMode: isProviderCodePlanMode(
       account.baseUrl,
       configuredModels,
@@ -114,74 +138,288 @@ function getAuthModeLabel(
   }
 }
 
-function ProviderModelListEditor(props: {
-  value: string[];
-  placeholder: string;
-  helpText: string;
-  buttonLabel: string;
-  onChange: (next: string[]) => void;
-}) {
-  const [pendingValue, setPendingValue] = useState('');
+type ProviderModelDialogState = {
+  mode: 'add' | 'edit';
+  index: number | null;
+  model?: ProviderModelEntry;
+};
 
-  const handleAdd = () => {
-    const nextValue = pendingValue.trim();
-    if (!nextValue) {
-      return;
+function ProviderModelDialog(props: {
+  title: string;
+  placeholder: string;
+  initialValue?: ProviderModelEntry;
+  onClose: () => void;
+  onSave: (next: ProviderModelEntry) => void;
+}) {
+  const { t } = useTranslation('settings');
+  const [modelId, setModelId] = useState(props.initialValue?.id ?? '');
+  const [supportsImage, setSupportsImage] = useState(props.initialValue?.input?.includes('image') ?? false);
+  const [advancedOpen, setAdvancedOpen] = useState(
+    typeof props.initialValue?.contextWindow === 'number'
+    || typeof props.initialValue?.maxTokens === 'number',
+  );
+  const [contextWindow, setContextWindow] = useState(
+    typeof props.initialValue?.contextWindow === 'number' ? String(props.initialValue.contextWindow) : '',
+  );
+  const [maxTokens, setMaxTokens] = useState(
+    typeof props.initialValue?.maxTokens === 'number' ? String(props.initialValue.maxTokens) : '',
+  );
+
+  const parseOptionalPositiveInteger = (value: string): number | undefined => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
     }
-    props.onChange(normalizeProviderModelList([...props.value, nextValue]));
-    setPendingValue('');
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   };
 
-  const handleRemove = (modelId: string) => {
-    props.onChange(props.value.filter((value) => value !== modelId));
+  const handleSave = () => {
+    const nextId = modelId.trim();
+    if (!nextId) {
+      return;
+    }
+
+    props.onSave(createProviderModelEntry(nextId, {
+      supportsImage,
+      contextWindow: parseOptionalPositiveInteger(contextWindow),
+      maxTokens: parseOptionalPositiveInteger(maxTokens),
+    }));
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {props.value.map((modelId) => (
-          <span
-            key={modelId}
-            className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-black/[0.04] px-3 py-1.5 font-mono text-[12px] text-foreground dark:border-white/10 dark:bg-white/[0.06]"
-          >
-            {modelId}
-            <button
-              type="button"
-              onClick={() => handleRemove(modelId)}
-              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-foreground"
-              aria-label={`Remove ${modelId}`}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          value={pendingValue}
-          onChange={(event) => setPendingValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              handleAdd();
-            }
-          }}
-          placeholder={props.placeholder}
-          className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          className="surface-hover rounded-full border-black/10 px-4 dark:border-white/10"
-          onClick={handleAdd}
-          disabled={!pendingValue.trim()}
+    createPortal(
+      <div className="overlay-backdrop fixed inset-0 z-[160] flex items-center justify-center p-4">
+        <Card
+          role="dialog"
+          aria-label={props.title}
+          className="modal-card-surface w-full max-w-xl rounded-3xl border shadow-2xl"
         >
-          {props.buttonLabel}
-        </Button>
+          <CardHeader className="relative pb-2">
+            <CardTitle className="modal-title">{props.title}</CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="modal-close-button absolute right-4 top-4 -mr-2 -mt-2"
+              onClick={props.onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5 p-6 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="provider-model-id" className="text-[14px] font-bold text-foreground/80">
+                {t('aiProviders.models.dialog.id')}
+              </Label>
+              <Input
+                id="provider-model-id"
+                value={modelId}
+                onChange={(event) => setModelId(event.target.value)}
+                placeholder={props.placeholder}
+                className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-[14px] font-bold text-foreground/80">{t('aiProviders.models.dialog.modalities.title')}</p>
+              <div className="flex items-center gap-3">
+                <label className="cursor-default">
+                  <input
+                    type="checkbox"
+                    checked
+                    disabled
+                    aria-label={t('aiProviders.models.dialog.modalities.text')}
+                    className="sr-only"
+                  />
+                  <span className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-black/15 bg-black/[0.08] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] dark:border-white/15 dark:bg-white/[0.12]">
+                    <HugeiconsIcon icon={TextSquareIcon} className="h-5 w-5" />
+                    <span className="absolute right-1 top-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-foreground text-background">
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                  </span>
+                </label>
+                <label className="cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={supportsImage}
+                    onChange={(event) => setSupportsImage(event.target.checked)}
+                    aria-label={t('aiProviders.models.dialog.modalities.image')}
+                    className="sr-only"
+                  />
+                  <span
+                    className={cn(
+                      'relative inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors',
+                      supportsImage
+                        ? 'border-black/15 bg-black/[0.08] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] dark:border-white/15 dark:bg-white/[0.12]'
+                        : 'border-black/8 bg-transparent text-muted-foreground hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/[0.05]',
+                    )}
+                  >
+                    <HugeiconsIcon icon={Image02Icon} className="h-5 w-5" />
+                    {supportsImage ? (
+                      <span className="absolute right-1 top-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-foreground text-background">
+                        <Check className="h-2.5 w-2.5" />
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 text-[13px] font-medium text-info hover:opacity-80"
+                onClick={() => setAdvancedOpen((value) => !value)}
+              >
+                {advancedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {t('aiProviders.models.dialog.advanced')}
+              </button>
+              {advancedOpen ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="provider-model-context-window" className="text-[13px] text-muted-foreground">
+                      {t('aiProviders.models.dialog.contextWindow')}
+                    </Label>
+                    <Input
+                      id="provider-model-context-window"
+                      value={contextWindow}
+                      onChange={(event) => setContextWindow(event.target.value)}
+                      inputMode="numeric"
+                      placeholder="200000"
+                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="provider-model-max-tokens" className="text-[13px] text-muted-foreground">
+                      {t('aiProviders.models.dialog.maxTokens')}
+                    </Label>
+                    <Input
+                      id="provider-model-max-tokens"
+                      value={maxTokens}
+                      onChange={(event) => setMaxTokens(event.target.value)}
+                      inputMode="numeric"
+                      placeholder="65536"
+                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="modal-footer">
+              <Button type="button" variant="ghost" className="modal-secondary-button shadow-none" onClick={props.onClose}>
+                {t('aiProviders.dialog.cancel')}
+              </Button>
+              <Button
+                type="button"
+                className="modal-primary-button shadow-none"
+                onClick={handleSave}
+                disabled={!modelId.trim()}
+              >
+                {t('aiProviders.models.dialog.save')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    )
+  );
+}
+
+function ProviderModelConfigSection(props: {
+  title: string;
+  emptyLabel: string;
+  models: ProviderModelEntry[];
+  providerType?: ProviderType | string;
+  providerEmoji?: string;
+  onAdd: () => void;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
+}) {
+  const { t } = useTranslation('settings');
+  const providerIconUrl = props.providerType ? getProviderIconUrl(props.providerType) : undefined;
+  const invertProviderIcon = props.providerType ? shouldInvertInDark(props.providerType) : false;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[14px] font-bold text-foreground/80">{props.title}</p>
+        <button
+          type="button"
+          onClick={props.onAdd}
+          aria-label={t('aiProviders.models.addModel')}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <HugeiconsIcon icon={AddCircleIcon} className="h-4 w-4" />
+        </button>
       </div>
-      <p className="text-[12px] text-muted-foreground">
-        {props.helpText}
-      </p>
+
+      {props.models.length === 0 ? (
+        <div className="modal-field-surface rounded-2xl border border-dashed px-4 py-5 text-[13px] text-muted-foreground">
+          {props.emptyLabel}
+        </div>
+      ) : (
+        <div className="space-y-2 p-2 rounded-xl border border-black/8 bg-card dark:border-white/10">
+          {props.models.map((model, index) => (
+            <div
+              key={`${model.id}-${index}`}
+              className="flex items-center justify-between gap-4"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl">
+                  {providerIconUrl ? (
+                    <img
+                      src={providerIconUrl}
+                      alt=""
+                      className={cn('h-4 w-4', invertProviderIcon && 'dark:invert')}
+                    />
+                  ) : (
+                    <span className="text-[14px] leading-none">{props.providerEmoji || '⚙️'}</span>
+                  )}
+                </span>
+                <div className="flex min-w-0 items-center gap-1">
+                  <p className="truncate font-mono text-[13px] font-medium text-foreground">{model.id}</p>
+                  <span
+                    title={t('aiProviders.models.modalities.text')}
+                    className="inline-flex shrink-0 items-center justify-center text-foreground/70 dark:text-foreground/75"
+                  >
+                    <HugeiconsIcon icon={TextSquareIcon} className="h-4 w-4" />
+                  </span>
+                  {model.input?.includes('image') ? (
+                    <span
+                      title={t('aiProviders.models.modalities.image')}
+                      className="inline-flex shrink-0 items-center justify-center text-foreground/70 dark:text-foreground/75"
+                    >
+                      <HugeiconsIcon icon={Image02Icon} className="h-4 w-4" />
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => props.onEdit(index)}
+                  aria-label={t('aiProviders.models.editModel')}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
+                >
+                  <HugeiconsIcon icon={FileEditIcon} className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onDelete(index)}
+                  aria-label={t('aiProviders.models.removeModel')}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-destructive dark:hover:bg-white/[0.08]"
+                >
+                  <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[12px] text-muted-foreground">{t('aiProviders.models.help')}</p>
     </div>
   );
 }
@@ -335,7 +573,7 @@ export function ProvidersSettings() {
     apiKey: string,
     options?: {
       baseUrl?: string;
-      models?: string[];
+      models?: ProviderModelEntry[];
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
     }
@@ -353,7 +591,7 @@ export function ProvidersSettings() {
         apiProtocol: type === 'custom' || type === 'ollama'
           ? (options?.apiProtocol || 'openai-completions')
           : undefined,
-        models: normalizeProviderModelList(options?.models),
+        models: options?.models,
         enabled: true,
         isDefault: false,
         createdAt: new Date().toISOString(),
@@ -726,19 +964,27 @@ function ProviderCard({
     () => getConfiguredProviderModels(account),
     [account],
   );
+  const configuredModelEntries = useMemo(
+    () => getConfiguredProviderModelEntries(account),
+    [account],
+  );
   const typeInfo = PROVIDER_TYPE_INFO.find((provider) => provider.id === account.vendorId);
   const providerDocsUrl = getProviderDocsUrl(typeInfo, i18n.language);
   const showModelIdField = shouldShowProviderModelId(typeInfo, devModeUnlocked);
   const codePlanPreset = getProviderCodePlanPreset(typeInfo);
-  const draftState = getProviderDraftState(account, configuredModels, typeInfo);
+  const draftState = useMemo(
+    () => getProviderDraftState(account, configuredModels, configuredModelEntries, typeInfo),
+    [account, configuredModelEntries, configuredModels, typeInfo],
+  );
   const [newKey, setNewKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(draftState.baseUrl);
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>(draftState.apiProtocol);
-  const [modelsText, setModelsText] = useState(draftState.modelsText);
+  const [modelEntries, setModelEntries] = useState(draftState.modelEntries);
   const [showKey, setShowKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [arkMode, setArkMode] = useState<CodePlanMode>(draftState.arkMode);
+  const [modelDialogState, setModelDialogState] = useState<ProviderModelDialogState | null>(null);
   const [oauthFlowing, setOauthFlowing] = useState(false);
   const [oauthData, setOauthData] = useState<OAuthFlowData | null>(null);
   const [manualCodeInput, setManualCodeInput] = useState('');
@@ -765,19 +1011,15 @@ function ProviderCard({
   const hasConfiguredAuth = hasConfiguredCredentials(account, status);
   const oauthConfigured = usesOAuthAuth && account.authMode === selectedAuthMode && hasConfiguredAuth;
   const apiKeyConfigured = status?.hasKey ?? false;
-  const normalizedDraftModels = useMemo(
-    () => normalizeProviderModelList(modelsText.split('\n')),
-    [modelsText],
-  );
   const currentBaseUrl = account.baseUrl || undefined;
   const currentApiProtocol = account.apiProtocol || 'openai-completions';
   const hasBaseUrlChange = Boolean(typeInfo?.showBaseUrl) && (baseUrl.trim() || undefined) !== currentBaseUrl;
   const hasProtocolChange = canEditProtocol && apiProtocol !== currentApiProtocol;
-  const hasModelChange = showModelIdField && !providerModelsEqual(normalizedDraftModels, configuredModels);
+  const hasModelChange = showModelIdField && !providerModelEntriesEqual(modelEntries, configuredModelEntries);
   const authModeChangeNeedsSave = usesApiKeyAuth && account.authMode !== 'api_key';
   const missingApiKeyForModeSwitch = authModeChangeNeedsSave && !apiKeyConfigured && !newKey.trim();
   const hasPendingChanges = Boolean(newKey.trim()) || hasBaseUrlChange || hasProtocolChange || hasModelChange || authModeChangeNeedsSave;
-  const missingRequiredModel = showModelIdField && normalizedDraftModels.length === 0;
+  const missingRequiredModel = showModelIdField && modelEntries.length === 0;
   const hasEditableFields = canEditModelConfig || usesApiKeyAuth || authModeChangeNeedsSave;
   const headerLink = usesApiKeyAuth && typeInfo?.apiKeyUrl
     ? { href: typeInfo.apiKeyUrl, label: t('aiProviders.oauth.getApiKey') }
@@ -792,8 +1034,9 @@ function ProviderCard({
     setShowKey(false);
     setBaseUrl(draftState.baseUrl);
     setApiProtocol(draftState.apiProtocol);
-    setModelsText(draftState.modelsText);
+    setModelEntries(draftState.modelEntries);
     setArkMode(draftState.arkMode);
+    setModelDialogState(null);
     setOauthFlowing(false);
     setOauthData(null);
     setManualCodeInput('');
@@ -802,7 +1045,7 @@ function ProviderCard({
     draftState.apiProtocol,
     draftState.arkMode,
     draftState.baseUrl,
-    draftState.modelsText,
+    draftState.modelEntries,
   ]);
 
   useEffect(() => {
@@ -814,9 +1057,10 @@ function ProviderCard({
     setShowKey(false);
     setBaseUrl(draftState.baseUrl);
     setApiProtocol(draftState.apiProtocol);
-    setModelsText(draftState.modelsText);
+    setModelEntries(draftState.modelEntries);
     setArkMode(draftState.arkMode);
     setAuthModeSelection(account.authMode === 'api_key' ? 'apikey' : 'oauth');
+    setModelDialogState(null);
   };
 
   useEffect(() => {
@@ -967,7 +1211,7 @@ function ProviderCard({
         updates.apiProtocol = apiProtocol || 'openai-completions';
       }
       if (hasModelChange) {
-        updates.models = normalizedDraftModels;
+        updates.models = modelEntries;
       }
       if (authModeChangeNeedsSave) {
         updates.authMode = 'api_key';
@@ -1078,7 +1322,7 @@ function ProviderCard({
           )}
         </div>
 
-        {usesOAuthAuth && (
+      {usesOAuthAuth && (
           <section className={sectionClassName}>
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1223,12 +1467,12 @@ function ProviderCard({
           </section>
         )}
 
+
         {canEditModelConfig && (
           <section className={sectionClassName}>
-            <div className="space-y-3">
-              <p className="text-[14px] font-bold text-foreground/80">{t('aiProviders.sections.model')}</p>
+            <div className="space-y-4">
               {codePlanPreset && (
-                <div className="space-y-1.5 pt-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.codePlanPreset')}</Label>
                     {typeInfo?.codePlanDocsUrl && (
@@ -1250,15 +1494,15 @@ function ProviderCard({
                       if (nextMode === 'apikey') {
                         setArkMode('apikey');
                         setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                        if (normalizedDraftModels.length === 1 && normalizedDraftModels[0] === codePlanPreset.modelId) {
-                          setModelsText(typeInfo?.defaultModelId || '');
+                        if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
+                          setModelEntries(typeInfo?.defaultModelId ? [createProviderModelEntry(typeInfo.defaultModelId)] : []);
                         }
                         return;
                       }
 
                       setArkMode('codeplan');
                       setBaseUrl(codePlanPreset.baseUrl);
-                      setModelsText(codePlanPreset.modelId);
+                      setModelEntries([createProviderModelEntry(codePlanPreset.modelId)]);
                     }}
                     options={[
                       { value: 'apikey', label: t('aiProviders.authModes.apiKey') },
@@ -1330,17 +1574,18 @@ function ProviderCard({
                   </div>
                 </div>
               )}
-              {showModelIdField && (
-                <div className="space-y-1.5">
-                  <ProviderModelListEditor
-                    value={normalizedDraftModels}
-                    placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
-                    helpText={t('aiProviders.dialog.modelIdsHelp')}
-                    buttonLabel={t('aiProviders.dialog.addModel')}
-                    onChange={(nextModels) => setModelsText(nextModels.join('\n'))}
-                  />
-                </div>
-              )}
+              {showModelIdField ? (
+                <ProviderModelConfigSection
+                  title={t('aiProviders.sections.model')}
+                  emptyLabel={t('aiProviders.models.empty')}
+                  models={modelEntries}
+                  providerType={account.vendorId}
+                  providerEmoji={vendor?.icon || typeInfo?.icon}
+                  onAdd={() => setModelDialogState({ mode: 'add', index: null })}
+                  onEdit={(index) => setModelDialogState({ mode: 'edit', index, model: modelEntries[index] })}
+                  onDelete={(index) => setModelEntries((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                />
+              ) : null}
             </div>
           </section>
         )}
@@ -1425,6 +1670,40 @@ function ProviderCard({
           </div>
         )}
       </div>
+      {modelDialogState ? (
+        <ProviderModelDialog
+          title={t(
+            modelDialogState.mode === 'add'
+              ? 'aiProviders.models.dialog.addTitle'
+              : 'aiProviders.models.dialog.editTitle',
+          )}
+          placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
+          initialValue={modelDialogState.model}
+          onClose={() => setModelDialogState(null)}
+          onSave={(nextModel) => {
+            setModelEntries((current) => {
+              const nextEntries = [...current];
+              if (modelDialogState.mode === 'edit' && modelDialogState.index !== null) {
+                nextEntries[modelDialogState.index] = nextModel;
+              } else {
+                nextEntries.push(nextModel);
+              }
+
+              const dedupedEntries: ProviderModelEntry[] = [];
+              const seen = new Set<string>();
+              for (const entry of nextEntries) {
+                if (!entry.id || seen.has(entry.id)) {
+                  continue;
+                }
+                seen.add(entry.id);
+                dedupedEntries.push(entry);
+              }
+              return dedupedEntries;
+            });
+            setModelDialogState(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1440,7 +1719,7 @@ interface AddProviderDialogProps {
     apiKey: string,
     options?: {
       baseUrl?: string;
-      models?: string[];
+      models?: ProviderModelEntry[];
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
     }
@@ -1470,11 +1749,12 @@ function AddProviderDialog({
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>('openai-completions');
-  const [modelsText, setModelsText] = useState('');
+  const [modelEntries, setModelEntries] = useState<ProviderModelEntry[]>([]);
   const [arkMode, setArkMode] = useState<CodePlanMode>('apikey');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [modelDialogState, setModelDialogState] = useState<ProviderModelDialogState | null>(null);
 
   // OAuth Flow State
   const [oauthFlowing, setOauthFlowing] = useState(false);
@@ -1515,7 +1795,7 @@ function AddProviderDialog({
     setApiKey('');
     setBaseUrl(initialTypeInfo?.defaultBaseUrl || '');
     setApiProtocol('openai-completions');
-    setModelsText(initialTypeInfo?.defaultModelId || '');
+    setModelEntries(initialTypeInfo?.defaultModelId ? [createProviderModelEntry(initialTypeInfo.defaultModelId)] : []);
     setArkMode('apikey');
     setValidationError(null);
   }, [initialType, t]);
@@ -1699,9 +1979,8 @@ function AddProviderDialog({
         }
       }
 
-      const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
       const requiresModel = showModelIdField;
-      if (requiresModel && normalizedModels.length === 0) {
+      if (requiresModel && modelEntries.length === 0) {
         setValidationError(t('aiProviders.toast.modelRequired'));
         setSaving(false);
         return;
@@ -1716,7 +1995,7 @@ function AddProviderDialog({
           apiProtocol: selectedType === 'custom' || selectedType === 'ollama'
             ? apiProtocol
             : undefined,
-          models: normalizedModels,
+          models: modelEntries,
           authMode: useOAuthFlow ? (preferredOAuthMode || 'oauth_device') : selectedType === 'ollama'
             ? 'local'
             : (isOAuth && supportsApiKey && authMode === 'apikey')
@@ -1756,7 +2035,7 @@ function AddProviderDialog({
                     setName(type.id === 'custom' ? t('aiProviders.custom') : type.name);
                     setBaseUrl(type.defaultBaseUrl || '');
                     setApiProtocol('openai-completions');
-                    setModelsText(type.defaultModelId || '');
+                    setModelEntries(type.defaultModelId ? [createProviderModelEntry(type.defaultModelId)] : []);
                     setArkMode('apikey');
                   }}
                     className="surface-hover rounded-2xl border border-black/5 p-4 text-center transition-colors group dark:border-white/5"
@@ -1791,7 +2070,7 @@ function AddProviderDialog({
                         setValidationError(null);
                         setBaseUrl('');
                         setApiProtocol('openai-completions');
-                        setModelsText('');
+                        setModelEntries([]);
                         setArkMode('apikey');
                       }}
                       className="text-info text-[13px] font-medium hover:opacity-80"
@@ -1867,9 +2146,8 @@ function AddProviderDialog({
                         if (nextMode === 'apikey') {
                           setArkMode('apikey');
                           setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                          const normalizedModels = normalizeProviderModelList(modelsText.split('\n'));
-                          if (normalizedModels.length === 1 && normalizedModels[0] === codePlanPreset.modelId) {
-                            setModelsText(typeInfo?.defaultModelId || '');
+                          if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
+                            setModelEntries(typeInfo?.defaultModelId ? [createProviderModelEntry(typeInfo.defaultModelId)] : []);
                           }
                           setValidationError(null);
                           return;
@@ -1877,7 +2155,7 @@ function AddProviderDialog({
 
                         setArkMode('codeplan');
                         setBaseUrl(codePlanPreset.baseUrl);
-                        setModelsText(codePlanPreset.modelId);
+                        setModelEntries([createProviderModelEntry(codePlanPreset.modelId)]);
                         setValidationError(null);
                       }}
                       options={[
@@ -1973,21 +2251,6 @@ function AddProviderDialog({
                   </div>
                 )}
 
-                {showModelIdField && (
-                  <div className="space-y-2">
-                    <Label htmlFor="modelIds" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.modelIds')}</Label>
-                    <ProviderModelListEditor
-                      value={normalizeProviderModelList(modelsText.split('\n'))}
-                      placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
-                      helpText={t('aiProviders.dialog.modelIdsHelp')}
-                      buttonLabel={t('aiProviders.dialog.addModel')}
-                      onChange={(nextModels) => {
-                        setModelsText(nextModels.join('\n'));
-                        setValidationError(null);
-                      }}
-                    />
-                  </div>
-                )}
                 {/* Device OAuth Trigger — only shown when in OAuth mode */}
                 {useOAuthFlow && (
                   <div className="space-y-4 pt-2">
@@ -2118,6 +2381,19 @@ function AddProviderDialog({
                     )}
                   </div>
                 )}
+
+                {showModelIdField ? (
+                  <ProviderModelConfigSection
+                    title={t('aiProviders.sections.model')}
+                    emptyLabel={t('aiProviders.models.empty')}
+                    models={modelEntries}
+                    providerType={selectedType}
+                    providerEmoji={typeInfo?.icon}
+                    onAdd={() => setModelDialogState({ mode: 'add', index: null })}
+                    onEdit={(index) => setModelDialogState({ mode: 'edit', index, model: modelEntries[index] })}
+                    onDelete={(index) => setModelEntries((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                  />
+                ) : null}
               </div>
 
               <Separator className="separator-subtle" />
@@ -2126,7 +2402,7 @@ function AddProviderDialog({
                 <Button
                   onClick={handleAdd}
                   className={cn("modal-primary-button px-8", useOAuthFlow && "hidden")}
-                  disabled={!selectedType || saving || (showModelIdField && normalizeProviderModelList(modelsText.split('\n')).length === 0)}
+                  disabled={!selectedType || saving || (showModelIdField && modelEntries.length === 0)}
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -2138,6 +2414,41 @@ function AddProviderDialog({
           )}
         </CardContent>
       </Card>
+      {modelDialogState ? (
+        <ProviderModelDialog
+          title={t(
+            modelDialogState.mode === 'add'
+              ? 'aiProviders.models.dialog.addTitle'
+              : 'aiProviders.models.dialog.editTitle',
+          )}
+          placeholder={typeInfo?.modelIdPlaceholder || 'provider/model-id'}
+          initialValue={modelDialogState.model}
+          onClose={() => setModelDialogState(null)}
+          onSave={(nextModel) => {
+            setModelEntries((current) => {
+              const nextEntries = [...current];
+              if (modelDialogState.mode === 'edit' && modelDialogState.index !== null) {
+                nextEntries[modelDialogState.index] = nextModel;
+              } else {
+                nextEntries.push(nextModel);
+              }
+
+              const dedupedEntries: ProviderModelEntry[] = [];
+              const seen = new Set<string>();
+              for (const entry of nextEntries) {
+                if (!entry.id || seen.has(entry.id)) {
+                  continue;
+                }
+                seen.add(entry.id);
+                dedupedEntries.push(entry);
+              }
+              return dedupedEntries;
+            });
+            setValidationError(null);
+            setModelDialogState(null);
+          }}
+        />
+      ) : null}
     </div>,
     document.body,
   );

@@ -6,7 +6,7 @@
  */
 
 import { BUILTIN_PROVIDER_TYPES, type ProviderType } from './provider-registry';
-import type { ProviderProtocol } from '../shared/providers/types';
+import type { ProviderConfiguredModel, ProviderProtocol } from '../shared/providers/types';
 import { getActiveOpenClawProviders } from './openclaw-provider-config';
 import {
   deleteProviderAccount,
@@ -35,7 +35,7 @@ export interface ProviderConfig {
   type: ProviderType;
   baseUrl?: string;
   apiProtocol?: ProviderProtocol;
-  models?: string[];
+  models?: ProviderConfiguredModel[];
   /** @deprecated legacy single-model field kept for migration compatibility */
   model?: string;
   /** @deprecated legacy provider-level fallback field kept for migration compatibility */

@@ -1,0 +1,145 @@
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const updateAccountMock = vi.fn(async () => undefined);
+const refreshProviderSnapshotMock = vi.fn(async () => undefined);
+
+const providerState = {
+  statuses: [{
+    id: 'openrouter',
+    type: 'openrouter',
+    name: 'OpenRouter',
+    enabled: true,
+    createdAt: '2026-04-14T00:00:00.000Z',
+    updatedAt: '2026-04-14T00:00:00.000Z',
+    hasKey: true,
+    keyMasked: 'sk-o***1234',
+  }],
+  accounts: [{
+    id: 'openrouter',
+    vendorId: 'openrouter',
+    label: 'OpenRouter',
+    authMode: 'api_key' as const,
+    models: [],
+    enabled: true,
+    isDefault: false,
+    createdAt: '2026-04-14T00:00:00.000Z',
+    updatedAt: '2026-04-14T00:00:00.000Z',
+  }],
+  vendors: [{
+    id: 'openrouter',
+    name: 'OpenRouter',
+    icon: '🌐',
+    placeholder: 'sk-or-v1-...',
+    requiresApiKey: true,
+    showModelId: true,
+    modelIdPlaceholder: 'openai/gpt-5.4',
+    defaultAuthMode: 'api_key' as const,
+    supportedAuthModes: ['api_key'],
+    supportsMultipleAccounts: false,
+    category: 'compatible' as const,
+  }],
+  loading: false,
+  refreshProviderSnapshot: refreshProviderSnapshotMock,
+  createAccount: vi.fn(),
+  removeAccount: vi.fn(),
+  updateAccount: updateAccountMock,
+  validateAccountApiKey: vi.fn(async () => ({ valid: true })),
+};
+
+vi.mock('@/stores/providers', () => ({
+  useProviderStore: (selector?: (state: typeof providerState) => unknown) => (
+    selector ? selector(providerState) : providerState
+  ),
+}));
+
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: (selector?: (state: { devModeUnlocked: boolean }) => unknown) => (
+    selector ? selector({ devModeUnlocked: false }) : { devModeUnlocked: false }
+  ),
+}));
+
+vi.mock('@/lib/api-client', () => ({
+  invokeIpc: vi.fn(),
+}));
+
+vi.mock('@/lib/host-api', () => ({
+  hostApiFetch: vi.fn(),
+}));
+
+vi.mock('@/lib/host-events', () => ({
+  subscribeHostEvent: vi.fn(() => () => undefined),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n: { language: 'zh-CN' },
+    }),
+  };
+});
+
+describe('ProvidersSettings model editor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('adds a structured provider model through the modal and saves it on the account', async () => {
+    const { ProvidersSettings } = await import('@/components/settings/ProvidersSettings');
+
+    render(<ProvidersSettings />);
+
+    await screen.findAllByText('OpenRouter');
+
+    expect(screen.getByText('aiProviders.dialog.apiKey')).toBeInTheDocument();
+    expect(screen.getByText('aiProviders.sections.model')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'aiProviders.models.addModel' }));
+    });
+
+    const dialog = await screen.findByRole('dialog', { name: 'aiProviders.models.dialog.addTitle' });
+    await act(async () => {
+      fireEvent.change(within(dialog).getByLabelText('aiProviders.models.dialog.id'), {
+        target: { value: 'google/gemini-3-flash-preview' },
+      });
+      fireEvent.click(within(dialog).getByLabelText('aiProviders.models.dialog.modalities.image'));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'aiProviders.models.dialog.advanced' }));
+    });
+
+    await act(async () => {
+      fireEvent.change(await within(dialog).findByLabelText('aiProviders.models.dialog.contextWindow'), {
+        target: { value: '1048576' },
+      });
+      fireEvent.change(within(dialog).getByLabelText('aiProviders.models.dialog.maxTokens'), {
+        target: { value: '65536' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'aiProviders.models.dialog.save' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'aiProviders.dialog.save' }));
+    });
+
+    expect(updateAccountMock).toHaveBeenCalledWith('openrouter', expect.objectContaining({
+      models: [{
+        id: 'google/gemini-3-flash-preview',
+        name: 'google/gemini-3-flash-preview',
+        reasoning: false,
+        input: ['text', 'image'],
+        contextWindow: 1048576,
+        maxTokens: 65536,
+      }],
+    }), undefined);
+  });
+});

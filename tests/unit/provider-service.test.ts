@@ -160,6 +160,44 @@ describe('ProviderService.createAccount', () => {
     });
   });
 
+  it('seeds the default chat model from the first structured provider model entry', async () => {
+    const { ProviderService } = await import('@electron/services/providers/provider-service');
+    const service = new ProviderService();
+
+    await service.createAccount({
+      id: 'openai',
+      vendorId: 'openai',
+      label: 'OpenAI',
+      authMode: 'api_key',
+      models: [
+        {
+          id: 'gpt-5.4',
+          name: 'gpt-5.4',
+          reasoning: false,
+          input: ['text', 'image'],
+          contextWindow: 200000,
+        },
+        {
+          id: 'gpt-5.4-mini',
+          name: 'gpt-5.4-mini',
+          reasoning: false,
+        },
+      ],
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-13T00:00:00.000Z',
+    });
+
+    expect(updateDefaultAgentModelConfigMock).toHaveBeenCalledWith(expect.objectContaining({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: [],
+      },
+    }));
+  });
+
   it('does not overwrite an explicit chat model when adding another provider', async () => {
     const { ProviderService } = await import('@electron/services/providers/provider-service');
     const service = new ProviderService();
