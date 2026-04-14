@@ -42,6 +42,7 @@ import {
   shouldShowProviderModelId,
   shouldInvertInDark,
   type ProviderModelEntry,
+  getDefaultProviderModelEntries,
 } from '@/lib/providers';
 import {
   buildProviderAccountId,
@@ -1494,9 +1495,9 @@ function ProviderCard({
                       if (nextMode === 'apikey') {
                         setArkMode('apikey');
                         setBaseUrl(typeInfo?.defaultBaseUrl || '');
-                        if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
-                          setModelEntries(typeInfo?.defaultModelId ? [createProviderModelEntry(typeInfo.defaultModelId)] : []);
-                        }
+                          if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
+                            setModelEntries(getDefaultProviderModelEntries(typeInfo));
+                          }
                         return;
                       }
 
@@ -1795,7 +1796,7 @@ function AddProviderDialog({
     setApiKey('');
     setBaseUrl(initialTypeInfo?.defaultBaseUrl || '');
     setApiProtocol('openai-completions');
-    setModelEntries(initialTypeInfo?.defaultModelId ? [createProviderModelEntry(initialTypeInfo.defaultModelId)] : []);
+    setModelEntries(getDefaultProviderModelEntries(initialTypeInfo));
     setArkMode('apikey');
     setValidationError(null);
   }, [initialType, t]);
@@ -2035,7 +2036,7 @@ function AddProviderDialog({
                     setName(type.id === 'custom' ? t('aiProviders.custom') : type.name);
                     setBaseUrl(type.defaultBaseUrl || '');
                     setApiProtocol('openai-completions');
-                    setModelEntries(type.defaultModelId ? [createProviderModelEntry(type.defaultModelId)] : []);
+                    setModelEntries(getDefaultProviderModelEntries(type));
                     setArkMode('apikey');
                   }}
                     className="surface-hover rounded-2xl border border-black/5 p-4 text-center transition-colors group dark:border-white/5"
@@ -2147,7 +2148,7 @@ function AddProviderDialog({
                           setArkMode('apikey');
                           setBaseUrl(typeInfo?.defaultBaseUrl || '');
                           if (modelEntries.length === 1 && modelEntries[0]?.id === codePlanPreset.modelId) {
-                            setModelEntries(typeInfo?.defaultModelId ? [createProviderModelEntry(typeInfo.defaultModelId)] : []);
+                            setModelEntries(getDefaultProviderModelEntries(typeInfo));
                           }
                           setValidationError(null);
                           return;

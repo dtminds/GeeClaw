@@ -323,7 +323,13 @@ describe('provider runtime sync for browser OAuth', () => {
 
     expect(syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
       'ollama-ollamafd',
-      ['qwen3:30b'],
+      [
+        {
+          id: 'qwen3:30b',
+          name: 'qwen3:30b',
+          reasoning: false,
+        },
+      ],
       expect.objectContaining({
         baseUrl: 'http://localhost:11434/v1',
         api: 'openai-completions',

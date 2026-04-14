@@ -100,10 +100,10 @@ describe('ModelsSettingsSection', () => {
 
     const icons = [
       container.querySelector('[data-testid="model-slot-icon-model"]'),
-      container.querySelector('[data-testid="model-slot-icon-imageGenerationModel"]'),
-      container.querySelector('[data-testid="model-slot-icon-videoGenerationModel"]'),
       container.querySelector('[data-testid="model-slot-icon-imageModel"]'),
       container.querySelector('[data-testid="model-slot-icon-pdfModel"]'),
+      container.querySelector('[data-testid="model-slot-icon-imageGenerationModel"]'),
+      container.querySelector('[data-testid="model-slot-icon-videoGenerationModel"]'),
     ];
 
     expect(icons.every(Boolean)).toBe(true);
@@ -111,6 +111,16 @@ describe('ModelsSettingsSection', () => {
     expect((icons[1] as HTMLElement).compareDocumentPosition(icons[2] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect((icons[2] as HTMLElement).compareDocumentPosition(icons[3] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect((icons[3] as HTMLElement).compareDocumentPosition(icons[4] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('locks custom mode for image and video generation slots', async () => {
+    render(<ModelsSettingsSection />);
+
+    const imageGenerationModeGroup = await screen.findByRole('group', { name: 'agentModels.sections.imageGenerationModel.title' });
+    const videoGenerationModeGroup = screen.getByRole('group', { name: 'agentModels.sections.videoGenerationModel.title' });
+
+    expect(within(imageGenerationModeGroup).getByRole('button', { name: 'agentModels.mode.custom' })).toBeDisabled();
+    expect(within(videoGenerationModeGroup).getByRole('button', { name: 'agentModels.mode.custom' })).toBeDisabled();
   });
 
   it('uses the model ref prompt as a placeholder instead of a selectable option', async () => {

@@ -56,10 +56,10 @@ type ModelConfigDraft = Pick<
 
 const SLOT_ORDER: ModelSlotKey[] = [
   'model',
-  'imageGenerationModel',
-  'videoGenerationModel',
   'imageModel',
   'pdfModel',
+  'imageGenerationModel',
+  'videoGenerationModel',
 ];
 
 const MAX_FALLBACK_MODELS = 3;
@@ -70,6 +70,10 @@ const SLOT_ICONS = {
   imageGenerationModel: AiImageIcon,
   videoGenerationModel: AiVideoIcon,
 } satisfies Record<ModelSlotKey, Parameters<typeof HugeiconsIcon>[0]['icon']>;
+
+function slotAllowsCustomMode(slotKey: ModelSlotKey): boolean {
+  return slotKey !== 'imageGenerationModel' && slotKey !== 'videoGenerationModel';
+}
 
 function cloneDraft(snapshot: AgentDefaultModelSnapshot): ModelConfigDraft {
   return {
@@ -143,6 +147,7 @@ function ModelSlotEditor(props: {
 
   const sectionTitle = t(`agentModels.sections.${props.slotKey}.title`);
   const sectionDescription = t(`agentModels.sections.${props.slotKey}.description`);
+  const customModeLocked = props.optional && !slotAllowsCustomMode(props.slotKey);
   const fallbackSummary = props.slot.fallbacks.length > 0
     ? props.slot.fallbacks.join(', ')
     : !props.slot.primary
@@ -187,7 +192,7 @@ function ModelSlotEditor(props: {
               }}
               options={[
                 { value: 'auto', label: t('agentModels.mode.auto') },
-                { value: 'custom', label: t('agentModels.mode.custom') },
+                { value: 'custom', label: t('agentModels.mode.custom'), disabled: customModeLocked },
               ]}
               fullWidth
             />
@@ -404,20 +409,6 @@ export function ModelsSettingsSection() {
                 onChange={(nextSlot) => updateSlot('model', nextSlot)}
               />
               <ModelSlotEditor
-                slotKey="imageGenerationModel"
-                slot={draft.imageGenerationModel}
-                availableModels={availableModels}
-                optional
-                onChange={(nextSlot) => updateSlot('imageGenerationModel', nextSlot)}
-              />
-              <ModelSlotEditor
-                slotKey="videoGenerationModel"
-                slot={draft.videoGenerationModel}
-                availableModels={availableModels}
-                optional
-                onChange={(nextSlot) => updateSlot('videoGenerationModel', nextSlot)}
-              />
-              <ModelSlotEditor
                 slotKey="imageModel"
                 slot={draft.imageModel}
                 availableModels={availableModels}
@@ -430,6 +421,20 @@ export function ModelsSettingsSection() {
                 availableModels={availableModels}
                 optional
                 onChange={(nextSlot) => updateSlot('pdfModel', nextSlot)}
+              />
+              <ModelSlotEditor
+                slotKey="imageGenerationModel"
+                slot={draft.imageGenerationModel}
+                availableModels={availableModels}
+                optional
+                onChange={(nextSlot) => updateSlot('imageGenerationModel', nextSlot)}
+              />
+              <ModelSlotEditor
+                slotKey="videoGenerationModel"
+                slot={draft.videoGenerationModel}
+                availableModels={availableModels}
+                optional
+                onChange={(nextSlot) => updateSlot('videoGenerationModel', nextSlot)}
               />
             </div>
           )}
