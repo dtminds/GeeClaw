@@ -7,15 +7,21 @@ const RESERVED_RUNTIME_PROVIDER_KEYS = new Set<string>([
   'openai-codex',
 ]);
 
-export function slugifyCustomProviderKeySegment(value: string): string {
+export function sanitizeCustomProviderKeySegmentInput(value: string): string {
   return value
-    .trim()
+    .trimStart()
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/^-+/g, '')
     .replace(/-{2,}/g, '-');
+}
+
+export function slugifyCustomProviderKeySegment(value: string): string {
+  return sanitizeCustomProviderKeySegmentInput(value)
+    .trim()
+    .replace(/^-+|-+$/g, '')
 }
 
 export function isValidCustomProviderKeySegment(value: string): boolean {

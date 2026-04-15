@@ -77,6 +77,7 @@ import {
   buildCustomProviderRuntimeKey,
   isReservedRuntimeProviderKey,
   isValidCustomProviderKeySegment,
+  sanitizeCustomProviderKeySegmentInput,
   slugifyCustomProviderKeySegment,
 } from '../../../shared/providers/runtime-provider-key';
 
@@ -2479,7 +2480,7 @@ function AddProviderDialog({
                       value={customProviderKeySegment}
                       onChange={(e) => {
                         setCustomProviderKeyTouched(true);
-                        setCustomProviderKeySegment(slugifyCustomProviderKeySegment(e.target.value));
+                        setCustomProviderKeySegment(sanitizeCustomProviderKeySegmentInput(e.target.value));
                       }}
                       className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
                     />
