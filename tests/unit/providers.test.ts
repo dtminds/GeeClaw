@@ -136,9 +136,29 @@ describe('provider metadata', () => {
     );
   });
 
+  it('exposes a separate Moonshot Global provider config', () => {
+    const moonshotGlobal = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'moonshot-global');
+
+    expect(moonshotGlobal).toMatchObject({
+      id: 'moonshot-global',
+      name: 'Moonshot (Global)',
+      defaultBaseUrl: 'https://api.moonshot.ai/v1',
+      defaultModelId: 'kimi-k2.5',
+      docsUrl: 'https://platform.moonshot.ai/',
+    });
+    expect(getProviderEnvVar('moonshot-global')).toBe('MOONSHOT_GLOBAL_API_KEY');
+    expect(getProviderEnvVars('moonshot-global')).toEqual(['MOONSHOT_GLOBAL_API_KEY']);
+    expect(getProviderConfig('moonshot-global')).toEqual(
+      expect.objectContaining({
+        baseUrl: 'https://api.moonshot.ai/v1',
+        apiKeyEnv: 'MOONSHOT_GLOBAL_API_KEY',
+      })
+    );
+  });
+
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
   });
 

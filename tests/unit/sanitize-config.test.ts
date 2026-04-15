@@ -226,9 +226,9 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
     }
   }
 
-  // Mirror: remove stale tools.web.search.kimi.apiKey when moonshot provider exists.
+  // Mirror: remove stale tools.web.search.kimi.apiKey when Moonshot provider exists.
   const providers = ((config.models as Record<string, unknown> | undefined)?.providers as Record<string, unknown> | undefined) || {};
-  if (providers.moonshot) {
+  if (providers.moonshot || providers['moonshot-global']) {
     const tools = (config.tools as Record<string, unknown> | undefined) || {};
     const web = (tools.web as Record<string, unknown> | undefined) || {};
     const search = (web.search as Record<string, unknown> | undefined) || {};
@@ -498,6 +498,34 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     const kimi = ((((result.tools as Record<string, unknown>).web as Record<string, unknown>).search as Record<string, unknown>).kimi as Record<string, unknown>);
     expect(kimi).not.toHaveProperty('apiKey');
     expect(kimi.baseUrl).toBe('https://api.moonshot.cn/v1');
+  });
+
+  it('removes tools.web.search.kimi.apiKey when moonshot-global provider exists', async () => {
+    await writeConfig({
+      models: {
+        providers: {
+          'moonshot-global': { baseUrl: 'https://api.moonshot.ai/v1', api: 'openai-completions' },
+        },
+      },
+      tools: {
+        web: {
+          search: {
+            kimi: {
+              apiKey: 'stale-inline-key',
+              baseUrl: 'https://api.moonshot.ai/v1',
+            },
+          },
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    const kimi = ((((result.tools as Record<string, unknown>).web as Record<string, unknown>).search as Record<string, unknown>).kimi as Record<string, unknown>);
+    expect(kimi).not.toHaveProperty('apiKey');
+    expect(kimi.baseUrl).toBe('https://api.moonshot.ai/v1');
   });
 
   it('keeps tools.web.search.kimi.apiKey when moonshot provider is absent', async () => {

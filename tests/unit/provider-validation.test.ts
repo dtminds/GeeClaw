@@ -9,7 +9,7 @@ import { validateApiKeyWithProvider } from '@electron/services/providers/provide
 
 describe('validateApiKeyWithProvider', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('uses anthropic validation for minimax portal accounts', async () => {
@@ -50,6 +50,27 @@ describe('validateApiKeyWithProvider', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer sk-openai-test',
+        }),
+      }),
+    );
+  });
+
+  it('uses the global Moonshot endpoint for moonshot-global validation', async () => {
+    vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'kimi-k2.5' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const result = await validateApiKeyWithProvider('moonshot-global', 'sk-moonshot-global');
+
+    expect(result).toMatchObject({ valid: true });
+    expect(proxyAwareFetch).toHaveBeenCalledWith(
+      'https://api.moonshot.ai/v1/models?limit=1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-moonshot-global',
         }),
       }),
     );

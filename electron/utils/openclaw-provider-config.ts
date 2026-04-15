@@ -13,6 +13,7 @@ import {
 } from './openclaw-config-coordinator';
 import {
   OPENCLAW_PROVIDER_KEY_MOONSHOT,
+  OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL,
   isOpenClawOAuthPluginProviderKey,
 } from './provider-keys';
 import {
@@ -196,7 +197,7 @@ export async function setOpenClawDefaultModel(
   const fallbackModelIds = extractFallbackModelIds(provider, fallbackModels);
 
   await mutateOpenClawConfigDocument<void>((config) => {
-    ensureMoonshotKimiWebSearchCnBaseUrl(config, provider);
+    ensureMoonshotKimiWebSearchBaseUrl(config, provider);
 
     const agents = (config.agents || {}) as Record<string, unknown>;
     const defaults = (agents.defaults || {}) as Record<string, unknown>;
@@ -379,22 +380,48 @@ function removeLegacyMoonshotProviderEntry(
   return false;
 }
 
-function ensureMoonshotKimiWebSearchCnBaseUrl(config: Record<string, unknown>, provider: string): void {
-  if (provider !== OPENCLAW_PROVIDER_KEY_MOONSHOT) return;
+function getMoonshotKimiWebSearchBaseUrl(provider: string): string | undefined {
+  if (provider === OPENCLAW_PROVIDER_KEY_MOONSHOT) {
+    return 'https://api.moonshot.cn/v1';
+  }
+  if (provider === OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL) {
+    return 'https://api.moonshot.ai/v1';
+  }
+  return undefined;
+}
 
-  const tools = (config.tools || {}) as Record<string, unknown>;
-  const web = (tools.web || {}) as Record<string, unknown>;
-  const search = (web.search || {}) as Record<string, unknown>;
-  const kimi = (search.kimi && typeof search.kimi === 'object' && !Array.isArray(search.kimi))
-    ? (search.kimi as Record<string, unknown>)
+function ensureMoonshotKimiWebSearchBaseUrl(config: Record<string, unknown>, provider: string): void {
+  const baseUrl = getMoonshotKimiWebSearchBaseUrl(provider);
+  if (!baseUrl) return;
+
+  const plugins = (config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins))
+    ? (config.plugins as Record<string, unknown>)
     : {};
+  const entries = (plugins.entries && typeof plugins.entries === 'object' && !Array.isArray(plugins.entries))
+    ? (plugins.entries as Record<string, unknown>)
+    : {};
+  const moonshotPluginEntry = (
+    entries.moonshot && typeof entries.moonshot === 'object' && !Array.isArray(entries.moonshot)
+      ? (entries.moonshot as Record<string, unknown>)
+      : {}
+  );
+  const moonshotPluginConfig = (
+    moonshotPluginEntry.config && typeof moonshotPluginEntry.config === 'object' && !Array.isArray(moonshotPluginEntry.config)
+      ? (moonshotPluginEntry.config as Record<string, unknown>)
+      : {}
+  );
+  const webSearch = (
+    moonshotPluginConfig.webSearch && typeof moonshotPluginConfig.webSearch === 'object' && !Array.isArray(moonshotPluginConfig.webSearch)
+      ? (moonshotPluginConfig.webSearch as Record<string, unknown>)
+      : {}
+  );
 
-  delete kimi.apiKey;
-  kimi.baseUrl = 'https://api.moonshot.cn/v1';
-  search.kimi = kimi;
-  web.search = search;
-  tools.web = web;
-  config.tools = tools;
+  webSearch.baseUrl = baseUrl;
+  moonshotPluginConfig.webSearch = webSearch;
+  moonshotPluginEntry.config = moonshotPluginConfig;
+  entries.moonshot = moonshotPluginEntry;
+  plugins.entries = entries;
+  config.plugins = plugins;
 }
 
 export async function syncProviderConfigToOpenClaw(
@@ -403,7 +430,7 @@ export async function syncProviderConfigToOpenClaw(
   override: RuntimeProviderConfigOverride
 ): Promise<void> {
   await mutateOpenClawConfigDocument<void>((config) => {
-    ensureMoonshotKimiWebSearchCnBaseUrl(config, provider);
+    ensureMoonshotKimiWebSearchBaseUrl(config, provider);
 
     if (override.baseUrl && override.api) {
       upsertOpenClawProviderEntry(config, provider, {
@@ -440,7 +467,7 @@ export async function setOpenClawDefaultModelWithOverride(
   const fallbackModelIds = extractFallbackModelIds(provider, fallbackModels);
 
   await mutateOpenClawConfigDocument<void>((config) => {
-    ensureMoonshotKimiWebSearchCnBaseUrl(config, provider);
+    ensureMoonshotKimiWebSearchBaseUrl(config, provider);
 
     const agents = (config.agents || {}) as Record<string, unknown>;
     const defaults = (agents.defaults || {}) as Record<string, unknown>;

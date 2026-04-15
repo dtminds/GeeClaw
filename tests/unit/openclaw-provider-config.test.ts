@@ -312,6 +312,56 @@ describe('removeProviderFromOpenClaw', () => {
     ]);
   });
 
+  it('syncs Moonshot Global provider baseUrl into the Kimi web search plugin config', async () => {
+    await writeOpenClawJson({
+      plugins: {
+        entries: {
+          moonshot: {
+            enabled: true,
+            config: {
+              webSearch: {
+                apiKey: 'sk-kimi-search',
+                model: 'kimi-search-v1',
+                timeoutSeconds: 15,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('moonshot-global', [
+      {
+        id: 'kimi-k2.5',
+        name: 'Kimi K2.5',
+        reasoning: false,
+        input: ['text'],
+      },
+    ], {
+      baseUrl: 'https://api.moonshot.ai/v1',
+      api: 'openai-completions',
+      apiKeyEnv: 'MOONSHOT_GLOBAL_API_KEY',
+    });
+
+    const config = await readOpenClawJson();
+    const kimiWebSearch = (((((config.plugins as Record<string, unknown>).entries as Record<string, unknown>).moonshot as Record<string, unknown>).config as Record<string, unknown>).webSearch as Record<string, unknown>);
+    const providerEntry = (((config.models as Record<string, unknown>).providers as Record<string, unknown>)['moonshot-global'] as Record<string, unknown>);
+
+    expect(kimiWebSearch).toEqual({
+      apiKey: 'sk-kimi-search',
+      model: 'kimi-search-v1',
+      timeoutSeconds: 15,
+      baseUrl: 'https://api.moonshot.ai/v1',
+    });
+    expect(providerEntry).toMatchObject({
+      baseUrl: 'https://api.moonshot.ai/v1',
+      api: 'openai-completions',
+      apiKey: 'MOONSHOT_GLOBAL_API_KEY',
+    });
+  });
+
   it('maps MiniMax OAuth default-model writes to the canonical minimax plugin id', async () => {
     await writeOpenClawJson({
       plugins: {
