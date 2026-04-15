@@ -48,7 +48,7 @@ describe('provider metadata', () => {
           name: 'GeekAI',
           requiresApiKey: true,
           showModelId: true,
-          defaultModelId: 'qwen3.5-flash',
+          defaultModelId: 'qwen3.6-plus',
         }),
       ])
     );

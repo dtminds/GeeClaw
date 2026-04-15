@@ -54,6 +54,16 @@ describe('agent runtime sync default model cleanup', () => {
     vi.doMock('../../electron/services/agents/store-instance', () => ({
       getGeeClawAgentStore: vi.fn(async () => agentStore),
     }));
+    vi.doMock('../../electron/services/providers/store-instance', () => ({
+      getGeeClawProviderStore: vi.fn(async () => ({
+        get: (key: string) => {
+          if (key === 'providerAccounts') return {};
+          return undefined;
+        },
+        set: vi.fn(),
+        delete: vi.fn(),
+      })),
+    }));
 
     const configDir = join(homeDir, '.openclaw-geeclaw');
     const configPath = join(configDir, 'openclaw.json');

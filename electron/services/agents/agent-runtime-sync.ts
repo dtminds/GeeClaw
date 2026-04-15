@@ -5,6 +5,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { getManagedAgentDirPath, getManagedAgentWorkspacePath } from '../../utils/managed-agent-workspace';
 import { expandPath } from '../../utils/paths';
 import { normalize } from 'node:path';
+import { listProviderAccounts, providerAccountToConfig } from '../providers/provider-store';
+import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
+import { normalizeProviderModelList, resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
+import { getProviderDefinition } from '../../shared/providers/registry';
 
 interface StoredAgentRuntimeConfig {
   agents?: Record<string, unknown>;
@@ -74,6 +78,22 @@ function sanitizeStoredAgentsConfig(agents: Record<string, unknown>): Record<str
       .map((entry) => sanitizeAgentListEntry(entry));
   }
   return nextAgents;
+}
+
+async function buildDerivedDefaultModelsMap(): Promise<Record<string, Record<string, never>> | undefined> {
+  const refs = normalizeProviderModelList(
+    (await listProviderAccounts()).flatMap((account) => {
+      const providerKey = getOpenClawProviderKeyForType(account.vendorId, account.id, account.metadata);
+      return resolveEffectiveProviderModelEntries(providerAccountToConfig(account), getProviderDefinition(account.vendorId))
+        .map((model) => (model.id.startsWith(`${providerKey}/`) ? model.id : `${providerKey}/${model.id}`));
+    }),
+  ).sort((left, right) => left.localeCompare(right));
+
+  if (refs.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(refs.map((ref) => [ref, {}]));
 }
 
 function normalizeAgentListWithMainEntry(
@@ -163,6 +183,7 @@ export async function saveAgentRuntimeConfigToStore(config: {
 function applyStoredAgentRuntimeConfig(
   config: OpenClawConfig,
   storedConfig: StoredAgentRuntimeConfig,
+  derivedDefaultModels: Record<string, Record<string, never>> | undefined,
 ): boolean {
   const { agents: storedAgents, bindings: storedBindings } = storedConfig;
   let modified = false;
@@ -193,6 +214,12 @@ function applyStoredAgentRuntimeConfig(
     }
     if (!(typeof nextDefaults.workspace === 'string' && nextDefaults.workspace.trim())) {
       nextDefaults.workspace = getManagedMainWorkspace(nextDefaults);
+    }
+
+    if (derivedDefaultModels && Object.keys(derivedDefaultModels).length > 0) {
+      nextDefaults.models = derivedDefaultModels;
+    } else {
+      delete nextDefaults.models;
     }
 
     nextAgents.defaults = nextDefaults;
@@ -230,6 +257,7 @@ function applyStoredAgentRuntimeConfig(
 
 export async function syncAllAgentConfigToOpenClaw(): Promise<void> {
   const { agents: storedAgents, bindings: storedBindings } = await readStoredAgentRuntimeConfig();
+  const derivedDefaultModels = await buildDerivedDefaultModelsMap();
 
   let hasStoredConfigs = false;
   if (storedAgents && Object.keys(storedAgents).length > 0) hasStoredConfigs = true;
@@ -243,7 +271,7 @@ export async function syncAllAgentConfigToOpenClaw(): Promise<void> {
     const changed = applyStoredAgentRuntimeConfig(config as OpenClawConfig, {
       agents: storedAgents,
       bindings: storedBindings,
-    });
+    }, derivedDefaultModels);
 
     return { changed, result: changed };
   });

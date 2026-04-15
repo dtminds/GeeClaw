@@ -1045,6 +1045,7 @@ describe('managed agent config domain', () => {
         defaults?: {
           workspace?: string;
           model?: { primary?: string; fallbacks?: string[] };
+          models?: Record<string, Record<string, never>>;
           imageModel?: { primary?: string; fallbacks?: string[] };
           pdfModel?: { primary?: string; fallbacks?: string[] };
           imageGenerationModel?: { primary?: string; fallbacks?: string[] };
@@ -1067,7 +1068,13 @@ describe('managed agent config domain', () => {
       fallbacks: [],
     });
     expect(config.agents?.defaults?.videoGenerationModel).toBeUndefined();
-    expect(config.agents?.defaults).not.toHaveProperty('models');
+    expect(config.agents?.defaults?.models).toEqual({
+      'openai/gpt-5.4': {},
+      'openai/gpt-5.4-mini': {},
+      'openai/gpt-image-1': {},
+      'openrouter/qwen/qwen-2.5-vl-72b-instruct:free': {},
+      'qwen/wan2.6-t2v': {},
+    });
   });
 
   it('does not expose disabled built-in provider models in available model refs', async () => {
@@ -1103,6 +1110,85 @@ describe('managed agent config domain', () => {
         }),
       ]),
     });
+  });
+
+  it('promotes referenced removed built-in models into provider custom models', async () => {
+    const registry = await import('../../shared/providers/registry');
+    const originalGetProviderDefinition = registry.getProviderDefinition;
+    const getProviderDefinitionSpy = vi.spyOn(registry, 'getProviderDefinition').mockImplementation((type) => {
+      const definition = originalGetProviderDefinition(type);
+      if (type !== 'openai' || !definition) {
+        return definition;
+      }
+
+      return {
+        ...definition,
+        defaultModelId: 'gpt-6.0',
+        defaultModels: [{ id: 'gpt-6.0', name: 'gpt-6.0', reasoning: false }],
+      };
+    });
+
+    try {
+      const { configDir, providerStoreState, agentConfig } = await setupManagedPresetFixture({
+        providerAccounts: {
+          'openai-account': {
+            id: 'openai-account',
+            vendorId: 'openai',
+            label: 'OpenAI',
+            authMode: 'api_key',
+            models: [],
+            enabled: true,
+            isDefault: false,
+            createdAt: '2026-04-13T00:00:00.000Z',
+            updatedAt: '2026-04-13T00:00:00.000Z',
+          },
+        },
+      });
+
+      writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+        agents: {
+          defaults: {
+            workspace: '/managed/workspace',
+            model: {
+              primary: 'openai/gpt-5.4',
+              fallbacks: [],
+            },
+          },
+        },
+      }, null, 2), 'utf8');
+
+      await expect(agentConfig.getDefaultAgentModelConfig()).resolves.toMatchObject({
+        model: {
+          configured: true,
+          primary: 'openai/gpt-5.4',
+          fallbacks: [],
+        },
+        availableModels: expect.arrayContaining([
+          expect.objectContaining({
+            providerId: 'openai-account',
+            modelRefs: expect.arrayContaining(['openai/gpt-6.0', 'openai/gpt-5.4']),
+          }),
+        ]),
+      });
+
+      expect(providerStoreState.providerAccounts).toMatchObject({
+        'openai-account': {
+          metadata: {
+            modelCatalog: {
+              customModels: [
+                {
+                  id: 'gpt-5.4',
+                  name: 'gpt-5.4',
+                  reasoning: false,
+                },
+              ],
+            },
+          },
+        },
+      });
+    } finally {
+      getProviderDefinitionSpy.mockRestore();
+    }
   });
 
   it('clears active managed restrictions after unmanage', async () => {

@@ -19,14 +19,16 @@ import {
   shouldReplaceAgentAvatarOnMarketplaceSync,
 } from './agent-avatar';
 import {
+  getDefaultProviderModelEntries,
   normalizeProviderModelList,
+  resolveProviderModelCatalogState,
   resolveEffectiveProviderModelEntries,
 } from '../shared/providers/config-models';
 import { getProviderDefinition } from '../shared/providers/registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { mapWithConcurrency } from './promise-pool';
-import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
+import { listProviderAccounts, providerAccountToConfig, saveProviderAccount } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import {
@@ -78,6 +80,14 @@ interface AgentDefaultsConfig {
   videoGenerationModel?: string | AgentModelConfig;
   [key: string]: unknown;
 }
+
+const DEFAULT_AGENT_MODEL_SLOT_KEYS = [
+  'model',
+  'imageModel',
+  'pdfModel',
+  'imageGenerationModel',
+  'videoGenerationModel',
+] as const;
 
 interface AgentListEntry extends Record<string, unknown> {
   id: string;
@@ -983,6 +993,94 @@ function getConfiguredProviderModelRefs(
   );
 }
 
+function collectReferencedAgentModelRefs(config: AgentConfigDocument): string[] {
+  return normalizeProviderModelList(
+    DEFAULT_AGENT_MODEL_SLOT_KEYS.flatMap((key) => {
+      const slot = key === 'model'
+        ? readDefaultAgentModelConfig(config)
+        : readOptionalAgentModelConfig(config, key);
+      return [
+        slot.primary,
+        ...slot.fallbacks,
+      ];
+    }),
+  );
+}
+
+async function reconcileReferencedBuiltinModelRefs(
+  config: AgentConfigDocument,
+): Promise<void> {
+  const referencedRefs = collectReferencedAgentModelRefs(config);
+  if (referencedRefs.length === 0) {
+    return;
+  }
+
+  const providers = await listProviderAccounts();
+
+  await Promise.all(providers.map(async (provider) => {
+    const providerKey = getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata);
+    const prefix = `${providerKey}/`;
+    const referencedIds = normalizeProviderModelList(
+      referencedRefs
+        .filter((ref) => ref.startsWith(prefix))
+        .map((ref) => ref.slice(prefix.length)),
+    );
+
+    if (referencedIds.length === 0) {
+      return;
+    }
+
+    const providerDefinition = getProviderDefinition(provider.vendorId);
+    const builtinIds = new Set(
+      getDefaultProviderModelEntries(providerDefinition).map((model) => model.id),
+    );
+    const effectiveIds = new Set(
+      resolveEffectiveProviderModelEntries(provider, providerDefinition).map((model) => model.id),
+    );
+    const catalog = resolveProviderModelCatalogState(provider) ?? {
+      disabledBuiltinModelIds: [],
+      disabledCustomModelIds: [],
+      builtinModelOverrides: [],
+      customModels: [],
+    };
+
+    let changed = false;
+    for (const modelId of referencedIds) {
+      if (effectiveIds.has(modelId) || builtinIds.has(modelId)) {
+        continue;
+      }
+      if (catalog.customModels.some((model) => model.id === modelId)) {
+        continue;
+      }
+
+      catalog.customModels.push({
+        id: modelId,
+        name: modelId,
+        reasoning: false,
+      });
+      effectiveIds.add(modelId);
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    await saveProviderAccount({
+      ...provider,
+      metadata: {
+        ...(provider.metadata ?? {}),
+        modelCatalog: {
+          disabledBuiltinModelIds: catalog.disabledBuiltinModelIds,
+          disabledCustomModelIds: catalog.disabledCustomModelIds,
+          builtinModelOverrides: catalog.builtinModelOverrides,
+          customModels: catalog.customModels,
+        },
+      },
+    });
+  }));
+}
+
 async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
   const providers = (await listProviderAccounts()).map(providerAccountToConfig);
 
@@ -1429,6 +1527,7 @@ export async function listConfiguredAgentIds(): Promise<string[]> {
 
 export async function getDefaultAgentModelConfig(): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
+  await reconcileReferencedBuiltinModelRefs(config);
   return {
     ...buildDefaultAgentModelSnapshot(config),
     availableModels: await listAvailableProviderModelGroups(),
@@ -1439,6 +1538,7 @@ export async function updateDefaultAgentModelConfig(
   nextConfig: DefaultAgentModelConfigUpdate,
 ): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
+  await reconcileReferencedBuiltinModelRefs(config);
   const availableModels = await listAvailableProviderModelGroups();
   const availableRefs = new Set(availableModels.flatMap((provider) => provider.modelRefs));
 
