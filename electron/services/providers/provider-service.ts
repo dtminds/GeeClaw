@@ -2,7 +2,7 @@ import {
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
 } from '../../shared/providers/registry';
-import { getStoredCustomProviderRuntimeKey } from '../../../shared/providers/runtime-provider-key';
+import { isReservedRuntimeProviderKey } from '../../../shared/providers/runtime-provider-key';
 import type {
   ProviderAccount,
   ProviderConfig,
@@ -88,16 +88,19 @@ async function assertCustomRuntimeProviderKeyAvailable(account: ProviderAccount)
     return;
   }
 
-  const runtimeProviderKey = getStoredCustomProviderRuntimeKey(account.metadata);
+  const runtimeProviderKey = getOpenClawProviderKeyForType(account.vendorId, account.id, account.metadata);
   if (!runtimeProviderKey) {
     return;
+  }
+
+  if (isReservedRuntimeProviderKey(runtimeProviderKey)) {
+    throw new Error('Custom provider ID is reserved');
   }
 
   const accounts = await listProviderAccounts();
   const collision = accounts.find((existingAccount) => (
     existingAccount.id !== account.id
-    && existingAccount.vendorId === 'custom'
-    && getStoredCustomProviderRuntimeKey(existingAccount.metadata) === runtimeProviderKey
+    && getOpenClawProviderKeyForType(existingAccount.vendorId, existingAccount.id, existingAccount.metadata) === runtimeProviderKey
   ));
 
   if (collision) {

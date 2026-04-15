@@ -258,7 +258,7 @@ describe('ProviderService.createAccount', () => {
       authMode: 'api_key',
       models: ['gpt-4.1'],
       metadata: {
-        runtimeProviderKey: 'custom-my-provider',
+        runtimeProviderKey: 'my-provider',
       },
       enabled: true,
       isDefault: false,
@@ -269,7 +269,7 @@ describe('ProviderService.createAccount', () => {
     expect(updateDefaultAgentModelConfigMock).toHaveBeenCalledWith(expect.objectContaining({
       model: {
         configured: true,
-        primary: 'custom-my-provider/gpt-4.1',
+        primary: 'my-provider/gpt-4.1',
         fallbacks: [],
       },
     }));
@@ -286,7 +286,7 @@ describe('ProviderService.createAccount', () => {
         authMode: 'api_key',
         models: ['gpt-4.1'],
         metadata: {
-          runtimeProviderKey: 'custom-my-provider',
+          runtimeProviderKey: 'my-provider',
         },
         enabled: true,
         isDefault: false,
@@ -302,12 +302,32 @@ describe('ProviderService.createAccount', () => {
       authMode: 'api_key',
       models: ['gpt-4.1'],
       metadata: {
-        runtimeProviderKey: 'custom-my-provider',
+        runtimeProviderKey: 'my-provider',
       },
       enabled: true,
       isDefault: false,
       createdAt: '2026-04-13T00:00:00.000Z',
       updatedAt: '2026-04-13T00:00:00.000Z',
     })).rejects.toThrow('Custom provider ID already exists');
+  });
+
+  it('rejects reserved built-in runtime provider keys for custom providers', async () => {
+    const { ProviderService } = await import('@electron/services/providers/provider-service');
+    const service = new ProviderService();
+
+    await expect(service.createAccount({
+      id: 'custom-new',
+      vendorId: 'custom',
+      label: 'New Provider',
+      authMode: 'api_key',
+      models: ['gpt-4.1'],
+      metadata: {
+        runtimeProviderKey: 'openai',
+      },
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-13T00:00:00.000Z',
+    })).rejects.toThrow('Custom provider ID is reserved');
   });
 });

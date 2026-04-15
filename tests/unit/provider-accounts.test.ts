@@ -52,9 +52,9 @@ describe('provider account runtime namespaces', () => {
       vendorId: 'custom',
       label: 'Custom API',
       metadata: {
-        runtimeProviderKey: 'custom-my-provider',
+        runtimeProviderKey: 'my-provider',
       },
-    }))).toBe('custom-my-provider');
+    }))).toBe('my-provider');
   });
 
   it('preserves existing multi-instance runtime keys', () => {

@@ -1,7 +1,11 @@
-import type { ProviderAccount } from './types';
+import { BUILTIN_PROVIDER_TYPES, type ProviderAccount } from './types';
 
-const CUSTOM_PROVIDER_RUNTIME_KEY_PREFIX = 'custom-';
 const CUSTOM_PROVIDER_KEY_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const RESERVED_RUNTIME_PROVIDER_KEYS = new Set<string>([
+  ...BUILTIN_PROVIDER_TYPES,
+  'google-gemini-cli',
+  'openai-codex',
+]);
 
 export function slugifyCustomProviderKeySegment(value: string): string {
   return value
@@ -19,7 +23,7 @@ export function isValidCustomProviderKeySegment(value: string): boolean {
 }
 
 export function buildCustomProviderRuntimeKey(segment: string): string {
-  return `${CUSTOM_PROVIDER_RUNTIME_KEY_PREFIX}${segment.trim().toLowerCase()}`;
+  return segment.trim().toLowerCase();
 }
 
 export function getStoredCustomProviderRuntimeKey(
@@ -29,14 +33,13 @@ export function getStoredCustomProviderRuntimeKey(
     ? metadata.runtimeProviderKey.trim().toLowerCase()
     : '';
 
-  if (!runtimeProviderKey.startsWith(CUSTOM_PROVIDER_RUNTIME_KEY_PREFIX)) {
-    return undefined;
-  }
-
-  const segment = runtimeProviderKey.slice(CUSTOM_PROVIDER_RUNTIME_KEY_PREFIX.length);
-  if (!isValidCustomProviderKeySegment(segment)) {
+  if (!isValidCustomProviderKeySegment(runtimeProviderKey)) {
     return undefined;
   }
 
   return runtimeProviderKey;
+}
+
+export function isReservedRuntimeProviderKey(value: string): boolean {
+  return RESERVED_RUNTIME_PROVIDER_KEYS.has(value.trim().toLowerCase());
 }

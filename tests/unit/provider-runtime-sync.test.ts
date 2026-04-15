@@ -80,13 +80,13 @@ describe('provider runtime model catalogs', () => {
       type: 'custom',
       name: 'My Provider',
       metadata: {
-        runtimeProviderKey: 'custom-my-provider',
+        runtimeProviderKey: 'my-provider',
       },
       models: ['gpt-4.1'],
     });
 
     expect(getProviderCatalogModelRefs(config)).toEqual([
-      'custom-my-provider/gpt-4.1',
+      'my-provider/gpt-4.1',
     ]);
   });
 });

@@ -75,6 +75,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   buildCustomProviderRuntimeKey,
+  isReservedRuntimeProviderKey,
   isValidCustomProviderKeySegment,
   slugifyCustomProviderKeySegment,
 } from '../../../shared/providers/runtime-provider-key';
@@ -2304,6 +2305,11 @@ function AddProviderDialog({
           setSaving(false);
           return;
         }
+        if (isReservedRuntimeProviderKey(customRuntimeProviderKey)) {
+          setValidationError(t('aiProviders.toast.customProviderIdReserved'));
+          setSaving(false);
+          return;
+        }
         if (existingRuntimeProviderIds.has(customRuntimeProviderKey)) {
           setValidationError(t('aiProviders.toast.customProviderIdDuplicate'));
           setSaving(false);
@@ -2468,24 +2474,19 @@ function AddProviderDialog({
                 {selectedType === 'custom' && (
                   <div className="space-y-2">
                     <Label htmlFor="providerId" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.providerId')}</Label>
-                    <div className="modal-field-surface flex h-[44px] items-center overflow-hidden rounded-xl border">
-                      <span className="border-r border-black/8 px-3 font-mono text-[13px] text-muted-foreground dark:border-white/10">
-                        custom-
-                      </span>
-                      <Input
-                        id="providerId"
-                        placeholder="my-provider"
-                        value={customProviderKeySegment}
-                        onChange={(e) => {
-                          setCustomProviderKeyTouched(true);
-                          setCustomProviderKeySegment(slugifyCustomProviderKeySegment(e.target.value));
-                        }}
-                        className="h-full border-0 bg-transparent font-mono text-[13px] shadow-none focus-visible:ring-0"
-                      />
-                    </div>
+                    <Input
+                      id="providerId"
+                      placeholder="my-provider"
+                      value={customProviderKeySegment}
+                      onChange={(e) => {
+                        setCustomProviderKeyTouched(true);
+                        setCustomProviderKeySegment(slugifyCustomProviderKeySegment(e.target.value));
+                      }}
+                      className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
+                    />
                     <p className="text-[12px] text-muted-foreground">
                       {t('aiProviders.dialog.providerIdHelp', {
-                        value: customRuntimeProviderKey || 'custom-my-provider',
+                        value: customRuntimeProviderKey || 'my-provider',
                       })}
                     </p>
                   </div>
