@@ -6,7 +6,7 @@
  */
 
 import { BUILTIN_PROVIDER_TYPES, type ProviderType } from './provider-registry';
-import type { ProviderProtocol } from '../shared/providers/types';
+import type { ProviderConfiguredModel, ProviderProtocol } from '../shared/providers/types';
 import { getActiveOpenClawProviders } from './openclaw-provider-config';
 import {
   deleteProviderAccount,
@@ -35,7 +35,7 @@ export interface ProviderConfig {
   type: ProviderType;
   baseUrl?: string;
   apiProtocol?: ProviderProtocol;
-  models?: string[];
+  models?: ProviderConfiguredModel[];
   /** @deprecated legacy single-model field kept for migration compatibility */
   model?: string;
   /** @deprecated legacy provider-level fallback field kept for migration compatibility */
@@ -283,7 +283,7 @@ export async function getAllProvidersWithKeyInfo(): Promise<
     // e.g. provider.id "custom-a1b2c3d4-..." → strip hyphens → "customa1b2c3d4..." → slice(0,8) → "customa1"
     // → openClawKey = "custom-customa1"
     // This must match getOpenClawProviderKey() in ipc-handlers.ts exactly.
-    const openClawKey = getOpenClawProviderKeyForType(provider.type, provider.id);
+    const openClawKey = getOpenClawProviderKeyForType(provider.type, provider.id, provider.metadata);
     if (!isBuiltin && !activeOpenClawProviders.has(provider.type) && !activeOpenClawProviders.has(provider.id) && !activeOpenClawProviders.has(openClawKey)) {
       console.log(`[Sync] Provider ${provider.id} (${provider.type}) missing from OpenClaw, dropping from GeeClaw UI`);
       await deleteProvider(provider.id);

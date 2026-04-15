@@ -3,7 +3,10 @@ import { constants } from 'fs';
 import { LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS, LEGACY_BUILTIN_PLUGIN_ID_SET } from './legacy-built-in-plugins';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getManagedAgentWorkspacePath } from './managed-agent-workspace';
-import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
+import {
+  OPENCLAW_PROVIDER_KEY_MOONSHOT,
+  OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL,
+} from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
@@ -285,7 +288,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       console.log(`[sanitize] Removed deprecated auth.profiles.${LEGACY_QWEN_PROVIDER}`);
     }
 
-    if (providers[OPENCLAW_PROVIDER_KEY_MOONSHOT]) {
+    if (providers[OPENCLAW_PROVIDER_KEY_MOONSHOT] || providers[OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL]) {
       const tools = (config.tools as Record<string, unknown> | undefined) || {};
       const web = (tools.web as Record<string, unknown> | undefined) || {};
       const search = (web.search as Record<string, unknown> | undefined) || {};

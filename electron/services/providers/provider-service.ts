@@ -2,6 +2,7 @@ import {
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
 } from '../../shared/providers/registry';
+import { isReservedRuntimeProviderKey } from '../../../shared/providers/runtime-provider-key';
 import type {
   ProviderAccount,
   ProviderConfig,
@@ -27,7 +28,13 @@ import {
   storeApiKey,
 } from '../../utils/secure-storage';
 import type { ProviderWithKeyInfo } from '../../shared/providers/types';
+import { resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
+import {
+  getDefaultAgentModelConfig,
+  updateDefaultAgentModelConfig,
+} from '../../utils/agent-config';
 import { logger } from '../../utils/logger';
+import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
 
 function maskApiKey(apiKey: string | null): string | null {
   if (!apiKey) return null;
@@ -47,6 +54,58 @@ function logLegacyProviderApiUsage(method: string, replacement: string): void {
   logger.warn(
     `[provider-migration] Legacy provider API "${method}" is deprecated. Migrate to "${replacement}".`,
   );
+}
+
+async function seedDefaultAgentModelFromAccount(account: ProviderAccount): Promise<void> {
+  const configuredModels = resolveEffectiveProviderModelEntries(account, getProviderDefinition(account.vendorId))
+    .map((model) => model.id);
+  const primaryModel = configuredModels[0];
+  if (!primaryModel) {
+    return;
+  }
+
+  const current = await getDefaultAgentModelConfig();
+  if (current.model.primary || current.model.fallbacks.length > 0) {
+    return;
+  }
+
+  const providerKey = getOpenClawProviderKeyForType(account.vendorId, account.id, account.metadata);
+  await updateDefaultAgentModelConfig({
+    model: {
+      configured: true,
+      primary: `${providerKey}/${primaryModel}`,
+      fallbacks: [],
+    },
+    imageModel: current.imageModel,
+    pdfModel: current.pdfModel,
+    imageGenerationModel: current.imageGenerationModel,
+    videoGenerationModel: current.videoGenerationModel,
+  });
+}
+
+async function assertCustomRuntimeProviderKeyAvailable(account: ProviderAccount): Promise<void> {
+  if (account.vendorId !== 'custom') {
+    return;
+  }
+
+  const runtimeProviderKey = getOpenClawProviderKeyForType(account.vendorId, account.id, account.metadata);
+  if (!runtimeProviderKey) {
+    return;
+  }
+
+  if (isReservedRuntimeProviderKey(runtimeProviderKey)) {
+    throw new Error('Custom provider ID is reserved');
+  }
+
+  const accounts = await listProviderAccounts();
+  const collision = accounts.find((existingAccount) => (
+    existingAccount.id !== account.id
+    && getOpenClawProviderKeyForType(existingAccount.vendorId, existingAccount.id, existingAccount.metadata) === runtimeProviderKey
+  ));
+
+  if (collision) {
+    throw new Error('Custom provider ID already exists');
+  }
 }
 
 export class ProviderService {
@@ -71,11 +130,13 @@ export class ProviderService {
 
   async createAccount(account: ProviderAccount, apiKey?: string): Promise<ProviderAccount> {
     await ensureProviderStoreMigrated();
+    await assertCustomRuntimeProviderKeyAvailable(account);
     await saveProvider(providerAccountToConfig(account));
     await saveProviderAccount(account);
     if (apiKey !== undefined && apiKey.trim()) {
       await storeApiKey(account.id, apiKey.trim());
     }
+    await seedDefaultAgentModelFromAccount(account);
     return (await getProviderAccount(account.id)) ?? account;
   }
 
@@ -97,6 +158,7 @@ export class ProviderService {
       updatedAt: patch.updatedAt ?? new Date().toISOString(),
     };
 
+    await assertCustomRuntimeProviderKeyAvailable(nextAccount);
     await saveProvider(providerAccountToConfig(nextAccount));
     await saveProviderAccount(nextAccount);
     if (apiKey !== undefined) {

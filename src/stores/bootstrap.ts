@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 import { USER_STATUS_REQUIRES_INVITE } from '../../shared/auth/user-status';
-import { shouldSkipE2EProvider } from '@/lib/e2e';
-import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
 import { useSessionStore, type SessionAccount } from '@/stores/session';
@@ -12,7 +10,6 @@ export type BootstrapPhase =
   | 'needs_login'
   | 'needs_invite_code'
   | 'preparing'
-  | 'needs_provider'
   | 'ready'
   | 'error';
 
@@ -24,7 +21,6 @@ interface BootstrapStoreState {
   submitInviteCodeAndContinue: (inviteCode: string) => Promise<void>;
   skipInviteCodeAndContinue: () => Promise<void>;
   logoutToLogin: () => Promise<void>;
-  continueAfterProvider: () => Promise<void>;
   retry: () => Promise<void>;
 }
 
@@ -79,30 +75,6 @@ async function waitForGatewayRunning(timeoutMs = GATEWAY_READY_TIMEOUT_MS): Prom
   });
 }
 
-async function hasUsableProvider(): Promise<boolean> {
-  const snapshot = await fetchProviderSnapshot();
-  const items = buildProviderListItems(
-    snapshot.accounts,
-    snapshot.statuses,
-    snapshot.vendors,
-    snapshot.defaultAccountId,
-  );
-
-  const isUsable = (item: (typeof items)[number]) => {
-    const { account, status } = item;
-    if (account.authMode === 'oauth_device' || account.authMode === 'oauth_browser' || account.authMode === 'local') {
-      return true;
-    }
-    return status?.hasKey ?? false;
-  };
-
-  const defaultItem = snapshot.defaultAccountId
-    ? items.find((item) => item.account.id === snapshot.defaultAccountId)
-    : null;
-
-  return (defaultItem ? isUsable(defaultItem) : false) || items.some(isUsable);
-}
-
 async function ensureGatewayReady(): Promise<void> {
   await useGatewayStore.getState().init();
   let gateway = useGatewayStore.getState();
@@ -126,12 +98,6 @@ async function ensureGatewayReady(): Promise<void> {
 
 async function continueBootstrap(set: (patch: Partial<BootstrapStoreState>) => void): Promise<void> {
   set({ phase: 'preparing', error: null });
-
-  if (!shouldSkipE2EProvider() && !(await hasUsableProvider())) {
-    set({ phase: 'needs_provider' });
-    return;
-  }
-
   await ensureGatewayReady();
   useSettingsStore.getState().markSetupComplete();
   set({ phase: 'ready', error: null });
@@ -245,14 +211,6 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
         // ignore gateway stop failures on logout
       }
       set({ phase: 'needs_login', error: null });
-    }
-  },
-
-  continueAfterProvider: async () => {
-    try {
-      await continueBootstrap(set);
-    } catch (error) {
-      set({ phase: 'error', error: String(error) });
     }
   },
 

@@ -65,6 +65,17 @@ describe('agent runtime sync', () => {
       getGeeClawAgentStore: vi.fn(async () => agentStore),
     }));
 
+    vi.doMock('../../electron/services/providers/store-instance', () => ({
+      getGeeClawProviderStore: vi.fn(async () => ({
+        get: (key: string) => {
+          if (key === 'providerAccounts') return {};
+          return undefined;
+        },
+        set: vi.fn(),
+        delete: vi.fn(),
+      })),
+    }));
+
     vi.doMock('../../electron/services/channels/store-instance', () => ({
       getGeeClawChannelStore: vi.fn(async () => channelStore),
     }));

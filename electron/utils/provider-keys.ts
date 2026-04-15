@@ -1,7 +1,11 @@
+import type { ProviderAccount } from '../../shared/providers/types';
+import { getStoredCustomProviderRuntimeKey } from '../../shared/providers/runtime-provider-key';
+
 const MULTI_INSTANCE_PROVIDER_TYPES = new Set(['custom', 'ollama']);
 
 export const OPENCLAW_PROVIDER_KEY_MINIMAX = 'minimax-portal';
 export const OPENCLAW_PROVIDER_KEY_MOONSHOT = 'moonshot';
+export const OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL = 'moonshot-global';
 export const OAUTH_PROVIDER_TYPES = ['minimax-portal', 'minimax-portal-cn'] as const;
 export const OPENCLAW_OAUTH_PLUGIN_PROVIDER_KEYS = [
   OPENCLAW_PROVIDER_KEY_MINIMAX,
@@ -18,7 +22,18 @@ export function isMultiInstanceProviderType(type: string): boolean {
   return MULTI_INSTANCE_PROVIDER_TYPES.has(type);
 }
 
-export function getOpenClawProviderKeyForType(type: string, providerId: string): string {
+export function getOpenClawProviderKeyForType(
+  type: string,
+  providerId: string,
+  metadata?: ProviderAccount['metadata'],
+): string {
+  if (type === 'custom') {
+    const explicitRuntimeKey = getStoredCustomProviderRuntimeKey(metadata);
+    if (explicitRuntimeKey) {
+      return explicitRuntimeKey;
+    }
+  }
+
   if (isMultiInstanceProviderType(type)) {
     const prefix = `${type}-`;
     if (providerId.startsWith(prefix) && !providerId.slice(prefix.length).includes('-')) {

@@ -170,7 +170,7 @@ export function DashboardSettingsSection({ className }: DashboardSettingsSection
           <div className={`grid grid-cols-2 gap-4 md:grid-cols-3 ${devModeUnlocked ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
             <Button variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
               <Link
-                to={getSettingsModalPath('models')}
+                to={getSettingsModalPath('modelProviders')}
                 state={settingsModalState}
                 onClick={() => trackUiEvent('dashboard.quick_action', { action: 'add_provider' })}
               >

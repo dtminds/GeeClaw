@@ -207,6 +207,34 @@
       "model": "Model Settings",
       "fallback": "Fallback Settings"
     },
+    "models": {
+      "addModel": "Add model",
+      "editModel": "Edit model",
+      "removeModel": "Remove model",
+      "empty": "No models added yet",
+      "modalities": {
+        "text": "Text",
+        "image": "Image"
+      },
+      "contextWindowShort": "Context",
+      "maxTokensShort": "Max output",
+      "dialog": {
+        "addTitle": "Add model",
+        "editTitle": "Edit model",
+        "id": "Model name",
+        "advanced": "Advanced options",
+        "save": "Save",
+        "contextWindow": "Context Window",
+        "maxTokens": "Max Tokens",
+        "modalities": {
+          "title": "Supported modalities",
+          "text": "Text",
+          "textHint": "Enabled by default",
+          "image": "Image",
+          "imageHint": "Turn this on only if the model supports image understanding"
+        }
+      }
+    },
     "add": "Add Provider",
     "addAccount": "Add Account",
     "custom": "Custom",
@@ -235,6 +263,8 @@
       "title": "Add AI Provider",
       "desc": "Configure a new AI model provider",
       "displayName": "Display Name",
+      "providerId": "Provider ID",
+      "providerIdHelp": "Used for config refs and written as {{value}}. Lowercase letters, numbers, and hyphens only. This cannot be changed after creation.",
       "apiKey": "API Key",
       "apiKeyConfigured": "An API key is already stored for this provider.",
       "apiKeyMissing": "No API key is stored for this provider yet.",
@@ -250,7 +280,8 @@
       "protocol": "Protocol",
       "modelId": "Model ID",
       "modelIds": "Models",
-      "modelIdsHelp": "One model ID per line. These become the models configured under this provider.",
+      "modelIdsHelp": "Add model IDs one by one. These become the models configured under this provider.",
+      "addModel": "Add model",
       "fallbackModels": "Fallback Models",
       "fallbackProviders": "Fallback Providers",
       "fallbackModelIds": "Fallback Model IDs",
@@ -291,12 +322,16 @@
       "failedAdd": "Failed to add provider",
       "deleted": "Provider deleted",
       "failedDelete": "Failed to delete provider",
-      "blockedByFallback": "Cannot delete: model(s) {{refs}} from this provider are configured as Agent Fallbacks. Please remove them from Model Settings first.",
+      "blockedByFallback": "Cannot delete: model(s) {{refs}} from this provider are still referenced in Model Config. Remove those references first.",
       "defaultUpdated": "Default provider updated",
       "failedDefault": "Failed to set default",
       "updated": "Provider updated",
       "failedUpdate": "Failed to update provider",
       "invalidKey": "Invalid API key",
+      "customProviderIdRequired": "Provider ID is required",
+      "customProviderIdInvalid": "Provider ID can only contain lowercase letters, numbers, and hyphens",
+      "customProviderIdReserved": "Provider ID is reserved",
+      "customProviderIdDuplicate": "Provider ID already exists",
       "modelRequired": "Model ID is required",
       "minimaxConflict": "Cannot add both MiniMax (Global) and MiniMax (CN) providers."
     },
@@ -327,28 +362,64 @@
     }
   },
   "agentModels": {
-    "title": "Agent Model Defaults",
+    "title": "Model Config",
+    "description": "Choose which models GeeClaw should use for chat, image generation, video generation, vision understanding, and PDF.",
     "primary": "Primary Model",
     "fallbacks": "Fallback Models",
     "none": "Not configured",
-    "primaryHelp": "The current default provider's first configured model is used as the agent primary model.",
+    "selectPrimary": "Select a model",
+    "selectPrimaryFirst": "Choose a primary model first",
+    "selectFallbacks": "Select fallback models",
+    "fallbackLimit": "Up to 3 fallback models",
     "configureFallbacks": "Configure Fallbacks",
+    "fallbackPickerTitle": "Choose fallback models for {{section}}",
+    "fallbackPickerDescription": "These models are only used when the primary model is unavailable.",
+    "noFallbacksSelected": "No fallback models selected",
+    "selected": "Selected",
+    "select": "Select",
+    "done": "Done",
+    "emptyState": "No provider models are available yet. Add and configure at least one model under Model Providers first.",
+    "save": "Save",
     "refresh": "Refresh",
-    "dialog": {
-      "title": "Configure Agent Fallbacks",
-      "desc": "Fallback models are agent-level settings. Every entry must already exist under one of the configured providers below.",
-      "fallbacksLabel": "Fallback Model Refs",
-      "fallbacksEmpty": "Click a model below to add it as a fallback",
-      "fallbacksPlaceholder": "openai/gpt-5.2-mini\ngeeclaw/kimi-k2.5",
-      "fallbacksHelp": "Use one full model ref per line, for example provider/model-id.",
-      "available": "Available Provider Models",
-      "availableHelp": "These are the model refs currently defined under your providers and allowed for fallback use.",
-      "save": "Save Fallbacks"
+    "mode": {
+      "auto": "Automatic",
+      "custom": "Custom"
+    },
+    "sections": {
+      "model": {
+        "title": "Chat Model",
+        "description": "Required for normal chat. If this is empty, GeeClaw can open chat but cannot send messages.",
+        "fallbackHelp": "Fallbacks are used only when the primary chat model is unavailable."
+      },
+      "imageModel": {
+        "title": "Vision Understanding Model",
+        "description": "Used for image understanding and multimodal reasoning when GeeClaw needs a dedicated vision understanding model.",
+        "autoHelp": "Automatic mode omits this section and lets OpenClaw fall back to the default chat model chain.",
+        "fallbackHelp": "Fallbacks are attempted after the primary vision understanding model."
+      },
+      "pdfModel": {
+        "title": "PDF Model",
+        "description": "Used for PDF-specific understanding when you want a dedicated model for documents.",
+        "autoHelp": "Automatic mode omits this section. OpenClaw falls back to the Vision Understanding Model, then to the Chat Model.",
+        "fallbackHelp": "Fallbacks are attempted after the primary PDF model."
+      },
+      "imageGenerationModel": {
+        "title": "Image Generation Model",
+        "description": "Used for image generation workflows.",
+        "autoHelp": "Automatic mode omits this section and leaves image generation unmanaged.",
+        "fallbackHelp": "Fallbacks are attempted after the primary image generation model."
+      },
+      "videoGenerationModel": {
+        "title": "Video Generation Model",
+        "description": "Used for video generation workflows.",
+        "autoHelp": "Automatic mode omits this section and leaves video generation unmanaged.",
+        "fallbackHelp": "Fallbacks are attempted after the primary video generation model."
+      }
     },
     "toast": {
-      "saved": "Agent fallback models updated",
-      "failedSave": "Failed to save agent fallback models",
-      "failedLoad": "Failed to load agent model defaults"
+      "saved": "Model configuration updated",
+      "failedSave": "Failed to save model configuration",
+      "failedLoad": "Failed to load model configuration"
     }
   },
   "gateway": {

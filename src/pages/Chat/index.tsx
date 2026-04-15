@@ -4,7 +4,7 @@
  * via gateway:rpc IPC. Session selector, thinking toggle, and refresh
  * are in the toolbar; messages render with markdown + streaming.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowDown, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
@@ -31,6 +31,8 @@ import { buildChatItems } from './build-chat-items';
 import { createRequestedAgentNavigationCache } from './requested-agent-navigation-cache';
 import { useSettingsStore } from '@/stores/settings';
 import { CHANNEL_ICONS, CHANNEL_NAMES, getPrimaryChannels, type ChannelType } from '@/types/channel';
+import { hostApiFetch } from '@/lib/host-api';
+import { getSettingsModalPath } from '@/lib/settings-modal';
 
 const CHANNEL_LOGO_SVGS: Partial<Record<ChannelType, string>> = {
   telegram: telegramIcon,
@@ -74,6 +76,35 @@ const WELCOME_CHANNEL_TYPES = [...getPrimaryChannels()]
 
 const consumedRequestedAgentNavigationKeys = createRequestedAgentNavigationCache(128);
 
+interface AvailableProviderModelGroup {
+  providerId: string;
+  providerName: string;
+  modelRefs: string[];
+}
+
+interface AgentModelSlotState {
+  configured: boolean;
+  primary: string | null;
+  fallbacks: string[];
+}
+
+interface AgentDefaultModelSnapshot {
+  model: AgentModelSlotState;
+  imageModel: AgentModelSlotState;
+  pdfModel: AgentModelSlotState;
+  imageGenerationModel: AgentModelSlotState;
+  videoGenerationModel: AgentModelSlotState;
+  primary: string | null;
+  fallbacks: string[];
+  availableModels: AvailableProviderModelGroup[];
+}
+
+interface DefaultModelFetchState {
+  requestKey: string | null;
+  snapshot: AgentDefaultModelSnapshot | null;
+  loaded: boolean;
+}
+
 export function Chat() {
   const { t } = useTranslation('chat');
   const skipNextAutoLoadRef = useRef(false);
@@ -86,6 +117,11 @@ export function Chat() {
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
   const sessionsPanelCollapsed = useSettingsStore((s) => s.chatSessionsPanelCollapsed);
+  const [defaultModelState, setDefaultModelState] = useState<DefaultModelFetchState>({
+    requestKey: null,
+    snapshot: null,
+    loaded: false,
+  });
 
   const messages = useChatStore((s) => s.messages);
   const loading = useChatStore((s) => s.loading);
@@ -125,10 +161,79 @@ export function Chat() {
   const isStreamingActive = sending || hasAnyStreamContent;
   const autoScrollSessionId = currentDesktopSessionId
     || (currentViewMode === 'cron' && selectedCronRun ? `cron:${selectedCronRun.jobId}:${selectedCronRun.id}` : currentSessionKey);
-  const isComposerDisabled = !isGatewayRunning || (currentViewMode === 'cron' && !selectedCronRun?.sessionKey);
-  const disabledPlaceholder = currentViewMode === 'cron' && !selectedCronRun?.sessionKey
+  const cronComposerUnavailable = currentViewMode === 'cron' && !selectedCronRun?.sessionKey;
+  const defaultModelRequestKey = isGatewayRunning ? (location.key || location.pathname) : null;
+  const defaultModelSnapshot = defaultModelState.requestKey === defaultModelRequestKey
+    ? defaultModelState.snapshot
+    : null;
+  const defaultModelLoaded = defaultModelRequestKey !== null
+    && defaultModelState.requestKey === defaultModelRequestKey
+    && defaultModelState.loaded;
+  const availableModelRefs = useMemo(
+    () => new Set(defaultModelSnapshot?.availableModels.flatMap((group) => group.modelRefs) ?? []),
+    [defaultModelSnapshot],
+  );
+  const hasAvailableModels = availableModelRefs.size > 0;
+  const configuredPrimaryModel = defaultModelSnapshot?.model.primary ?? defaultModelSnapshot?.primary ?? null;
+  const hasValidPrimaryModel = Boolean(configuredPrimaryModel && availableModelRefs.has(configuredPrimaryModel));
+  const requiresProviderSetup = defaultModelLoaded && !hasAvailableModels;
+  const requiresModelConfig = defaultModelLoaded && hasAvailableModels && !hasValidPrimaryModel;
+  const isComposerDisabled = !isGatewayRunning || cronComposerUnavailable || requiresProviderSetup || requiresModelConfig;
+  const disabledPlaceholder = cronComposerUnavailable
     ? t('composer.cronFallbackPlaceholder')
-    : undefined;
+    : requiresProviderSetup
+      ? t('composer.modelProvidersRequiredPlaceholder')
+      : requiresModelConfig
+        ? t('composer.modelConfigRequiredPlaceholder')
+        : undefined;
+  const disabledHint = requiresProviderSetup
+    ? t('composer.modelProvidersHint')
+    : requiresModelConfig
+      ? t('composer.modelConfigHint')
+      : undefined;
+  const disabledAction = requiresProviderSetup
+    ? {
+        to: getSettingsModalPath('modelProviders'),
+        label: t('composer.openModelProviders'),
+      }
+    : requiresModelConfig
+      ? {
+          to: getSettingsModalPath('modelConfig'),
+          label: t('composer.openModelConfig'),
+        }
+      : null;
+
+  useEffect(() => {
+    if (!defaultModelRequestKey) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void hostApiFetch<AgentDefaultModelSnapshot>('/api/agents/default-model')
+      .then((snapshot) => {
+        if (!cancelled) {
+          setDefaultModelState({
+            requestKey: defaultModelRequestKey,
+            snapshot,
+            loaded: true,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDefaultModelState({
+            requestKey: defaultModelRequestKey,
+            snapshot: null,
+            loaded: true,
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultModelRequestKey]);
 
   // ── Auto-scroll behaviour ──────────────────────────────────────
   const {
@@ -203,6 +308,7 @@ export function Chat() {
     navigate,
     openAgentMainSession,
     requestedAgentId,
+    requestedAgentNavigationKey,
   ]);
 
   // Gateway not running
@@ -324,6 +430,8 @@ export function Chat() {
               onStop={abortRun}
               disabled={isComposerDisabled}
               disabledPlaceholder={disabledPlaceholder}
+              disabledHint={disabledHint}
+              disabledAction={disabledAction}
               sending={sending}
               isEmpty={isEmpty}
             />

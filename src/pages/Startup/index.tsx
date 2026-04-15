@@ -4,17 +4,14 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Loader2,
   Sparkles,
 } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ProviderContent } from '@/pages/Setup';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
-import { cn } from '@/lib/utils';
 import { subscribeHostEvent } from '@/lib/host-events';
 import geeclawIcon from '@/assets/logo.svg';
 
@@ -23,7 +20,6 @@ const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
   checking_session: 22,
   needs_invite_code: 44,
   preparing: 72,
-  needs_provider: 88,
   ready: 100,
 };
 
@@ -41,14 +37,11 @@ export function Startup() {
   const loginAndContinue = useBootstrapStore((state) => state.loginAndContinue);
   const submitInviteCodeAndContinue = useBootstrapStore((state) => state.submitInviteCodeAndContinue);
   const skipInviteCodeAndContinue = useBootstrapStore((state) => state.skipInviteCodeAndContinue);
-  const continueAfterProvider = useBootstrapStore((state) => state.continueAfterProvider);
   const logoutToLogin = useBootstrapStore((state) => state.logoutToLogin);
   const retry = useBootstrapStore((state) => state.retry);
   // const account = useSessionStore((state) => state.account);
   const setupComplete = useSettingsStore((state) => state.setupComplete);
 
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isSubmittingInviteCode, setIsSubmittingInviteCode] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<OpenClawSidecarStatus | null>(null);
@@ -68,12 +61,6 @@ export function Startup() {
       setSidecarStatus(payload);
     });
   }, []);
-
-  const handleProviderConfiguredChange = useCallback((configured: boolean) => {
-    if (configured) {
-      void continueAfterProvider();
-    }
-  }, [continueAfterProvider]);
 
   const handleInviteCodeSubmit = useCallback(async () => {
     const trimmedInviteCode = inviteCode.trim();
@@ -128,9 +115,6 @@ export function Startup() {
   }, [phase, setupComplete, sidecarStatus, t]);
 
   const statusMessage = useMemo(() => {
-    if (phase === 'needs_provider') {
-      return t('startup.status.provider');
-    }
     if (phase === 'needs_login') {
       return t('startup.status.login');
     }
@@ -295,44 +279,6 @@ export function Startup() {
       );
     }
 
-    if (phase === 'needs_provider') {
-      return (
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto flex w-full max-w-[58rem] flex-col gap-5"
-        >
-          <div className="modal-card-surface rounded-[2rem] border p-7 backdrop-blur-lg">
-            <div className="flex items-start gap-4">
-              <div className="modal-section-surface flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border shadow-[0_10px_24px_-18px_rgba(31,104,74,0.34)]">
-                <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium uppercase tracking-[0.18em] text-emerald-600/70">
-                  {t('startup.authenticated.eyebrow')}
-                </p>
-                <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-white/65">
-                  {statusMessage}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="modal-card-surface rounded-[2rem] border p-7 backdrop-blur-xl">
-            <ProviderContent
-              providers={[]}
-              selectedProvider={selectedProvider}
-              onSelectProvider={setSelectedProvider}
-              apiKey={apiKey}
-              onApiKeyChange={setApiKey}
-              onConfiguredChange={handleProviderConfiguredChange}
-            />
-          </div>
-        </motion.div>
-      );
-    }
-
     return (
       <motion.div
         initial={{ opacity: 0, y: 18 }}
@@ -383,12 +329,7 @@ export function Startup() {
 
       <div
         data-testid="startup-content-scroll-container"
-        className={cn(
-          'relative flex min-h-0 flex-1 flex-col px-6 pb-16 pt-10 md:px-10',
-          phase === 'needs_provider'
-            ? 'items-stretch overflow-y-auto overflow-x-hidden'
-            : 'items-center justify-center',
-        )}
+        className="relative flex min-h-0 flex-1 flex-col px-6 pb-16 pt-10 md:px-10 items-center justify-center"
       >
         {renderCenterPanel()}
       </div>

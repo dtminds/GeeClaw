@@ -49,7 +49,7 @@ Building AI agents shouldn't require mastering the command line. GeeClaw was des
 | Complex CLI setup | One-click installation with a simplified startup flow |
 | Configuration files | Visual settings with real-time validation |
 | Process management | Automatic gateway lifecycle management |
-| Multiple AI providers | Unified provider configuration panel |
+| Multiple AI providers | Separate Model Providers and Model Config settings |
 | Skill/plugin installation | Built-in skill marketplace and management |
 
 ### OpenClaw Inside
@@ -98,7 +98,7 @@ Environment variables for bundled search skills:
 Global runtime environment variables can now be managed directly in **Settings → Environment**. GeeClaw injects them into its managed Gateway and Agent runtimes, uses them when checking preset install requirements such as `requires.env`, and restarts the Gateway automatically after you save changes.
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
+Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. GeeClaw now separates provider setup from model assignment: configure accounts under **Settings → Model Providers**, then choose the default chat / image / video models under **Settings → Model Config**. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
@@ -144,12 +144,19 @@ pnpm dev
 ```
 ### First Launch
 
-When you launch GeeClaw for the first time, the **Setup Wizard** will guide you through:
+When you launch GeeClaw for the first time, the **Setup Wizard** focuses on getting the managed runtime ready:
 
 1. **Language & Region** – Configure your preferred locale
-2. **AI Provider** – Add providers with API keys or OAuth (for providers that support browser/device login)
-3. **Skill Bundles** – Select pre-configured skills for common use cases
-4. **Verification** – Test your configuration before entering the main interface
+2. **Runtime Preparation** – Verify the bundled OpenClaw runtime and supporting tools
+3. **Skill Bundles** – Install the default local skill/tool bundle
+4. **Enter the App** – Start using GeeClaw immediately after setup completes
+
+Model setup is now handled inside the main app:
+
+- Open **Settings → Model Providers** to add providers and their model catalogs.
+- Open **Settings → Model Config** to choose the default chat model and optional image/PDF/image-generation/video-generation model slots.
+- If no provider models exist, the chat composer stays disabled and links you to **Model Providers**.
+- If provider models exist but no default chat model is configured, the chat composer links you to **Model Config** instead.
 
 GeeClaw manages its own OpenClaw runtime and state directory. If you already have legacy OpenClaw data under `~/.openclaw`, keep it as-is for migration or manual import; GeeClaw does not switch over to your system `openclaw` command for normal runtime operation.
 

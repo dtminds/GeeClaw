@@ -121,11 +121,37 @@ describe('provider runtime sync for browser OAuth', () => {
       subject: 'chatgpt-account-id',
     });
     vi.mocked(getDefaultAgentModelConfig).mockResolvedValue({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['anthropic/claude-sonnet-4-5'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'openai/gpt-5.4',
       fallbacks: ['anthropic/claude-sonnet-4-5'],
     } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
   });
 
-  it('uses the openai-codex runtime provider for OpenAI browser OAuth defaults', async () => {
+  it('uses the explicit chat model when syncing OpenAI browser OAuth defaults', async () => {
     vi.mocked(getProvider).mockResolvedValue(makeProvider());
 
     await syncDefaultProviderToRuntime('openai-account');
@@ -146,7 +172,7 @@ describe('provider runtime sync for browser OAuth', () => {
     );
   });
 
-  it('uses gemini-3-flash-preview as the Google browser OAuth fallback model', async () => {
+  it('maps Google browser OAuth primary refs into the gemini runtime namespace', async () => {
     vi.mocked(getProvider).mockResolvedValue({
       ...makeProvider({
         id: 'google-account',
@@ -170,6 +196,35 @@ describe('provider runtime sync for browser OAuth', () => {
       expiresAt: 1710000000000,
       subject: 'google-account-id',
     });
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'google/gemini-2.5-pro',
+        fallbacks: ['anthropic/claude-sonnet-4-5'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'google/gemini-2.5-pro',
+      fallbacks: ['anthropic/claude-sonnet-4-5'],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
 
     await syncDefaultProviderToRuntime('google-account');
 
@@ -183,24 +238,46 @@ describe('provider runtime sync for browser OAuth', () => {
     );
     expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
       'google-gemini-cli',
-      'google-gemini-cli/gemini-3-flash-preview',
+      'google-gemini-cli/gemini-2.5-pro',
       ['anthropic/claude-sonnet-4-5'],
     );
   });
 
-  it('keeps bare configured model ids under the openai-codex runtime namespace', async () => {
-    vi.mocked(getProvider).mockResolvedValue(makeProvider({
-      models: ['gpt-5.3-codex-mini', 'gpt-5.3-codex'],
-      model: 'gpt-5.3-codex-mini',
-    }));
+  it('does not infer a default chat model from the provider when no explicit model is configured', async () => {
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: null,
+      fallbacks: [],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
 
     await syncDefaultProviderToRuntime('openai-account');
 
-    expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
-      'openai-codex',
-      'openai-codex/gpt-5.3-codex-mini',
-      ['anthropic/claude-sonnet-4-5'],
-    );
+    expect(setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
   });
 
   it('removes both runtime and stored keys when deleting a custom provider', async () => {
@@ -246,7 +323,13 @@ describe('provider runtime sync for browser OAuth', () => {
 
     expect(syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
       'ollama-ollamafd',
-      ['qwen3:30b'],
+      [
+        {
+          id: 'qwen3:30b',
+          name: 'qwen3:30b',
+          reasoning: false,
+        },
+      ],
       expect.objectContaining({
         baseUrl: 'http://localhost:11434/v1',
         api: 'openai-completions',
@@ -263,6 +346,35 @@ describe('provider runtime sync for browser OAuth', () => {
       baseUrl: 'http://localhost:11434/v1',
     });
     vi.mocked(getProvider).mockResolvedValue(ollamaProvider);
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'ollama-ollamafd/qwen3:30b',
+        fallbacks: ['anthropic/claude-sonnet-4-5'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'ollama-ollamafd/qwen3:30b',
+      fallbacks: ['anthropic/claude-sonnet-4-5'],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
 
     await syncDefaultProviderToRuntime('ollamafd');
 
@@ -291,6 +403,35 @@ describe('provider runtime sync for browser OAuth', () => {
       accountId: 'ollamafd',
       apiKey: 'ollama-local',
     });
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'ollama-ollamafd/qwen3:30b',
+        fallbacks: ['anthropic/claude-sonnet-4-5'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'ollama-ollamafd/qwen3:30b',
+      fallbacks: ['anthropic/claude-sonnet-4-5'],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
 
     await syncUpdatedProviderToRuntime(ollamaProvider, undefined);
 

@@ -19,7 +19,7 @@ const {
   updateAgentName,
   updateAgentPersona,
   updateAgentSettings,
-  updateDefaultAgentFallbacks,
+  updateDefaultAgentModelConfig,
 } = vi.hoisted(() => ({
   assignChannelToAgent: vi.fn(),
   clearChannelBinding: vi.fn(),
@@ -99,7 +99,7 @@ const {
     channelAccountOwners: {},
     explicitChannelAccountBindings: {},
   })),
-  updateDefaultAgentFallbacks: vi.fn(),
+  updateDefaultAgentModelConfig: vi.fn(),
 }));
 
 vi.mock('@electron/utils/agent-config', () => ({
@@ -118,7 +118,7 @@ vi.mock('@electron/utils/agent-config', () => ({
   updateAgentName,
   updateAgentPersona,
   updateAgentSettings,
-  updateDefaultAgentFallbacks,
+  updateDefaultAgentModelConfig,
 }));
 
 vi.mock('@electron/api/route-utils', () => ({
@@ -220,6 +220,116 @@ describe('agent API routes', () => {
         promptText: 'Please summarize what changed.',
       },
       agents: [{ id: 'stockexpert', managed: true }],
+    }));
+  });
+
+  it('updates the full default model config and schedules a gateway reload', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    const res = {} as never;
+    const debouncedReload = vi.fn();
+    parseJsonBody.mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: true,
+        primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+    });
+    updateDefaultAgentModelConfig.mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: true,
+        primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      availableModels: [],
+    });
+
+    const handled = await handleAgentRoutes(
+      { method: 'PUT' } as never,
+      res,
+      new URL('http://127.0.0.1/api/agents/default-model'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(updateDefaultAgentModelConfig).toHaveBeenCalledWith({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: ['openai/gpt-5.4-mini'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: true,
+        primary: 'openrouter/qwen/qwen-2.5-vl-72b-instruct:free',
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: true,
+        primary: 'openai/gpt-image-1',
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+    });
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJson).toHaveBeenCalledWith(res, 200, expect.objectContaining({
+      success: true,
+      model: expect.objectContaining({
+        primary: 'openai/gpt-5.4',
+      }),
     }));
   });
 
