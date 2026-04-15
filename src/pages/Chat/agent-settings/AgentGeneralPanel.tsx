@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -80,12 +80,6 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
       cancelled = true;
     };
   }, [agentId]);
-
-  const modelLabel = useMemo(() => {
-    if (!agent) return '';
-    const suffix = agent.inheritedModel ? ` ${t('agentSettingsDialog.general.inheritedSuffix')}` : '';
-    return `${agent.modelDisplay}${suffix}`;
-  }, [agent, t]);
 
   const canSaveName = Boolean(agent && name.trim() && name.trim() !== agent.name);
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));

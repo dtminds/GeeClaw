@@ -243,9 +243,7 @@ describe('AgentSettingsDialog shell', () => {
     expect(deleteCard).not.toHaveClass('mt-auto');
     expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toHaveClass('h-[min(88vh,860px)]', 'min-h-[620px]');
 
-    expect(screen.getByLabelText('Agent Name')).toHaveValue('Writer Bot');
-    expect(screen.getByLabelText('Agent ID')).toHaveValue('writer');
-    expect(screen.getByLabelText('Model')).toHaveValue('gpt-4.1');
+    expect(screen.getByLabelText('Agent Name - writer')).toHaveValue('Writer Bot');
     expect(screen.getByRole('button', { name: 'Delete Agent' })).toBeInTheDocument();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
