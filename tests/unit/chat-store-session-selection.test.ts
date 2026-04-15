@@ -717,4 +717,139 @@ describe('chat store session selection', () => {
     expect(messages[1]?.content).toBe('newer optimistic message');
   });
 
+  it('does not append the optimistic user message when history already contains the current send after a delayed start', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      messages: [
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 30,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 30,
+              },
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 + 6,
+              },
+              {
+                id: 'assistant-delta',
+                role: 'assistant',
+                content: 'thinking',
+                timestamp: optimisticSentAtMs / 1000 + 6.2,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.map((message) => message.id)).toEqual([
+      'prev-assistant',
+      'persisted-user',
+      'assistant-delta',
+    ]);
+  });
+
+  it('keeps the new optimistic user message when an older run sent the same text', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      messages: [
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 1,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'old-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 20,
+              },
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 1,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.at(-1)?.id).toBe('optimistic-user');
+    expect(messages.at(-1)?.content).toBe('你好');
+  });
+
 });
