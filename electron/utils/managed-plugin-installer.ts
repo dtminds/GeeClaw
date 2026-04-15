@@ -1,12 +1,6 @@
 import { spawn } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-} from 'node:fs';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { getManagedOpenClawConfigPath } from './openclaw-managed-profile';
@@ -113,14 +107,23 @@ function getPluginFinalDir(configDir: string, pluginId: string): string {
   return join(configDir, 'extensions', pluginId);
 }
 
-function getInstalledPluginVersion(configDir: string, pluginId: string): string | null {
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await access(targetPath, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getInstalledPluginVersion(configDir: string, pluginId: string): Promise<string | null> {
   const packageJsonPath = join(getPluginFinalDir(configDir, pluginId), 'package.json');
-  if (!existsSync(packageJsonPath)) {
+  if (!await pathExists(packageJsonPath)) {
     return null;
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown };
+    const parsed = JSON.parse(await readFile(packageJsonPath, 'utf8')) as { version?: unknown };
     return typeof parsed.version === 'string' && parsed.version.trim() ? parsed.version.trim() : null;
   } catch {
     return null;
@@ -151,21 +154,21 @@ function createManagedPluginEnv(options: EnsureManagedPluginsReadyBeforeGatewayL
 
 async function createStagingRoot(configDir: string, pluginId: string): Promise<string> {
   const stagingBase = join(configDir, '.managed-plugin-staging');
-  mkdirSync(stagingBase, { recursive: true });
+  await mkdir(stagingBase, { recursive: true });
   return mkdtemp(join(stagingBase, `${pluginId}-${Date.now()}-${randomUUID()}-`));
 }
 
-function cleanupDirectory(targetPath: string): void {
-  rmSync(targetPath, { recursive: true, force: true });
+async function cleanupDirectory(targetPath: string): Promise<void> {
+  await rm(targetPath, { recursive: true, force: true });
 }
 
 async function readPackageJson(packageRoot: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
 }
 
-function resolveExtractedPackageRoot(destinationRoot: string): string {
+async function resolveExtractedPackageRoot(destinationRoot: string): Promise<string> {
   const npmPackageRoot = join(destinationRoot, 'package');
-  return existsSync(join(npmPackageRoot, 'package.json')) ? npmPackageRoot : destinationRoot;
+  return await pathExists(join(npmPackageRoot, 'package.json')) ? npmPackageRoot : destinationRoot;
 }
 
 function parsePackFilename(stdout: string): string {
@@ -199,12 +202,12 @@ export async function ensureManagedPluginInstalled(
   const runCommand = options.runCommand ?? defaultRunManagedPluginCommand;
   const extractPackage = options.extractPackage ?? defaultExtractManagedPluginPackage;
   const finalDir = getPluginFinalDir(options.configDir, options.plugin.pluginId);
-  const currentVersion = getInstalledPluginVersion(options.configDir, options.plugin.pluginId);
+  const currentVersion = await getInstalledPluginVersion(options.configDir, options.plugin.pluginId);
   const stagingRoot = await createStagingRoot(options.configDir, options.plugin.pluginId);
   const packDir = join(stagingRoot, 'pack');
   const extractRoot = join(stagingRoot, 'extract');
-  mkdirSync(packDir, { recursive: true });
-  mkdirSync(extractRoot, { recursive: true });
+  await mkdir(packDir, { recursive: true });
+  await mkdir(extractRoot, { recursive: true });
 
   try {
     const packResult = await runCommand({
@@ -220,7 +223,7 @@ export async function ensureManagedPluginInstalled(
       destinationRoot: extractRoot,
     });
 
-    const packageRoot = resolveExtractedPackageRoot(extractRoot);
+    const packageRoot = await resolveExtractedPackageRoot(extractRoot);
     const packageJson = await readPackageJson(packageRoot);
     validatePluginManifest(packageJson);
 
@@ -233,10 +236,10 @@ export async function ensureManagedPluginInstalled(
       });
     }
 
-    cleanupDirectory(finalDir);
-    mkdirSync(resolve(finalDir, '..'), { recursive: true });
-    renameSync(packageRoot, finalDir);
-    cleanupDirectory(stagingRoot);
+    await cleanupDirectory(finalDir);
+    await mkdir(resolve(finalDir, '..'), { recursive: true });
+    await rename(packageRoot, finalDir);
+    await cleanupDirectory(stagingRoot);
 
     return {
       action: 'installed',
@@ -245,8 +248,8 @@ export async function ensureManagedPluginInstalled(
       previousVersion: currentVersion,
     };
   } catch (error) {
-    cleanupDirectory(stagingRoot);
-    cleanupDirectory(finalDir);
+    await cleanupDirectory(stagingRoot);
+    await cleanupDirectory(finalDir);
     throw error;
   }
 }
@@ -259,7 +262,7 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
   const results: EnsureManagedPluginInstalledResult[] = [];
 
   for (const plugin of plugins) {
-    const installedVersion = getInstalledPluginVersion(options.openclawConfigDir, plugin.pluginId);
+    const installedVersion = await getInstalledPluginVersion(options.openclawConfigDir, plugin.pluginId);
     setManagedPluginStatus({
       pluginId: plugin.pluginId,
       displayName: plugin.displayName,

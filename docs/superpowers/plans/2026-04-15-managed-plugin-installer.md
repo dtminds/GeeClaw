@@ -14,7 +14,7 @@
 
 **Files:**
 - Create: `tests/unit/managed-plugin-installer.test.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/tests/unit/gateway-config-sync.test.ts`
+- Modify: `tests/unit/gateway-config-sync.test.ts`
 - Test: `tests/unit/managed-plugin-installer.test.ts`, `tests/unit/gateway-config-sync.test.ts`
 
 - [ ] **Step 1: Write failing installer tests for version checks, validation, dependency install, cleanup, and atomic promotion**
@@ -52,10 +52,10 @@ git commit -m "test: lock managed plugin startup workflow"
 ### Task 2: Implement registry, installer, and status store
 
 **Files:**
-- Create: `/Users/lsave/workspace/AI/ClawX/electron/utils/managed-plugin-registry.ts`
-- Create: `/Users/lsave/workspace/AI/ClawX/electron/utils/managed-plugin-installer.ts`
-- Create: `/Users/lsave/workspace/AI/ClawX/electron/utils/managed-plugin-status.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/electron/utils/plugin-install.ts`
+- Create: `electron/utils/managed-plugin-registry.ts`
+- Create: `electron/utils/managed-plugin-installer.ts`
+- Create: `electron/utils/managed-plugin-status.ts`
+- Modify: `electron/utils/plugin-install.ts`
 - Test: `tests/unit/managed-plugin-installer.test.ts`
 
 - [ ] **Step 1: Implement managed plugin registry with `lossless-claw` as the first required plugin**
@@ -116,8 +116,8 @@ git commit -m "feat: add managed plugin installer core"
 ### Task 3: Wire managed plugin installation into gateway startup
 
 **Files:**
-- Modify: `/Users/lsave/workspace/AI/ClawX/electron/gateway/config-sync.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/tests/unit/gateway-config-sync.test.ts`
+- Modify: `electron/gateway/config-sync.ts`
+- Modify: `tests/unit/gateway-config-sync.test.ts`
 - Test: `tests/unit/gateway-config-sync.test.ts`
 
 - [ ] **Step 1: Integrate managed plugin preparation after managed profile setup**
@@ -149,11 +149,11 @@ git commit -m "feat: install managed plugins before gateway startup"
 ### Task 4: Surface managed plugin status to renderer and startup UI
 
 **Files:**
-- Modify: `/Users/lsave/workspace/AI/ClawX/electron/main/index.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/electron/preload/index.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/src/lib/host-events.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/src/pages/Startup/index.tsx`
-- Create: `/Users/lsave/workspace/AI/ClawX/tests/unit/startup-managed-plugin-status.test.tsx`
+- Modify: `electron/main/index.ts`
+- Modify: `electron/preload/index.ts`
+- Modify: `src/lib/host-events.ts`
+- Modify: `src/pages/Startup/index.tsx`
+- Create: `tests/unit/startup-managed-plugin-status.test.tsx`
 - Test: `tests/unit/startup-managed-plugin-status.test.tsx`
 
 - [ ] **Step 1: Add main-process event emission for managed plugin status**
@@ -191,9 +191,9 @@ git commit -m "feat: surface managed plugin install status during startup"
 ### Task 5: Reconcile memory settings with managed plugin readiness
 
 **Files:**
-- Modify: `/Users/lsave/workspace/AI/ClawX/electron/utils/openclaw-memory-settings.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/tests/unit/settings-routes.test.ts`
-- Modify: `/Users/lsave/workspace/AI/ClawX/tests/unit/settings-dialog.test.tsx`
+- Modify: `electron/utils/openclaw-memory-settings.ts`
+- Modify: `tests/unit/settings-routes.test.ts`
+- Modify: `tests/unit/settings-dialog.test.tsx`
 - Test: `tests/unit/settings-routes.test.ts`, `tests/unit/settings-dialog.test.tsx`
 
 - [ ] **Step 1: Update memory settings to derive lossless readiness from managed plugin install result**
@@ -222,10 +222,10 @@ git commit -m "fix: align memory settings with managed plugin readiness"
 ### Task 6: Final verification and cleanup
 
 **Files:**
-- Modify: `/Users/lsave/workspace/AI/ClawX/package.json`
-- Modify: `/Users/lsave/workspace/AI/ClawX/pnpm-lock.yaml`
-- Modify: `/Users/lsave/workspace/AI/ClawX/README.md`
-- Modify: `/Users/lsave/workspace/AI/ClawX/README.zh-CN.md`
+- Modify: `package.json`
+- Modify: `pnpm-lock.yaml`
+- Modify: `README.md`
+- Modify: `README.zh-CN.md`
 
 - [ ] **Step 1: Remove packaged dependency assumptions**
 

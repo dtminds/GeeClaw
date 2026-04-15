@@ -336,7 +336,7 @@ For `lossless-claw`, this means startup must not proceed into a state where:
 Add tests covering:
 
 1. plugin already installed at exact target version
-   - installer does nothing
+   - installer still refreshes the plugin through staging and atomic promotion
 
 2. plugin missing
    - installer runs pack, extract, validate, npm install, promotion
