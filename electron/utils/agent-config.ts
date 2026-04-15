@@ -988,7 +988,7 @@ async function listAvailableProviderModelGroups(): Promise<AvailableProviderMode
 
   return providers
     .map((provider) => {
-      const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id);
+      const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id, provider.metadata);
       const modelRefs = getConfiguredProviderModelRefs(provider, providerKey);
 
       return {

@@ -123,7 +123,7 @@ export async function handleProviderRoutes(
         return true;
       }
 
-      const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
+      const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId, existing.metadata);
       const currentModelConfig = await getDefaultAgentModelConfig();
       const blockingRefs = collectConfiguredModelRefs(currentModelConfig)
         .filter((ref) => ref.startsWith(`${providerKey}/`));
@@ -177,7 +177,7 @@ export async function handleProviderRoutes(
 
       // Guard: block deletion if any configured default model slot still points at this provider.
       if (existing) {
-        const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
+        const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId, existing.metadata);
         const modelConfig = await getDefaultAgentModelConfig();
         const blocking = collectConfiguredModelRefs(modelConfig)
           .filter((ref) => ref.startsWith(`${providerKey}/`));

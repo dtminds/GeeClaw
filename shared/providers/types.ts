@@ -183,6 +183,7 @@ export interface ProviderAccount {
     region?: string;
     email?: string;
     resourceUrl?: string;
+    runtimeProviderKey?: string;
     modelCatalog?: ProviderModelCatalogState;
     /** @deprecated legacy field kept for migration compatibility */
     customModels?: string[];

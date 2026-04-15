@@ -73,4 +73,20 @@ describe('provider runtime model catalogs', () => {
     expect(getOpenClawProviderKey('custom', 'custom-a1b2c3d4')).toBe('custom-a1b2c3d4');
     expect(getOpenClawProviderKey('ollama', 'ollama-a1b2c3d4')).toBe('ollama-a1b2c3d4');
   });
+
+  it('uses an explicit custom runtime provider key from provider metadata', () => {
+    const config = providerConfig({
+      id: 'custom-account-id',
+      type: 'custom',
+      name: 'My Provider',
+      metadata: {
+        runtimeProviderKey: 'custom-my-provider',
+      },
+      models: ['gpt-4.1'],
+    });
+
+    expect(getProviderCatalogModelRefs(config)).toEqual([
+      'custom-my-provider/gpt-4.1',
+    ]);
+  });
 });

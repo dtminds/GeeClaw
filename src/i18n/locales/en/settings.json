@@ -264,6 +264,8 @@
       "title": "Add AI Provider",
       "desc": "Configure a new AI model provider",
       "displayName": "Display Name",
+      "providerId": "Provider ID",
+      "providerIdHelp": "Used for config refs and written as {{value}}. Lowercase letters, numbers, and hyphens only. This cannot be changed after creation.",
       "apiKey": "API Key",
       "apiKeyConfigured": "An API key is already stored for this provider.",
       "apiKeyMissing": "No API key is stored for this provider yet.",
@@ -327,6 +329,9 @@
       "updated": "Provider updated",
       "failedUpdate": "Failed to update provider",
       "invalidKey": "Invalid API key",
+      "customProviderIdRequired": "Provider ID is required",
+      "customProviderIdInvalid": "Provider ID can only contain lowercase letters, numbers, and hyphens",
+      "customProviderIdDuplicate": "Provider ID already exists",
       "modelRequired": "Model ID is required",
       "minimaxConflict": "Cannot add both MiniMax (Global) and MiniMax (CN) providers."
     },

@@ -2,6 +2,7 @@ import {
   PROVIDER_DEFINITIONS,
   getProviderDefinition,
 } from '../../shared/providers/registry';
+import { getStoredCustomProviderRuntimeKey } from '../../../shared/providers/runtime-provider-key';
 import type {
   ProviderAccount,
   ProviderConfig,
@@ -68,7 +69,7 @@ async function seedDefaultAgentModelFromAccount(account: ProviderAccount): Promi
     return;
   }
 
-  const providerKey = getOpenClawProviderKeyForType(account.vendorId, account.id);
+  const providerKey = getOpenClawProviderKeyForType(account.vendorId, account.id, account.metadata);
   await updateDefaultAgentModelConfig({
     model: {
       configured: true,
@@ -80,6 +81,28 @@ async function seedDefaultAgentModelFromAccount(account: ProviderAccount): Promi
     imageGenerationModel: current.imageGenerationModel,
     videoGenerationModel: current.videoGenerationModel,
   });
+}
+
+async function assertCustomRuntimeProviderKeyAvailable(account: ProviderAccount): Promise<void> {
+  if (account.vendorId !== 'custom') {
+    return;
+  }
+
+  const runtimeProviderKey = getStoredCustomProviderRuntimeKey(account.metadata);
+  if (!runtimeProviderKey) {
+    return;
+  }
+
+  const accounts = await listProviderAccounts();
+  const collision = accounts.find((existingAccount) => (
+    existingAccount.id !== account.id
+    && existingAccount.vendorId === 'custom'
+    && getStoredCustomProviderRuntimeKey(existingAccount.metadata) === runtimeProviderKey
+  ));
+
+  if (collision) {
+    throw new Error('Custom provider ID already exists');
+  }
 }
 
 export class ProviderService {
@@ -104,6 +127,7 @@ export class ProviderService {
 
   async createAccount(account: ProviderAccount, apiKey?: string): Promise<ProviderAccount> {
     await ensureProviderStoreMigrated();
+    await assertCustomRuntimeProviderKeyAvailable(account);
     await saveProvider(providerAccountToConfig(account));
     await saveProviderAccount(account);
     if (apiKey !== undefined && apiKey.trim()) {
@@ -131,6 +155,7 @@ export class ProviderService {
       updatedAt: patch.updatedAt ?? new Date().toISOString(),
     };
 
+    await assertCustomRuntimeProviderKeyAvailable(nextAccount);
     await saveProvider(providerAccountToConfig(nextAccount));
     await saveProviderAccount(nextAccount);
     if (apiKey !== undefined) {

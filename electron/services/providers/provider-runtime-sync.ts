@@ -70,8 +70,12 @@ function normalizeProviderBaseUrl(
   return normalized;
 }
 
-export function getOpenClawProviderKey(type: string, providerId: string): string {
-  return getOpenClawProviderKeyForType(type, providerId);
+export function getOpenClawProviderKey(
+  type: string,
+  providerId: string,
+  metadata?: ProviderConfig['metadata'],
+): string {
+  return getOpenClawProviderKeyForType(type, providerId, metadata);
 }
 
 async function resolveRuntimeProviderKey(config: ProviderConfig): Promise<string> {
@@ -84,7 +88,7 @@ async function resolveRuntimeProviderKey(config: ProviderConfig): Promise<string
       return OPENAI_OAUTH_RUNTIME_PROVIDER;
     }
   }
-  return getOpenClawProviderKey(config.type, config.id);
+  return getOpenClawProviderKey(config.type, config.id, account?.metadata ?? config.metadata);
 }
 
 async function getBrowserOAuthRuntimeProvider(config: ProviderConfig): Promise<string | null> {
@@ -108,7 +112,7 @@ async function getBrowserOAuthRuntimeProvider(config: ProviderConfig): Promise<s
 }
 
 export function getProviderModelRef(config: ProviderConfig, providerKeyOverride?: string): string | undefined {
-  const providerKey = providerKeyOverride ?? getOpenClawProviderKey(config.type, config.id);
+  const providerKey = providerKeyOverride ?? getOpenClawProviderKey(config.type, config.id, config.metadata);
   const configuredModels = resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type))
     .map((model) => model.id);
 
@@ -130,7 +134,7 @@ export function getProviderModelRef(config: ProviderConfig, providerKeyOverride?
 }
 
 export function getProviderCatalogModelRefs(config: ProviderConfig): string[] {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
+  const providerKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
   const results: string[] = [];
   const seen = new Set<string>();
 

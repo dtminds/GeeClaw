@@ -5,6 +5,7 @@ import type { DefaultAgentModelConfigSnapshot } from '@electron/utils/agent-conf
 const {
   ensureProviderStoreMigratedMock,
   getProviderAccountMock,
+  listProviderAccountsMock,
   saveProviderAccountMock,
   saveProviderMock,
   storeApiKeyMock,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   ensureProviderStoreMigratedMock: vi.fn(),
   getProviderAccountMock: vi.fn(),
+  listProviderAccountsMock: vi.fn(),
   saveProviderAccountMock: vi.fn(),
   saveProviderMock: vi.fn(),
   storeApiKeyMock: vi.fn(),
@@ -27,7 +29,7 @@ vi.mock('@electron/services/providers/provider-migration', () => ({
 vi.mock('@electron/services/providers/provider-store', () => ({
   getDefaultProviderAccountId: vi.fn(),
   getProviderAccount: (...args: unknown[]) => getProviderAccountMock(...args),
-  listProviderAccounts: vi.fn(),
+  listProviderAccounts: (...args: unknown[]) => listProviderAccountsMock(...args),
   providerAccountToConfig: vi.fn((account: ProviderAccount) => ({
     id: account.id,
     type: account.vendorId,
@@ -104,6 +106,7 @@ describe('ProviderService.createAccount', () => {
     saveProviderAccountMock.mockResolvedValue(undefined);
     storeApiKeyMock.mockResolvedValue(undefined);
     getProviderAccountMock.mockResolvedValue(null);
+    listProviderAccountsMock.mockResolvedValue([]);
     getDefaultAgentModelConfigMock.mockResolvedValue(buildDefaultModelSnapshot());
     updateDefaultAgentModelConfigMock.mockResolvedValue(buildDefaultModelSnapshot({
       model: {
@@ -242,5 +245,69 @@ describe('ProviderService.createAccount', () => {
     });
 
     expect(updateDefaultAgentModelConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the explicit custom runtime provider key when seeding the default model', async () => {
+    const { ProviderService } = await import('@electron/services/providers/provider-service');
+    const service = new ProviderService();
+
+    await service.createAccount({
+      id: 'custom-6f5a4c3b-1234-5678-9abc-def012345678',
+      vendorId: 'custom',
+      label: 'My Provider',
+      authMode: 'api_key',
+      models: ['gpt-4.1'],
+      metadata: {
+        runtimeProviderKey: 'custom-my-provider',
+      },
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-13T00:00:00.000Z',
+    });
+
+    expect(updateDefaultAgentModelConfigMock).toHaveBeenCalledWith(expect.objectContaining({
+      model: {
+        configured: true,
+        primary: 'custom-my-provider/gpt-4.1',
+        fallbacks: [],
+      },
+    }));
+  });
+
+  it('rejects duplicate explicit custom runtime provider keys', async () => {
+    const { ProviderService } = await import('@electron/services/providers/provider-service');
+    const service = new ProviderService();
+    listProviderAccountsMock.mockResolvedValueOnce([
+      {
+        id: 'custom-existing',
+        vendorId: 'custom',
+        label: 'Existing Provider',
+        authMode: 'api_key',
+        models: ['gpt-4.1'],
+        metadata: {
+          runtimeProviderKey: 'custom-my-provider',
+        },
+        enabled: true,
+        isDefault: false,
+        createdAt: '2026-04-13T00:00:00.000Z',
+        updatedAt: '2026-04-13T00:00:00.000Z',
+      },
+    ]);
+
+    await expect(service.createAccount({
+      id: 'custom-new',
+      vendorId: 'custom',
+      label: 'New Provider',
+      authMode: 'api_key',
+      models: ['gpt-4.1'],
+      metadata: {
+        runtimeProviderKey: 'custom-my-provider',
+      },
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-13T00:00:00.000Z',
+    })).rejects.toThrow('Custom provider ID already exists');
   });
 });

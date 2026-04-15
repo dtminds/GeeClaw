@@ -73,6 +73,11 @@ import {
   TextSquareIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  buildCustomProviderRuntimeKey,
+  isValidCustomProviderKeySegment,
+  slugifyCustomProviderKeySegment,
+} from '../../../shared/providers/runtime-provider-key';
 
 function getProtocolBaseUrlPlaceholder(
   apiProtocol: ProviderAccount['apiProtocol'],
@@ -668,6 +673,10 @@ export function ProvidersSettings() {
     () => new Set(displayProviders.map((item) => item.account.vendorId)),
     [displayProviders],
   );
+  const existingRuntimeProviderIds = useMemo(
+    () => new Set(displayProviders.map((item) => item.runtimeProviderId)),
+    [displayProviders],
+  );
   const providerSidebarItems = useMemo<ProviderSidebarEntry[]>(
     () => {
       const orderedVendorIds = [
@@ -767,6 +776,7 @@ export function ProvidersSettings() {
       modelCatalog?: ProviderModelCatalogState;
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
+      runtimeProviderKey?: string;
     }
   ) => {
     const vendor = vendorMap.get(type);
@@ -783,7 +793,14 @@ export function ProvidersSettings() {
           ? (options?.apiProtocol || 'openai-completions')
           : undefined,
         models: [],
-        metadata: options?.modelCatalog ? { modelCatalog: options.modelCatalog } : undefined,
+        metadata: (
+          options?.modelCatalog || options?.runtimeProviderKey
+            ? {
+              ...(options?.modelCatalog ? { modelCatalog: options.modelCatalog } : {}),
+              ...(options?.runtimeProviderKey ? { runtimeProviderKey: options.runtimeProviderKey } : {}),
+            }
+            : undefined
+        ),
         enabled: true,
         isDefault: false,
         createdAt: new Date().toISOString(),
@@ -958,6 +975,7 @@ export function ProvidersSettings() {
         <AddProviderDialog
           initialType={addDialogInitialType}
           existingVendorIds={existingVendorIds}
+          existingRuntimeProviderIds={existingRuntimeProviderIds}
           vendors={vendors}
           onClose={() => {
             setShowAddDialog(false);
@@ -1529,6 +1547,11 @@ function ProviderCard({
                   {account.label}
                 </p>
                 )}
+                {account.vendorId === 'custom' && (
+                  <p className="font-mono text-[12px] text-muted-foreground">
+                    {item.runtimeProviderId}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1994,6 +2017,7 @@ function ProviderCard({
 interface AddProviderDialogProps {
   initialType?: ProviderType | null;
   existingVendorIds: Set<string>;
+  existingRuntimeProviderIds: Set<string>;
   vendors: ProviderVendorInfo[];
   onClose: () => void;
   onAdd: (
@@ -2005,6 +2029,7 @@ interface AddProviderDialogProps {
       modelCatalog?: ProviderModelCatalogState;
       authMode?: ProviderAccount['authMode'];
       apiProtocol?: ProviderAccount['apiProtocol'];
+      runtimeProviderKey?: string;
     }
   ) => Promise<void>;
   onValidateKey: (
@@ -2020,6 +2045,7 @@ type SegmentedProtocol = NonNullable<ProviderAccount['apiProtocol']>;
 function AddProviderDialog({
   initialType = null,
   existingVendorIds,
+  existingRuntimeProviderIds,
   vendors,
   onClose,
   onAdd,
@@ -2032,6 +2058,8 @@ function AddProviderDialog({
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiProtocol, setApiProtocol] = useState<ProviderAccount['apiProtocol']>('openai-completions');
+  const [customProviderKeySegment, setCustomProviderKeySegment] = useState('');
+  const [customProviderKeyTouched, setCustomProviderKeyTouched] = useState(false);
   const [modelCatalog, setModelCatalog] = useState<ProviderModelCatalogDraft>(normalizeProviderModelCatalogDraft());
   const [arkMode, setArkMode] = useState<CodePlanMode>('apikey');
   const [showKey, setShowKey] = useState(false);
@@ -2074,6 +2102,10 @@ function AddProviderDialog({
     : (selectedVendor?.supportedAuthModes.includes('oauth_device')
       ? 'oauth_device'
       : ((selectedType === 'google' || selectedType === 'openai') ? 'oauth_browser' : null));
+  const normalizedCustomProviderKeySegment = customProviderKeySegment.trim().toLowerCase();
+  const customRuntimeProviderKey = selectedType === 'custom' && normalizedCustomProviderKeySegment
+    ? buildCustomProviderRuntimeKey(normalizedCustomProviderKeySegment)
+    : '';
   // Effective OAuth mode: pure OAuth providers, or dual-mode with oauth selected
   const useOAuthFlow = isOAuth && (!supportsApiKey || authMode === 'oauth');
 
@@ -2088,10 +2120,20 @@ function AddProviderDialog({
     setApiKey('');
     setBaseUrl(initialTypeInfo?.defaultBaseUrl || '');
     setApiProtocol('openai-completions');
+    setCustomProviderKeySegment(initialType === 'custom' ? slugifyCustomProviderKeySegment(t('aiProviders.custom')) : '');
+    setCustomProviderKeyTouched(false);
     setModelCatalog(normalizeProviderModelCatalogDraft());
     setArkMode('apikey');
     setValidationError(null);
   }, [initialType, t]);
+
+  useEffect(() => {
+    if (selectedType !== 'custom' || customProviderKeyTouched) {
+      return;
+    }
+
+    setCustomProviderKeySegment(slugifyCustomProviderKeySegment(name));
+  }, [customProviderKeyTouched, name, selectedType]);
 
   useEffect(() => {
     if (!selectedVendor || !isOAuth || !supportsApiKey) {
@@ -2251,6 +2293,24 @@ function AddProviderDialog({
     setValidationError(null);
 
     try {
+      if (selectedType === 'custom') {
+        if (!normalizedCustomProviderKeySegment) {
+          setValidationError(t('aiProviders.toast.customProviderIdRequired'));
+          setSaving(false);
+          return;
+        }
+        if (!isValidCustomProviderKeySegment(normalizedCustomProviderKeySegment)) {
+          setValidationError(t('aiProviders.toast.customProviderIdInvalid'));
+          setSaving(false);
+          return;
+        }
+        if (existingRuntimeProviderIds.has(customRuntimeProviderKey)) {
+          setValidationError(t('aiProviders.toast.customProviderIdDuplicate'));
+          setSaving(false);
+          return;
+        }
+      }
+
       // Validate key first if the provider requires one and a key was entered
       const requiresKey = typeInfo?.requiresApiKey ?? false;
       if (requiresKey && !apiKey.trim()) {
@@ -2289,6 +2349,7 @@ function AddProviderDialog({
             ? apiProtocol
             : undefined,
           modelCatalog,
+          runtimeProviderKey: selectedType === 'custom' ? customRuntimeProviderKey : undefined,
           authMode: useOAuthFlow ? (preferredOAuthMode || 'oauth_device') : selectedType === 'ollama'
             ? 'local'
             : (isOAuth && supportsApiKey && authMode === 'apikey')
@@ -2328,6 +2389,8 @@ function AddProviderDialog({
                     setName(type.id === 'custom' ? t('aiProviders.custom') : type.name);
                     setBaseUrl(type.defaultBaseUrl || '');
                     setApiProtocol('openai-completions');
+                    setCustomProviderKeySegment(type.id === 'custom' ? slugifyCustomProviderKeySegment(t('aiProviders.custom')) : '');
+                    setCustomProviderKeyTouched(false);
                     setModelCatalog(normalizeProviderModelCatalogDraft());
                     setArkMode('apikey');
                   }}
@@ -2363,6 +2426,8 @@ function AddProviderDialog({
                         setValidationError(null);
                         setBaseUrl('');
                         setApiProtocol('openai-completions');
+                        setCustomProviderKeySegment('');
+                        setCustomProviderKeyTouched(false);
                         setModelCatalog(normalizeProviderModelCatalogDraft());
                         setArkMode('apikey');
                       }}
@@ -2399,6 +2464,32 @@ function AddProviderDialog({
                     className="modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px]"
                   />
                 </div>
+
+                {selectedType === 'custom' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="providerId" className="text-[14px] font-bold text-foreground/80">{t('aiProviders.dialog.providerId')}</Label>
+                    <div className="modal-field-surface flex h-[44px] items-center overflow-hidden rounded-xl border">
+                      <span className="border-r border-black/8 px-3 font-mono text-[13px] text-muted-foreground dark:border-white/10">
+                        custom-
+                      </span>
+                      <Input
+                        id="providerId"
+                        placeholder="my-provider"
+                        value={customProviderKeySegment}
+                        onChange={(e) => {
+                          setCustomProviderKeyTouched(true);
+                          setCustomProviderKeySegment(slugifyCustomProviderKeySegment(e.target.value));
+                        }}
+                        className="h-full border-0 bg-transparent font-mono text-[13px] shadow-none focus-visible:ring-0"
+                      />
+                    </div>
+                    <p className="text-[12px] text-muted-foreground">
+                      {t('aiProviders.dialog.providerIdHelp', {
+                        value: customRuntimeProviderKey || 'custom-my-provider',
+                      })}
+                    </p>
+                  </div>
+                )}
 
                 {/* Auth mode toggle for providers supporting both */}
                 {isOAuth && supportsApiKey && (
