@@ -7,12 +7,16 @@ const {
   getDefaultAgentModelConfigMock,
   getOpenClawProviderKeyForTypeMock,
   getProviderServiceMock,
+  syncAllAgentConfigToOpenClawMock,
+  syncUpdatedProviderToRuntimeMock,
 } = vi.hoisted(() => ({
   parseJsonBodyMock: vi.fn(),
   sendJsonMock: vi.fn(),
   getDefaultAgentModelConfigMock: vi.fn(),
   getOpenClawProviderKeyForTypeMock: vi.fn(),
   getProviderServiceMock: vi.fn(),
+  syncAllAgentConfigToOpenClawMock: vi.fn(),
+  syncUpdatedProviderToRuntimeMock: vi.fn(),
 }));
 
 const providerServiceStub = {
@@ -46,7 +50,11 @@ vi.mock('@electron/services/providers/provider-runtime-sync', () => ({
   syncDeletedProviderToRuntime: vi.fn(),
   syncProviderApiKeyToRuntime: vi.fn(),
   syncSavedProviderToRuntime: vi.fn(),
-  syncUpdatedProviderToRuntime: vi.fn(),
+  syncUpdatedProviderToRuntime: (...args: unknown[]) => syncUpdatedProviderToRuntimeMock(...args),
+}));
+
+vi.mock('@electron/services/agents/agent-runtime-sync', () => ({
+  syncAllAgentConfigToOpenClaw: (...args: unknown[]) => syncAllAgentConfigToOpenClawMock(...args),
 }));
 
 vi.mock('@electron/services/providers/provider-validation', () => ({
@@ -72,6 +80,8 @@ describe('handleProviderRoutes', () => {
       mockFn.mockReset();
     });
     getProviderServiceMock.mockReturnValue(providerServiceStub);
+    syncAllAgentConfigToOpenClawMock.mockReset();
+    syncUpdatedProviderToRuntimeMock.mockReset();
     getOpenClawProviderKeyForTypeMock.mockReturnValue('openai');
     getDefaultAgentModelConfigMock.mockResolvedValue({
       model: {
@@ -248,5 +258,52 @@ describe('handleProviderRoutes', () => {
         error: 'BLOCKED_BY_FALLBACK:openrouter/google/gemini-3-flash-preview',
       }),
     );
+  });
+
+  it('rebuilds derived default model exports after provider account updates', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    providerServiceStub.getAccount.mockResolvedValueOnce({
+      id: 'openrouter',
+      vendorId: 'openrouter',
+      authMode: 'api_key',
+      metadata: {},
+    });
+    providerServiceStub.updateAccount.mockResolvedValueOnce({
+      id: 'openrouter',
+      vendorId: 'openrouter',
+      authMode: 'api_key',
+      metadata: {
+        modelCatalog: {
+          disabledBuiltinModelIds: ['openai/gpt-5.4'],
+          disabledCustomModelIds: [],
+          builtinModelOverrides: [],
+          customModels: [],
+        },
+      },
+    });
+    getOpenClawProviderKeyForTypeMock.mockReturnValueOnce('openrouter');
+    parseJsonBodyMock.mockResolvedValueOnce({
+      updates: {
+        metadata: {
+          modelCatalog: {
+            disabledBuiltinModelIds: ['openai/gpt-5.4'],
+            disabledCustomModelIds: [],
+            builtinModelOverrides: [],
+            customModels: [],
+          },
+        },
+      },
+    });
+
+    const handled = await handleProviderRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/provider-accounts/openrouter'),
+      { gatewayManager: {} } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(syncUpdatedProviderToRuntimeMock).toHaveBeenCalledTimes(1);
+    expect(syncAllAgentConfigToOpenClawMock).toHaveBeenCalledTimes(1);
   });
 });

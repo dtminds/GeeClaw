@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
 import { normalizeProviderModelList } from '../../shared/providers/config-models';
+import { syncAllAgentConfigToOpenClaw } from '../../services/agents/agent-runtime-sync';
 
 const legacyProviderRoutesWarned = new Set<string>();
 
@@ -83,6 +84,7 @@ export async function handleProviderRoutes(
       const body = await parseJsonBody<{ account: ProviderAccount; apiKey?: string }>(req);
       const account = await providerService.createAccount(body.account, body.apiKey);
       await syncSavedProviderToRuntime(providerAccountToConfig(account), body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true, account });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -148,6 +150,7 @@ export async function handleProviderRoutes(
 
       const nextAccount = await providerService.updateAccount(accountId, body.updates, body.apiKey);
       await syncUpdatedProviderToRuntime(providerAccountToConfig(nextAccount), body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true, account: nextAccount });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -199,6 +202,7 @@ export async function handleProviderRoutes(
         ctx.gatewayManager,
         runtimeProviderKey,
       );
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -323,6 +327,7 @@ export async function handleProviderRoutes(
         }
       }
       await syncSavedProviderToRuntime(config, body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -370,6 +375,7 @@ export async function handleProviderRoutes(
         }
       }
       await syncUpdatedProviderToRuntime(nextConfig, body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -390,6 +396,7 @@ export async function handleProviderRoutes(
       }
       await providerService.deleteLegacyProvider(providerId);
       await syncDeletedProviderToRuntime(existing, providerId, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });

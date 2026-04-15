@@ -1244,7 +1244,6 @@ function ProviderCard({
   const authModeChangeNeedsSave = usesApiKeyAuth && account.authMode !== 'api_key';
   const missingApiKeyForModeSwitch = authModeChangeNeedsSave && !apiKeyConfigured && !newKey.trim();
   const hasPendingChanges = Boolean(newKey.trim()) || hasBaseUrlChange || hasProtocolChange || hasModelChange || authModeChangeNeedsSave;
-  const missingRequiredModel = showModelIdField && effectiveModelEntries.length === 0;
   const hasEditableFields = canEditModelConfig || usesApiKeyAuth || authModeChangeNeedsSave;
   const headerLink = usesApiKeyAuth && typeInfo?.apiKeyUrl
     ? { href: typeInfo.apiKeyUrl, label: t('aiProviders.oauth.getApiKey') }
@@ -1440,11 +1439,6 @@ function ProviderCard({
 
   const handleSaveEdits = async () => {
     if (!hasPendingChanges) {
-      return;
-    }
-
-    if (missingRequiredModel) {
-      toast.error(t('aiProviders.toast.modelRequired'));
       return;
     }
 
@@ -1976,7 +1970,7 @@ function ProviderCard({
             <button
               type="button"
               className="modal-primary-button inline-flex items-center gap-2 shadow-none disabled:opacity-50"
-              disabled={validating || saving || !hasPendingChanges || missingRequiredModel || missingApiKeyForModeSwitch}
+              disabled={validating || saving || !hasPendingChanges || missingApiKeyForModeSwitch}
               onClick={handleSaveEdits}
             >
               {validating || saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -2815,7 +2809,7 @@ function AddProviderDialog({
                 <Button
                   onClick={handleAdd}
                   className={cn("modal-primary-button px-8", useOAuthFlow && "hidden")}
-                  disabled={!selectedType || saving || (showModelIdField && effectiveModelEntries.length === 0)}
+                  disabled={!selectedType || saving}
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />

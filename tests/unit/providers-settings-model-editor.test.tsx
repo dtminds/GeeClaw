@@ -251,4 +251,55 @@ describe('ProvidersSettings model editor', () => {
     const removeItem = await screen.findByRole('menuitem', { name: 'aiProviders.models.removeModel' });
     expect(removeItem).toHaveAttribute('data-disabled');
   }, 10000);
+
+  it('allows saving when all provider models are disabled', async () => {
+    providerState.accounts[0].metadata = {
+      modelCatalog: {
+        disabledBuiltinModelIds: [],
+        disabledCustomModelIds: [],
+        builtinModelOverrides: [],
+        customModels: [{
+          id: 'google/gemini-3-flash-preview',
+          name: 'google/gemini-3-flash-preview',
+          reasoning: false,
+        }],
+      },
+    };
+
+    const { ProvidersSettings } = await import('@/components/settings/ProvidersSettings');
+    render(<ProvidersSettings />);
+
+    await screen.findAllByText('OpenRouter');
+
+    const toggles = screen.getAllByRole('switch', { name: 'aiProviders.list.enabled' });
+    await act(async () => {
+      fireEvent.click(toggles[toggles.length - 1]);
+    });
+
+    const saveButton = screen.getByRole('button', { name: 'aiProviders.dialog.save' });
+    expect(saveButton).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    expect(updateAccountMock).toHaveBeenCalledWith('openrouter', expect.objectContaining({
+      model: undefined,
+      models: [],
+      fallbackModels: [],
+      fallbackAccountIds: [],
+      metadata: {
+        modelCatalog: {
+          disabledBuiltinModelIds: [],
+          disabledCustomModelIds: ['google/gemini-3-flash-preview'],
+          builtinModelOverrides: [],
+          customModels: [{
+            id: 'google/gemini-3-flash-preview',
+            name: 'google/gemini-3-flash-preview',
+            reasoning: false,
+          }],
+        },
+      },
+    }), undefined);
+  });
 });
