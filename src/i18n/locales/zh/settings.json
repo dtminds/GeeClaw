@@ -425,7 +425,7 @@
   },
   "agentModels": {
     "title": "模型配置",
-    "description": "为聊天、生图、生视频、视觉理解和 PDF 选择 GeeClaw 要使用的模型。",
+    "description": "为聊天、生图、生视频、视觉理解和 PDF 选择 Agent 要使用的模型",
     "primary": "默认模型",
     "fallbacks": "备用模型",
     "none": "未配置",
