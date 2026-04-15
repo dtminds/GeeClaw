@@ -19,6 +19,16 @@ type OpenClawSidecarStatus = {
   error?: string;
 };
 
+type ManagedPluginStatus = {
+  pluginId: string;
+  displayName: string;
+  stage: 'idle' | 'checking' | 'installing' | 'installed' | 'failed';
+  message: string;
+  targetVersion: string;
+  installedVersion?: string | null;
+  error?: string;
+};
+
 const bootstrapState: BootstrapState = {
   phase: 'preparing',
   error: null,
@@ -34,6 +44,7 @@ const settingsState = {
 };
 
 let sidecarStatusHandler: ((payload: OpenClawSidecarStatus) => void) | null = null;
+let managedPluginStatusHandler: ((payload: ManagedPluginStatus | null) => void) | null = null;
 
 const translations: Record<string, string> = {
   'startup.preparing.title': '正在准备 GeeClaw',
@@ -43,7 +54,13 @@ const translations: Record<string, string> = {
   'startup.preparing.openclawExtractingCaption': '首次启动需要解压运行时，请保持窗口打开。',
   'startup.preparing.openclawUpdatingTitle': '正在更新 OpenClaw 到 {{version}}',
   'startup.preparing.openclawUpdatingCaption': '正在替换内置运行时，请保持窗口打开。',
+  'startup.preparing.managedPluginCaption': '正在为本次启动准备 {{plugin}}，请保持窗口打开。',
   'startup.status.default': '我们正在为您准备一个稳定、顺滑的 AI 使用体验。',
+  'startup.error.title': '启动失败',
+  'startup.error.body': 'GeeClaw 在准备环境时遇到了问题。',
+  'startup.error.retry': '重试',
+  'startup.error.managedPluginTitle': '{{plugin}} 插件安装失败',
+  'startup.error.managedPluginBody': '启动前依赖的插件没有安装成功，请重试。',
 };
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -97,13 +114,19 @@ vi.mock('@/stores/settings', () => ({
 }));
 
 vi.mock('@/lib/host-events', () => ({
-  subscribeHostEvent: vi.fn((eventName: string, handler: (payload: OpenClawSidecarStatus) => void) => {
+  subscribeHostEvent: vi.fn((eventName: string, handler: (payload: OpenClawSidecarStatus | ManagedPluginStatus | null) => void) => {
     if (eventName === 'openclaw:sidecar-status') {
-      sidecarStatusHandler = handler;
+      sidecarStatusHandler = handler as (payload: OpenClawSidecarStatus) => void;
+    }
+    if (eventName === 'openclaw:managed-plugin-status') {
+      managedPluginStatusHandler = handler as (payload: ManagedPluginStatus | null) => void;
     }
     return () => {
       if (sidecarStatusHandler === handler) {
         sidecarStatusHandler = null;
+      }
+      if (managedPluginStatusHandler === handler) {
+        managedPluginStatusHandler = null;
       }
     };
   }),
@@ -115,6 +138,7 @@ describe('Startup OpenClaw sidecar feedback', () => {
     bootstrapState.error = null;
     settingsState.setupComplete = false;
     sidecarStatusHandler = null;
+    managedPluginStatusHandler = null;
   });
 
   it('shows OpenClaw runtime preparation copy while the packaged sidecar is extracting', async () => {
@@ -143,5 +167,44 @@ describe('Startup OpenClaw sidecar feedback', () => {
 
     expect(screen.getByText('正在更新 OpenClaw 到 2026.4.10')).toBeInTheDocument();
     expect(screen.getByText('正在替换内置运行时，请保持窗口打开。')).toBeInTheDocument();
+  });
+
+  it('shows managed plugin install copy while a required plugin is being installed', async () => {
+    const { Startup } = await import('@/pages/Startup');
+    render(<Startup />);
+
+    await act(async () => {
+      managedPluginStatusHandler?.({
+        pluginId: 'lossless-claw',
+        displayName: 'lossless-claw',
+        stage: 'installing',
+        message: '正在安装 lossless-claw 插件…',
+        targetVersion: '0.5.2',
+      });
+    });
+
+    expect(screen.getByText('正在安装 lossless-claw 插件…')).toBeInTheDocument();
+    expect(screen.getByText('正在为本次启动准备 lossless-claw，请保持窗口打开。')).toBeInTheDocument();
+  });
+
+  it('shows managed plugin failure copy during startup error state', async () => {
+    bootstrapState.phase = 'error';
+    const { Startup } = await import('@/pages/Startup');
+    render(<Startup />);
+
+    await act(async () => {
+      managedPluginStatusHandler?.({
+        pluginId: 'lossless-claw',
+        displayName: 'lossless-claw',
+        stage: 'failed',
+        message: '正在安装 lossless-claw 插件…',
+        targetVersion: '0.5.2',
+        error: 'npm install failed',
+      });
+    });
+
+    expect(screen.getByText('lossless-claw 插件安装失败')).toBeInTheDocument();
+    expect(screen.getByText('启动前依赖的插件没有安装成功，请重试。')).toBeInTheDocument();
+    expect(screen.getByText('npm install failed')).toBeInTheDocument();
   });
 });

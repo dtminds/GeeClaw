@@ -30,6 +30,7 @@ import {
   ensureAlwaysEnabledBundledPluginsConfigured,
   syncBundledPluginLoadPathsToOpenClaw,
 } from '../utils/plugin-install';
+import { ensureManagedPluginsReadyBeforeGatewayLaunch } from '../utils/managed-plugin-installer';
 import {
   initializeMemoryDefaultsOnStartup,
   syncLosslessClawInstallStateToOpenClaw,
@@ -728,6 +729,14 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     uvEnv,
     proxyEnv,
     gatewayPort: port,
+  });
+
+  await ensureManagedPluginsReadyBeforeGatewayLaunch({
+    openclawConfigDir,
+    finalPath,
+    managedAppEnv,
+    uvEnv,
+    proxyEnv,
   });
 
   await syncGatewayConfigBeforeLaunch(appSettings, port);

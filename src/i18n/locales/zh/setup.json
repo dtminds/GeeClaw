@@ -163,6 +163,7 @@
             "body": "首次启动时可能会稍微久一点。",
             "caption": "第一次准备可能需要几分钟时间，请不要关闭窗口。",
             "captionReturning": "正在启动所需服务，请稍候",
+            "managedPluginCaption": "正在为本次启动准备 {{plugin}}，请保持窗口打开。",
             "openclawExtractingTitle": "正在准备 OpenClaw 运行时",
             "openclawExtractingCaption": "首次启动需要解压运行时，请保持窗口打开。",
             "openclawUpdatingTitle": "正在更新 OpenClaw 到 {{version}}",
@@ -183,6 +184,8 @@
         "error": {
             "title": "GeeClaw 需要处理一下",
             "body": "我们暂时没能完成应用准备。您可以重试，或查看下面的详情。",
+            "managedPluginTitle": "{{plugin}} 插件安装失败",
+            "managedPluginBody": "启动前依赖的插件没有安装成功，请重试。",
             "retry": "重试"
         },
         "gatewayRecovery": {

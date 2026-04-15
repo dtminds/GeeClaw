@@ -30,6 +30,16 @@ interface OpenClawSidecarStatus {
   error?: string;
 }
 
+interface ManagedPluginStatus {
+  pluginId: string;
+  displayName: string;
+  stage: 'idle' | 'checking' | 'installing' | 'installed' | 'failed';
+  message: string;
+  targetVersion: string;
+  installedVersion?: string | null;
+  error?: string;
+}
+
 export function Startup() {
   const { t } = useTranslation('setup');
   const phase = useBootstrapStore((state) => state.phase);
@@ -45,6 +55,7 @@ export function Startup() {
   const [inviteCode, setInviteCode] = useState('');
   const [isSubmittingInviteCode, setIsSubmittingInviteCode] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<OpenClawSidecarStatus | null>(null);
+  const [managedPluginStatus, setManagedPluginStatus] = useState<ManagedPluginStatus | null>(null);
 
   const progress = phaseProgress[phase] ?? 12;
   const isLoadingPhase = phase === 'idle' || phase === 'checking_session' || phase === 'preparing';
@@ -59,6 +70,12 @@ export function Startup() {
   useEffect(() => {
     return subscribeHostEvent<OpenClawSidecarStatus>('openclaw:sidecar-status', (payload) => {
       setSidecarStatus(payload);
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeHostEvent<ManagedPluginStatus | null>('openclaw:managed-plugin-status', (payload) => {
+      setManagedPluginStatus(payload);
     });
   }, []);
 
@@ -100,6 +117,13 @@ export function Startup() {
         };
       }
 
+      if (managedPluginStatus && (managedPluginStatus.stage === 'checking' || managedPluginStatus.stage === 'installing')) {
+        return {
+          title: managedPluginStatus.message,
+          caption: t('startup.preparing.managedPluginCaption', { plugin: managedPluginStatus.displayName }),
+        };
+      }
+
       return {
         title: t('startup.preparing.title'),
         caption: setupComplete
@@ -112,7 +136,11 @@ export function Startup() {
       title: t('startup.checkingSession.title'),
       caption: t('startup.checkingSession.caption'),
     };
-  }, [phase, setupComplete, sidecarStatus, t]);
+  }, [managedPluginStatus, phase, setupComplete, sidecarStatus, t]);
+
+  const managedPluginFailure = phase === 'error' && managedPluginStatus?.stage === 'failed'
+    ? managedPluginStatus
+    : null;
 
   const statusMessage = useMemo(() => {
     if (phase === 'needs_login') {
@@ -292,13 +320,17 @@ export function Startup() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-foreground dark:text-white/95">
-              {t('startup.error.title')}
+              {managedPluginFailure
+                ? t('startup.error.managedPluginTitle', { plugin: managedPluginFailure.displayName })
+                : t('startup.error.title')}
             </h2>
             <p className="mt-3 text-base leading-7 text-muted-foreground dark:text-white/78">
-              {t('startup.error.body')}
+              {managedPluginFailure
+                ? t('startup.error.managedPluginBody')
+                : t('startup.error.body')}
             </p>
             <p className="mt-4 text-sm leading-6 text-muted-foreground dark:text-white/65">
-              {statusMessage}
+              {managedPluginFailure?.error || statusMessage}
             </p>
             {error ? (
               <pre className="mt-5 whitespace-pre-wrap break-words rounded-[1.4rem] bg-slate-950/92 p-4 text-xs leading-6 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">

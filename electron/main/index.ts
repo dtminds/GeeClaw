@@ -47,6 +47,10 @@ import {
   getOpenClawSidecarStatus,
   subscribeOpenClawSidecarStatus,
 } from '../utils/openclaw-sidecar-status';
+import {
+  getManagedPluginStatus,
+  subscribeManagedPluginStatus,
+} from '../utils/managed-plugin-status';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -460,6 +464,19 @@ async function initialize(): Promise<void> {
     emitOpenClawSidecarStatus();
   });
   emitOpenClawSidecarStatus();
+
+  const emitManagedPluginStatus = () => {
+    const status = getManagedPluginStatus();
+    hostEventBus.emit('openclaw:managed-plugin-status', status);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('openclaw:managed-plugin-status', status);
+    }
+  };
+
+  subscribeManagedPluginStatus(() => {
+    emitManagedPluginStatus();
+  });
+  emitManagedPluginStatus();
 
   const gatewayAutoStart = await getSetting('gatewayAutoStart');
   logger.info(
