@@ -22,7 +22,23 @@ vi.mock('@electron/utils/agent-config', () => ({
 vi.mock('@electron/utils/provider-registry', () => ({
   getProviderEnvVar: vi.fn(() => undefined),
   getProviderDefaultModel: vi.fn(() => undefined),
-  getProviderConfig: vi.fn(() => undefined),
+  getProviderConfig: vi.fn((provider: string) => {
+    if (provider === 'moonshot') {
+      return {
+        baseUrl: 'https://api.moonshot.cn/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'MOONSHOT_API_KEY',
+      };
+    }
+    if (provider === 'moonshot-global') {
+      return {
+        baseUrl: 'https://api.moonshot.ai/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'MOONSHOT_GLOBAL_API_KEY',
+      };
+    }
+    return undefined;
+  }),
 }));
 
 vi.mock('@electron/utils/openclaw-config-coordinator', () => ({

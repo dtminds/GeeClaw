@@ -381,13 +381,14 @@ function removeLegacyMoonshotProviderEntry(
 }
 
 function getMoonshotKimiWebSearchBaseUrl(provider: string): string | undefined {
-  if (provider === OPENCLAW_PROVIDER_KEY_MOONSHOT) {
-    return 'https://api.moonshot.cn/v1';
+  if (
+    provider !== OPENCLAW_PROVIDER_KEY_MOONSHOT
+    && provider !== OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL
+  ) {
+    return undefined;
   }
-  if (provider === OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL) {
-    return 'https://api.moonshot.ai/v1';
-  }
-  return undefined;
+
+  return getProviderConfig(provider)?.baseUrl;
 }
 
 function ensureMoonshotKimiWebSearchBaseUrl(config: Record<string, unknown>, provider: string): void {
