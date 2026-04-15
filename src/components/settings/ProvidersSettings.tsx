@@ -80,6 +80,10 @@ import {
   sanitizeCustomProviderKeySegmentInput,
   slugifyCustomProviderKeySegment,
 } from '../../../shared/providers/runtime-provider-key';
+import {
+  providerModelCatalogDraftsEqual,
+  type ProviderModelCatalogDraft,
+} from './provider-model-catalog';
 
 function getProtocolBaseUrlPlaceholder(
   apiProtocol: ProviderAccount['apiProtocol'],
@@ -110,13 +114,6 @@ function createProviderModelEntry(
     ...(typeof options?.maxTokens === 'number' ? { maxTokens: options.maxTokens } : {}),
   };
 }
-
-type ProviderModelCatalogDraft = {
-  disabledBuiltinModelIds: string[];
-  disabledCustomModelIds: string[];
-  customModels: ProviderModelEntry[];
-  builtinModelOverrides: ProviderModelEntry[];
-};
 
 type ProviderModelListItem = {
   id: string;
@@ -1239,7 +1236,7 @@ function ProviderCard({
   const canAddCustomModels = modelCatalogMode === 'runtime-editable';
   const hasModelChange = showModelIdField && (
     !providerModelEntriesEqual(effectiveModelEntries, configuredModelEntries)
-    || JSON.stringify(modelCatalog) !== JSON.stringify(initialModelCatalog)
+    || !providerModelCatalogDraftsEqual(modelCatalog, initialModelCatalog)
   );
   const authModeChangeNeedsSave = usesApiKeyAuth && account.authMode !== 'api_key';
   const missingApiKeyForModeSwitch = authModeChangeNeedsSave && !apiKeyConfigured && !newKey.trim();

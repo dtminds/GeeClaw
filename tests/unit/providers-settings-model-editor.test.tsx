@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { providerModelCatalogDraftsEqual } from '@/components/settings/provider-model-catalog';
+
 const updateAccountMock = vi.fn(async () => undefined);
 const refreshProviderSnapshotMock = vi.fn(async () => undefined);
 const hostApiFetchMock = vi.fn();
@@ -183,6 +185,38 @@ describe('ProvidersSettings model editor', () => {
       },
     }), undefined);
   }, 10000);
+
+  it('compares provider model catalog drafts by normalized content rather than JSON stringification', () => {
+    expect(providerModelCatalogDraftsEqual(
+      {
+        disabledBuiltinModelIds: ['b', 'a', 'a'],
+        disabledCustomModelIds: ['x'],
+        builtinModelOverrides: [{ id: 'builtin-1', name: 'builtin-1', reasoning: false }],
+        customModels: [{ id: 'custom-1', name: 'custom-1', reasoning: false }],
+      },
+      {
+        disabledBuiltinModelIds: ['b', 'a'],
+        disabledCustomModelIds: ['x'],
+        builtinModelOverrides: [{ id: 'builtin-1', name: 'builtin-1', reasoning: false }],
+        customModels: [{ id: 'custom-1', name: 'custom-1', reasoning: false }],
+      },
+    )).toBe(true);
+
+    expect(providerModelCatalogDraftsEqual(
+      {
+        disabledBuiltinModelIds: [],
+        disabledCustomModelIds: [],
+        builtinModelOverrides: [],
+        customModels: [{ id: 'custom-1', name: 'custom-1', reasoning: false }],
+      },
+      {
+        disabledBuiltinModelIds: [],
+        disabledCustomModelIds: [],
+        builtinModelOverrides: [],
+        customModels: [{ id: 'custom-2', name: 'custom-2', reasoning: false }],
+      },
+    )).toBe(false);
+  });
 
   it('disables toggle and delete for models referenced by model config', async () => {
     providerState.accounts[0].metadata = {
