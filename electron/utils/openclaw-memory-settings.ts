@@ -8,7 +8,15 @@ import type { OpenClawConfigDocument } from './openclaw-config-coordinator';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getOpenClawConfigDir } from './paths';
 
-export const LOSSLESS_CLAW_REQUIRED_VERSION = getManagedPlugin('lossless-claw')?.targetVersion ?? '0.5.2';
+function getRequiredManagedPluginVersion(pluginId: string): string {
+  const plugin = getManagedPlugin(pluginId);
+  if (!plugin) {
+    throw new Error(`Managed plugin registry entry is missing for ${pluginId}`);
+  }
+  return plugin.targetVersion;
+}
+
+export const LOSSLESS_CLAW_REQUIRED_VERSION = getRequiredManagedPluginVersion('lossless-claw');
 const ACTIVE_MEMORY_DEFAULT_AGENTS = ['main'];
 
 type ConfigRecord = Record<string, unknown>;

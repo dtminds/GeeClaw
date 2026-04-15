@@ -162,6 +162,36 @@ async function cleanupDirectory(targetPath: string): Promise<void> {
   await rm(targetPath, { recursive: true, force: true });
 }
 
+async function promotePluginDirectory(options: {
+  packageRoot: string;
+  finalDir: string;
+  pluginId: string;
+}): Promise<void> {
+  const finalParentDir = resolve(options.finalDir, '..');
+  const backupDir = join(finalParentDir, `${options.pluginId}.replace-backup-${randomUUID()}`);
+  const finalDirExists = await pathExists(options.finalDir);
+
+  await mkdir(finalParentDir, { recursive: true });
+
+  if (finalDirExists) {
+    await rename(options.finalDir, backupDir);
+  }
+
+  try {
+    await rename(options.packageRoot, options.finalDir);
+  } catch (error) {
+    await cleanupDirectory(options.finalDir);
+    if (finalDirExists) {
+      await cleanupDirectory(backupDir);
+    }
+    throw error;
+  }
+
+  if (finalDirExists) {
+    await cleanupDirectory(backupDir);
+  }
+}
+
 async function readPackageJson(packageRoot: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as Record<string, unknown>;
 }
@@ -236,9 +266,11 @@ export async function ensureManagedPluginInstalled(
       });
     }
 
-    await cleanupDirectory(finalDir);
-    await mkdir(resolve(finalDir, '..'), { recursive: true });
-    await rename(packageRoot, finalDir);
+    await promotePluginDirectory({
+      packageRoot,
+      finalDir,
+      pluginId: options.plugin.pluginId,
+    });
     await cleanupDirectory(stagingRoot);
 
     return {
