@@ -1819,44 +1819,17 @@ function ProviderCard({
               {canEditProtocol && (
                 <div className="space-y-1.5">
                   <Label className="text-[13px] text-muted-foreground">{t('aiProviders.dialog.protocol', 'Protocol')}</Label>
-                  <div className="flex flex-wrap gap-2 text-[13px]">
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('openai-completions')}
-                      className={cn(
-                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
-                        apiProtocol === 'openai-completions'
-                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
-                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      {t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('openai-responses')}
-                      className={cn(
-                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
-                        apiProtocol === 'openai-responses'
-                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
-                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      {t('aiProviders.protocols.openaiResponses', 'OpenAI Responses')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApiProtocol('anthropic-messages')}
-                      className={cn(
-                        'flex-1 rounded-xl border px-3 py-2 transition-colors',
-                        apiProtocol === 'anthropic-messages'
-                          ? 'border-black/12 bg-black/[0.06] font-medium text-foreground dark:border-white/10 dark:bg-white/[0.09]'
-                          : 'border-black/8 bg-black/[0.025] text-muted-foreground hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      {t('aiProviders.protocols.anthropic', 'Anthropic')}
-                    </button>
-                  </div>
+                  <SegmentedControl<SegmentedProtocol>
+                    ariaLabel={t('aiProviders.dialog.protocol', 'Protocol')}
+                    value={apiProtocol || 'openai-completions'}
+                    onValueChange={(nextProtocol) => setApiProtocol(nextProtocol)}
+                    options={[
+                      { value: 'openai-completions', label: t('aiProviders.protocols.openaiCompletions', 'OpenAI Completions') },
+                      { value: 'openai-responses', label: t('aiProviders.protocols.openaiResponses', 'OpenAI Responses') },
+                      { value: 'anthropic-messages', label: t('aiProviders.protocols.anthropic', 'Anthropic') },
+                    ]}
+                    fullWidth
+                  />
                 </div>
               )}
               {showModelIdField ? (

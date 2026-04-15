@@ -302,4 +302,56 @@ describe('ProvidersSettings model editor', () => {
       },
     }), undefined);
   });
+
+  it('uses segmented protocol control when editing an existing custom provider', async () => {
+    providerState.statuses = [{
+      id: 'custom-example',
+      type: 'custom',
+      name: 'Custom',
+      enabled: true,
+      createdAt: '2026-04-14T00:00:00.000Z',
+      updatedAt: '2026-04-14T00:00:00.000Z',
+      hasKey: true,
+      keyMasked: 'sk-c***1234',
+    }];
+    providerState.accounts = [{
+      id: 'custom-example',
+      vendorId: 'custom',
+      label: 'Custom',
+      authMode: 'api_key',
+      apiProtocol: 'openai-completions',
+      baseUrl: 'https://api.example.com/v1',
+      models: [],
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-14T00:00:00.000Z',
+      updatedAt: '2026-04-14T00:00:00.000Z',
+    }];
+    providerState.vendors = [{
+      id: 'custom',
+      name: 'Custom',
+      icon: '⚙️',
+      placeholder: 'API key...',
+      requiresApiKey: true,
+      showBaseUrl: true,
+      showModelId: true,
+      modelIdPlaceholder: 'your-provider/model-id',
+      defaultAuthMode: 'api_key',
+      supportedAuthModes: ['api_key'],
+      supportsMultipleAccounts: true,
+      category: 'custom',
+      modelCatalogMode: 'runtime-editable',
+    }];
+
+    const { ProvidersSettings } = await import('@/components/settings/ProvidersSettings');
+    render(<ProvidersSettings />);
+
+    await screen.findAllByText('Custom');
+
+    const protocolGroup = screen.getByRole('group', { name: 'aiProviders.dialog.protocol' });
+    expect(protocolGroup).toBeInTheDocument();
+    expect(within(protocolGroup).getByRole('button', { name: 'aiProviders.protocols.openaiCompletions' })).toBeInTheDocument();
+    expect(within(protocolGroup).getByRole('button', { name: 'aiProviders.protocols.openaiResponses' })).toBeInTheDocument();
+    expect(within(protocolGroup).getByRole('button', { name: 'aiProviders.protocols.anthropic' })).toBeInTheDocument();
+  });
 });
