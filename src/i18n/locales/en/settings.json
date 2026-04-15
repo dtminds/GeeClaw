@@ -212,7 +212,6 @@
       "editModel": "Edit model",
       "removeModel": "Remove model",
       "empty": "No models added yet",
-      "help": "Manage the models available under this provider so the model config page can reference them.",
       "modalities": {
         "text": "Text",
         "image": "Image"
@@ -265,7 +264,7 @@
       "desc": "Configure a new AI model provider",
       "displayName": "Display Name",
       "providerId": "Provider ID",
-      "providerIdHelp": "Used for config refs and written as {{value}}. Lowercase letters, numbers, and hyphens only. Built-in provider names are reserved. This cannot be changed after creation.",
+      "providerIdHelp": "Used for config refs and written as {{value}}. Lowercase letters, numbers, and hyphens only. This cannot be changed after creation.",
       "apiKey": "API Key",
       "apiKeyConfigured": "An API key is already stored for this provider.",
       "apiKeyMissing": "No API key is stored for this provider yet.",

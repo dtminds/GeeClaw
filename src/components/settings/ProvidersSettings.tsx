@@ -616,7 +616,6 @@ function ProviderModelConfigSection(props: {
         </div>
       )}
 
-      <p className="text-[12px] text-muted-foreground">{t('aiProviders.models.help')}</p>
     </div>
   );
 }
