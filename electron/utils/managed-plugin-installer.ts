@@ -5,10 +5,8 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  writeFileSync,
 } from 'node:fs';
 import { mkdtemp, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { getManagedOpenClawConfigPath } from './openclaw-managed-profile';
