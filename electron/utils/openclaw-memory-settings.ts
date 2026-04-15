@@ -249,6 +249,81 @@ function normalizeLosslessClawManagedConfig(losslessEntry: ConfigRecord): boolea
   return changed;
 }
 
+function initializeDreamingDefaults(entries: ConfigRecord): boolean {
+  const memoryCoreEntry = ensureRecord(entries, 'memory-core');
+  const memoryCoreConfig = ensureRecord(memoryCoreEntry, 'config');
+  const dreaming = ensureRecord(memoryCoreConfig, 'dreaming');
+
+  if (dreaming.enabled === false || dreaming.enabled === true) {
+    return false;
+  }
+
+  dreaming.enabled = true;
+  return true;
+}
+
+function initializeActiveMemoryDefaults(entries: ConfigRecord): boolean {
+  const activeMemoryEntry = ensureRecord(entries, 'active-memory');
+  const activeMemoryConfig = ensureRecord(activeMemoryEntry, 'config');
+  let changed = deleteKeyIfPresent(activeMemoryConfig, 'modelFallbackPolicy');
+
+  const activeMemoryExplicitlyDisabled = activeMemoryEntry.enabled === false || activeMemoryConfig.enabled === false;
+  if (activeMemoryExplicitlyDisabled) {
+    return changed;
+  }
+
+  if (activeMemoryEntry.enabled !== true) {
+    activeMemoryEntry.enabled = true;
+    changed = true;
+  }
+
+  if (activeMemoryConfig.enabled !== true) {
+    activeMemoryConfig.enabled = true;
+    changed = true;
+  }
+
+  const currentAgents = Array.isArray(activeMemoryConfig.agents)
+    ? activeMemoryConfig.agents.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  if (currentAgents.length !== ACTIVE_MEMORY_DEFAULT_AGENTS.length
+    || currentAgents.some((entry, index) => entry !== ACTIVE_MEMORY_DEFAULT_AGENTS[index])) {
+    activeMemoryConfig.agents = [...ACTIVE_MEMORY_DEFAULT_AGENTS];
+    changed = true;
+  }
+
+  return changed;
+}
+
+function initializeLosslessClawDefaults(
+  entries: ConfigRecord,
+  slots: ConfigRecord,
+  losslessInstallState: LosslessClawInstallState,
+): boolean {
+  if (losslessInstallState.kind !== 'ready') {
+    return false;
+  }
+
+  const losslessEntry = ensureRecord(entries, 'lossless-claw');
+  let changed = normalizeLosslessClawManagedConfig(losslessEntry);
+
+  const losslessExplicitlyDisabled = losslessEntry.enabled === false || slots.contextEngine === 'legacy';
+  if (losslessExplicitlyDisabled) {
+    return changed;
+  }
+
+  if (losslessEntry.enabled !== true) {
+    losslessEntry.enabled = true;
+    changed = true;
+  }
+
+  if (slots.contextEngine !== 'lossless-claw') {
+    slots.contextEngine = 'lossless-claw';
+    changed = true;
+  }
+
+  return changed;
+}
+
 export async function readMemorySettingsSnapshot(config: OpenClawConfigDocument): Promise<MemorySettingsSnapshot> {
   const plugins = asRecord(config.plugins);
   const slots = asRecord(plugins?.slots);
@@ -439,55 +514,9 @@ export async function initializeMemoryDefaultsOnStartup(): Promise<boolean> {
     const slots = ensureRecord(plugins, 'slots');
     let changed = false;
 
-    const memoryCoreEntry = ensureRecord(entries, 'memory-core');
-    const memoryCoreConfig = ensureRecord(memoryCoreEntry, 'config');
-    const dreaming = ensureRecord(memoryCoreConfig, 'dreaming');
-    if (dreaming.enabled !== false && dreaming.enabled !== true) {
-      dreaming.enabled = true;
-      changed = true;
-    }
-
-    const activeMemoryEntry = ensureRecord(entries, 'active-memory');
-    const activeMemoryConfig = ensureRecord(activeMemoryEntry, 'config');
-    const activeMemoryExplicitlyDisabled = activeMemoryEntry.enabled === false || activeMemoryConfig.enabled === false;
-
-    changed = deleteKeyIfPresent(activeMemoryConfig, 'modelFallbackPolicy') || changed;
-
-    if (!activeMemoryExplicitlyDisabled) {
-      if (activeMemoryEntry.enabled !== true) {
-        activeMemoryEntry.enabled = true;
-        changed = true;
-      }
-      if (activeMemoryConfig.enabled !== true) {
-        activeMemoryConfig.enabled = true;
-        changed = true;
-      }
-      const currentAgents = Array.isArray(activeMemoryConfig.agents)
-        ? activeMemoryConfig.agents.filter((entry): entry is string => typeof entry === 'string')
-        : [];
-      if (currentAgents.length !== ACTIVE_MEMORY_DEFAULT_AGENTS.length
-        || currentAgents.some((entry, index) => entry !== ACTIVE_MEMORY_DEFAULT_AGENTS[index])) {
-        activeMemoryConfig.agents = [...ACTIVE_MEMORY_DEFAULT_AGENTS];
-        changed = true;
-      }
-    }
-
-    if (losslessInstallState.kind === 'ready') {
-      const losslessEntry = ensureRecord(entries, 'lossless-claw');
-      changed = normalizeLosslessClawManagedConfig(losslessEntry) || changed;
-
-      const losslessExplicitlyDisabled = losslessEntry.enabled === false || slots.contextEngine === 'legacy';
-      if (!losslessExplicitlyDisabled) {
-        if (losslessEntry.enabled !== true) {
-          losslessEntry.enabled = true;
-          changed = true;
-        }
-        if (slots.contextEngine !== 'lossless-claw') {
-          slots.contextEngine = 'lossless-claw';
-          changed = true;
-        }
-      }
-    }
+    changed = initializeDreamingDefaults(entries) || changed;
+    changed = initializeActiveMemoryDefaults(entries) || changed;
+    changed = initializeLosslessClawDefaults(entries, slots, losslessInstallState) || changed;
 
     return {
       changed,
