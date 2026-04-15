@@ -123,6 +123,11 @@ vi.mock('@electron/utils/plugin-install', () => ({
   })),
 }));
 
+vi.mock('@electron/utils/openclaw-memory-settings', () => ({
+  syncLosslessClawInstallStateToOpenClaw: vi.fn(async () => false),
+  initializeMemoryDefaultsOnStartup: vi.fn(async () => false),
+}));
+
 vi.mock('@electron/utils/proxy', () => ({
   buildProxyEnv: vi.fn(() => ({})),
   resolveProxySettings: vi.fn(() => ({
@@ -203,6 +208,27 @@ describe('syncGatewayConfigBeforeLaunch', () => {
     expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
     expect(sanitizeOpenClawConfig).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith('Failed to sync proxy config to openclaw.json:', expect.any(Error));
+  });
+
+  it('initializes memory defaults after lossless install-state sync during startup patching', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const {
+      syncLosslessClawInstallStateToOpenClaw,
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
+    await syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788);
+
+    expect(syncLosslessClawInstallStateToOpenClaw).toHaveBeenCalledTimes(1);
+    expect(initializeMemoryDefaultsOnStartup).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(syncLosslessClawInstallStateToOpenClaw).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(initializeMemoryDefaultsOnStartup).mock.invocationCallOrder[0],
+    );
   });
 });
 

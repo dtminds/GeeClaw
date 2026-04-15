@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getSettingsModalPath, resolveSettingsSection } from '@/lib/settings-modal';
 
 describe('settings modal paths', () => {
+  it('builds the memory settings path', () => {
+    expect(getSettingsModalPath('memory')).toBe('/settings/memory');
+  });
+
   it('builds the opencli settings path', () => {
     expect(getSettingsModalPath('opencli')).toBe('/settings/opencli');
   });
@@ -43,6 +47,11 @@ describe('settings modal paths', () => {
   it('resolves the environment settings section from the route', () => {
     expect(resolveSettingsSection('/settings/environment')).toBe('environment');
     expect(resolveSettingsSection('/settings/environment/runtime')).toBe('environment');
+  });
+
+  it('resolves the memory settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/memory')).toBe('memory');
+    expect(resolveSettingsSection('/settings/memory/lossless')).toBe('memory');
   });
 
   it('resolves the web search settings section from the route', () => {

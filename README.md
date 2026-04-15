@@ -214,6 +214,18 @@ Open **Settings → Environment** to manage app-level environment variables for 
 - Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
 - Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
 
+### Memory Settings
+
+Open **Settings → Memory** to manage a small, beginner-friendly subset of OpenClaw memory features without editing `openclaw.json` directly.
+
+- The page currently exposes **Dreaming**, **Active Memory**, and **Lossless Claw** only.
+- Dreaming writes `plugins.entries["memory-core"].config.dreaming.enabled`.
+- Active Memory writes `plugins.entries["active-memory"].config.enabled`, optional `config.model`, and restores `config.agents = ["main"]` plus `config.modelFallbackPolicy = "default-remote"` when enabling.
+- Lossless Claw writes `plugins.entries["lossless-claw"].config.summaryModel` and toggles `plugins.slots.contextEngine` between `lossless-claw` and `legacy` while the plugin is installed.
+- GeeClaw checks `~/.openclaw/extensions/lossless-claw/package.json` to confirm the installed `lossless-claw` version matches GeeClaw's pinned version before allowing Lossless Claw to be enabled.
+- If `lossless-claw` is missing or version-mismatched, GeeClaw marks the feature unavailable and disables stale runtime activation by clearing `plugins.slots.contextEngine` and forcing `plugins.entries["lossless-claw"].enabled = false`.
+- Saving Memory settings debounces a managed Gateway reload so the updated config takes effect immediately.
+
 ### Web Search Providers
 
 Open **Settings → Web Search** to manage OpenClaw `web_search` providers without editing `openclaw.json` by hand.

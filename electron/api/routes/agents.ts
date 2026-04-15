@@ -211,12 +211,14 @@ export async function handleAgentRoutes(
         const body = await parseJsonBody<{
           name?: string;
           avatarPresetId?: string;
+          activeMemoryEnabled?: boolean;
           skillScope?: { mode: 'default' | 'specified'; skills?: string[] };
         }>(req);
         const agentId = decodeURIComponent(parts[0]);
         const snapshot = await updateAgentSettings(agentId, {
           name: body.name,
           avatarPresetId: body.avatarPresetId,
+          activeMemoryEnabled: typeof body.activeMemoryEnabled === 'boolean' ? body.activeMemoryEnabled : undefined,
           skillScope: body.skillScope?.mode === 'specified'
             ? { mode: 'specified', skills: body.skillScope.skills ?? [] }
             : body.skillScope?.mode === 'default'

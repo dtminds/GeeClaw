@@ -30,7 +30,9 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, value?: string | Record<string, unknown>) => (
+      typeof value === 'string' ? value : key
+    ),
   }),
 }));
 
@@ -78,6 +80,29 @@ describe('Settings dialog', () => {
         return {
           toolPermission: 'default',
           approvalPolicy: 'full',
+        };
+      }
+
+      if (path === '/api/settings/memory') {
+        return {
+          dreaming: {
+            enabled: true,
+            status: 'enabled',
+          },
+          activeMemory: {
+            enabled: false,
+            model: null,
+            modelMode: 'automatic',
+            status: 'disabled',
+          },
+          losslessClaw: {
+            enabled: false,
+            installedVersion: null,
+            requiredVersion: '0.5.2',
+            summaryModel: null,
+            summaryModelMode: 'automatic',
+            status: 'not-installed',
+          },
         };
       }
 
@@ -147,5 +172,71 @@ describe('Settings dialog', () => {
     expect(await screen.findByText('safety.toolPermission.title')).toBeInTheDocument();
     expect(screen.getByText('safety.approvalPolicy.title')).toBeInTheDocument();
     expect(screen.queryByText('safety.directory.title')).not.toBeInTheDocument();
+  });
+
+  it('renders the memory settings page from the modal route', async () => {
+    const { Settings } = await import('@/pages/Settings');
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/settings/memory',
+            state: {
+              backgroundLocation: {
+                pathname: '/dashboard',
+              },
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings/*" element={<Settings />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const memoryHeading = await screen.findByRole('heading', { name: 'memory.title' });
+    expect(memoryHeading).toBeInTheDocument();
+    expect(memoryHeading).toHaveClass('modal-title');
+    expect(screen.getByText('memory.description')).toHaveClass('modal-description');
+    expect(screen.getByRole('heading', { name: 'memory.cards.dreaming.title' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'memory.cards.activeMemory.title' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'memory.cards.losslessClaw.title' })).toBeInTheDocument();
+    expect(screen.queryAllByText('memory.docs')).toHaveLength(0);
+    expect(screen.queryByText('memory.cards.losslessClaw.version')).not.toBeInTheDocument();
+  });
+
+  it('places memory after model config in the settings navigation', async () => {
+    const { Settings } = await import('@/pages/Settings');
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/settings/memory',
+            state: {
+              backgroundLocation: {
+                pathname: '/dashboard',
+              },
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings/*" element={<Settings />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('heading', { name: 'memory.title' });
+
+    const navButtons = screen.getAllByRole('button');
+    const labels = navButtons.map((button) => button.textContent).filter(Boolean);
+
+    expect(labels.indexOf('agentModels.title')).toBeGreaterThanOrEqual(0);
+    expect(labels.indexOf('memory.title')).toBeGreaterThan(labels.indexOf('agentModels.title'));
   });
 });

@@ -7,8 +7,70 @@
     "cliMarketplace": "CLI Market",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "memory": "Memory",
     "webSearch": "Web Search",
     "environment": "Environment"
+  },
+  "memory": {
+    "title": "Memory",
+    "description": "Configure the beginner-friendly memory features exposed by GeeClaw.",
+    "loading": "Loading memory settings",
+    "docs": "Open docs",
+    "saveModel": "Save",
+    "modelPlaceholder": "Select a model",
+    "notInstalled": "Not installed",
+    "modelMode": {
+      "automatic": "Automatic",
+      "custom": "Custom"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "not-installed": "Not Installed",
+      "unavailable": "Unavailable"
+    },
+    "cards": {
+      "dreaming": {
+        "title": "Dreaming",
+        "description": "Organizes recent memory in the background and helps keep more important information."
+      },
+      "activeMemory": {
+        "title": "Active Memory",
+        "description": "Searches relevant memory before generating a reply.",
+        "modelTitle": "Dedicated model",
+        "modelDescription": "Prefer a small, low-latency, lower-cost model for memory lookup and organization."
+      },
+      "losslessClaw": {
+        "title": "Lossless Claw",
+        "description": "Keeps more context available in long-running conversations.",
+        "modelTitle": "Summary model",
+        "modelDescription": "Prefer a stable, lower-cost model for long-conversation summarization.",
+        "version": "Installed: {{installed}} · Required: {{required}}"
+      }
+    },
+    "copy": {
+      "dreaming": {
+        "enabled": "Background memory organization is on.",
+        "disabled": "Background memory organization is off.",
+        "unavailable": "This feature is not available right now."
+      },
+      "activeMemory": {
+        "enabled": "Relevant memory is checked before replies.",
+        "disabled": "Replies are generated without active memory lookup.",
+        "unavailable": "This feature cannot be configured right now."
+      },
+      "losslessClaw": {
+        "enabled": "Long conversations keep more context available.",
+        "disabled": "Standard context management is being used.",
+        "not-installed": "This plugin is not installed.",
+        "unavailable": "Installed plugin version does not match GeeClaw requirements."
+      }
+    },
+    "toast": {
+      "loadFailed": "Failed to load memory settings",
+      "saved": "Memory settings updated",
+      "saveFailed": "Failed to save memory settings"
+    }
   },
   "webSearch": {
     "title": "Web Search",
@@ -652,8 +714,8 @@
   "about": {
     "title": "About",
     "appName": "GeeClaw",
-    "tagline": "Graphical AI Assistant",
-    "basedOn": "Based on OpenClaw & ClawX",
+    "tagline": "I'm not as omnipotent as the world claims, but I'll do my best.",
+    "basedOn": "Based on OpenClaw",
     "version": "Version {{version}}",
     "docs": "Website",
     "github": "GitHub"

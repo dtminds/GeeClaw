@@ -20,6 +20,11 @@ import {
   readOpenClawConfigDocument,
 } from '../../utils/openclaw-config-coordinator';
 import {
+  applyMemorySettingsPatch,
+  readMemorySettingsSnapshot,
+  type MemorySettingsPatch,
+} from '../../utils/openclaw-memory-settings';
+import {
   buildOpenClawSafetySettings,
   isApprovalPolicy,
   isToolPermission,
@@ -217,6 +222,39 @@ export async function handleSettingsRoutes(
         return {
           changed,
           result: readWebSearchSettingsSnapshot(config),
+        };
+      });
+
+      if (changed && ctx.gatewayManager.getStatus().state === 'running') {
+        ctx.gatewayManager.debouncedReload();
+      }
+
+      sendJson(res, 200, { success: true, settings });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/memory' && req.method === 'GET') {
+    try {
+      const config = await readOpenClawConfigDocument();
+      sendJson(res, 200, await readMemorySettingsSnapshot(config));
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/memory' && req.method === 'PUT') {
+    try {
+      const body = await parseJsonBody<MemorySettingsPatch>(req);
+      let changed = false;
+      const settings = await mutateOpenClawConfigDocument(async (config) => {
+        changed = await applyMemorySettingsPatch(config, body);
+        return {
+          changed,
+          result: await readMemorySettingsSnapshot(config),
         };
       });
 

@@ -7,8 +7,70 @@
     "cliMarketplace": "CLI 市场",
     "opencli": "OpenCLI",
     "mcp": "MCP",
+    "memory": "记忆",
     "webSearch": "联网搜索",
     "environment": "环境变量"
+  },
+  "memory": {
+    "title": "记忆",
+    "description": "记忆自动沉淀，主动回忆，成为越用越懂你的 AI 助手",
+    "loading": "正在加载记忆设置",
+    "docs": "查看文档",
+    "saveModel": "保存",
+    "modelPlaceholder": "请选择模型",
+    "notInstalled": "未安装",
+    "modelMode": {
+      "automatic": "自动",
+      "custom": "自定义"
+    },
+    "status": {
+      "enabled": "已启用",
+      "disabled": "已关闭",
+      "not-installed": "未安装",
+      "unavailable": "不可用"
+    },
+    "cards": {
+      "dreaming": {
+        "title": "梦境",
+        "description": "每天凌晨开启梦境，整理近期记忆，我会自己记下重要的事情"
+      },
+      "activeMemory": {
+        "title": "Active Memory",
+        "description": "我会在生成回复前先读取相关的记忆，并主动注入到对话中",
+        "modelTitle": "专用模型",
+        "modelDescription": "建议优先选择低成本、低延迟的小模型，用于记忆检索与整理"
+      },
+      "losslessClaw": {
+        "title": "Lossless Claw",
+        "description": "通过对长对话进行自动摘要，保留更多可用上下文",
+        "modelTitle": "摘要模型",
+        "modelDescription": "建议选择稳定、成本较低的次旗舰模型，用于长对话摘要",
+        "version": "已安装：{{installed}} · 需要版本：{{required}}"
+      }
+    },
+    "copy": {
+      "dreaming": {
+        "enabled": "后台记忆整理已开启",
+        "disabled": "后台记忆整理已关闭",
+        "unavailable": "当前暂时无法使用此功能"
+      },
+      "activeMemory": {
+        "enabled": "此处开启后，默认只会对主智能体生效，可在智能体设置页单独开启或关闭",
+        "disabled": "回复时不会主动检索记忆",
+        "unavailable": "当前暂时无法配置此功能"
+      },
+      "losslessClaw": {
+        "enabled": "长对话会保留更多上下文",
+        "disabled": "当前使用标准上下文管理",
+        "not-installed": "该插件尚未安装",
+        "unavailable": "已安装插件版本与 GeeClaw 要求不匹配"
+      }
+    },
+    "toast": {
+      "loadFailed": "加载记忆设置失败",
+      "saved": "记忆设置已更新",
+      "saveFailed": "保存记忆设置失败"
+    }
   },
   "webSearch": {
     "title": "联网搜索",
@@ -652,8 +714,8 @@
   "about": {
     "title": "关于",
     "appName": "GeeClaw",
-    "tagline": "致力于成为人人都能养活的虾",
-    "basedOn": "基于 OpenClaw，ClawX 构建",
+    "tagline": "我并不如世人宣传的那样万能，但我会尽力",
+    "basedOn": "基于 OpenClaw 构建",
     "version": "版本 {{version}}",
     "docs": "官网",
     "github": "GitHub"

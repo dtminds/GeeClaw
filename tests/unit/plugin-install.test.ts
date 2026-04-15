@@ -276,7 +276,7 @@ describe('reconcileBundledPluginLoadPaths', () => {
       expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'geeclaw-plugin']);
       expect(config.plugins?.entries).toEqual({
         'lossless-claw': {
-          enabled: true,
+          enabled: false,
           config: {
             dbPath: join(process.env.HOME, '.openclaw-geeclaw', 'lcm.db'),
             freshTailCount: 64,
@@ -296,7 +296,7 @@ describe('reconcileBundledPluginLoadPaths', () => {
         },
       });
       expect(config.plugins?.entries?.['lossless-claw']).toEqual({
-        enabled: true,
+        enabled: false,
         config: {
           dbPath: join(process.env.HOME, '.openclaw-geeclaw', 'lcm.db'),
           freshTailCount: 64,
