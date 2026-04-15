@@ -1406,6 +1406,102 @@ describe('managed agent config domain', () => {
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('avatarSource');
   });
 
+  it('syncs per-agent active-memory membership when updating agent settings', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    const configWithPlugin = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      plugins?: Record<string, unknown>;
+    };
+    configWithPlugin.plugins = {
+      entries: {
+        'active-memory': {
+          enabled: true,
+          config: {
+            enabled: true,
+            agents: ['main'],
+          },
+        },
+      },
+    };
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify(configWithPlugin, null, 2), 'utf8');
+
+    await agentConfig.updateAgentSettings('research-helper', {
+      activeMemoryEnabled: true,
+    });
+
+    let config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      plugins?: {
+        entries?: {
+          'active-memory'?: {
+            config?: {
+              agents?: string[];
+            };
+          };
+        };
+      };
+    };
+    expect(config.plugins?.entries?.['active-memory']?.config?.agents).toEqual(['main', 'research-helper']);
+
+    await agentConfig.updateAgentSettings('research-helper', {
+      activeMemoryEnabled: false,
+    });
+
+    config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      plugins?: {
+        entries?: {
+          'active-memory'?: {
+            config?: {
+              agents?: string[];
+            };
+          };
+        };
+      };
+    };
+    expect(config.plugins?.entries?.['active-memory']?.config?.agents).toEqual(['main']);
+  });
+
+  it('removes deleted agents from active-memory membership', async () => {
+    const { agentConfig, configDir, homeDir } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        defaults?: { workspace?: string };
+        list?: Array<{ id?: string; name?: string; workspace?: string }>;
+      };
+      plugins?: Record<string, unknown>;
+    };
+    config.plugins = {
+      entries: {
+        'active-memory': {
+          enabled: true,
+          config: {
+            enabled: true,
+            agents: ['main', 'research-helper'],
+          },
+        },
+      },
+    };
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify(config, null, 2), 'utf8');
+
+    await agentConfig.deleteAgentConfig('research-helper');
+
+    const nextConfig = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      plugins?: {
+        entries?: {
+          'active-memory'?: {
+            config?: {
+              agents?: string[];
+            };
+          };
+        };
+      };
+    };
+    expect(nextConfig.plugins?.entries?.['active-memory']?.config?.agents).toEqual(['main']);
+    expect(existsSync(join(homeDir, 'geeclaw', 'workspace-research-helper'))).toBe(true);
+  });
+
   it('uses tilde-based workspace defaults on Windows so OpenClaw can expand them', async () => {
     setPlatform('win32');
     const { agentConfig } = await setupManagedPresetFixture();

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -208,9 +207,6 @@ function AgentSettingsDialogBody({ agentId, onOpenChange }: Omit<AgentSettingsDi
             <DialogTitle className="modal-title">
               {t('agentSettingsDialog.title')}
             </DialogTitle>
-            <DialogDescription className="modal-description mt-0">
-              {t('agentSettingsDialog.description')}
-            </DialogDescription>
           </DialogHeader>
           <Button
             type="button"

@@ -36,6 +36,7 @@ import {
   isPresetSupportedOnPlatform,
   type AgentPresetPlatform,
 } from './agent-preset-platforms';
+import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { deleteDesktopSessionsForAgent } from './desktop-sessions';
 import {
   getAgentMarketplaceCatalogEntry,
@@ -129,6 +130,8 @@ interface AgentConfigDocument extends Record<string, unknown> {
   };
 }
 
+type ConfigRecord = Record<string, unknown>;
+
 type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
 type ManagedAgentSource = 'preset' | 'marketplace';
@@ -167,6 +170,7 @@ export interface AgentSettingsUpdate {
   name?: string;
   skillScope?: AgentSkillScope;
   avatarPresetId?: AgentAvatarPresetId;
+  activeMemoryEnabled?: boolean;
 }
 
 export interface AgentSummary {
@@ -296,6 +300,76 @@ const PERSONA_FILE_MAP = {
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function asConfigRecord(value: unknown): ConfigRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as ConfigRecord
+    : undefined;
+}
+
+function ensureConfigRecord(target: ConfigRecord, key: string): ConfigRecord {
+  const existing = asConfigRecord(target[key]);
+  if (existing) {
+    return existing;
+  }
+
+  const next: ConfigRecord = {};
+  target[key] = next;
+  return next;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function updateActiveMemoryAgentMembership(
+  config: AgentConfigDocument,
+  agentId: string,
+  enabled: boolean,
+): boolean {
+  const root = config as ConfigRecord;
+  const plugins = enabled ? ensureConfigRecord(root, 'plugins') : asConfigRecord(root.plugins);
+  if (!plugins) {
+    return false;
+  }
+
+  const entries = enabled ? ensureConfigRecord(plugins, 'entries') : asConfigRecord(plugins.entries);
+  if (!entries) {
+    return false;
+  }
+
+  const activeMemoryEntry = enabled
+    ? ensureConfigRecord(entries, 'active-memory')
+    : asConfigRecord(entries['active-memory']);
+  if (!activeMemoryEntry) {
+    return false;
+  }
+
+  const activeMemoryConfig = enabled
+    ? ensureConfigRecord(activeMemoryEntry, 'config')
+    : asConfigRecord(activeMemoryEntry.config);
+  if (!activeMemoryConfig) {
+    return false;
+  }
+
+  const currentAgents = readStringArray(activeMemoryConfig.agents);
+  const nextAgents = enabled
+    ? (currentAgents.includes(agentId) ? currentAgents : [...currentAgents, agentId])
+    : currentAgents.filter((entry) => entry !== agentId);
+
+  if (stringArraysEqual(currentAgents, nextAgents)) {
+    return false;
+  }
+
+  activeMemoryConfig.agents = nextAgents;
+  return true;
 }
 
 function normalizeManagedAgentSource(source: unknown): ManagedAgentSource {
@@ -1081,7 +1155,7 @@ async function reconcileReferencedBuiltinModelRefs(
   }));
 }
 
-async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
+export async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
   const providers = (await listProviderAccounts()).map(providerAccountToConfig);
 
   return providers
@@ -1960,6 +2034,9 @@ export async function updateAgentSettings(
     }
     nextEntry = applyAgentSkillScope(nextEntry, nextScope);
   }
+  if (typeof updates.activeMemoryEnabled === 'boolean') {
+    updateActiveMemoryAgentMembership(config, agentId, updates.activeMemoryEnabled);
+  }
 
   entries[index] = nextEntry;
   config.agents = {
@@ -1968,6 +2045,16 @@ export async function updateAgentSettings(
   };
 
   await persistAgentConfigAndPatchRuntime(config);
+  if (typeof updates.activeMemoryEnabled === 'boolean') {
+    await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
+      const changed = updateActiveMemoryAgentMembership(
+        currentConfig as AgentConfigDocument,
+        agentId,
+        updates.activeMemoryEnabled as boolean,
+      );
+      return { changed, result: changed };
+    });
+  }
   if (updates.avatarPresetId) {
     await writeAgentAvatarMap(avatars);
   }
@@ -2109,7 +2196,13 @@ export async function deleteAgentConfig(
     };
   }
 
+  updateActiveMemoryAgentMembership(config, agentId, false);
+
   await persistAgentConfigAndPatchRuntime(config);
+  await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
+    const changed = updateActiveMemoryAgentMembership(currentConfig as AgentConfigDocument, agentId, false);
+    return { changed, result: changed };
+  });
   if (management[agentId]) {
     delete management[agentId];
     await writeAgentManagementMap(management);

@@ -78,7 +78,6 @@
     },
     "agentSettingsDialog": {
         "title": "智能体设置",
-        "description": "管理该智能体的人设、技能和记忆",
         "navigation": "智能体设置分区",
         "panels": {
             "loading": "正在加载智能体人格...",
@@ -92,6 +91,9 @@
             "agentIdLabel": "智能体 ID",
             "modelLabel": "模型",
             "inheritedSuffix": "（继承）",
+            "activeMemoryLabel": "Active Memory",
+            "activeMemoryDescription": "启用主动记忆召回，增强根据记忆回答的能力",
+            "activeMemoryDisabledHint": "需先在 设置 -> 记忆 中开启 Active Memory。",
             "deleteLabel": "删除智能体",
             "deleteTitle": "删除智能体",
             "deleteMessage": "确认删除该智能体？其工作区与运行目录也会被移除。",

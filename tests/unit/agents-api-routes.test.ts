@@ -339,6 +339,7 @@ describe('agent API routes', () => {
     parseJsonBody.mockResolvedValueOnce({
       name: '股票助手 Pro',
       avatarPresetId: 'gradient-sunset',
+      activeMemoryEnabled: true,
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -361,6 +362,7 @@ describe('agent API routes', () => {
     expect(updateAgentSettings).toHaveBeenCalledWith('stockexpert', {
       name: '股票助手 Pro',
       avatarPresetId: 'gradient-sunset',
+      activeMemoryEnabled: true,
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],

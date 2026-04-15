@@ -215,6 +215,18 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - preset 安装前的 `requires.env` 检查会同时读取这批应用级变量与当前进程环境。
 - 保存后会自动重启 Gateway，让变更立即生效。
 
+### Memory 设置
+
+打开 **设置 → Memory**，可以用更易懂的方式管理一小部分 OpenClaw 记忆能力，而不需要手动修改 `openclaw.json`。
+
+- 当前页面只暴露 **Dreaming**、**Active Memory**、**Lossless Claw** 三张卡片。
+- Dreaming 会写入 `plugins.entries["memory-core"].config.dreaming.enabled`。
+- Active Memory 会写入 `plugins.entries["active-memory"].config.enabled`、可选的 `config.model`，并在启用时补齐 `config.agents = ["main"]` 与 `config.modelFallbackPolicy = "default-remote"`。
+- Lossless Claw 会写入 `plugins.entries["lossless-claw"].config.summaryModel`，并在插件已安装时把 `plugins.slots.contextEngine` 在 `lossless-claw` 与 `legacy` 之间切换。
+- GeeClaw 会读取 `~/.openclaw/extensions/lossless-claw/package.json`，确认本机安装的 `lossless-claw` 版本是否与 GeeClaw pin 的版本一致；只有一致时才允许启用 Lossless Claw。
+- 如果 `lossless-claw` 缺失或版本不匹配，GeeClaw 会把该功能标记为不可用，并通过清除 `plugins.slots.contextEngine`、强制 `plugins.entries["lossless-claw"].enabled = false` 来关闭遗留激活状态。
+- 保存 Memory 设置后，GeeClaw 会对托管 Gateway 做一次 debounce 热重载，让配置立即生效。
+
 ### 联网搜索提供商
 
 打开 **设置 → 联网搜索**，可以直接管理 OpenClaw 的 `web_search` 提供商，而不需要手动编辑 `openclaw.json`。

@@ -30,6 +30,10 @@ import {
   ensureAlwaysEnabledBundledPluginsConfigured,
   syncBundledPluginLoadPathsToOpenClaw,
 } from '../utils/plugin-install';
+import {
+  initializeMemoryDefaultsOnStartup,
+  syncLosslessClawInstallStateToOpenClaw,
+} from '../utils/openclaw-memory-settings';
 
 import { syncAllChannelConfigToOpenClaw } from '../services/channels/channel-runtime-sync';
 import {
@@ -574,6 +578,14 @@ export async function syncGatewayConfigBeforeLaunch(
 
   await runStartupPatchStep('Failed to sync bundled plugin load paths to openclaw.json:', async () => {
     await syncBundledPluginLoadPathsToOpenClaw();
+  });
+
+  await runStartupPatchStep('Failed to sync lossless-claw install state to openclaw.json:', async () => {
+    await syncLosslessClawInstallStateToOpenClaw();
+  });
+
+  await runStartupPatchStep('Failed to initialize memory defaults in openclaw.json:', async () => {
+    await initializeMemoryDefaultsOnStartup();
   });
 
   await runStartupPatchStep('Failed to sync bundled skill load paths to openclaw.json:', async () => {

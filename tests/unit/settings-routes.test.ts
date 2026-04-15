@@ -19,6 +19,8 @@ const buildWebSearchProviderAvailabilityMapMock = vi.fn();
 const buildWebSearchProviderEnvVarStatusMapMock = vi.fn();
 const deleteWebSearchProviderConfigMock = vi.fn();
 const readWebSearchSettingsSnapshotMock = vi.fn();
+const readMemorySettingsSnapshotMock = vi.fn();
+const applyMemorySettingsPatchMock = vi.fn();
 const readOpenClawConfigDocumentMock = vi.fn();
 const mutateOpenClawConfigDocumentMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
@@ -58,6 +60,11 @@ vi.mock('@electron/utils/openclaw-web-search-config', () => ({
   buildWebSearchProviderEnvVarStatusMap: (...args: unknown[]) => buildWebSearchProviderEnvVarStatusMapMock(...args),
   deleteWebSearchProviderConfig: (...args: unknown[]) => deleteWebSearchProviderConfigMock(...args),
   readWebSearchSettingsSnapshot: (...args: unknown[]) => readWebSearchSettingsSnapshotMock(...args),
+}));
+
+vi.mock('@electron/utils/openclaw-memory-settings', () => ({
+  readMemorySettingsSnapshot: (...args: unknown[]) => readMemorySettingsSnapshotMock(...args),
+  applyMemorySettingsPatch: (...args: unknown[]) => applyMemorySettingsPatchMock(...args),
 }));
 
 vi.mock('@electron/utils/openclaw-config-coordinator', () => ({
@@ -100,6 +107,27 @@ describe('handleSettingsRoutes', () => {
       },
       providerConfigByProvider: {},
     });
+    readMemorySettingsSnapshotMock.mockResolvedValue({
+      dreaming: {
+        enabled: false,
+        status: 'disabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+      },
+    });
+    applyMemorySettingsPatchMock.mockResolvedValue(false);
     readOpenClawConfigDocumentMock.mockResolvedValue({});
     mutateOpenClawConfigDocumentMock.mockImplementation(async (
       mutate: (config: Record<string, unknown>) => Promise<{ changed: boolean; result: unknown }> | { changed: boolean; result: unknown },
@@ -233,6 +261,119 @@ describe('handleSettingsRoutes', () => {
     expect(restart).toHaveBeenCalledTimes(1);
     expect(sendJsonMock).toHaveBeenLastCalledWith(
       res,
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('returns the memory settings snapshot', async () => {
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+        modelMode: 'custom',
+        status: 'enabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: '0.5.2',
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'disabled',
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/memory'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(readMemorySettingsSnapshotMock).toHaveBeenCalledWith({});
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({
+        dreaming: expect.objectContaining({ status: 'enabled' }),
+        activeMemory: expect.objectContaining({ model: 'openai/gpt-5.4-mini' }),
+      }),
+    );
+  });
+
+  it('persists memory settings and debounces a gateway reload when config changed', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+      },
+    });
+    applyMemorySettingsPatchMock.mockResolvedValueOnce(true);
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+        modelMode: 'custom',
+        status: 'enabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/memory'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(mutateOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(applyMemorySettingsPatchMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        dreaming: {
+          enabled: true,
+        },
+      }),
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
       200,
       expect.objectContaining({ success: true }),
     );

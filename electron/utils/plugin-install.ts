@@ -337,7 +337,7 @@ export function getAlwaysEnabledBundledPluginIds(): string[] {
   return [...ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS];
 }
 
-function getManagedBundledPluginPolicy(pluginId: string): {
+export function getManagedBundledPluginPolicy(pluginId: string): {
   allowedConfigKeys?: string[];
   config?: Record<string, unknown>;
   slots?: Record<string, string>;
@@ -411,7 +411,8 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
         );
         let entryChanged = false;
 
-        if (entry.enabled !== true) {
+        const shouldPreserveExplicitDisable = pluginId === 'lossless-claw' && entry.enabled === false;
+        if (!shouldPreserveExplicitDisable && entry.enabled !== true) {
           entry.enabled = true;
           entryChanged = true;
         }
@@ -474,7 +475,7 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
           }
         }
 
-        if (policy?.slots) {
+        if (policy?.slots && pluginId !== 'lossless-claw') {
           for (const [slotKey, slotValue] of Object.entries(policy.slots)) {
             if (nextSlots[slotKey] !== slotValue) {
               nextSlots[slotKey] = slotValue;
