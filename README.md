@@ -222,8 +222,8 @@ Open **Settings → Memory** to manage a small, beginner-friendly subset of Open
 - Dreaming writes `plugins.entries["memory-core"].config.dreaming.enabled`.
 - Active Memory writes `plugins.entries["active-memory"].config.enabled`, optional `config.model`, and restores `config.agents = ["main"]` plus `config.modelFallbackPolicy = "default-remote"` when enabling.
 - Lossless Claw writes `plugins.entries["lossless-claw"].config.summaryModel` and toggles `plugins.slots.contextEngine` between `lossless-claw` and `legacy` while the plugin is installed.
-- GeeClaw checks `~/.openclaw/extensions/lossless-claw/package.json` to confirm the installed `lossless-claw` version matches GeeClaw's pinned version before allowing Lossless Claw to be enabled.
-- If `lossless-claw` is missing or version-mismatched, GeeClaw marks the feature unavailable and disables stale runtime activation by clearing `plugins.slots.contextEngine` and forcing `plugins.entries["lossless-claw"].enabled = false`.
+- GeeClaw prepares `lossless-claw` before every gateway startup by fetching the pinned package into a staging directory, installing runtime dependencies there, and atomically replacing `~/.openclaw-geeclaw/extensions/lossless-claw`.
+- If `lossless-claw` installation fails during startup, GeeClaw blocks gateway launch, clears the managed `extensions/lossless-claw` directory to avoid partial installs, and leaves the feature unavailable until the next retry succeeds.
 - Saving Memory settings debounces a managed Gateway reload so the updated config takes effect immediately.
 
 ### Web Search Providers

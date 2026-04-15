@@ -201,7 +201,7 @@ describe('openclaw memory settings', () => {
     ]);
   });
 
-  it('treats newer installed lossless-claw versions as available', async () => {
+  it('treats newer installed lossless-claw versions as unavailable when they do not match the GeeClaw pin', async () => {
     await writeOpenClawJson({
       plugins: {
         entries: {
@@ -225,7 +225,7 @@ describe('openclaw memory settings', () => {
       requiredVersion: '0.5.2',
       summaryModel: 'openai/gpt-5.4-mini',
       summaryModelMode: 'custom',
-      status: 'disabled',
+      status: 'unavailable',
     });
   });
 

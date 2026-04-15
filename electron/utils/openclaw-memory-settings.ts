@@ -2,12 +2,21 @@ import { access, readFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join } from 'path';
 import { listAvailableProviderModelGroups, type AvailableProviderModelGroup } from './agent-config';
+import { getManagedPlugin } from './managed-plugin-registry';
 import { getManagedBundledPluginPolicy } from './plugin-install';
 import type { OpenClawConfigDocument } from './openclaw-config-coordinator';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getOpenClawConfigDir } from './paths';
 
-export const LOSSLESS_CLAW_REQUIRED_VERSION = '0.5.2';
+function getRequiredManagedPluginVersion(pluginId: string): string {
+  const plugin = getManagedPlugin(pluginId);
+  if (!plugin) {
+    throw new Error(`Managed plugin registry entry is missing for ${pluginId}`);
+  }
+  return plugin.targetVersion;
+}
+
+export const LOSSLESS_CLAW_REQUIRED_VERSION = getRequiredManagedPluginVersion('lossless-claw');
 const ACTIVE_MEMORY_DEFAULT_AGENTS = ['main'];
 
 type ConfigRecord = Record<string, unknown>;
@@ -94,19 +103,6 @@ function deleteKeyIfPresent(target: ConfigRecord, key: string): boolean {
   return true;
 }
 
-function parseVersionSegment(segment: string): number | null {
-  if (!segment) {
-    return 0;
-  }
-
-  const match = segment.match(/^(\d+)/);
-  if (!match) {
-    return null;
-  }
-
-  return Number.parseInt(match[1], 10);
-}
-
 function arraysEqual(left: unknown[], right: unknown[]): boolean {
   if (left.length !== right.length) {
     return false;
@@ -115,29 +111,8 @@ function arraysEqual(left: unknown[], right: unknown[]): boolean {
   return left.every((value, index) => value === right[index]);
 }
 
-function isVersionAtLeast(installedVersion: string, requiredVersion: string): boolean {
-  const installedSegments = installedVersion.split('.');
-  const requiredSegments = requiredVersion.split('.');
-  const length = Math.max(installedSegments.length, requiredSegments.length);
-
-  for (let index = 0; index < length; index += 1) {
-    const installedValue = parseVersionSegment(installedSegments[index] ?? '0');
-    const requiredValue = parseVersionSegment(requiredSegments[index] ?? '0');
-
-    if (installedValue === null || requiredValue === null) {
-      return false;
-    }
-
-    if (installedValue > requiredValue) {
-      return true;
-    }
-
-    if (installedValue < requiredValue) {
-      return false;
-    }
-  }
-
-  return true;
+function isRequiredVersionInstalled(installedVersion: string, requiredVersion: string): boolean {
+  return installedVersion === requiredVersion;
 }
 
 async function readLosslessClawInstallState(): Promise<LosslessClawInstallState> {
@@ -157,7 +132,7 @@ async function readLosslessClawInstallState(): Promise<LosslessClawInstallState>
     const parsed = JSON.parse(raw) as { version?: unknown };
     const installedVersion = readString(parsed.version);
 
-    if (!installedVersion || !isVersionAtLeast(installedVersion, LOSSLESS_CLAW_REQUIRED_VERSION)) {
+    if (!installedVersion || !isRequiredVersionInstalled(installedVersion, LOSSLESS_CLAW_REQUIRED_VERSION)) {
       return {
         kind: 'version-mismatch',
         installedVersion: installedVersion ?? '',

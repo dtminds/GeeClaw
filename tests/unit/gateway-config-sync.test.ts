@@ -128,6 +128,10 @@ vi.mock('@electron/utils/openclaw-memory-settings', () => ({
   initializeMemoryDefaultsOnStartup: vi.fn(async () => false),
 }));
 
+vi.mock('@electron/utils/managed-plugin-installer', () => ({
+  ensureManagedPluginsReadyBeforeGatewayLaunch: vi.fn(async () => []),
+}));
+
 vi.mock('@electron/utils/proxy', () => ({
   buildProxyEnv: vi.fn(() => ({})),
   resolveProxySettings: vi.fn(() => ({
@@ -229,6 +233,51 @@ describe('syncGatewayConfigBeforeLaunch', () => {
     ).toBeLessThan(
       vi.mocked(initializeMemoryDefaultsOnStartup).mock.invocationCallOrder[0],
     );
+  });
+
+  it('installs managed plugins before startup config sync runs', async () => {
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      await prepareGatewayLaunchContext(28788);
+
+      expect(ensureManagedPluginsReadyBeforeGatewayLaunch).toHaveBeenCalledTimes(1);
+      expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        vi.mocked(syncProxyConfigToOpenClaw).mock.invocationCallOrder[0],
+      );
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('blocks gateway launch when a required managed plugin fails to install', async () => {
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mockRejectedValueOnce(new Error('lossless-claw install failed'));
+
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      await expect(prepareGatewayLaunchContext(28788)).rejects.toThrow('lossless-claw install failed');
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -163,6 +163,7 @@
             "body": "This may take a little longer the first time.",
             "caption": "First-time preparation can take a few minutes. Please keep this window open.",
             "captionReturning": "Restoring services. This should only take a moment.",
+            "managedPluginCaption": "Preparing {{plugin}} for this startup. Please keep this window open.",
             "openclawExtractingTitle": "Preparing the OpenClaw runtime",
             "openclawExtractingCaption": "First launch needs to unpack the runtime. Please keep this window open.",
             "openclawUpdatingTitle": "Updating OpenClaw to {{version}}",
@@ -183,6 +184,8 @@
         "error": {
             "title": "GeeClaw needs attention",
             "body": "We could not finish preparing the app. Try again, or check the details below.",
+            "managedPluginTitle": "{{plugin}} plugin installation failed",
+            "managedPluginBody": "A required startup plugin could not be installed. Please try again.",
             "retry": "Try again"
         },
         "gatewayRecovery": {

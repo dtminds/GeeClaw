@@ -22,7 +22,6 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'wecom-openclaw-plugin', npmName: '@wecom/wecom-openclaw-plugin', displayName: '企业微信' },
   { pluginId: 'openclaw-weixin', npmName: '@tencent-weixin/openclaw-weixin', displayName: '微信' },
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
-  { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
   { pluginId: 'geeclaw-plugin', npmName: 'geeclaw-plugin', displayName: 'geeclaw-plugin' },
 ];
 

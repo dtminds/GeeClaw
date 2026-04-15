@@ -9,16 +9,10 @@ const DEFAULT_BUNDLED_OPENCLAW_PLUGINS = [
   { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
   { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
   { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
-  { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
   { npmName: '@tencent-weixin/openclaw-weixin', pluginId: 'openclaw-weixin' },
 ];
 
-const EXTRA_BUNDLED_PLUGIN_PACKAGES = {
-  // Upstream package imports SessionManager from pi-coding-agent at runtime,
-  // but does not declare it in package.json. Bundle it explicitly until the
-  // plugin publishes correct metadata.
-  // '@martian-engineering/lossless-claw': ['@mariozechner/pi-coding-agent'],
-};
+const EXTRA_BUNDLED_PLUGIN_PACKAGES = {};
 
 const SKIP_PACKAGE_NAMES = new Set(['typescript', '@playwright/test']);
 const SKIP_PACKAGE_SCOPES = ['@types/'];
