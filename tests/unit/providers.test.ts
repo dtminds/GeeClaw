@@ -54,6 +54,22 @@ describe('provider metadata', () => {
     );
   });
 
+  it('includes GeeClaw in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).toContain('geeclaw');
+
+    expect(PROVIDER_TYPE_INFO).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'geeclaw',
+          name: 'GeeClaw',
+          requiresApiKey: true,
+          defaultModelId: 'qwen3.6-plus',
+          showModelId: false,
+        }),
+      ]),
+    );
+  });
+
   it('includes ark in the backend provider registry', () => {
     expect(BUILTIN_PROVIDER_TYPES).toContain('ark');
     expect(getProviderEnvVar('ark')).toBe('ARK_API_KEY');
@@ -88,6 +104,16 @@ describe('provider metadata', () => {
       baseUrl: 'https://geekai.co/api/v1',
       api: 'openai-completions',
       apiKeyEnv: 'GEEKAI_API_KEY',
+    }));
+  });
+
+  it('includes GeeClaw in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).toContain('geeclaw');
+    expect(getProviderEnvVar('geeclaw')).toBe('GEECLAW_API_KEY');
+    expect(getProviderConfig('geeclaw')).toEqual(expect.objectContaining({
+      baseUrl: 'https://geekai.co/api/v1',
+      api: 'openai-completions',
+      apiKeyEnv: 'GEECLAW_API_KEY',
     }));
   });
 
@@ -158,7 +184,7 @@ describe('provider metadata', () => {
 
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'geeclaw', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
   });
 

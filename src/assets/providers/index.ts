@@ -16,6 +16,7 @@ export const providerIcons: Record<string, string> = {
     google,
     openrouter,
     geekai: custom,
+    geeclaw: custom,
     ark,
     moonshot,
     'moonshot-global': moonshot,
