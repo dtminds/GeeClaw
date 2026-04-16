@@ -77,8 +77,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@larksuite/openclaw-lark':
-        specifier: 2026.4.1
-        version: 2026.4.1(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))
+        specifier: 2026.4.7
+        version: 2026.4.7(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))
       '@playwright/test':
         specifier: ^1.59.0
         version: 1.59.1
@@ -128,8 +128,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@tencent-weixin/openclaw-weixin':
-        specifier: 2.1.7
-        version: 2.1.7
+        specifier: 2.1.8
+        version: 2.1.8
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -1338,8 +1338,8 @@ packages:
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
 
-  '@larksuite/openclaw-lark@2026.4.1':
-    resolution: {integrity: sha512-IUZ5CajR7UTSVYYDyyU/P/I+DeWDcVnbM2WTLo747gED225uKQ4/jBu5hQt8oz3GUq3FqT+RDRYelE8fIqUPag==}
+  '@larksuite/openclaw-lark@2026.4.7':
+    resolution: {integrity: sha512-oiS7hHwJpoOQCHjgAT2xPTO9zmmUKEje2kgsYC+Q8ZMu0gn/sI+FE2NYnQ3dVcgqw7z+2rdajgcTP6kkisFxNw==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -2726,8 +2726,8 @@ packages:
   '@telegraf/types@7.1.0':
     resolution: {integrity: sha512-kGevOIbpMcIlCDeorKGpwZmdH7kHbqlk/Yj6dEpJMKEQw5lk0KVQY0OLXaCswy8GqlIVLd5625OB+rAntP9xVw==}
 
-  '@tencent-weixin/openclaw-weixin@2.1.7':
-    resolution: {integrity: sha512-2x5/mbO2IVAsN4aUA41g6i8O84WIJCeFj8kwmB2pGjuxIBVy5FnEI5n52Pc5xroOLbxzW5FXN4cDtc/PvvKghg==}
+  '@tencent-weixin/openclaw-weixin@2.1.8':
+    resolution: {integrity: sha512-YM2fumDI+NvslhFH4gsek+scgCwTdyz7eMDyfNadCTXPjh9hoosn8tcMF0P90gQJEGEud7AJXiKKd8IKGNCfRA==}
     engines: {node: '>=22'}
 
   '@testing-library/dom@10.4.1':
@@ -9297,7 +9297,7 @@ snapshots:
       '@lancedb/lancedb-win32-x64-msvc': 0.27.2
     optional: true
 
-  '@larksuite/openclaw-lark@2026.4.1(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))':
+  '@larksuite/openclaw-lark@2026.4.7(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))':
     dependencies:
       '@larksuiteoapi/node-sdk': 1.60.0
       '@sinclair/typebox': 0.34.48
@@ -9312,7 +9312,7 @@ snapshots:
 
   '@larksuiteoapi/node-sdk@1.60.0':
     dependencies:
-      axios: 1.13.5
+      axios: 1.13.6(debug@4.4.3)
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
@@ -10862,7 +10862,7 @@ snapshots:
   '@telegraf/types@7.1.0':
     optional: true
 
-  '@tencent-weixin/openclaw-weixin@2.1.7':
+  '@tencent-weixin/openclaw-weixin@2.1.8':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6
