@@ -39,8 +39,8 @@ Today `lossless-claw` is still treated as a bundled plugin in config and UI flow
 
 1. `lossless-claw` must no longer be shipped as part of the packaged plugin bundle.
 2. Before gateway launch, GeeClaw must determine the currently installed version of each managed plugin so startup status and cleanup logic have accurate context.
-3. GeeClaw must install the pinned managed plugin package on every startup using the specified npm-pack workflow, replacing any existing copy.
-4. Version upgrades use the same install flow as same-version refreshes and fresh installs.
+3. GeeClaw must install the pinned managed plugin package when the plugin is missing or the installed version does not match the pinned version.
+4. Version upgrades use the same install flow as fresh installs.
 5. Installation failures must remove `extensions/<pluginId>` to avoid partial installs being treated as valid.
 6. Startup behavior must be policy-driven per plugin:
    - required plugins block gateway launch on failure
@@ -54,7 +54,6 @@ Today `lossless-claw` is still treated as a bundled plugin in config and UI flow
 3. The final plugin directory swap must be atomic.
 4. Plugin installation and config patching must remain separate concerns.
 5. Failed installs should be retried on every startup; there is no failure backoff.
-6. Successful installs should also refresh the pinned plugin on every startup so GeeClaw never keeps an older dependency tree in place.
 
 ## High-Level Design
 
@@ -130,7 +129,7 @@ Read:
 
 If the file is missing or invalid, treat the plugin as not installed.
 
-GeeClaw records the currently installed version for status/reporting, but still proceeds with a fresh staged install even when `package.json.version === targetVersion`.
+If `package.json.version === targetVersion`, GeeClaw should treat the plugin as ready and skip the install workflow.
 
 ### Step 2. Create staging workspace
 
@@ -336,7 +335,7 @@ For `lossless-claw`, this means startup must not proceed into a state where:
 Add tests covering:
 
 1. plugin already installed at exact target version
-   - installer still refreshes the plugin through staging and atomic promotion
+   - installer does nothing
 
 2. plugin missing
    - installer runs pack, extract, validate, npm install, promotion

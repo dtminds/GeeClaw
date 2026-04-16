@@ -155,37 +155,37 @@
         "authenticated": {
             "eyebrow": "账户已就绪",
             "title": "已登录",
-            "body": "您的账户已就绪。接下来连接一个 AI 服务即可开始使用。",
-            "bodyNamed": "{{name}}，您的账户已就绪。接下来连接一个 AI 服务即可开始使用。"
+            "body": "您的账户已就绪。接下来连接一个 AI 服务即可开始使用",
+            "bodyNamed": "{{name}}，您的账户已就绪。接下来连接一个 AI 服务即可开始使用"
         },
         "preparing": {
             "title": "正在准备 GeeClaw",
             "body": "首次启动时可能会稍微久一点。",
             "caption": "第一次准备可能需要几分钟时间，请不要关闭窗口。",
             "captionReturning": "正在启动所需服务，请稍候",
-            "managedPluginCaption": "正在为本次启动准备 {{plugin}}，请保持窗口打开。",
+            "managedPluginCaption": "正在准备 {{plugin}}，请保持窗口打开",
             "openclawExtractingTitle": "正在准备 OpenClaw 运行时",
-            "openclawExtractingCaption": "首次启动需要解压运行时，请保持窗口打开。",
+            "openclawExtractingCaption": "首次启动需要解压运行时，请保持窗口打开",
             "openclawUpdatingTitle": "正在更新 OpenClaw 到 {{version}}",
-            "openclawUpdatingCaption": "正在替换内置运行时，请保持窗口打开。"
+            "openclawUpdatingCaption": "正在替换内置运行时，请保持窗口打开"
         },
         "needsProvider": {
             "title": "连接您的 AI 服务",
-            "body": "选择一个 AI 提供商后即可开始聊天。"
+            "body": "选择一个 AI 提供商后即可开始聊天"
         },
         "status": {
             "label": "当前状态",
-            "default": "我们正在为您准备一个稳定、顺滑的 AI 使用体验。",
-            "login": "完成一次快速登录后，就可以继续了。",
-            "invite": "该账号尚未开通，请先输入邀请码继续。",
-            "provider": "下一步：连接模型提供商，让 GeeClaw 可以开始聊天。",
-            "error": "启动过程遇到了一点问题，您可以直接在这里重试。"
+            "default": "我们正在为您准备一个稳定、顺滑的 AI 使用体验",
+            "login": "完成一次快速登录后，就可以继续了",
+            "invite": "该账号尚未开通，请先输入邀请码继续",
+            "provider": "下一步：连接模型提供商，让 GeeClaw 可以开始聊天",
+            "error": "启动过程遇到了一点问题，您可以直接在这里重试"
         },
         "error": {
             "title": "GeeClaw 需要处理一下",
-            "body": "我们暂时没能完成应用准备。您可以重试，或查看下面的详情。",
+            "body": "我们暂时没能完成应用准备。您可以重试，或查看下面的详情",
             "managedPluginTitle": "{{plugin}} 插件安装失败",
-            "managedPluginBody": "启动前依赖的插件没有安装成功，请重试。",
+            "managedPluginBody": "插件没有安装成功，相关功能可能暂时不可用，后续启动会继续重试",
             "retry": "重试"
         },
         "gatewayRecovery": {
@@ -197,7 +197,7 @@
             },
             "error": {
                 "title": "OpenClaw 服务未能恢复",
-                "body": "我们尝试重新连接 OpenClaw 网关，但这次没有成功。您可以直接重试，或查看下面的详情。",
+                "body": "我们尝试重新连接 OpenClaw 网关，但这次没有成功。您可以直接重试，或查看下面的详情",
                 "retry": "重试"
             }
         }

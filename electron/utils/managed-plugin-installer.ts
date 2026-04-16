@@ -31,13 +31,14 @@ export type ExtractManagedPluginPackage = (options: {
 export type EnsureManagedPluginInstalledOptions = {
   plugin: ManagedPluginDefinition;
   configDir: string;
+  currentVersion?: string | null;
   runCommand?: RunManagedPluginCommand;
   extractPackage?: ExtractManagedPluginPackage;
   commandEnv?: NodeJS.ProcessEnv;
 };
 
 export type EnsureManagedPluginInstalledResult = {
-  action: 'installed';
+  action: 'installed' | 'noop';
   pluginId: string;
   installedVersion: string;
   previousVersion: string | null;
@@ -232,7 +233,18 @@ export async function ensureManagedPluginInstalled(
   const runCommand = options.runCommand ?? defaultRunManagedPluginCommand;
   const extractPackage = options.extractPackage ?? defaultExtractManagedPluginPackage;
   const finalDir = getPluginFinalDir(options.configDir, options.plugin.pluginId);
-  const currentVersion = await getInstalledPluginVersion(options.configDir, options.plugin.pluginId);
+  const currentVersion = options.currentVersion ?? await getInstalledPluginVersion(
+    options.configDir,
+    options.plugin.pluginId,
+  );
+  if (currentVersion === options.plugin.targetVersion) {
+    return {
+      action: 'noop',
+      pluginId: options.plugin.pluginId,
+      installedVersion: currentVersion,
+      previousVersion: currentVersion,
+    };
+  }
   const stagingRoot = await createStagingRoot(options.configDir, options.plugin.pluginId);
   const packDir = join(stagingRoot, 'pack');
   const extractRoot = join(stagingRoot, 'extract');
@@ -305,18 +317,21 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
     });
 
     try {
-      setManagedPluginStatus({
-        pluginId: plugin.pluginId,
-        displayName: plugin.displayName,
-        stage: 'installing',
-        message: plugin.installMessage,
-        targetVersion: plugin.targetVersion,
-        installedVersion,
-      });
+      if (installedVersion !== plugin.targetVersion) {
+        setManagedPluginStatus({
+          pluginId: plugin.pluginId,
+          displayName: plugin.displayName,
+          stage: 'installing',
+          message: plugin.installMessage,
+          targetVersion: plugin.targetVersion,
+          installedVersion,
+        });
+      }
 
       const result = await ensureManagedPluginInstalled({
         plugin,
         configDir: options.openclawConfigDir,
+        currentVersion: installedVersion,
         commandEnv: env,
       });
 

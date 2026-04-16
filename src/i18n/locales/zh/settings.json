@@ -45,7 +45,7 @@
         "description": "通过对长对话进行自动摘要，保留更多可用上下文",
         "modelTitle": "摘要模型",
         "modelDescription": "建议选择稳定、成本较低的次旗舰模型，用于长对话摘要",
-        "version": "已安装：{{installed}} · 需要版本：{{required}}"
+        "version": "已安装：v{{installed}}，最低版本要求：v{{required}}"
       }
     },
     "copy": {

@@ -20,7 +20,7 @@
 - [ ] **Step 1: Write failing installer tests for version checks, validation, dependency install, cleanup, and atomic promotion**
 
 Add table-driven cases covering:
-- exact-version reinstall
+- exact-version no-op
 - missing plugin installs
 - version mismatch reinstalls
 - missing `openclaw.extensions` fails and removes final dir
