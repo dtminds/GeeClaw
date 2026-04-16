@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
+  SETUP_PROVIDERS,
   getDefaultProviderModelEntries,
   getProviderDocsUrl,
   getProviderCodePlanPreset,
+  getProviderIconUrl,
   isProviderCodePlanMode,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
@@ -38,20 +40,36 @@ describe('provider metadata', () => {
     );
   });
 
-  it('includes GeekAI in the frontend provider registry', () => {
-    expect(PROVIDER_TYPES).toContain('geekai');
+  it('does not expose GeekAI in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).not.toContain('geekai');
+    expect(PROVIDER_TYPE_INFO.find((provider) => provider.id === 'geekai')).toBeUndefined();
+  });
+
+  it('includes GeeClaw in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).toContain('geeclaw');
 
     expect(PROVIDER_TYPE_INFO).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'geekai',
-          name: 'GeekAI',
+          id: 'geeclaw',
+          name: 'GeeClaw',
           requiresApiKey: true,
-          showModelId: true,
           defaultModelId: 'qwen3.6-plus',
+          showBaseUrl: false,
+          showModelId: true,
         }),
-      ])
+      ]),
     );
+
+    expect(SETUP_PROVIDERS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'geeclaw',
+          name: 'GeeClaw',
+        }),
+      ]),
+    );
+    expect(getProviderIconUrl('geeclaw')).toBeTruthy();
   });
 
   it('includes ark in the backend provider registry', () => {
@@ -81,13 +99,19 @@ describe('provider metadata', () => {
     });
   });
 
-  it('includes GeekAI in the backend provider registry', () => {
-    expect(BUILTIN_PROVIDER_TYPES).toContain('geekai');
-    expect(getProviderEnvVar('geekai')).toBe('GEEKAI_API_KEY');
-    expect(getProviderConfig('geekai')).toEqual(expect.objectContaining({
+  it('does not expose GeekAI in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).not.toContain('geekai');
+    expect(getProviderEnvVar('geekai')).toBeUndefined();
+    expect(getProviderConfig('geekai')).toBeUndefined();
+  });
+
+  it('includes GeeClaw in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).toContain('geeclaw');
+    expect(getProviderEnvVar('geeclaw')).toBe('GEECLAW_API_KEY');
+    expect(getProviderConfig('geeclaw')).toEqual(expect.objectContaining({
       baseUrl: 'https://geekai.co/api/v1',
       api: 'openai-completions',
-      apiKeyEnv: 'GEEKAI_API_KEY',
+      apiKeyEnv: 'GEECLAW_API_KEY',
     }));
   });
 
@@ -158,7 +182,7 @@ describe('provider metadata', () => {
 
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geeclaw', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
   });
 

@@ -9,6 +9,12 @@ let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
 let openclawRuntimeDir = join(process.cwd(), 'openclaw-runtime/node_modules/openclaw');
 let openclawRuntimeSource: 'bundled' | 'system' = 'bundled';
+let providerAccounts: Array<{
+  id: string;
+  vendorId: string;
+  enabled: boolean;
+  updatedAt: string;
+}> = [];
 const runtimeDirsToCleanup = new Set<string>();
 
 function createMockOpenClawRuntime(prefix: string): string {
@@ -59,9 +65,23 @@ vi.mock('@electron/utils/secure-storage', () => ({
   getProvider: vi.fn(async () => null),
 }));
 
+vi.mock('@electron/services/providers/provider-store', () => ({
+  listProviderAccounts: vi.fn(async () => providerAccounts),
+}));
+
 vi.mock('@electron/utils/provider-registry', () => ({
   getProviderEnvVar: vi.fn(() => null),
   getKeyableProviderTypes: vi.fn(() => []),
+  getProviderConfig: vi.fn((type: string) => {
+    if (type === 'geeclaw') {
+      return {
+        baseUrl: 'https://geekai.co/api/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'GEECLAW_API_KEY',
+      };
+    }
+    return undefined;
+  }),
 }));
 
 vi.mock('@electron/utils/openclaw-runtime', () => ({
@@ -174,6 +194,7 @@ beforeEach(() => {
   homeDir = '/Users/test';
   openclawRuntimeDir = createMockOpenClawRuntime('geeclaw-openclaw-runtime-');
   openclawRuntimeSource = 'bundled';
+  providerAccounts = [];
 });
 
 afterEach(() => {
@@ -281,6 +302,62 @@ describe('syncGatewayConfigBeforeLaunch', () => {
       });
       expect(ensureManagedPluginsReadyBeforeGatewayLaunch).toHaveBeenCalledTimes(1);
       expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects GEECLAW_API_KEY when an enabled GeeClaw account exists', async () => {
+    const { getApiKey } = await import('@electron/utils/secure-storage');
+
+    providerAccounts = [{
+      id: 'geeclaw-account',
+      vendorId: 'geeclaw',
+      enabled: true,
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    }];
+    vi.mocked(getApiKey).mockImplementation(async (providerId: string) => (
+      providerId === 'geeclaw-account' ? 'geeclaw-secret' : null
+    ));
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+      const context = await prepareGatewayLaunchContext(28788);
+      expect(context.forkEnv.GEECLAW_API_KEY).toBe('geeclaw-secret');
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not inject GEECLAW_API_KEY for disabled GeeClaw accounts', async () => {
+    const { getApiKey } = await import('@electron/utils/secure-storage');
+
+    providerAccounts = [{
+      id: 'geeclaw-account',
+      vendorId: 'geeclaw',
+      enabled: false,
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    }];
+    vi.mocked(getApiKey).mockImplementation(async (providerId: string) => (
+      providerId === 'geeclaw-account' ? 'geeclaw-secret' : null
+    ));
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+      const context = await prepareGatewayLaunchContext(28788);
+      expect(context.forkEnv.GEECLAW_API_KEY).toBeUndefined();
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
       rmSync(homeDir, { recursive: true, force: true });

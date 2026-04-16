@@ -32,6 +32,7 @@ import {
 } from '../utils/skill-config';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
+import { localLlmProxyManager } from './local-llm-proxy';
 import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
@@ -268,6 +269,12 @@ async function initialize(): Promise<void> {
 
   // Apply persisted proxy settings before creating windows or network requests.
   await applyProxySettings();
+
+  try {
+    await localLlmProxyManager.start();
+  } catch (error) {
+    logger.warn('Failed to start local LLM proxy:', error);
+  }
 
   // Set application menu
   createMenu();
@@ -563,9 +570,14 @@ if (gotTheLock) {
     hostEventBus.closeAll();
     hostApiServer?.close();
 
-    const stopPromise = gatewayManager.stop({ shutdownExternal: false }).catch((error) => {
-      logger.warn('gatewayManager.stop() error during quit:', error);
-    });
+    const stopPromise = Promise.all([
+      gatewayManager.stop({ shutdownExternal: false }).catch((error) => {
+        logger.warn('gatewayManager.stop() error during quit:', error);
+      }),
+      localLlmProxyManager.stop().catch((error) => {
+        logger.warn('localLlmProxyManager.stop() error during quit:', error);
+      }),
+    ]);
     const timeoutPromise = new Promise<'timeout'>((resolve) => {
       setTimeout(() => resolve('timeout'), 5000);
     });
@@ -590,6 +602,13 @@ if (gotTheLock) {
     logger.error(`${reason}:`, error);
     try {
       void gatewayManager.stop({ shutdownExternal: false }).catch(() => {
+        // Ignore cleanup failures on crash paths.
+      });
+    } catch {
+      // Ignore cleanup failures on crash paths.
+    }
+    try {
+      void localLlmProxyManager.stop().catch(() => {
         // Ignore cleanup failures on crash paths.
       });
     } catch {

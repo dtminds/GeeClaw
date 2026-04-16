@@ -17,6 +17,7 @@ import { buildProxyEnv, resolveProxySettings } from '../utils/proxy';
 import { syncProxyConfigToOpenClaw } from '../utils/openclaw-proxy';
 import { syncAllProviderRuntimeConfigToOpenClaw } from '../services/providers/provider-runtime-sync';
 import { syncAllAgentConfigToOpenClaw } from "../services/agents/agent-runtime-sync";
+import { listProviderAccounts } from '../services/providers/provider-store';
 import {
   ensureAlwaysEnabledSkillsConfigured,
   migrateManagedPreinstalledSkillsToBundledSource,
@@ -633,7 +634,7 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
       const defaultProvider = await getProvider(defaultProviderId);
       const defaultProviderType = defaultProvider?.type;
       const defaultProviderKey = await getApiKey(defaultProviderId);
-      if (defaultProviderType && defaultProviderKey) {
+      if (defaultProvider?.enabled && defaultProviderType && defaultProviderKey) {
         const envVar = getProviderEnvVar(defaultProviderType);
         if (envVar) {
           providerEnv[envVar] = defaultProviderKey;
@@ -658,6 +659,22 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
     } catch (err) {
       logger.warn(`Failed to load API key for ${providerType}:`, err);
     }
+  }
+
+  try {
+    const geeclawAccount = (await listProviderAccounts())
+      .filter((account) => account.vendorId === 'geeclaw' && account.enabled)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+
+    if (geeclawAccount && !providerEnv.GEECLAW_API_KEY) {
+      const geeclawKey = await getApiKey(geeclawAccount.id);
+      if (geeclawKey) {
+        providerEnv.GEECLAW_API_KEY = geeclawKey;
+        loadedProviderKeyCount++;
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to load GeeClaw API key for environment injection:', err);
   }
 
   return { providerEnv, loadedProviderKeyCount };
