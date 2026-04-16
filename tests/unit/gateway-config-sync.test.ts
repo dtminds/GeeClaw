@@ -261,11 +261,12 @@ describe('syncGatewayConfigBeforeLaunch', () => {
     }
   });
 
-  it('blocks gateway launch when a required managed plugin fails to install', async () => {
+  it('continues gateway launch when managed plugin preparation completes without blocking', async () => {
     const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
-    vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mockRejectedValueOnce(new Error('lossless-claw install failed'));
+    vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mockResolvedValueOnce([]);
 
     const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
 
     homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
@@ -273,7 +274,13 @@ describe('syncGatewayConfigBeforeLaunch', () => {
     mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
 
     try {
-      await expect(prepareGatewayLaunchContext(28788)).rejects.toThrow('lossless-claw install failed');
+      await expect(prepareGatewayLaunchContext(28788)).resolves.toMatchObject({
+        appSettings: {
+          gatewayToken: 'gateway-token',
+        },
+      });
+      expect(ensureManagedPluginsReadyBeforeGatewayLaunch).toHaveBeenCalledTimes(1);
+      expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
       rmSync(homeDir, { recursive: true, force: true });

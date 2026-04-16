@@ -185,7 +185,7 @@
             "title": "GeeClaw needs attention",
             "body": "We could not finish preparing the app. Try again, or check the details below.",
             "managedPluginTitle": "{{plugin}} plugin installation failed",
-            "managedPluginBody": "A required startup plugin could not be installed. Please try again.",
+            "managedPluginBody": "The plugin could not be installed. Related features may be unavailable until the next retry succeeds.",
             "retry": "Try again"
         },
         "gatewayRecovery": {

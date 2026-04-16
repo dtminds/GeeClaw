@@ -10,7 +10,7 @@ if /i "%1"=="update" (
     echo.
     echo To update openclaw, update GeeClaw:
     echo   Open GeeClaw ^> Settings ^> Check for Updates
-    echo   Or download the latest version from https://claw-x.com
+    echo   Or download the latest version from https://www.geeclaw.cn
     exit /b 0
 )
 

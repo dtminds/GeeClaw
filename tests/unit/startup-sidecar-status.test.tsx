@@ -60,7 +60,7 @@ const translations: Record<string, string> = {
   'startup.error.body': 'GeeClaw 在准备环境时遇到了问题。',
   'startup.error.retry': '重试',
   'startup.error.managedPluginTitle': '{{plugin}} 插件安装失败',
-  'startup.error.managedPluginBody': '启动前依赖的插件没有安装成功，请重试。',
+  'startup.error.managedPluginBody': '插件没有安装成功，相关功能可能暂时不可用，后续启动会继续重试。',
 };
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -169,7 +169,7 @@ describe('Startup OpenClaw sidecar feedback', () => {
     expect(screen.getByText('正在替换内置运行时，请保持窗口打开。')).toBeInTheDocument();
   });
 
-  it('shows managed plugin install copy while a required plugin is being installed', async () => {
+  it('shows managed plugin install copy while a managed plugin is being installed', async () => {
     const { Startup } = await import('@/pages/Startup');
     render(<Startup />);
 
@@ -204,7 +204,7 @@ describe('Startup OpenClaw sidecar feedback', () => {
     });
 
     expect(screen.getByText('lossless-claw 插件安装失败')).toBeInTheDocument();
-    expect(screen.getByText('启动前依赖的插件没有安装成功，请重试。')).toBeInTheDocument();
+    expect(screen.getByText('插件没有安装成功，相关功能可能暂时不可用，后续启动会继续重试。')).toBeInTheDocument();
     expect(screen.getByText('npm install failed')).toBeInTheDocument();
   });
 });
