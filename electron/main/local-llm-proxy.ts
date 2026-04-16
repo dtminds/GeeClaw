@@ -211,9 +211,10 @@ export class LocalLlmProxyManager {
 
       const upstreamUrl = buildUpstreamUrl(rawUrl, this.upstreamBaseUrl);
       const body = await readRequestBody(req);
+      const outgoingHeaders = toOutgoingHeaders(req.headers);
       const response = await this.fetchImpl(upstreamUrl, {
         method: req.method || 'GET',
-        headers: toOutgoingHeaders(req.headers),
+        headers: outgoingHeaders,
         body,
         signal: upstreamController.signal,
       });
@@ -257,7 +258,6 @@ export class LocalLlmProxyManager {
       });
     } catch (error) {
       if (upstreamController.signal.aborted && isAbortLikeError(error)) {
-        logger.debug('Local LLM proxy request aborted');
         if (!res.writableEnded && !res.destroyed) {
           res.destroy();
         }

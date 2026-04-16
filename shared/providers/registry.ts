@@ -24,7 +24,7 @@ function createDefaultProviderModel(
   };
 }
 
-function createGeekAiCompatibleProvider(
+function createGeeClawCompatibleProvider(
   options: {
     id: ProviderType;
     name: string;
@@ -350,21 +350,22 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
       apiKeyEnv: 'SILICONFLOW_API_KEY',
     },
   },
-  createGeekAiCompatibleProvider({
-    id: 'geekai',
-    name: 'GeekAI',
-    envVar: 'GEEKAI_API_KEY',
-    showModelId: true,
-    modelIdPlaceholder: 'your-model-id',
-    hidden: true,
-  }),
-  createGeekAiCompatibleProvider({
+  createGeeClawCompatibleProvider({
     id: 'geeclaw',
     name: 'GeeClaw',
     envVar: 'GEECLAW_API_KEY',
     showBaseUrl: false,
-    showModelId: false,
+    showModelId: true,
     modelCatalogMode: 'builtin-only',
+    defaultModels: [
+      createDefaultProviderModel('qwen3.6-plus'),
+      createDefaultProviderModel('glm-5.1'),
+      createDefaultProviderModel('minimax-m2.7'),
+      createDefaultProviderModel('mimo-v2-omni'),
+      createDefaultProviderModel('doubao-seed-2.0-pro'),
+      createDefaultProviderModel('gpt-5.4'),
+      createDefaultProviderModel('claude-sonnet-4-6'),
+    ]
   }),
   {
     id: 'ollama',

@@ -76,22 +76,22 @@ describe('validateApiKeyWithProvider', () => {
     );
   });
 
-  it('uses GeekAI registry config for OpenAI-compatible validation', async () => {
+  it('uses GeeClaw registry config for OpenAI-compatible validation', async () => {
     vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: [{ id: 'geekai-chat' }] }), {
+      new Response(JSON.stringify({ data: [{ id: 'geeclaw-chat' }] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
 
-    const result = await validateApiKeyWithProvider('geekai', 'sk-geekai-test');
+    const result = await validateApiKeyWithProvider('geeclaw', 'sk-geeclaw-test');
 
     expect(result).toMatchObject({ valid: true });
     expect(proxyAwareFetch).toHaveBeenCalledWith(
       'https://geekai.co/api/v1/models?limit=1',
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: 'Bearer sk-geekai-test',
+          Authorization: 'Bearer sk-geeclaw-test',
         }),
       }),
     );

@@ -8,9 +8,9 @@ import type { ProviderConfig } from '@electron/utils/secure-storage';
 
 function providerConfig(overrides: Partial<ProviderConfig>): ProviderConfig {
   return {
-    id: 'geekai-account',
-    name: 'GeekAI',
-    type: 'geekai',
+    id: 'geeclaw-account',
+    name: 'GeeClaw',
+    type: 'geeclaw',
     enabled: true,
     createdAt: '2026-03-16T00:00:00.000Z',
     updatedAt: '2026-03-16T00:00:00.000Z',
@@ -21,13 +21,13 @@ function providerConfig(overrides: Partial<ProviderConfig>): ProviderConfig {
 describe('provider runtime model catalogs', () => {
   it('builds provider-owned model refs and ids from configured provider models', () => {
     const config = providerConfig({
-      models: ['gpt-4.1', 'gpt-4.1-mini', 'geekai/gpt-4.1-nano', 'gpt-4.1-mini'],
+      models: ['gpt-4.1', 'gpt-4.1-mini', 'geeclaw/gpt-4.1-nano', 'gpt-4.1-mini'],
     });
 
     expect(getProviderCatalogModelRefs(config)).toEqual([
-      'geekai/gpt-4.1',
-      'geekai/gpt-4.1-mini',
-      'geekai/gpt-4.1-nano',
+      'geeclaw/gpt-4.1',
+      'geeclaw/gpt-4.1-mini',
+      'geeclaw/gpt-4.1-nano',
     ]);
     expect(getProviderCatalogModelIds(config)).toEqual([
       'gpt-4.1',
@@ -53,14 +53,14 @@ describe('provider runtime model catalogs', () => {
       models: [
         { id: 'gpt-4.1', name: 'gpt-4.1', reasoning: false, input: ['text'] },
         { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini', reasoning: false, input: ['text', 'image'] },
-        { id: 'geekai/gpt-4.1-nano', name: 'geekai/gpt-4.1-nano', reasoning: false },
+        { id: 'geeclaw/gpt-4.1-nano', name: 'geeclaw/gpt-4.1-nano', reasoning: false },
       ],
     });
 
     expect(getProviderCatalogModelRefs(config)).toEqual([
-      'geekai/gpt-4.1',
-      'geekai/gpt-4.1-mini',
-      'geekai/gpt-4.1-nano',
+      'geeclaw/gpt-4.1',
+      'geeclaw/gpt-4.1-mini',
+      'geeclaw/gpt-4.1-nano',
     ]);
     expect(getProviderCatalogModelIds(config)).toEqual([
       'gpt-4.1',

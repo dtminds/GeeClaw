@@ -40,20 +40,9 @@ describe('provider metadata', () => {
     );
   });
 
-  it('includes GeekAI in the frontend provider registry', () => {
-    expect(PROVIDER_TYPES).toContain('geekai');
-
-    expect(PROVIDER_TYPE_INFO).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'geekai',
-          name: 'GeekAI',
-          requiresApiKey: true,
-          showModelId: true,
-          defaultModelId: 'qwen3.6-plus',
-        }),
-      ])
-    );
+  it('does not expose GeekAI in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).not.toContain('geekai');
+    expect(PROVIDER_TYPE_INFO.find((provider) => provider.id === 'geekai')).toBeUndefined();
   });
 
   it('includes GeeClaw in the frontend provider registry', () => {
@@ -66,7 +55,8 @@ describe('provider metadata', () => {
           name: 'GeeClaw',
           requiresApiKey: true,
           defaultModelId: 'qwen3.6-plus',
-          showModelId: false,
+          showBaseUrl: false,
+          showModelId: true,
         }),
       ]),
     );
@@ -109,14 +99,10 @@ describe('provider metadata', () => {
     });
   });
 
-  it('includes GeekAI in the backend provider registry', () => {
-    expect(BUILTIN_PROVIDER_TYPES).toContain('geekai');
-    expect(getProviderEnvVar('geekai')).toBe('GEEKAI_API_KEY');
-    expect(getProviderConfig('geekai')).toEqual(expect.objectContaining({
-      baseUrl: 'https://geekai.co/api/v1',
-      api: 'openai-completions',
-      apiKeyEnv: 'GEEKAI_API_KEY',
-    }));
+  it('does not expose GeekAI in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).not.toContain('geekai');
+    expect(getProviderEnvVar('geekai')).toBeUndefined();
+    expect(getProviderConfig('geekai')).toBeUndefined();
   });
 
   it('includes GeeClaw in the backend provider registry', () => {
@@ -196,7 +182,7 @@ describe('provider metadata', () => {
 
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'geeclaw', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geeclaw', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
   });
 
