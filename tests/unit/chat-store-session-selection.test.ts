@@ -982,4 +982,87 @@ describe('chat store session selection', () => {
     expect(messages[0]?.id).toBe('persisted-user');
   });
 
+  it('ignores an older same-session history reload once a newer send has started', async () => {
+    const firstSentAtMs = 1_700_000_000_000;
+    const secondSentAtMs = firstSentAtMs + 2_000;
+    const historyDeferred = createDeferred<{ messages: Array<Record<string, unknown>> }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: false,
+      messages: [
+        {
+          id: 'persisted-user-1',
+          role: 'user',
+          content: '你好',
+          timestamp: firstSentAtMs / 1000,
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '第一轮回复',
+          timestamp: (firstSentAtMs + 1_000) / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return historyDeferred.promise;
+        }
+        return {};
+      }),
+    });
+
+    const lateReloadPromise = useChatStore.getState().loadHistory(true);
+
+    useChatStore.setState((state) => ({
+      ...state,
+      sending: true,
+      lastUserMessageAt: secondSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user-2',
+      pendingOptimisticUserAnchorAt: firstSentAtMs + 1_000,
+      historyRequestGeneration: state.historyRequestGeneration + 1,
+      messages: [
+        ...state.messages,
+        {
+          id: 'optimistic-user-2',
+          role: 'user',
+          content: '你好',
+          timestamp: secondSentAtMs / 1000,
+        },
+      ],
+    }));
+
+    historyDeferred.resolve({
+      messages: [
+        {
+          id: 'persisted-user-1',
+          role: 'user',
+          content: '你好',
+          timestamp: firstSentAtMs / 1000,
+        },
+      ],
+    });
+
+    await lateReloadPromise;
+
+    const messages = useChatStore.getState().messages;
+    expect(messages.map((message) => message.id)).toEqual([
+      'persisted-user-1',
+      'assistant-1',
+      'optimistic-user-2',
+    ]);
+  });
+
 });

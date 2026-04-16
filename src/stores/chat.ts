@@ -113,6 +113,7 @@ interface ChatState {
   lastUserMessageAt: number | null;
   pendingOptimisticUserId: string | null;
   pendingOptimisticUserAnchorAt: number | null;
+  historyRequestGeneration: number;
   /** Images collected from tool results, attached to the next assistant message */
   pendingToolImages: AttachedFileMeta[];
   pendingToolHiddenCount: number;
@@ -316,8 +317,9 @@ function getHistoryRequestKey(request: {
   desktopSessionId: string;
   viewMode: ChatViewMode;
   cronRunId: string;
+  generation: number;
 }): string {
-  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}`;
+  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}::${request.generation}`;
 }
 
 function isSameHistoryRequest(
@@ -326,14 +328,16 @@ function isSameHistoryRequest(
     desktopSessionId: string;
     viewMode: ChatViewMode;
     cronRunId: string;
+    generation: number;
   },
-  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun'>,
+  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun' | 'historyRequestGeneration'>,
 ): boolean {
   return (
     state.currentSessionKey === request.sessionKey
     && state.currentDesktopSessionId === request.desktopSessionId
     && state.currentViewMode === request.viewMode
     && (state.selectedCronRun?.id ?? '') === request.cronRunId
+    && state.historyRequestGeneration === request.generation
   );
 }
 
@@ -632,6 +636,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   lastUserMessageAt: null,
   pendingOptimisticUserId: null,
   pendingOptimisticUserAnchorAt: null,
+  historyRequestGeneration: 0,
   pendingToolImages: [],
   pendingToolHiddenCount: 0,
 
@@ -1049,7 +1054,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadHistory: async (quiet = false) => {
     const startedAt = Date.now();
     clearHistoryStartupRetryTimer();
-    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun } = get();
+    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun, historyRequestGeneration } = get();
     logChatTrace('loadHistory:start', {
       quiet,
       requestSessionKey: currentSessionKey,
@@ -1073,6 +1078,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       desktopSessionId: currentDesktopSessionId,
       viewMode: currentViewMode,
       cronRunId: selectedCronRun?.id ?? '',
+      generation: historyRequestGeneration,
     };
     if (!quiet) set({ loading: true, error: null });
 
@@ -1568,6 +1574,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const previousMessage = s.messages[s.messages.length - 1];
         return typeof previousMessage?.timestamp === 'number' ? toMs(previousMessage.timestamp) : null;
       })(),
+      historyRequestGeneration: s.historyRequestGeneration + 1,
     }));
 
     // Update desktop session metadata as soon as the first user message is sent.
