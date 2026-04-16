@@ -930,4 +930,56 @@ describe('chat store session selection', () => {
     ]);
   });
 
+  it('does not append the first optimistic user message when history already contains its persisted copy', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: null,
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 10,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe('persisted-user');
+  });
+
 });
