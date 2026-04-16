@@ -8,6 +8,7 @@ import siliconflow from './siliconflow.svg';
 import minimaxPortal from './minimax.svg';
 import qwenPortal from './qwen.svg';
 import ollama from './ollama.svg';
+import geeclaw from './geeclaw.svg';
 import custom from './custom.svg';
 
 export const providerIcons: Record<string, string> = {
@@ -15,7 +16,7 @@ export const providerIcons: Record<string, string> = {
   openai,
   google,
   openrouter,
-  geeclaw: custom,
+  geeclaw,
   ark,
   moonshot,
   'moonshot-global': moonshot,
