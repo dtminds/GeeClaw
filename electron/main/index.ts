@@ -577,9 +577,7 @@ if (gotTheLock) {
       localLlmProxyManager.stop().catch((error) => {
         logger.warn('localLlmProxyManager.stop() error during quit:', error);
       }),
-    ]).catch((error) => {
-      logger.warn('gatewayManager.stop() error during quit:', error);
-    });
+    ]);
     const timeoutPromise = new Promise<'timeout'>((resolve) => {
       setTimeout(() => resolve('timeout'), 5000);
     });
