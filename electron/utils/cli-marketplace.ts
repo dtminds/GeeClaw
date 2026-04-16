@@ -171,6 +171,14 @@ function getManagedInstallMethod(entry: CliMarketplaceCatalogItem): Extract<CliM
   ) ?? null;
 }
 
+function requireManagedInstallMethod(entry: CliMarketplaceCatalogItem): Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }> {
+  const managedMethod = getManagedInstallMethod(entry);
+  if (!managedMethod) {
+    throw new Error(`Catalog entry "${entry.id}" does not support managed install`);
+  }
+  return managedMethod;
+}
+
 function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
   entries.forEach((entry, index) => {
     const label = describeEntry(entry, index);
@@ -294,28 +302,32 @@ export class CliMarketplaceService {
 
   async install({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
     const entry = await this.getEntryById(id);
-    return this.installEntry(entry);
+    const managedMethod = requireManagedInstallMethod(entry);
+    return this.installEntry(entry, managedMethod);
   }
 
   async uninstall({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
     const entry = await this.getEntryById(id);
-    return this.uninstallEntry(entry);
+    const managedMethod = requireManagedInstallMethod(entry);
+    return this.uninstallEntry(entry, managedMethod);
   }
 
   async startInstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
     const entry = await this.getEntryById(id);
+    const managedMethod = requireManagedInstallMethod(entry);
     const job = this.createJob(entry, 'install');
     void this.runJob(job, async () => {
-      await this.installEntry(entry, this.appendJobLog(job));
+      await this.installEntry(entry, managedMethod, this.appendJobLog(job));
     });
     return this.getJob(job.id);
   }
 
   async startUninstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
     const entry = await this.getEntryById(id);
+    const managedMethod = requireManagedInstallMethod(entry);
     const job = this.createJob(entry, 'uninstall');
     void this.runJob(job, async () => {
-      await this.uninstallEntry(entry, this.appendJobLog(job));
+      await this.uninstallEntry(entry, managedMethod, this.appendJobLog(job));
     });
     return this.getJob(job.id);
   }
@@ -330,13 +342,9 @@ export class CliMarketplaceService {
 
   private async installEntry(
     entry: CliMarketplaceCatalogItem,
+    managedMethod: Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }>,
     appendLog?: CliMarketplaceLogAppender,
   ): Promise<CliMarketplaceStatusItem> {
-    const managedMethod = getManagedInstallMethod(entry);
-    if (!managedMethod) {
-      throw new Error(`Catalog entry "${entry.id}" does not support managed install`);
-    }
-
     ensureDir(this.managedPrefixDir);
     if (process.platform !== 'win32') {
       ensureDir(join(this.managedPrefixDir, 'bin'));
@@ -372,13 +380,9 @@ export class CliMarketplaceService {
 
   private async uninstallEntry(
     entry: CliMarketplaceCatalogItem,
+    managedMethod: Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }>,
     appendLog?: CliMarketplaceLogAppender,
   ): Promise<CliMarketplaceStatusItem> {
-    const managedMethod = getManagedInstallMethod(entry);
-    if (!managedMethod) {
-      throw new Error(`Catalog entry "${entry.id}" does not support managed install`);
-    }
-
     for (const source of managedMethod.postUninstallSkills ?? []) {
       await this.runSkillCommandWithBundledNpx('remove', source, {
         prefixDir: this.managedPrefixDir,

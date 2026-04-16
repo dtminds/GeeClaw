@@ -316,6 +316,58 @@ describe('cli marketplace service', () => {
     expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
   });
 
+  it('rejects install job start for entries that only provide manual install methods', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+    });
+
+    await expect(service.startInstallJob({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('rejects uninstall job start for entries that only provide manual install methods', async () => {
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.startUninstallJob({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
+  });
+
   it('installs a curated package into the GeeClaw prefix', async () => {
     const installWithBundledNpm = vi.fn(async () => undefined);
     const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
