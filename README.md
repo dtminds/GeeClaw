@@ -98,7 +98,7 @@ Environment variables for bundled search skills:
 Global runtime environment variables can now be managed directly in **Settings → Environment**. GeeClaw injects them into its managed Gateway and Agent runtimes, uses them when checking preset install requirements such as `requires.env`, and restarts the Gateway automatically after you save changes.
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. GeeClaw now separates provider setup from model assignment: configure accounts under **Settings → Model Providers**, then choose the default chat / image / video models under **Settings → Model Config**. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
+Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. GeeClaw now separates provider setup from model assignment: configure accounts under **Settings → Model Providers**, then choose the default chat / image / video models under **Settings → Model Config**. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in. The built-in **GeeClaw** provider accepts only an API key and routes OpenClaw traffic through a local loopback proxy, so runtime config stores `http://127.0.0.1:<port>/proxy` plus an env-backed key reference instead of the real upstream endpoint.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
@@ -154,6 +154,7 @@ When you launch GeeClaw for the first time, the **Setup Wizard** focuses on gett
 Model setup is now handled inside the main app:
 
 - Open **Settings → Model Providers** to add providers and their model catalogs.
+- The built-in **GeeClaw** provider is fixed-config: you only enter its API key, while the real upstream base URL stays hidden behind GeeClaw's local transparent proxy.
 - Open **Settings → Model Config** to choose the default chat model and optional image/PDF/image-generation/video-generation model slots.
 - If no provider models exist, the chat composer stays disabled and links you to **Model Providers**.
 - If provider models exist but no default chat model is configured, the chat composer links you to **Model Config** instead.
