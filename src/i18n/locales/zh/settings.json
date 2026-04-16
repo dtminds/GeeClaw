@@ -150,6 +150,11 @@
       "valuePlaceholder": "变量值",
       "save": "保存环境变量"
     },
+    "validation": {
+      "title": "请先修正以下问题：",
+      "incomplete": "第 {{row}} 行需要同时填写变量名和值。",
+      "duplicate": "变量名 {{key}} 重复，请保留一项。"
+    },
     "toast": {
       "loadFailed": "加载环境变量失败",
       "saved": "环境变量已保存",

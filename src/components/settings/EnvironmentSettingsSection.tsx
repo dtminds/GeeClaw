@@ -30,12 +30,51 @@ function createEditableEntry(entry?: Partial<ManagedAppEnvironmentEntry>): Edita
   };
 }
 
+function buildValidationMessages(
+  entries: EditableManagedAppEnvironmentEntry[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string[] {
+  const messages: string[] = [];
+  const seenKeys = new Set<string>();
+  const duplicateKeys = new Set<string>();
+
+  entries.forEach((entry, index) => {
+    const key = entry.key.trim();
+    const value = entry.value.trim();
+    const hasKey = key.length > 0;
+    const hasValue = value.length > 0;
+
+    if (hasKey !== hasValue) {
+      messages.push(t('environment.validation.incomplete', { row: index + 1 }));
+      return;
+    }
+
+    if (!hasKey) {
+      return;
+    }
+
+    if (seenKeys.has(key)) {
+      duplicateKeys.add(key);
+      return;
+    }
+
+    seenKeys.add(key);
+  });
+
+  duplicateKeys.forEach((key) => {
+    messages.push(t('environment.validation.duplicate', { key }));
+  });
+
+  return messages;
+}
+
 export function EnvironmentSettingsSection() {
   const { t } = useTranslation('settings');
   const [entries, setEntries] = useState<EditableManagedAppEnvironmentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showValues, setShowValues] = useState(false);
+  const [validationMessages, setValidationMessages] = useState<string[]>([]);
   const showInitialLoading = loading && entries.length === 0;
   const loadFailedLabel = t('environment.toast.loadFailed');
 
@@ -68,6 +107,7 @@ export function EnvironmentSettingsSection() {
   }, [loadFailedLabel]);
 
   const handleAddEntry = () => {
+    setValidationMessages([]);
     setEntries((current) => [...current, createEditableEntry()]);
   };
 
@@ -76,6 +116,7 @@ export function EnvironmentSettingsSection() {
     field: keyof ManagedAppEnvironmentEntry,
     value: string,
   ) => {
+    setValidationMessages([]);
     setEntries((current) => current.map((entry, entryIndex) => (
       entryIndex === index
         ? { ...entry, [field]: value }
@@ -84,10 +125,17 @@ export function EnvironmentSettingsSection() {
   };
 
   const handleRemoveEntry = (index: number) => {
+    setValidationMessages([]);
     setEntries((current) => current.filter((_, entryIndex) => entryIndex !== index));
   };
 
   const handleSave = async () => {
+    const nextValidationMessages = buildValidationMessages(entries, t);
+    if (nextValidationMessages.length > 0) {
+      setValidationMessages(nextValidationMessages);
+      return;
+    }
+
     setSaving(true);
     try {
       const nextEntries = entries
@@ -108,6 +156,7 @@ export function EnvironmentSettingsSection() {
         }),
       });
 
+      setValidationMessages([]);
       setEntries(nextEntries);
       toast.success(t('environment.toast.saved'));
     } catch (error) {
@@ -205,6 +254,17 @@ export function EnvironmentSettingsSection() {
               </div>
             ))}
           </div>
+
+          {validationMessages.length > 0 ? (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-4 text-sm text-amber-950 dark:text-amber-100">
+              <p className="font-medium">{t('environment.validation.title')}</p>
+              <ul className="mt-2 space-y-1 text-sm leading-6">
+                {validationMessages.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <div className="flex justify-end">
             <Button
