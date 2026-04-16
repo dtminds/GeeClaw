@@ -127,6 +127,19 @@ export function MemorySettingsSection() {
           return current;
         }
 
+        const losslessReady = (
+          current.losslessClaw.installedVersion === current.losslessClaw.requiredVersion
+          && (current.losslessClaw.status === 'disabled' || current.losslessClaw.status === 'enabled')
+        );
+        const lateProgressEvent = Boolean(
+          payload
+          && (payload.stage === 'checking' || payload.stage === 'installing')
+          && losslessReady
+        );
+        if (lateProgressEvent) {
+          return current;
+        }
+
         return {
           ...current,
           losslessClaw: {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemorySettingsSection } from '@/components/settings/MemorySettingsSection';
 
@@ -262,6 +262,72 @@ describe('MemorySettingsSection', () => {
       });
     });
     expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+  });
+
+  it('ignores late install progress events after lossless-claw has already refreshed to installed state', async () => {
+    const initialSnapshot = {
+      availableModels,
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+        installJob: null,
+      },
+    };
+    const updatedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installedVersion: '0.9.1',
+        status: 'disabled',
+        installJob: null,
+      },
+    };
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/memory/lossless-claw/install' && init?.method === 'POST') {
+        return {
+          success: true,
+          settings: updatedSnapshot,
+        };
+      }
+      return initialSnapshot;
+    });
+
+    render(<MemorySettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'memory.actions.install' }));
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+    });
+
+    await act(async () => {
+      managedPluginStatusHandler?.({
+        pluginId: 'lossless-claw',
+        displayName: 'lossless-claw',
+        stage: 'installing',
+        message: '正在安装 lossless-claw 依赖…',
+        targetVersion: '0.9.1',
+        installedVersion: null,
+      });
+    });
+
+    expect(screen.queryByRole('button', { name: 'memory.actions.installInProgress' })).not.toBeInTheDocument();
+    expect(screen.queryByText('正在安装 lossless-claw 依赖…')).not.toBeInTheDocument();
   });
 
   it('shows an upgrade button and in-progress install copy for an unavailable lossless-claw plugin', async () => {
