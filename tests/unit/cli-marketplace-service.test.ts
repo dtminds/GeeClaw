@@ -493,6 +493,65 @@ describe('cli marketplace service', () => {
     await expect(service.getCatalog()).rejects.toThrow('multiple managed-npm');
   });
 
+  it('throws when catalog entries mix legacy managed fields and explicit managed-npm methods', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'mixed-managed',
+          title: 'Mixed managed CLI',
+          packageName: '@geeclaw-test/mixed-managed-legacy',
+          binNames: ['mixed-managed'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/mixed-managed-explicit' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('must not mix legacy managed fields');
+  });
+
+  it('fails fast when bundled npm runtime is missing for managed mutation APIs', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { getBundledNpmPath } = await import('@electron/utils/managed-bin');
+    const mockedGetBundledNpmPath = vi.mocked(getBundledNpmPath);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'managed-runtime-missing',
+          title: 'Managed runtime missing CLI',
+          binNames: ['managed-runtime-missing'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/managed-runtime-missing' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.install({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.uninstall({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.startInstallJob({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.startUninstallJob({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
+  });
+
   it('forces shell execution for absolute npm.cmd installs on Windows', async () => {
     setPlatform('win32');
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');

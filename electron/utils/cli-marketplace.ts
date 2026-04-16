@@ -171,12 +171,25 @@ function getManagedInstallMethod(entry: CliMarketplaceCatalogItem): Extract<CliM
   ) ?? null;
 }
 
+function hasLegacyManagedFields(entry: CliMarketplaceCatalogItem): boolean {
+  return entry.packageName !== undefined
+    || entry.installArgs !== undefined
+    || entry.postInstallSkills !== undefined
+    || entry.postUninstallSkills !== undefined;
+}
+
 function requireManagedInstallMethod(entry: CliMarketplaceCatalogItem): Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }> {
   const managedMethod = getManagedInstallMethod(entry);
   if (!managedMethod) {
     throw new Error(`Catalog entry "${entry.id}" does not support managed install`);
   }
   return managedMethod;
+}
+
+function requireBundledNpmRuntime(): void {
+  if (!getBundledNpmPath()) {
+    throw new Error('Bundled npm runtime is missing');
+  }
 }
 
 function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
@@ -252,6 +265,12 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
       throw new Error(`[cli-marketplace] Entry ${label} must include at least one install method`);
     }
 
+    const hasExplicitManagedMethod = Array.isArray(entry.installMethods)
+      && entry.installMethods.some((method) => method?.type === 'managed-npm');
+    if (hasExplicitManagedMethod && hasLegacyManagedFields(entry)) {
+      throw new Error(`[cli-marketplace] Entry ${label} must not mix legacy managed fields with explicit managed-npm install methods`);
+    }
+
     const managedMethodCount = normalizedInstallMethods.filter((method) => method.type === 'managed-npm').length;
     if (managedMethodCount > 1) {
       throw new Error(`[cli-marketplace] Entry ${label} must not include multiple managed-npm install methods`);
@@ -303,18 +322,21 @@ export class CliMarketplaceService {
   async install({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
     const entry = await this.getEntryById(id);
     const managedMethod = requireManagedInstallMethod(entry);
+    requireBundledNpmRuntime();
     return this.installEntry(entry, managedMethod);
   }
 
   async uninstall({ id }: { id: string }): Promise<CliMarketplaceStatusItem> {
     const entry = await this.getEntryById(id);
     const managedMethod = requireManagedInstallMethod(entry);
+    requireBundledNpmRuntime();
     return this.uninstallEntry(entry, managedMethod);
   }
 
   async startInstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
     const entry = await this.getEntryById(id);
     const managedMethod = requireManagedInstallMethod(entry);
+    requireBundledNpmRuntime();
     const job = this.createJob(entry, 'install');
     void this.runJob(job, async () => {
       await this.installEntry(entry, managedMethod, this.appendJobLog(job));
@@ -325,6 +347,7 @@ export class CliMarketplaceService {
   async startUninstallJob({ id }: { id: string }): Promise<CliMarketplaceJobSnapshot> {
     const entry = await this.getEntryById(id);
     const managedMethod = requireManagedInstallMethod(entry);
+    requireBundledNpmRuntime();
     const job = this.createJob(entry, 'uninstall');
     void this.runJob(job, async () => {
       await this.uninstallEntry(entry, managedMethod, this.appendJobLog(job));
