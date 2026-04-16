@@ -35,6 +35,22 @@ const FEISHU_PLUGIN_ID = 'openclaw-lark';
 const DEFAULT_ACCOUNT_ID = 'default';
 const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
 const CHANNEL_TOP_LEVEL_KEYS_TO_KEEP = new Set(['enabled', 'defaultAccount', 'accounts']);
+const WECOM_MULTI_ACCOUNT_MIRRORED_KEYS = new Set([
+    'botId',
+    'secret',
+    'dmPolicy',
+    'allowFrom',
+    'websocketUrl',
+    'sendThinkingMessage',
+    'token',
+    'encodingAESKey',
+    'receiveId',
+    'name',
+    'corpId',
+    'corpSecret',
+    'agentId',
+    'agent',
+]);
 const MANAGED_PLUGIN_ENTRY_IDS = [DINGTALK_PLUGIN_ID, WECOM_PLUGIN_ID, WEIXIN_PLUGIN_ID, FEISHU_PLUGIN_ID];
 
 // Channels that are managed as plugins (config goes under plugins.entries, not channels)
@@ -344,6 +360,7 @@ export async function writeOpenClawConfig(
     await ensureConfigDir();
 
     try {
+        normalizeManagedChannelConfig(config);
         reconcileManagedChannelPluginConfig(config);
         const bundledPluginReconcile = reconcileBundledPluginLoadPaths(config);
         for (const warning of bundledPluginReconcile.warnings) {
@@ -661,6 +678,108 @@ function getComparableAccountPayload(accountConfig: ChannelConfigData): ChannelC
         comparablePayload[key] = value;
     }
     return comparablePayload;
+}
+
+function hasTruthyString(value: unknown): boolean {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isMeaningfulWeComAgentConfig(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const agent = value as Record<string, unknown>;
+    return hasTruthyString(agent.corpId)
+        || hasTruthyString(agent.corpSecret)
+        || hasTruthyString(agent.agentId)
+        || hasTruthyString(agent.token)
+        || hasTruthyString(agent.encodingAESKey);
+}
+
+function isGhostWeComDefaultAccount(account: ChannelConfigData | undefined): boolean {
+    if (!account || typeof account !== 'object') {
+        return false;
+    }
+
+    return !hasTruthyString(account.botId)
+        && !hasTruthyString(account.secret)
+        && !hasTruthyString(account.corpId)
+        && !hasTruthyString(account.corpSecret)
+        && !hasTruthyString(account.agentId)
+        && !hasTruthyString(account.token)
+        && !hasTruthyString(account.encodingAESKey)
+        && !hasTruthyString(account.receiveId)
+        && !isMeaningfulWeComAgentConfig(account.agent);
+}
+
+function normalizeWeComMultiAccountSection(channelSection: ChannelConfigData): boolean {
+    const accounts = channelSection.accounts as Record<string, ChannelConfigData> | undefined;
+    if (!accounts || typeof accounts !== 'object') {
+        return false;
+    }
+
+    const accountIds = Object.keys(accounts).filter(Boolean);
+    if (accountIds.length === 0) {
+        return false;
+    }
+
+    let changed = false;
+    const configuredDefault =
+        typeof channelSection.defaultAccount === 'string' && channelSection.defaultAccount.trim()
+            ? channelSection.defaultAccount.trim()
+            : undefined;
+    const effectiveDefault =
+        (configuredDefault && accounts[configuredDefault] ? configuredDefault : undefined)
+        ?? (accounts[DEFAULT_ACCOUNT_ID] ? DEFAULT_ACCOUNT_ID : accountIds[0]);
+
+    if (channelSection.defaultAccount !== effectiveDefault) {
+        channelSection.defaultAccount = effectiveDefault;
+        changed = true;
+    }
+
+    if (
+        accountIds.length > 1
+        && effectiveDefault !== DEFAULT_ACCOUNT_ID
+        && isGhostWeComDefaultAccount(accounts[DEFAULT_ACCOUNT_ID])
+    ) {
+        delete accounts[DEFAULT_ACCOUNT_ID];
+        changed = true;
+    }
+
+    const defaultAccount = accounts[effectiveDefault];
+    for (const key of WECOM_MULTI_ACCOUNT_MIRRORED_KEYS) {
+        if (!(key in channelSection) || !defaultAccount) {
+            continue;
+        }
+
+        if (isDeepStrictEqual(channelSection[key], defaultAccount[key])) {
+            delete channelSection[key];
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+export function normalizeManagedChannelConfig(config: OpenClawConfig): boolean {
+    const channels = config.channels;
+    if (!channels || typeof channels !== 'object') {
+        return false;
+    }
+
+    let changed = false;
+    for (const [channelType, section] of Object.entries(channels)) {
+        if (!section || typeof section !== 'object') {
+            continue;
+        }
+
+        if (channelType === 'wecom') {
+            changed = normalizeWeComMultiAccountSection(section as ChannelConfigData) || changed;
+        }
+    }
+
+    return changed;
 }
 
 function findMirroredAccountId(

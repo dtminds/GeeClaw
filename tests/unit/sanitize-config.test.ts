@@ -82,6 +82,7 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
     qqbot: ['openclaw-qqbot'],
   };
   const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
+  const CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR = new Set(['wecom']);
 
   // Mirror of the production blocklist logic
   const skills = config.skills;
@@ -202,6 +203,10 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
           delete section.defaultAccount;
           modified = true;
         }
+        continue;
+      }
+
+      if (CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR.has(channelType)) {
         continue;
       }
 
@@ -623,6 +628,61 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
         botToken: 'telegram-token',
       },
     });
+  });
+
+  it('does not mirror the configured default account credentials to the wecom channel top level', async () => {
+    await writeConfig({
+      channels: {
+        wecom: {
+          enabled: true,
+          defaultAccount: 'helper',
+          accounts: {
+            helper: {
+              enabled: true,
+              botId: 'bot-helper',
+              secret: 'secret-helper',
+              dmPolicy: 'open',
+              allowFrom: ['*'],
+            },
+            sales: {
+              enabled: true,
+              botId: 'bot-sales',
+              secret: 'secret-sales',
+              dmPolicy: 'open',
+              allowFrom: ['*'],
+            },
+          },
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.channels).toEqual({
+      wecom: {
+        enabled: true,
+        defaultAccount: 'helper',
+        accounts: {
+          helper: {
+            enabled: true,
+            botId: 'bot-helper',
+            secret: 'secret-helper',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+          sales: {
+            enabled: true,
+            botId: 'bot-sales',
+            secret: 'secret-sales',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+        },
+      },
+    });
+    expect(result.commands).toEqual({ restart: true });
   });
 
   it('strips dingtalk multi-account metadata while preserving flat credentials', async () => {

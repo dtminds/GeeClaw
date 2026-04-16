@@ -11,6 +11,7 @@ import {
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
 const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
+const CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR = new Set(['wecom']);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -240,6 +241,10 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             changed = true;
             console.log(`[sanitize] Removed incompatible 'defaultAccount' from channels.${channelType}`);
           }
+          continue;
+        }
+
+        if (CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR.has(channelType)) {
           continue;
         }
 
