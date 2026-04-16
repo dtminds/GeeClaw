@@ -130,7 +130,6 @@ describe('cli marketplace service', () => {
             label: 'brew',
             command: 'brew install foo',
             status: 'available',
-            missingCommands: [],
           }),
         ],
       }),
@@ -216,7 +215,6 @@ describe('cli marketplace service', () => {
             label: 'brew',
             command: 'brew install bar',
             status: 'available',
-            missingCommands: [],
           }),
         ],
       }),
@@ -254,7 +252,6 @@ describe('cli marketplace service', () => {
         installed: true,
         source: 'system',
         actionLabel: 'reinstall',
-        uninstallable: false,
         installMethods: [
           expect.objectContaining({
             type: 'manual',
