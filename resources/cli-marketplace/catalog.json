@@ -2,85 +2,105 @@
     {
         "id": "mcporter",
         "title": "MCPorter",
-        "packageName": "mcporter",
         "binNames": [
             "mcporter"
+        ],
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "mcporter"
+            }
         ],
         "description": "通过命令行调用 MCP 服务",
         "homepage": "mcporter.dev",
         "platforms": [
             "darwin",
             "win32"
-        ],
-        "installArgs": []
+        ]
     },
     {
         "id": "opencli",
         "title": "OpenCLI",
-        "packageName": "@jackwener/opencli",
         "binNames": [
             "opencli"
+        ],
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "@jackwener/opencli"
+            }
         ],
         "description": "让任何网站或 Electron 应用成为你的 CLI",
         "homepage": "https://opencli.info/",
         "platforms": [
             "darwin",
             "win32"
-        ],
-        "installArgs": []
+        ]
     },
     {
         "id": "feishu",
         "title": "飞书 CLI",
-        "packageName": "@larksuite/cli",
         "binNames": [
             "lark-cli"
         ],
-        "postInstallSkills": [
-            "larksuite/cli"
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "@larksuite/cli",
+                "postInstallSkills": [
+                    "larksuite/cli"
+                ]
+            }
         ],
         "description": "飞书/Lark 开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作飞书。覆盖消息、文档、多维表格、电子表格、日历、邮箱、任务、会议等核心业务域，提供 200+ 命令及 19 个 AI Agent Skills",
         "homepage": "https://github.com/larksuite/cli",
         "platforms": [
             "darwin",
             "win32"
-        ],
-        "installArgs": []
+        ]
     },
     {
         "id": "wecom",
         "title": "企业微信 CLI",
-        "packageName": "@wecom/cli",
         "binNames": [
             "wecom-cli"
         ],
-        "postInstallSkills": [
-            "WeComTeam/wecom-cli"
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "@wecom/cli",
+                "postInstallSkills": [
+                    "WeComTeam/wecom-cli"
+                ]
+            }
         ],
         "description": "企业微信开放企业微信消息、日程、文档、智能表格、会议、待办、通讯录等核心产品能力 — 让人类和 AI Agent 都能在终端中操作企业微信",
         "homepage": "https://github.com/WecomTeam/wecom-cli",
         "platforms": [
             "darwin",
             "win32"
-        ],
-        "installArgs": []
+        ]
     },
     {
         "id": "md2wechat",
         "title": "md2wechat",
-        "packageName": "@geekjourneyx/md2wechat",
         "binNames": [
             "md2wechat"
         ],
-        "postInstallSkills": [
-            "geekjourneyx/md2wechat-skill"
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "@geekjourneyx/md2wechat",
+                "postInstallSkills": [
+                    "geekjourneyx/md2wechat-skill"
+                ]
+            }
         ],
         "description": "一套面向 AI Agent 的微信公众号发布接口，用于把 Markdown 转成微信可用 HTML、创建图文消息草稿、创建小绿书草稿、批量上传素材",
         "homepage": "https://www.md2wechat.com/zh",
         "platforms": [
             "darwin",
             "win32"
-        ],
-        "installArgs": []
+        ]
     }
 ]

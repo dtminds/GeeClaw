@@ -166,6 +166,23 @@
     "installed": "已安装",
     "missing": "未安装",
     "install": "安装",
+    "copyInstallCommand": "复制安装命令",
+    "copyInstallCommandCopied": "安装命令已复制",
+    "copyInstallCommandFailed": "复制安装命令失败",
+    "source": {
+      "system": "系统",
+      "geeclaw": "GeeClaw"
+    },
+    "managed": {
+      "needRuntime": "需要托管运行时"
+    },
+    "manual": {
+      "needHomebrew": "需要 Homebrew",
+      "needCurl": "需要 curl",
+      "needNpm": "需要 npm",
+      "unavailable": "不可用",
+      "copyMethod": "复制安装命令"
+    },
     "reinstall": "重新安装",
     "uninstall": "卸载",
     "moreActions": "更多操作",

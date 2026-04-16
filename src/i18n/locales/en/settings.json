@@ -166,6 +166,23 @@
     "installed": "Installed",
     "missing": "Not installed",
     "install": "Install",
+    "copyInstallCommand": "Copy Install Command",
+    "copyInstallCommandCopied": "Install command copied",
+    "copyInstallCommandFailed": "Failed to copy install command",
+    "source": {
+      "system": "System",
+      "geeclaw": "GeeClaw"
+    },
+    "managed": {
+      "needRuntime": "Need managed runtime"
+    },
+    "manual": {
+      "needHomebrew": "Need Homebrew",
+      "needCurl": "Need curl",
+      "needNpm": "Need npm",
+      "unavailable": "Unavailable",
+      "copyMethod": "Copy install command"
+    },
     "reinstall": "Reinstall",
     "uninstall": "Uninstall",
     "moreActions": "More actions",
