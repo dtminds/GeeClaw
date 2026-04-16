@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('managed plugin installer', () => {
-  it('reinstalls the target version even when the same version is already present', async () => {
+  it('skips installation when the exact target version is already present', async () => {
     const configDir = makeTempDir('managed-plugin-config-');
     const pluginDir = join(configDir, 'extensions', 'lossless-claw');
     mkdirSync(pluginDir, { recursive: true });
@@ -70,14 +70,14 @@ describe('managed plugin installer', () => {
     });
 
     expect(result).toEqual({
-      action: 'installed',
+      action: 'noop',
       pluginId: 'lossless-claw',
       installedVersion: '0.5.2',
       previousVersion: '0.5.2',
     });
-    expect(runCommand).toHaveBeenCalledTimes(1);
-    expect(extractPackage).toHaveBeenCalledTimes(1);
-    expect(() => readFileSync(join(pluginDir, 'stale.txt'), 'utf8')).toThrow();
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(extractPackage).not.toHaveBeenCalled();
+    expect(readFileSync(join(pluginDir, 'stale.txt'), 'utf8')).toBe('stale\n');
   });
 
   it('installs a missing plugin into staging and atomically promotes it', async () => {
@@ -224,7 +224,7 @@ describe('managed plugin installer', () => {
     const configDir = makeTempDir('managed-plugin-config-');
     const staleFinalDir = join(configDir, 'extensions', 'lossless-claw');
     mkdirSync(staleFinalDir, { recursive: true });
-    writeJson(join(staleFinalDir, 'package.json'), { version: '0.5.2' });
+    writeJson(join(staleFinalDir, 'package.json'), { version: '0.5.1' });
 
     const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
 

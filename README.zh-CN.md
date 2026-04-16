@@ -223,7 +223,7 @@ GeeClaw 内置了代理设置，适用于需要通过本地代理客户端访问
 - Dreaming 会写入 `plugins.entries["memory-core"].config.dreaming.enabled`。
 - Active Memory 会写入 `plugins.entries["active-memory"].config.enabled`、可选的 `config.model`，并在启用时补齐 `config.agents = ["main"]` 与 `config.modelFallbackPolicy = "default-remote"`。
 - Lossless Claw 会写入 `plugins.entries["lossless-claw"].config.summaryModel`，并在插件已安装时把 `plugins.slots.contextEngine` 在 `lossless-claw` 与 `legacy` 之间切换。
-- 在每次启动 Gateway 之前，GeeClaw 都会先把 pin 住版本的 `lossless-claw` 下载到 staging 目录，在其中安装运行时依赖，然后再原子替换 `~/.openclaw-geeclaw/extensions/lossless-claw`。
+- 在启动 Gateway 之前，GeeClaw 会先检查 `~/.openclaw-geeclaw/extensions/lossless-claw/package.json`；只有当 `lossless-claw` 缺失或版本与 pin 不一致时，才会重新安装或升级。
 - 如果 `lossless-claw` 在启动阶段安装失败，GeeClaw 会阻止 Gateway 启动，清理 `extensions/lossless-claw` 目录以避免残留半安装状态，并在下次启动时再次重试。
 - 保存 Memory 设置后，GeeClaw 会对托管 Gateway 做一次 debounce 热重载，让配置立即生效。
 

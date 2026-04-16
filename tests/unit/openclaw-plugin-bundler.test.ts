@@ -53,8 +53,8 @@ describe('openclaw plugin bundler helpers', () => {
       [pkgV2, 'demo-package'],
     ]);
 
-    expect(() => buildDependencyCopyPlan(collected, { sourceLabel: 'lossless-claw' })).toThrowError(
-      /lossless-claw.*demo-package.*1\.0\.0.*2\.0\.0/s,
+    expect(() => buildDependencyCopyPlan(collected, { sourceLabel: 'test-plugin' })).toThrowError(
+      /test-plugin.*demo-package.*1\.0\.0.*2\.0\.0/s,
     );
   });
 
@@ -74,7 +74,7 @@ describe('openclaw plugin bundler helpers', () => {
       [pkgB, 'demo-package'],
     ]);
 
-    expect(buildDependencyCopyPlan(collected, { sourceLabel: 'lossless-claw' })).toEqual({
+    expect(buildDependencyCopyPlan(collected, { sourceLabel: 'test-plugin' })).toEqual({
       entries: [
         {
           pkgName: 'demo-package',
@@ -84,37 +84,6 @@ describe('openclaw plugin bundler helpers', () => {
       ],
       skippedDuplicates: 1,
     });
-  });
-
-  it('fails smoke validation when a bundled plugin output is missing a required runtime dependency', async () => {
-    await import('../../scripts/lib/openclaw-plugin-bundler.cjs');
-
-    const root = mkdtempSync(join(tmpdir(), 'geeclaw-plugin-bundler-'));
-    tempDirs.push(root);
-
-    const pluginDir = join(root, 'lossless-claw');
-    mkdirSync(join(pluginDir, 'dist'), { recursive: true });
-    writeJson(join(pluginDir, 'openclaw.plugin.json'), { id: 'lossless-claw' });
-    writeJson(join(pluginDir, 'package.json'), {
-      name: '@martian-engineering/lossless-claw',
-      version: '0.8.0',
-      main: 'dist/index.js',
-      dependencies: {
-        zod: '^3.0.0',
-      },
-    });
-    writeFileSync(join(pluginDir, 'dist', 'index.js'), 'module.exports = {}\n', 'utf8');
-    createPackage(join(pluginDir, 'node_modules', 'zod'), {
-      name: 'zod',
-      version: '3.25.0',
-      main: 'index.js',
-    });
-
-    // expect(() => validateBundledPluginOutput(pluginDir, {
-    //   pluginId: 'lossless-claw',
-    //   npmName: '@martian-engineering/lossless-claw',
-    //   extraRequiredPackages: ['@mariozechner/pi-coding-agent'],
-    // })).toThrowError(/@mariozechner\/pi-coding-agent/);
   });
 
   it('accepts a bundled plugin when at least one declared runtime entry exists', async () => {
@@ -184,7 +153,7 @@ describe('openclaw plugin bundler helpers', () => {
     const root = mkdtempSync(join(tmpdir(), 'geeclaw-plugin-bundler-'));
     tempDirs.push(root);
 
-    const pluginDir = join(root, 'lossless-claw');
+    const pluginDir = join(root, 'test-plugin');
     mkdirSync(join(pluginDir, 'node_modules', 'demo-dep', 'tests'), { recursive: true });
     mkdirSync(join(pluginDir, 'dist'), { recursive: true });
 
