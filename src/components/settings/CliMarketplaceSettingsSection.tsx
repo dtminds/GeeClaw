@@ -14,9 +14,20 @@ import {
 import { hostApiFetch } from '@/lib/host-api';
 import { toUserMessage } from '@/lib/api-client';
 
-type CliMarketplaceActionLabel = 'install' | 'reinstall';
 type CliMarketplaceJobOperation = 'install' | 'uninstall';
 type CliMarketplaceJobStatus = 'running' | 'succeeded' | 'failed';
+
+type CliMarketplaceManualMethodLabel = 'brew' | 'curl' | 'npm' | 'custom';
+
+interface CliMarketplaceInstallMethodStatus {
+  type: 'managed-npm' | 'manual';
+  label: 'managed-npm' | CliMarketplaceManualMethodLabel;
+  command?: string;
+  available: boolean;
+  unavailableReason?: 'missing-command' | 'runtime-missing';
+  missingCommands?: string[];
+  managed: boolean;
+}
 
 interface CliMarketplaceItem {
   id: string;
@@ -24,7 +35,8 @@ interface CliMarketplaceItem {
   description: string;
   homepage?: string;
   installed: boolean;
-  actionLabel: CliMarketplaceActionLabel;
+  source: 'system' | 'geeclaw' | 'none';
+  installMethods: CliMarketplaceInstallMethodStatus[];
 }
 
 interface CliMarketplaceJob {
@@ -37,6 +49,36 @@ interface CliMarketplaceJob {
   startedAt: string;
   finishedAt: string | null;
   error?: string;
+}
+
+function getManagedInstallMethod(item: CliMarketplaceItem): CliMarketplaceInstallMethodStatus | null {
+  return item.installMethods.find((method) => method.type === 'managed-npm') ?? null;
+}
+
+function getManualInstallMethods(item: CliMarketplaceItem): Array<CliMarketplaceInstallMethodStatus & { type: 'manual' }> {
+  return item.installMethods.filter((method): method is CliMarketplaceInstallMethodStatus & { type: 'manual' } => method.type === 'manual');
+}
+
+function getFirstAvailableManualInstallMethod(item: CliMarketplaceItem): (CliMarketplaceInstallMethodStatus & { type: 'manual'; command: string }) | null {
+  return item.installMethods.find((method): method is CliMarketplaceInstallMethodStatus & { type: 'manual'; command: string } => (
+    method.type === 'manual'
+    && method.available
+    && typeof method.command === 'string'
+    && method.command.length > 0
+  )) ?? null;
+}
+
+function getManualMethodDisplayName(methodLabel: CliMarketplaceManualMethodLabel): string {
+  if (methodLabel === 'brew') {
+    return 'Homebrew';
+  }
+  if (methodLabel === 'curl') {
+    return 'curl';
+  }
+  if (methodLabel === 'npm') {
+    return 'npm';
+  }
+  return 'Command';
 }
 
 function InstallStatusBadge({
@@ -200,6 +242,18 @@ export function CliMarketplaceSettingsSection() {
     }
   };
 
+  const copyInstallCommand = async (command: string) => {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(command);
+      toast.success(t('cliMarketplace.copyInstallCommandCopied', { defaultValue: 'Install command copied' }));
+    } catch (error) {
+      toast.error(`${t('cliMarketplace.copyInstallCommandFailed', { defaultValue: 'Failed to copy install command' })}: ${toUserMessage(error)}`);
+    }
+  };
+
   const isJobRunning = activeJob?.status === 'running';
 
   const getJobTitle = (operation: CliMarketplaceJobOperation): string => (
@@ -251,93 +305,177 @@ export function CliMarketplaceSettingsSection() {
           ) : (
             <div className="flex flex-col gap-4">
               {items.map((item) => (
-                <div key={item.id} className="modal-field-surface rounded-2xl border p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
-                        <InstallStatusBadge
-                          installed={item.installed}
-                          installedLabel={t('cliMarketplace.installed')}
-                          missingLabel={t('cliMarketplace.missing')}
-                        />
-                      </div>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {item.description || item.homepage || item.id}
-                      </p>
-                    </div>
+                (() => {
+                  const managedInstallMethod = getManagedInstallMethod(item);
+                  const manualInstallMethods = getManualInstallMethods(item);
+                  const firstAvailableManualInstallMethod = getFirstAvailableManualInstallMethod(item);
+                  const canInstallWithManagedMethod = item.source === 'none' && managedInstallMethod?.available === true;
+                  const canInstallWithManualMethod = item.source === 'none' && !canInstallWithManagedMethod && firstAvailableManualInstallMethod !== null;
+                  const hasUnavailableManualMethod = manualInstallMethods.some((method) => !method.available);
+                  const showActionsMenu = item.source === 'geeclaw'
+                    || (item.source === 'system' && manualInstallMethods.length > 0)
+                    || hasUnavailableManualMethod
+                    || manualInstallMethods.length > 1;
+                  const sourceBadgeLabel = item.source === 'geeclaw'
+                    ? t('cliMarketplace.source.geeclaw', { defaultValue: 'GeeClaw' })
+                    : item.source === 'system'
+                      ? t('cliMarketplace.source.system', { defaultValue: 'System' })
+                      : null;
 
-                    {item.installed ? (
-                      <div
-                        ref={(node) => {
-                          if (openActionsMenuId === item.id) {
-                            actionsMenuRootRef.current = node;
-                          } else if (actionsMenuRootRef.current === node) {
-                            actionsMenuRootRef.current = null;
-                          }
-                        }}
-                        className="relative"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-full px-3"
-                          aria-label={t('cliMarketplace.moreActions')}
-                          aria-haspopup="menu"
-                          aria-expanded={openActionsMenuId === item.id}
-                          aria-controls={openActionsMenuId === item.id ? `cli-marketplace-menu-${item.id}` : undefined}
-                          onClick={() => setOpenActionsMenuId((current) => current === item.id ? null : item.id)}
-                          disabled={isJobRunning}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                        {openActionsMenuId === item.id && (
-                          <div
-                            id={`cli-marketplace-menu-${item.id}`}
-                            role="menu"
-                            aria-label={t('cliMarketplace.moreActions')}
-                            className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[160px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10"
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              role="menuitem"
-                              className="w-full justify-start rounded-xl px-3 py-2 text-sm"
-                              autoFocus
-                              onClick={() => {
-                                setOpenActionsMenuId(null);
-                                void startJob(item, 'install');
-                              }}
-                            >
-                              {t('cliMarketplace.reinstall')}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              role="menuitem"
-                              className="w-full justify-start rounded-xl px-3 py-2 text-sm"
-                              onClick={() => {
-                                setOpenActionsMenuId(null);
-                                void startJob(item, 'uninstall');
-                              }}
-                            >
-                              {t('cliMarketplace.uninstall')}
-                            </Button>
+                  return (
+                    <div key={item.id} className="modal-field-surface rounded-2xl border p-4">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                            <InstallStatusBadge
+                              installed={item.installed}
+                              installedLabel={t('cliMarketplace.installed')}
+                              missingLabel={t('cliMarketplace.missing')}
+                            />
                           </div>
-                        )}
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            {item.description || item.homepage || item.id}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {canInstallWithManagedMethod && (
+                            <Button
+                              type="button"
+                              className="rounded-full"
+                              onClick={() => void startJob(item, 'install')}
+                              disabled={isJobRunning}
+                            >
+                              {t('cliMarketplace.install')}
+                            </Button>
+                          )}
+
+                          {canInstallWithManualMethod && firstAvailableManualInstallMethod && (
+                            <Button
+                              type="button"
+                              className="rounded-full"
+                              onClick={() => {
+                                void copyInstallCommand(firstAvailableManualInstallMethod.command);
+                              }}
+                              disabled={isJobRunning}
+                            >
+                              {t('cliMarketplace.copyInstallCommand', { defaultValue: 'Copy Install Command' })}
+                            </Button>
+                          )}
+
+                          {!canInstallWithManagedMethod && !canInstallWithManualMethod && sourceBadgeLabel && (
+                            <Badge className="rounded-full border border-black/8 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground dark:border-white/10">
+                              {sourceBadgeLabel}
+                            </Badge>
+                          )}
+
+                          {showActionsMenu ? (
+                            <div
+                              ref={(node) => {
+                                if (openActionsMenuId === item.id) {
+                                  actionsMenuRootRef.current = node;
+                                } else if (actionsMenuRootRef.current === node) {
+                                  actionsMenuRootRef.current = null;
+                                }
+                              }}
+                              className="relative"
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full px-3"
+                                aria-label={t('cliMarketplace.moreActions')}
+                                aria-haspopup="menu"
+                                aria-expanded={openActionsMenuId === item.id}
+                                aria-controls={openActionsMenuId === item.id ? `cli-marketplace-menu-${item.id}` : undefined}
+                                onClick={() => setOpenActionsMenuId((current) => current === item.id ? null : item.id)}
+                                disabled={isJobRunning}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                              {openActionsMenuId === item.id && (
+                                <div
+                                  id={`cli-marketplace-menu-${item.id}`}
+                                  role="menu"
+                                  aria-label={t('cliMarketplace.moreActions')}
+                                  className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[220px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10"
+                                >
+                                  {item.source === 'geeclaw' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      autoFocus
+                                      onClick={() => {
+                                        setOpenActionsMenuId(null);
+                                        void startJob(item, 'install');
+                                      }}
+                                    >
+                                      {t('cliMarketplace.reinstall')}
+                                    </Button>
+                                  )}
+                                  {item.source === 'geeclaw' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      onClick={() => {
+                                        setOpenActionsMenuId(null);
+                                        void startJob(item, 'uninstall');
+                                      }}
+                                    >
+                                      {t('cliMarketplace.uninstall')}
+                                    </Button>
+                                  )}
+                                  {manualInstallMethods.map((method, index) => {
+                                    const unavailableReasonLabel = method.label === 'brew'
+                                      ? t('cliMarketplace.manual.needHomebrew', { defaultValue: 'Need Homebrew' })
+                                      : method.label === 'curl'
+                                        ? t('cliMarketplace.manual.needCurl', { defaultValue: 'Need curl' })
+                                        : method.label === 'npm'
+                                          ? t('cliMarketplace.manual.needNpm', { defaultValue: 'Need npm' })
+                                          : t('cliMarketplace.manual.unavailable', { defaultValue: 'Unavailable' });
+                                    const isUnavailable = !method.available || !method.command;
+                                    const label = isUnavailable
+                                      ? unavailableReasonLabel
+                                      : t('cliMarketplace.manual.copyMethod', {
+                                        defaultValue: `Copy via ${getManualMethodDisplayName(method.label)}`,
+                                      });
+                                    const autoFocus = item.source !== 'geeclaw' && index === 0;
+
+                                    return (
+                                      <Button
+                                        key={`${item.id}-manual-${method.label}-${index}`}
+                                        type="button"
+                                        variant="ghost"
+                                        role="menuitem"
+                                        className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                        autoFocus={autoFocus}
+                                        disabled={isUnavailable}
+                                        onClick={() => {
+                                          if (!method.command || isUnavailable) {
+                                            return;
+                                          }
+                                          setOpenActionsMenuId(null);
+                                          void copyInstallCommand(method.command);
+                                        }}
+                                      >
+                                        {label}
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        className="rounded-full"
-                        onClick={() => void startJob(item, 'install')}
-                        disabled={isJobRunning}
-                      >
-                        {t('cliMarketplace.install')}
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()
               ))}
             </div>
           )}

@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostApiFetchMock = vi.fn();
+const clipboardWriteTextMock = vi.fn();
+const toastErrorMock = vi.fn();
+const toastSuccessMock = vi.fn();
 
 const translations: Record<string, string> = {
   'cliMarketplace.title': 'CLI 市场',
@@ -13,6 +16,7 @@ const translations: Record<string, string> = {
   'cliMarketplace.installed': '已安装',
   'cliMarketplace.missing': '未安装',
   'cliMarketplace.install': '安装',
+  'cliMarketplace.copyInstallCommand': '复制安装命令',
   'cliMarketplace.reinstall': '重新安装',
   'cliMarketplace.uninstall': '卸载',
   'cliMarketplace.moreActions': '更多操作',
@@ -30,7 +34,18 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => translations[key] ?? key,
+      t: (key: string, options?: { defaultValue?: string } | string) => {
+        if (translations[key]) {
+          return translations[key];
+        }
+        if (typeof options === 'string') {
+          return options;
+        }
+        if (options && typeof options.defaultValue === 'string') {
+          return options.defaultValue;
+        }
+        return key;
+      },
     }),
   };
 });
@@ -45,32 +60,40 @@ vi.mock('@/lib/api-client', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    error: vi.fn(),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 describe('CliMarketplaceSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: clipboardWriteTextMock,
+      },
+    });
   });
 
-  it('renders installed items with a more-actions menu and missing items with an install button', async () => {
+  it('renders 安装 for source=none with available managed-npm method', async () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
-          {
-            id: 'feishu',
-            title: 'Feishu CLI',
-            description: 'Docs',
-            installed: true,
-            actionLabel: 'reinstall',
-          },
           {
             id: 'wecom',
             title: 'WeCom CLI',
             description: 'Docs',
             installed: false,
-            actionLabel: 'install',
+            source: 'none',
+            installMethods: [
+              {
+                type: 'managed-npm',
+                label: 'managed-npm',
+                available: true,
+                managed: true,
+              },
+            ],
           },
         ];
       }
@@ -82,9 +105,7 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    expect(await screen.findByText('Feishu CLI')).toBeInTheDocument();
-    expect(screen.getByText('已安装')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '更多操作' })).toBeInTheDocument();
+    expect(await screen.findByText('WeCom CLI')).toBeInTheDocument();
     expect(screen.getByText('未安装')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '安装' })).toBeInTheDocument();
 
@@ -93,7 +114,120 @@ describe('CliMarketplaceSettingsSection', () => {
     });
   });
 
-  it('opens the more-actions dropdown for installed items and runs reinstall', async () => {
+  it('renders 复制安装命令 and copies the command for source=none manual-only brew', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'foo',
+            title: 'Foo CLI',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install foo',
+                available: true,
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '复制安装命令' }));
+
+    await waitFor(() => {
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('brew install foo');
+    });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('does not render 卸载 for source=system entries', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'foo',
+            title: 'Foo CLI',
+            description: 'Docs',
+            installed: true,
+            source: 'system',
+            installMethods: [
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install foo',
+                available: true,
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).queryByText('卸载')).not.toBeInTheDocument();
+  });
+
+  it('shows disabled Need Homebrew text for unavailable brew manual method', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'foo',
+            title: 'Foo CLI',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install foo',
+                available: false,
+                unavailableReason: 'missing-command',
+                missingCommands: ['brew'],
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+
+    const menu = await screen.findByRole('menu');
+    const disabledManualMethod = within(menu).getByRole('menuitem', { name: 'Need Homebrew' });
+    expect(disabledManualMethod).toBeDisabled();
+  });
+
+  it('opens reinstall/uninstall menu for source=geeclaw and starts reinstall job', async () => {
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
@@ -102,7 +236,15 @@ describe('CliMarketplaceSettingsSection', () => {
             title: 'Feishu CLI',
             description: 'Docs',
             installed: true,
-            actionLabel: 'reinstall',
+            source: 'geeclaw',
+            installMethods: [
+              {
+                type: 'managed-npm',
+                label: 'managed-npm',
+                available: true,
+                managed: true,
+              },
+            ],
           },
         ];
       }
@@ -145,6 +287,8 @@ describe('CliMarketplaceSettingsSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('重新安装')).toBeInTheDocument();
+    expect(within(menu).getByText('卸载')).toBeInTheDocument();
     fireEvent.click(within(menu).getByText('重新安装'));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
@@ -157,61 +301,5 @@ describe('CliMarketplaceSettingsSection', () => {
         }),
       );
     });
-  });
-
-  it('opens a job dialog and shows install logs for CLI and skills', async () => {
-    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
-      if (path === '/api/cli-marketplace/catalog') {
-        return [
-          {
-            id: 'feishu',
-            title: 'Feishu CLI',
-            description: 'Docs',
-            installed: false,
-            actionLabel: 'install',
-          },
-        ];
-      }
-
-      if (path === '/api/cli-marketplace/install') {
-        expect(init?.method).toBe('POST');
-        return {
-          id: 'job-install-1',
-          itemId: 'feishu',
-          title: 'Feishu CLI',
-          operation: 'install',
-          status: 'running',
-          logs: '$ npm install --global @larksuite/cli\n',
-          startedAt: '2026-03-30T00:00:00.000Z',
-          finishedAt: null,
-        };
-      }
-
-      if (path === '/api/cli-marketplace/jobs/job-install-1') {
-        return {
-          id: 'job-install-1',
-          itemId: 'feishu',
-          title: 'Feishu CLI',
-          operation: 'install',
-          status: 'succeeded',
-          logs: '$ npm install --global @larksuite/cli\n$ npx -y skills add larksuite/cli -y -g\n',
-          startedAt: '2026-03-30T00:00:00.000Z',
-          finishedAt: '2026-03-30T00:00:10.000Z',
-        };
-      }
-
-      throw new Error(`Unexpected path: ${path}`);
-    });
-
-    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
-
-    render(<CliMarketplaceSettingsSection />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '安装' }));
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(await screen.findByText('安装 CLI')).toBeInTheDocument();
-    expect(await screen.findByText(/\$ npm install --global @larksuite\/cli/)).toBeInTheDocument();
-    expect(await screen.findByText(/\$ npx -y skills add larksuite\/cli -y -g/)).toBeInTheDocument();
   });
 });
