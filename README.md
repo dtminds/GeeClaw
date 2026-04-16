@@ -144,11 +144,11 @@ pnpm dev
 ```
 ### First Launch
 
-When you launch GeeClaw for the first time, the **Setup Wizard** focuses on getting the managed runtime ready:
+When you launch GeeClaw for the first time, GeeClaw first checks whether you need to sign in, then the **Setup Wizard** focuses on getting the managed runtime ready:
 
-1. **Language & Region** – Configure your preferred locale
-2. **Runtime Preparation** – Verify the bundled OpenClaw runtime and supporting tools
-3. **Skill Bundles** – Install the default local skill/tool bundle
+1. **Welcome** – Pick your preferred language and confirm the app is ready to configure
+2. **Environment Check** – Verify the bundled OpenClaw runtime and supporting services
+3. **Setting Up** – Install the default local tools GeeClaw expects on first launch
 4. **Enter the App** – Start using GeeClaw immediately after setup completes
 
 Model setup is now handled inside the main app:
@@ -446,6 +446,14 @@ own `node_modules/`.
 ## Contributing
 
 We welcome contributions from the community. For local setup, validation commands, and project guardrails, start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Before opening a pull request, run:
+
+```bash
+pnpm run verify
+```
+
+If your change affects onboarding, settings copy, or other user-facing behavior, update both `README.md` and `README.zh-CN.md` in the same PR.
 
 Additional maintainer and contributor docs:
 

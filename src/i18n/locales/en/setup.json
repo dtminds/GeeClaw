@@ -48,7 +48,14 @@
             "success": "Node.js is available",
             "error": "Failed",
             "gatewayRunning": "Running on port {{port}}",
-            "packageReady": "OpenClaw runtime ready"
+            "packageReady": "OpenClaw runtime ready",
+            "runtimeReady": "{{displayName}} ready{{versionLabel}}",
+            "waitingGateway": "Waiting for the Gateway to become ready",
+            "failedToStart": "Failed to start",
+            "startingGateway": "Starting the Gateway...",
+            "gatewayTimeout": "Gateway startup timed out",
+            "checkFailed": "Check failed: {{error}}",
+            "loadLogsFailed": "(Failed to load logs)"
         },
         "issue": {
             "title": "Environment issue detected",
@@ -99,6 +106,28 @@
         "title": "Installing Essential Components",
         "subtitle": "Setting up the tools needed to power your AI assistant",
         "progress": "Progress",
+        "skills": {
+            "opencode": {
+                "name": "OpenCode",
+                "description": "AI coding assistant backend"
+            },
+            "python-env": {
+                "name": "Python Environment",
+                "description": "Python runtime for bundled skills"
+            },
+            "code-assist": {
+                "name": "Code Assist",
+                "description": "Code analysis and suggestion tools"
+            },
+            "file-tools": {
+                "name": "File Tools",
+                "description": "File operations and local workspace helpers"
+            },
+            "terminal": {
+                "name": "Terminal",
+                "description": "Shell command execution support"
+            }
+        },
         "status": {
             "pending": "Pending",
             "installing": "Installing...",
@@ -135,7 +164,7 @@
             "caption": "We are confirming your sign-in status before starting the app."
         },
         "needsLogin": {
-            "title": "Welcome to GeeClaw",
+            "title": "Sign in to continue",
             "action": "Sign in"
         },
         "authenticated": {
@@ -177,8 +206,8 @@
             "recovering": {
                 "eyebrow": "Gateway recovery",
                 "title": "Restarting OpenClaw",
-                "body": "Some features are temporarily unavailable We will resume automatically once the gateway is back",
-                "caption": "This usually takes around ten seconds Please keep this window open"
+                "body": "Some features are temporarily unavailable. We will resume automatically once the gateway is back.",
+                "caption": "This usually takes around ten seconds. Please keep this window open."
             },
             "error": {
                 "title": "The OpenClaw Gateway could not recover",
