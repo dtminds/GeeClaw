@@ -29,23 +29,25 @@ const translations: Record<string, string> = {
   'common:status.loading': '加载中',
 };
 
+const translate = (key: string, options?: { defaultValue?: string } | string) => {
+  if (translations[key]) {
+    return translations[key];
+  }
+  if (typeof options === 'string') {
+    return options;
+  }
+  if (options && typeof options.defaultValue === 'string') {
+    return options.defaultValue;
+  }
+  return key;
+};
+
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-i18next')>();
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string, options?: { defaultValue?: string } | string) => {
-        if (translations[key]) {
-          return translations[key];
-        }
-        if (typeof options === 'string') {
-          return options;
-        }
-        if (options && typeof options.defaultValue === 'string') {
-          return options.defaultValue;
-        }
-        return key;
-      },
+      t: translate,
     }),
   };
 });
@@ -150,6 +152,131 @@ describe('CliMarketplaceSettingsSection', () => {
       expect(clipboardWriteTextMock).toHaveBeenCalledWith('brew install foo');
     });
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps managed install primary while exposing manual fallback in overflow menu', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'bar',
+            title: 'Bar CLI',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'managed-npm',
+                label: 'managed-npm',
+                available: true,
+                managed: true,
+              },
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install bar',
+                available: true,
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    expect(await screen.findByRole('button', { name: '安装' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+
+    const menu = await screen.findByRole('menu');
+    const copyFallbackItem = within(menu).getByRole('menuitem', { name: /Copy via/i });
+    expect(copyFallbackItem).toBeEnabled();
+    fireEvent.click(copyFallbackItem);
+
+    await waitFor(() => {
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('brew install bar');
+    });
+  });
+
+  it('shows a visible disabled runtime-missing action surface for managed-only entries', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'runtime-missing',
+            title: 'Runtime Missing CLI',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'managed-npm',
+                label: 'managed-npm',
+                available: false,
+                unavailableReason: 'runtime-missing',
+                managed: true,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+
+    const menu = await screen.findByRole('menu');
+    const runtimeMissingItem = within(menu).getByRole('menuitem', { name: /runtime/i });
+    expect(runtimeMissingItem).toBeDisabled();
+  });
+
+  it('shows error toast when copying manual install command fails', async () => {
+    clipboardWriteTextMock.mockRejectedValueOnce(new Error('clipboard denied'));
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'copy-failure',
+            title: 'Copy Failure CLI',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install copy-failure',
+                available: true,
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '复制安装命令' }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining('Failed to copy install command'));
+    });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 
   it('does not render 卸载 for source=system entries', async () => {

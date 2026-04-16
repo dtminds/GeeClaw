@@ -312,10 +312,19 @@ export function CliMarketplaceSettingsSection() {
                   const canInstallWithManagedMethod = item.source === 'none' && managedInstallMethod?.available === true;
                   const canInstallWithManualMethod = item.source === 'none' && !canInstallWithManagedMethod && firstAvailableManualInstallMethod !== null;
                   const hasUnavailableManualMethod = manualInstallMethods.some((method) => !method.available);
+                  const showManagedRuntimeMissingAction = item.source === 'none'
+                    && managedInstallMethod?.available === false
+                    && managedInstallMethod.unavailableReason === 'runtime-missing';
+                  const showManualInstallMethodsInMenu = manualInstallMethods.length > 0
+                    && (
+                      item.source !== 'none'
+                      || canInstallWithManagedMethod
+                      || hasUnavailableManualMethod
+                      || manualInstallMethods.length > 1
+                    );
                   const showActionsMenu = item.source === 'geeclaw'
-                    || (item.source === 'system' && manualInstallMethods.length > 0)
-                    || hasUnavailableManualMethod
-                    || manualInstallMethods.length > 1;
+                    || showManagedRuntimeMissingAction
+                    || showManualInstallMethodsInMenu;
                   const sourceBadgeLabel = item.source === 'geeclaw'
                     ? t('cliMarketplace.source.geeclaw', { defaultValue: 'GeeClaw' })
                     : item.source === 'system'
@@ -430,6 +439,18 @@ export function CliMarketplaceSettingsSection() {
                                       {t('cliMarketplace.uninstall')}
                                     </Button>
                                   )}
+                                  {showManagedRuntimeMissingAction && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      autoFocus={item.source !== 'geeclaw'}
+                                      disabled
+                                    >
+                                      {t('cliMarketplace.managed.needRuntime', { defaultValue: 'Need managed runtime' })}
+                                    </Button>
+                                  )}
                                   {manualInstallMethods.map((method, index) => {
                                     const unavailableReasonLabel = method.label === 'brew'
                                       ? t('cliMarketplace.manual.needHomebrew', { defaultValue: 'Need Homebrew' })
@@ -444,7 +465,7 @@ export function CliMarketplaceSettingsSection() {
                                       : t('cliMarketplace.manual.copyMethod', {
                                         defaultValue: `Copy via ${getManualMethodDisplayName(method.label)}`,
                                       });
-                                    const autoFocus = item.source !== 'geeclaw' && index === 0;
+                                    const autoFocus = item.source !== 'geeclaw' && !showManagedRuntimeMissingAction && index === 0;
 
                                     return (
                                       <Button
