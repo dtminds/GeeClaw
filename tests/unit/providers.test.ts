@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
+  SETUP_PROVIDERS,
   getDefaultProviderModelEntries,
   getProviderDocsUrl,
   getProviderCodePlanPreset,
+  getProviderIconUrl,
   isProviderCodePlanMode,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
@@ -68,6 +70,16 @@ describe('provider metadata', () => {
         }),
       ]),
     );
+
+    expect(SETUP_PROVIDERS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'geeclaw',
+          name: 'GeeClaw',
+        }),
+      ]),
+    );
+    expect(getProviderIconUrl('geeclaw')).toBeTruthy();
   });
 
   it('includes ark in the backend provider registry', () => {

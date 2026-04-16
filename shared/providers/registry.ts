@@ -24,6 +24,40 @@ function createDefaultProviderModel(
   };
 }
 
+function createGeekAiCompatibleProvider(
+  options: {
+    id: ProviderType;
+    name: string;
+    envVar: string;
+  } & Partial<ProviderDefinition>,
+): ProviderDefinition {
+  return {
+    id: options.id,
+    name: options.name,
+    icon: options.icon ?? '🦞',
+    placeholder: options.placeholder ?? 'sk-...',
+    model: options.model ?? 'Multi-Model',
+    requiresApiKey: options.requiresApiKey ?? true,
+    defaultModelId: options.defaultModelId ?? 'qwen3.6-plus',
+    defaultModels: options.defaultModels ?? [createDefaultProviderModel('qwen3.6-plus')],
+    modelCatalogMode: options.modelCatalogMode ?? 'runtime-editable',
+    category: options.category ?? 'compatible',
+    envVar: options.envVar,
+    supportedAuthModes: options.supportedAuthModes ?? ['api_key'],
+    defaultAuthMode: options.defaultAuthMode ?? 'api_key',
+    supportsMultipleAccounts: options.supportsMultipleAccounts ?? true,
+    ...(options.showBaseUrl !== undefined ? { showBaseUrl: options.showBaseUrl } : {}),
+    ...(options.showModelId !== undefined ? { showModelId: options.showModelId } : {}),
+    ...(options.modelIdPlaceholder !== undefined ? { modelIdPlaceholder: options.modelIdPlaceholder } : {}),
+    ...(options.hidden !== undefined ? { hidden: options.hidden } : {}),
+    providerConfig: {
+      baseUrl: 'https://geekai.co/api/v1',
+      api: 'openai-completions',
+      apiKeyEnv: options.envVar,
+    },
+  };
+}
+
 export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
   {
     id: 'anthropic',
@@ -316,53 +350,22 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
       apiKeyEnv: 'SILICONFLOW_API_KEY',
     },
   },
-  {
+  createGeekAiCompatibleProvider({
     id: 'geekai',
     name: 'GeekAI',
-    icon: '🦞',
-    placeholder: 'sk-...',
-    model: 'Multi-Model',
-    requiresApiKey: true,
+    envVar: 'GEEKAI_API_KEY',
     showModelId: true,
     modelIdPlaceholder: 'your-model-id',
-    defaultModelId: 'qwen3.6-plus',
-    defaultModels: [createDefaultProviderModel('qwen3.6-plus')],
-    modelCatalogMode: 'runtime-editable',
-    category: 'compatible',
-    envVar: 'GEEKAI_API_KEY',
-    supportedAuthModes: ['api_key'],
-    defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
     hidden: true,
-    providerConfig: {
-      baseUrl: 'https://geekai.co/api/v1',
-      api: 'openai-completions',
-      apiKeyEnv: 'GEEKAI_API_KEY'
-    },
-  },
-  {
+  }),
+  createGeekAiCompatibleProvider({
     id: 'geeclaw',
     name: 'GeeClaw',
-    icon: '🦞',
-    placeholder: 'sk-...',
-    model: 'Multi-Model',
-    requiresApiKey: true,
+    envVar: 'GEECLAW_API_KEY',
     showBaseUrl: false,
     showModelId: false,
-    defaultModelId: 'qwen3.6-plus',
-    defaultModels: [createDefaultProviderModel('qwen3.6-plus')],
     modelCatalogMode: 'builtin-only',
-    category: 'compatible',
-    envVar: 'GEECLAW_API_KEY',
-    supportedAuthModes: ['api_key'],
-    defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
-    providerConfig: {
-      baseUrl: 'https://geekai.co/api/v1',
-      api: 'openai-completions',
-      apiKeyEnv: 'GEECLAW_API_KEY',
-    },
-  },
+  }),
   {
     id: 'ollama',
     name: 'Ollama',
