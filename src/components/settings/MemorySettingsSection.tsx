@@ -3,7 +3,9 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { hostApiFetch } from '@/lib/host-api';
+import { subscribeHostEvent } from '@/lib/host-events';
 import { toUserMessage } from '@/lib/api-client';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +17,16 @@ type AvailableProviderModelGroup = {
   providerId: string;
   providerName: string;
   modelRefs: string[];
+};
+
+type ManagedPluginStatus = {
+  pluginId: string;
+  displayName: string;
+  stage: 'idle' | 'checking' | 'installing' | 'installed' | 'failed';
+  message: string;
+  targetVersion: string;
+  installedVersion?: string | null;
+  error?: string;
 };
 
 type MemorySettingsSnapshot = {
@@ -37,6 +49,7 @@ type MemorySettingsSnapshot = {
     summaryModel: string | null;
     summaryModelMode: 'automatic' | 'custom';
     status: MemoryCardStatus;
+    installJob: ManagedPluginStatus | null;
   };
 };
 
@@ -71,6 +84,14 @@ export function MemorySettingsSection() {
   const [losslessMode, setLosslessMode] = useState<'automatic' | 'custom'>('automatic');
   const [losslessModelDraft, setLosslessModelDraft] = useState('');
 
+  const applySnapshot = (snapshot: MemorySettingsSnapshot) => {
+    setSettings(snapshot);
+    setActiveMemoryMode(snapshot.activeMemory.modelMode);
+    setActiveMemoryModelDraft(snapshot.activeMemory.model ?? '');
+    setLosslessMode(snapshot.losslessClaw.summaryModelMode);
+    setLosslessModelDraft(snapshot.losslessClaw.summaryModel ?? '');
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -78,11 +99,7 @@ export function MemorySettingsSection() {
       try {
         const snapshot = await hostApiFetch<MemorySettingsSnapshot>('/api/settings/memory');
         if (cancelled) return;
-        setSettings(snapshot);
-        setActiveMemoryMode(snapshot.activeMemory.modelMode);
-        setActiveMemoryModelDraft(snapshot.activeMemory.model ?? '');
-        setLosslessMode(snapshot.losslessClaw.summaryModelMode);
-        setLosslessModelDraft(snapshot.losslessClaw.summaryModel ?? '');
+        applySnapshot(snapshot);
       } catch (error) {
         if (!cancelled) {
           toast.error(`${t('memory.toast.loadFailed')}: ${toUserMessage(error)}`);
@@ -99,6 +116,28 @@ export function MemorySettingsSection() {
     };
   }, [t]);
 
+  useEffect(() => {
+    return subscribeHostEvent<ManagedPluginStatus | null>('openclaw:managed-plugin-status', (payload) => {
+      if (payload && payload.pluginId !== 'lossless-claw') {
+        return;
+      }
+
+      setSettings((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          losslessClaw: {
+            ...current.losslessClaw,
+            installJob: payload,
+          },
+        };
+      });
+    });
+  }, []);
+
   const savePatch = async (patch: MemorySettingsPatch, savingId: string) => {
     setSavingKey(savingId);
     try {
@@ -109,14 +148,26 @@ export function MemorySettingsSection() {
         },
         body: JSON.stringify(patch),
       });
-      setSettings(response.settings);
-      setActiveMemoryMode(response.settings.activeMemory.modelMode);
-      setActiveMemoryModelDraft(response.settings.activeMemory.model ?? '');
-      setLosslessMode(response.settings.losslessClaw.summaryModelMode);
-      setLosslessModelDraft(response.settings.losslessClaw.summaryModel ?? '');
+      applySnapshot(response.settings);
       toast.success(t('memory.toast.saved'));
     } catch (error) {
       toast.error(`${t('memory.toast.saveFailed')}: ${toUserMessage(error)}`);
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const installLosslessClaw = async () => {
+    setSavingKey('lossless-install');
+    try {
+      const response = await hostApiFetch<{ success: boolean; settings: MemorySettingsSnapshot }>(
+        '/api/settings/memory/lossless-claw/install',
+        { method: 'POST' },
+      );
+      applySnapshot(response.settings);
+      toast.success(t('memory.toast.installSuccess'));
+    } catch (error) {
+      toast.error(`${t('memory.toast.installFailed')}: ${toUserMessage(error)}`);
     } finally {
       setSavingKey(null);
     }
@@ -138,6 +189,18 @@ export function MemorySettingsSection() {
       </div>
     );
   }
+
+  const losslessInstallRunning = settings.losslessClaw.installJob?.stage === 'checking'
+    || settings.losslessClaw.installJob?.stage === 'installing';
+  const losslessNeedsInstall = settings.losslessClaw.status === 'not-installed';
+  const losslessNeedsUpgrade = settings.losslessClaw.status === 'unavailable';
+  const losslessNeedsAction = losslessNeedsInstall
+    || losslessNeedsUpgrade
+    || settings.losslessClaw.installJob?.stage === 'failed'
+    || losslessInstallRunning;
+  const losslessActionLabel = losslessInstallRunning
+    ? (losslessNeedsUpgrade ? t('memory.actions.upgradeInProgress') : t('memory.actions.installInProgress'))
+    : (losslessNeedsUpgrade ? t('memory.actions.upgrade') : t('memory.actions.install'));
 
   return (
     <div className="flex flex-col gap-6">
@@ -279,12 +342,38 @@ export function MemorySettingsSection() {
                   </p>
                 ) : null}
               </div>
-              <Switch
-                checked={settings.losslessClaw.enabled}
-                disabled={savingKey !== null || settings.losslessClaw.status === 'not-installed' || settings.losslessClaw.status === 'unavailable'}
-                onCheckedChange={(enabled) => { void savePatch({ losslessClaw: { enabled } }, 'lossless-toggle'); }}
-              />
+              {losslessNeedsAction ? (
+                <Button
+                  type="button"
+                  variant={losslessNeedsUpgrade ? 'outline' : 'default'}
+                  disabled={savingKey !== null || losslessInstallRunning}
+                  onClick={() => { void installLosslessClaw(); }}
+                >
+                  {(savingKey === 'lossless-install' || losslessInstallRunning) ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {losslessActionLabel}
+                </Button>
+              ) : (
+                <Switch
+                  checked={settings.losslessClaw.enabled}
+                  disabled={savingKey !== null || losslessInstallRunning}
+                  onCheckedChange={(enabled) => { void savePatch({ losslessClaw: { enabled } }, 'lossless-toggle'); }}
+                />
+              )}
             </div>
+            {settings.losslessClaw.installJob ? (
+              <div className="space-y-2 rounded-2xl border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Loader2 className={`h-4 w-4 ${losslessInstallRunning ? 'animate-spin' : ''}`} />
+                  <span>{settings.losslessClaw.installJob.message}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{t('memory.copy.losslessClaw.installingHint')}</p>
+                {settings.losslessClaw.installJob.error ? (
+                  <p className="text-sm text-destructive">{settings.losslessClaw.installJob.error}</p>
+                ) : null}
+              </div>
+            ) : null}
             {settings.losslessClaw.enabled ? (
               <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
                 <div className="flex items-center justify-between gap-4">

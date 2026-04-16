@@ -154,6 +154,7 @@ describe('openclaw memory settings', () => {
       },
       losslessClaw: {
         enabled: true,
+        installJob: null,
         installedVersion: '0.9.1',
         requiredVersion: '0.9.1',
         summaryModel: 'openai/gpt-5.4-mini',
@@ -186,6 +187,7 @@ describe('openclaw memory settings', () => {
 
     expect(snapshot.losslessClaw).toEqual({
       enabled: false,
+      installJob: null,
       installedVersion: '0.5.1',
       requiredVersion: '0.9.1',
       summaryModel: 'openai/gpt-5.4-mini',
@@ -221,6 +223,7 @@ describe('openclaw memory settings', () => {
 
     expect(snapshot.losslessClaw).toEqual({
       enabled: false,
+      installJob: null,
       installedVersion: '0.9.2',
       requiredVersion: '0.9.1',
       summaryModel: 'openai/gpt-5.4-mini',

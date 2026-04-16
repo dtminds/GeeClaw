@@ -21,6 +21,7 @@ const deleteWebSearchProviderConfigMock = vi.fn();
 const readWebSearchSettingsSnapshotMock = vi.fn();
 const readMemorySettingsSnapshotMock = vi.fn();
 const applyMemorySettingsPatchMock = vi.fn();
+const installManagedPluginNowMock = vi.fn();
 const readOpenClawConfigDocumentMock = vi.fn();
 const mutateOpenClawConfigDocumentMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
@@ -65,6 +66,10 @@ vi.mock('@electron/utils/openclaw-web-search-config', () => ({
 vi.mock('@electron/utils/openclaw-memory-settings', () => ({
   readMemorySettingsSnapshot: (...args: unknown[]) => readMemorySettingsSnapshotMock(...args),
   applyMemorySettingsPatch: (...args: unknown[]) => applyMemorySettingsPatchMock(...args),
+}));
+
+vi.mock('@electron/utils/managed-plugin-installer', () => ({
+  installManagedPluginNow: (...args: unknown[]) => installManagedPluginNowMock(...args),
 }));
 
 vi.mock('@electron/utils/openclaw-config-coordinator', () => ({
@@ -125,9 +130,16 @@ describe('handleSettingsRoutes', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'not-installed',
+        installJob: null,
       },
     });
     applyMemorySettingsPatchMock.mockResolvedValue(false);
+    installManagedPluginNowMock.mockResolvedValue({
+      action: 'installed',
+      pluginId: 'lossless-claw',
+      installedVersion: '0.9.1',
+      previousVersion: null,
+    });
     readOpenClawConfigDocumentMock.mockResolvedValue({});
     mutateOpenClawConfigDocumentMock.mockImplementation(async (
       mutate: (config: Record<string, unknown>) => Promise<{ changed: boolean; result: unknown }> | { changed: boolean; result: unknown },
@@ -285,6 +297,7 @@ describe('handleSettingsRoutes', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'disabled',
+        installJob: null,
       },
     });
 
@@ -343,6 +356,7 @@ describe('handleSettingsRoutes', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'not-installed',
+        installJob: null,
       },
     });
 
@@ -377,6 +391,64 @@ describe('handleSettingsRoutes', () => {
       200,
       expect.objectContaining({ success: true }),
     );
+  });
+
+  it('installs lossless-claw on demand and returns the refreshed memory snapshot', async () => {
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: false,
+        status: 'disabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: '0.9.1',
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'disabled',
+        installJob: null,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const res = {} as ServerResponse;
+    const restart = vi.fn();
+    const debouncedReload = vi.fn();
+
+    const handled = await handleSettingsRoutes(
+      { method: 'POST' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:13210/api/settings/memory/lossless-claw/install'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart,
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(installManagedPluginNowMock).toHaveBeenCalledWith({ pluginId: 'lossless-claw' });
+    expect(readOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(readMemorySettingsSnapshotMock).toHaveBeenCalledWith({});
+    expect(debouncedReload).not.toHaveBeenCalled();
+    expect(restart).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(res, 200, {
+      success: true,
+      settings: expect.objectContaining({
+        losslessClaw: expect.objectContaining({
+          installedVersion: '0.9.1',
+          status: 'disabled',
+        }),
+      }),
+    });
   });
 
   it('returns normalized web search provider descriptors', async () => {

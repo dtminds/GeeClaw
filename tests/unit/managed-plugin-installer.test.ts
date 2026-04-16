@@ -62,6 +62,7 @@ describe('managed plugin installer', () => {
         displayName: 'lossless-claw',
         installMessage: '正在安装 lossless-claw 插件…',
         requiredForStartup: true,
+        startupInstallPolicy: 'missing-or-outdated',
         syncConfigOnStartup: true,
       },
       configDir,
@@ -114,6 +115,7 @@ describe('managed plugin installer', () => {
         displayName: 'lossless-claw',
         installMessage: '正在安装 lossless-claw 插件…',
         requiredForStartup: true,
+        startupInstallPolicy: 'missing-or-outdated',
         syncConfigOnStartup: true,
       },
       configDir,
@@ -147,7 +149,7 @@ describe('managed plugin installer', () => {
     const configDir = makeTempDir('managed-plugin-config-');
     const staleFinalDir = join(configDir, 'extensions', 'lossless-claw');
     mkdirSync(staleFinalDir, { recursive: true });
-    writeJson(join(staleFinalDir, 'package.json'), { version: '0.8.0' });
+    writeJson(join(staleFinalDir, 'package.json'), { version: '0.5.1' });
 
     const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
 
@@ -159,6 +161,7 @@ describe('managed plugin installer', () => {
         displayName: 'lossless-claw',
         installMessage: '正在安装 lossless-claw 插件…',
         requiredForStartup: true,
+        startupInstallPolicy: 'missing-or-outdated',
         syncConfigOnStartup: true,
       },
       configDir,
@@ -182,7 +185,7 @@ describe('managed plugin installer', () => {
     const configDir = makeTempDir('managed-plugin-config-');
     const staleFinalDir = join(configDir, 'extensions', 'lossless-claw');
     mkdirSync(staleFinalDir, { recursive: true });
-    writeJson(join(staleFinalDir, 'package.json'), { version: '0.8.0' });
+    writeJson(join(staleFinalDir, 'package.json'), { version: '0.5.1' });
 
     const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
 
@@ -194,6 +197,7 @@ describe('managed plugin installer', () => {
         displayName: 'lossless-claw',
         installMessage: '正在安装 lossless-claw 插件…',
         requiredForStartup: true,
+        startupInstallPolicy: 'missing-or-outdated',
         syncConfigOnStartup: true,
       },
       configDir,
@@ -236,6 +240,7 @@ describe('managed plugin installer', () => {
         displayName: 'lossless-claw',
         installMessage: '正在安装 lossless-claw 插件…',
         requiredForStartup: true,
+        startupInstallPolicy: 'missing-or-outdated',
         syncConfigOnStartup: true,
       },
       configDir,
@@ -244,5 +249,179 @@ describe('managed plugin installer', () => {
     })).rejects.toThrow(/npm pack failed/);
 
     expect(() => readFileSync(join(configDir, 'extensions', 'lossless-claw', 'package.json'), 'utf8')).toThrow();
+  });
+
+  it('skips installation when the plugin is missing and startup policy is outdated-only', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
+
+    const runCommand = vi.fn();
+    const extractPackage = vi.fn();
+
+    const result = await ensureManagedPluginInstalled({
+      plugin: {
+        pluginId: 'lossless-claw',
+        packageName: '@martian-engineering/lossless-claw',
+        targetVersion: '0.9.1',
+        displayName: 'lossless-claw',
+        installMessage: '正在安装 lossless-claw 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'outdated-only',
+        syncConfigOnStartup: true,
+      },
+      configDir,
+      runCommand,
+      extractPackage,
+    });
+
+    expect(result).toEqual({
+      action: 'noop',
+      pluginId: 'lossless-claw',
+      installedVersion: '',
+      previousVersion: null,
+    });
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(extractPackage).not.toHaveBeenCalled();
+    expect(() => readFileSync(join(configDir, 'extensions', 'lossless-claw', 'package.json'), 'utf8')).toThrow();
+  });
+
+  it('skips installation when the installed version is newer than the pinned version', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const pluginDir = join(configDir, 'extensions', 'lossless-claw');
+    mkdirSync(pluginDir, { recursive: true });
+    writeJson(join(pluginDir, 'package.json'), {
+      name: '@martian-engineering/lossless-claw',
+      version: '0.9.2',
+      openclaw: { extensions: ['./dist/index.js'] },
+    });
+
+    const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
+
+    const runCommand = vi.fn();
+    const extractPackage = vi.fn();
+
+    const result = await ensureManagedPluginInstalled({
+      plugin: {
+        pluginId: 'lossless-claw',
+        packageName: '@martian-engineering/lossless-claw',
+        targetVersion: '0.9.1',
+        displayName: 'lossless-claw',
+        installMessage: '正在安装 lossless-claw 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'outdated-only',
+        syncConfigOnStartup: true,
+      },
+      configDir,
+      runCommand,
+      extractPackage,
+    });
+
+    expect(result).toEqual({
+      action: 'noop',
+      pluginId: 'lossless-claw',
+      installedVersion: '0.9.2',
+      previousVersion: '0.9.2',
+    });
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(extractPackage).not.toHaveBeenCalled();
+  });
+
+  it('installs a missing plugin when reconcile policy is requested', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
+
+    const runCommand = vi.fn()
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ filename: 'lossless-claw-0.9.1.tgz' }]),
+        stderr: '',
+      });
+    const extractPackage = vi.fn(async ({ destinationRoot }: { destinationRoot: string }) => {
+      mkdirSync(join(destinationRoot, 'dist'), { recursive: true });
+      writeJson(join(destinationRoot, 'package.json'), {
+        name: '@martian-engineering/lossless-claw',
+        version: '0.9.1',
+        openclaw: { extensions: ['./dist/index.js'] },
+      });
+      writeFileSync(join(destinationRoot, 'dist', 'index.js'), 'export {};\n', 'utf8');
+    });
+
+    const result = await ensureManagedPluginInstalled({
+      plugin: {
+        pluginId: 'lossless-claw',
+        packageName: '@martian-engineering/lossless-claw',
+        targetVersion: '0.9.1',
+        displayName: 'lossless-claw',
+        installMessage: '正在安装 lossless-claw 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'outdated-only',
+        syncConfigOnStartup: true,
+      },
+      configDir,
+      runCommand,
+      extractPackage,
+      installPolicy: 'reconcile',
+    });
+
+    expect(result).toEqual({
+      action: 'installed',
+      pluginId: 'lossless-claw',
+      installedVersion: '0.9.1',
+      previousVersion: null,
+    });
+    expect(runCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('reinstalls a newer mismatched version when reconcile policy is requested', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const pluginDir = join(configDir, 'extensions', 'lossless-claw');
+    mkdirSync(pluginDir, { recursive: true });
+    writeJson(join(pluginDir, 'package.json'), {
+      name: '@martian-engineering/lossless-claw',
+      version: '0.9.2',
+      openclaw: { extensions: ['./dist/index.js'] },
+    });
+
+    const { ensureManagedPluginInstalled } = await import('@electron/utils/managed-plugin-installer');
+
+    const runCommand = vi.fn()
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ filename: 'lossless-claw-0.9.1.tgz' }]),
+        stderr: '',
+      });
+    const extractPackage = vi.fn(async ({ destinationRoot }: { destinationRoot: string }) => {
+      mkdirSync(join(destinationRoot, 'dist'), { recursive: true });
+      writeJson(join(destinationRoot, 'package.json'), {
+        name: '@martian-engineering/lossless-claw',
+        version: '0.9.1',
+        openclaw: { extensions: ['./dist/index.js'] },
+      });
+      writeFileSync(join(destinationRoot, 'dist', 'index.js'), 'export {};\n', 'utf8');
+    });
+
+    const result = await ensureManagedPluginInstalled({
+      plugin: {
+        pluginId: 'lossless-claw',
+        packageName: '@martian-engineering/lossless-claw',
+        targetVersion: '0.9.1',
+        displayName: 'lossless-claw',
+        installMessage: '正在安装 lossless-claw 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'outdated-only',
+        syncConfigOnStartup: true,
+      },
+      configDir,
+      runCommand,
+      extractPackage,
+      installPolicy: 'reconcile',
+    });
+
+    expect(result).toEqual({
+      action: 'installed',
+      pluginId: 'lossless-claw',
+      installedVersion: '0.9.1',
+      previousVersion: '0.9.2',
+    });
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(readFileSync(join(configDir, 'extensions', 'lossless-claw', 'package.json'), 'utf8')).version).toBe('0.9.1');
   });
 });

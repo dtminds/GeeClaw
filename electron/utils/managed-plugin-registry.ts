@@ -1,3 +1,5 @@
+export type ManagedPluginStartupInstallPolicy = 'missing-or-outdated' | 'outdated-only';
+
 export type ManagedPluginDefinition = {
   pluginId: string;
   packageName: string;
@@ -5,6 +7,7 @@ export type ManagedPluginDefinition = {
   displayName: string;
   installMessage: string;
   requiredForStartup: boolean;
+  startupInstallPolicy: ManagedPluginStartupInstallPolicy;
   syncConfigOnStartup: boolean;
 };
 
@@ -16,6 +19,7 @@ export const MANAGED_PLUGINS: ManagedPluginDefinition[] = [
     displayName: 'lossless-claw',
     installMessage: '正在安装记忆增强插件',
     requiredForStartup: false,
+    startupInstallPolicy: 'outdated-only',
     syncConfigOnStartup: true,
   },
 ];

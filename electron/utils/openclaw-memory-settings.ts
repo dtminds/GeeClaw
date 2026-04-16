@@ -3,6 +3,7 @@ import { constants } from 'fs';
 import { join } from 'path';
 import { listAvailableProviderModelGroups, type AvailableProviderModelGroup } from './agent-config';
 import { getManagedPlugin } from './managed-plugin-registry';
+import { getManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
 import { getManagedBundledPluginPolicy } from './plugin-install';
 import type { OpenClawConfigDocument } from './openclaw-config-coordinator';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
@@ -43,6 +44,7 @@ export type MemorySettingsSnapshot = {
     summaryModel: string | null;
     summaryModelMode: 'automatic' | 'custom';
     status: MemoryCardStatus;
+    installJob: ManagedPluginStatus | null;
   };
 };
 
@@ -311,6 +313,10 @@ export async function readMemorySettingsSnapshot(config: OpenClawConfigDocument)
   const losslessEntry = asRecord(entries?.['lossless-claw']);
   const losslessConfig = asRecord(losslessEntry?.config);
   const losslessInstallState = await readLosslessClawInstallState();
+  const losslessInstallJob = (() => {
+    const status = getManagedPluginStatus();
+    return status?.pluginId === 'lossless-claw' ? status : null;
+  })();
   const availableModels = await listAvailableProviderModelGroups();
 
   const dreamingEnabled = dreaming?.enabled === true;
@@ -354,6 +360,7 @@ export async function readMemorySettingsSnapshot(config: OpenClawConfigDocument)
       summaryModel: losslessSummaryModel,
       summaryModelMode: losslessSummaryModel ? 'custom' : 'automatic',
       status: losslessStatus,
+      installJob: losslessInstallJob,
     },
   };
 }
