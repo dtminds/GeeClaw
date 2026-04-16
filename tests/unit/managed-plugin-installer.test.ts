@@ -424,4 +424,93 @@ describe('managed plugin installer', () => {
     expect(runCommand).toHaveBeenCalledTimes(1);
     expect(JSON.parse(readFileSync(join(configDir, 'extensions', 'lossless-claw', 'package.json'), 'utf8')).version).toBe('0.9.1');
   });
+
+  it('does not clear another plugin that is still actively checking or installing', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const pluginDir = join(configDir, 'extensions', 'memory-core');
+    mkdirSync(pluginDir, { recursive: true });
+    writeJson(join(pluginDir, 'package.json'), {
+      name: '@martian-engineering/memory-core',
+      version: '1.2.3',
+      openclaw: { extensions: ['./dist/index.js'] },
+    });
+
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    const { getManagedPluginStatus, setManagedPluginStatus } = await import('@electron/utils/managed-plugin-status');
+
+    setManagedPluginStatus({
+      pluginId: 'lossless-claw',
+      displayName: 'lossless-claw',
+      stage: 'installing',
+      message: '正在安装 lossless-claw 依赖…',
+      targetVersion: '0.9.1',
+      installedVersion: null,
+    });
+
+    await ensureManagedPluginsReadyBeforeGatewayLaunch({
+      plugins: [{
+        pluginId: 'memory-core',
+        packageName: '@martian-engineering/memory-core',
+        targetVersion: '1.2.3',
+        displayName: 'memory-core',
+        installMessage: '正在安装 memory-core 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'missing-or-outdated',
+        syncConfigOnStartup: true,
+      }],
+      openclawConfigDir: configDir,
+      finalPath: process.env.PATH ?? '',
+      managedAppEnv: {},
+      uvEnv: {},
+      proxyEnv: {},
+    });
+
+    expect(getManagedPluginStatus()).toEqual(expect.objectContaining({
+      pluginId: 'lossless-claw',
+      stage: 'installing',
+    }));
+  });
+
+  it('clears a stale terminal status when a later plugin is a startup no-op', async () => {
+    const configDir = makeTempDir('managed-plugin-config-');
+    const pluginDir = join(configDir, 'extensions', 'memory-core');
+    mkdirSync(pluginDir, { recursive: true });
+    writeJson(join(pluginDir, 'package.json'), {
+      name: '@martian-engineering/memory-core',
+      version: '1.2.3',
+      openclaw: { extensions: ['./dist/index.js'] },
+    });
+
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    const { getManagedPluginStatus, setManagedPluginStatus } = await import('@electron/utils/managed-plugin-status');
+
+    setManagedPluginStatus({
+      pluginId: 'lossless-claw',
+      displayName: 'lossless-claw',
+      stage: 'installed',
+      message: '正在安装 lossless-claw 插件…',
+      targetVersion: '0.9.1',
+      installedVersion: '0.9.1',
+    });
+
+    await ensureManagedPluginsReadyBeforeGatewayLaunch({
+      plugins: [{
+        pluginId: 'memory-core',
+        packageName: '@martian-engineering/memory-core',
+        targetVersion: '1.2.3',
+        displayName: 'memory-core',
+        installMessage: '正在安装 memory-core 插件…',
+        requiredForStartup: false,
+        startupInstallPolicy: 'missing-or-outdated',
+        syncConfigOnStartup: true,
+      }],
+      openclawConfigDir: configDir,
+      finalPath: process.env.PATH ?? '',
+      managedAppEnv: {},
+      uvEnv: {},
+      proxyEnv: {},
+    });
+
+    expect(getManagedPluginStatus()).toBeNull();
+  });
 });
