@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a static GitHub Pages landing page under `docs/` that closely recreates the AutoClaw reference page, rebrands it for GeeClaw, and keeps images, legal links, and download URLs easy to swap later.
+**Goal:** Build a static GitHub Pages landing page under `site/` that closely recreates the AutoClaw reference page, rebrands it for GeeClaw, and keeps images, legal links, and download URLs easy to swap later.
 
-**Architecture:** Keep the landing page isolated from the Electron app by using three plain files: semantic HTML in `docs/index.html`, page styling in `docs/styles.css`, and centralized asset/link configuration plus small DOM wiring in `docs/app.js`. Lock the main behaviors with a Vitest + JSDOM regression test that reads the shipped `docs/` files directly.
+**Architecture:** Keep the landing page isolated from the Electron app by using three plain files: semantic HTML in `site/index.html`, page styling in `site/styles.css`, and centralized asset/link configuration plus small DOM wiring in `site/app.js`. Lock the main behaviors with a Vitest + JSDOM regression test that reads the shipped `site/` files directly.
 
 **Tech Stack:** Static HTML, CSS, vanilla JavaScript, Vitest, JSDOM, Node `fs`
 
@@ -13,9 +13,9 @@
 ## File Map
 
 **Create**
-- `docs/index.html`
-- `docs/styles.css`
-- `docs/app.js`
+- `site/index.html`
+- `site/styles.css`
+- `site/app.js`
 - `tests/unit/github-pages-landing.test.ts`
 
 **Modify**
@@ -39,7 +39,7 @@ expect(document.querySelectorAll('.flow-card').length).toBe(3);
 - [ ] **Step 2: Run the landing-page test to verify it fails**
 
 Run: `pnpm exec vitest run tests/unit/github-pages-landing.test.ts`
-Expected: FAIL because `docs/index.html` does not exist yet.
+Expected: FAIL because `site/index.html` does not exist yet.
 
 - [ ] **Step 3: Extend the test to cover config-driven link and asset hydration**
 
@@ -57,9 +57,9 @@ Expected: FAIL because the page and config script still do not exist.
 ## Task 2: Implement the static page files
 
 **Files:**
-- Create: `docs/index.html`
-- Create: `docs/styles.css`
-- Create: `docs/app.js`
+- Create: `site/index.html`
+- Create: `site/styles.css`
+- Create: `site/app.js`
 - Test: `tests/unit/github-pages-landing.test.ts`
 
 - [ ] **Step 1: Add semantic HTML matching the approved page structure**
@@ -109,18 +109,18 @@ Expected: PASS
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
 
-- [ ] **Step 1: Add a short section describing the `docs/` landing page**
+- [ ] **Step 1: Add a short section describing the `site/` landing page**
 
 ```md
 ### GitHub Pages Landing Page
 
-The repository includes a static landing page under `docs/`.
+The repository includes a static landing page under `site/`.
 ```
 
 - [ ] **Step 2: Mention the GitHub Pages publishing source and custom-domain compatibility**
 
 ```md
-Publish the `docs/` directory with GitHub Pages. The page uses relative local paths so it works under both a project URL and a custom domain.
+Publish the `site/` directory with GitHub Pages. The page uses relative local paths so it works under both a project URL and a custom domain.
 ```
 
 - [ ] **Step 3: Run the landing-page test again after doc edits**
@@ -131,9 +131,9 @@ Expected: PASS
 ## Task 4: Final verification
 
 **Files:**
-- Verify: `docs/index.html`
-- Verify: `docs/styles.css`
-- Verify: `docs/app.js`
+- Verify: `site/index.html`
+- Verify: `site/styles.css`
+- Verify: `site/app.js`
 - Verify: `tests/unit/github-pages-landing.test.ts`
 - Verify: `README.md`
 - Verify: `README.zh-CN.md`
@@ -146,9 +146,9 @@ Expected: PASS
 - [ ] **Step 2: Run a local static build smoke check**
 
 Run: `pnpm run build:vite`
-Expected: PASS, confirming the repo still builds after adding `docs/` assets.
+Expected: PASS, confirming the repo still builds after adding `site/` assets.
 
 - [ ] **Step 3: Review changed files for scope**
 
-Run: `git diff -- docs/index.html docs/styles.css docs/app.js tests/unit/github-pages-landing.test.ts README.md README.zh-CN.md`
+Run: `git diff -- site/index.html site/styles.css site/app.js tests/unit/github-pages-landing.test.ts README.md README.zh-CN.md`
 Expected: only the landing page, test, and README changes appear.

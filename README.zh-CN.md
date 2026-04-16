@@ -431,10 +431,10 @@ GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scri
 
 ### GitHub Pages 落地页
 
-仓库现在还包含一套位于 [`docs/`](docs/) 下的静态营销落地页。
+仓库现在还包含一套位于 [`site/`](site/) 下的静态营销落地页。
 
-- 本地预览时可直接打开 [`docs/index.html`](docs/index.html)。
-- 部署时可将仓库的 `docs/` 目录直接作为 GitHub Pages 发布源。
+- 本地预览时可直接打开 [`site/index.html`](site/index.html)。
+- 部署时可将仓库的 `site/` 目录直接作为 GitHub Pages 发布源。
 - 页面使用相对本地资源路径，并通过配置注入外部图片和链接，因此同一份文件既能跑在 GitHub Pages 项目地址下，也能直接绑定到 `www.geeclaw.cn` 这类自定义域名。
 
 ### 技术栈

@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 
 function loadLandingPage() {
-  const htmlPath = resolve(process.cwd(), 'docs/index.html');
-  const scriptPath = resolve(process.cwd(), 'docs/app.js');
+  const htmlPath = resolve(process.cwd(), 'site/index.html');
+  const scriptPath = resolve(process.cwd(), 'site/app.js');
   const html = readFileSync(htmlPath, 'utf8');
   const script = readFileSync(scriptPath, 'utf8');
   const dom = new JSDOM(html, {
@@ -42,7 +42,7 @@ describe('GitHub Pages landing page', () => {
     expect(macLink?.getAttribute('href')).toBe('#download-mac-apple-silicon');
     expect(intelLink?.getAttribute('href')).toBe('#download-mac-intel');
     expect(winLink?.getAttribute('href')).toBe('#download-windows');
-    expect(heroImage?.getAttribute('src')).toContain('AutoClaw_workspace_preview_img');
+    expect(heroImage?.getAttribute('src')).toBe('./main.png');
     expect(firstFlowImage?.getAttribute('src')).toContain('Frame_1_oversea');
     expect(privacyLink?.getAttribute('href')).toBe('#privacy-policy');
     expect(termsLink?.getAttribute('href')).toBe('#terms-of-service');

@@ -2,12 +2,12 @@
 
 > Scope: create a GitHub Pages landing page that closely recreates `https://autoglm.zhipuai.cn/autoclaw/` as a single static site, rebranded for GeeClaw, with placeholder download links and source images temporarily reused from the upstream page.
 
-**Goal:** add a self-contained static landing page under `docs/` that can be published through GitHub Pages now and later bound to `www.geeclaw.cn` without code changes. The page should preserve the target page's visual hierarchy and overall section order, while removing the invoice/community extras the user does not want.
+**Goal:** add a self-contained static landing page under `site/` that can be published through GitHub Pages now and later bound to `www.geeclaw.cn` without code changes. The page should preserve the target page's visual hierarchy and overall section order, while removing the invoice/community extras the user does not want.
 
 **Primary source paths**
-- `/Users/lsave/workspace/AI/ClawX/docs/index.html`
-- `/Users/lsave/workspace/AI/ClawX/docs/styles.css`
-- `/Users/lsave/workspace/AI/ClawX/docs/app.js`
+- `/Users/lsave/workspace/AI/ClawX/site/index.html`
+- `/Users/lsave/workspace/AI/ClawX/site/styles.css`
+- `/Users/lsave/workspace/AI/ClawX/site/app.js`
 - `/Users/lsave/workspace/AI/ClawX/README.md`
 - `/Users/lsave/workspace/AI/ClawX/README.zh-CN.md`
 
@@ -18,11 +18,11 @@
 
 ## 1. Product Decision
 
-The deliverable should be a plain static site rooted at `docs/`, not a new Vite app and not a renderer route inside the Electron product.
+The deliverable should be a plain static site rooted at `site/`, not a new Vite app and not a renderer route inside the Electron product.
 
 Reasoning:
 
-- GitHub Pages can publish `docs/` directly with minimal setup.
+- GitHub Pages can publish `site/` directly with minimal setup.
 - A static page keeps the marketing site isolated from the Electron app runtime and release flow.
 - The user plans to bind a custom domain later, so the page should avoid repo-name-coupled absolute paths.
 
@@ -147,9 +147,9 @@ Privacy and terms links should also read from config for later replacement.
 
 The landing page should use this minimal structure:
 
-- `/Users/lsave/workspace/AI/ClawX/docs/index.html`
-- `/Users/lsave/workspace/AI/ClawX/docs/styles.css`
-- `/Users/lsave/workspace/AI/ClawX/docs/app.js`
+- `/Users/lsave/workspace/AI/ClawX/site/index.html`
+- `/Users/lsave/workspace/AI/ClawX/site/styles.css`
+- `/Users/lsave/workspace/AI/ClawX/site/app.js`
 
 Implementation rules:
 
@@ -161,7 +161,7 @@ No bundler-specific code should be required for the page to work.
 
 ## 7. GitHub Pages Compatibility
 
-The page must be deployable from GitHub Pages `docs/` without rewriting paths.
+The page must be deployable from GitHub Pages `site/` without rewriting paths.
 
 Requirements:
 
@@ -196,7 +196,7 @@ The design should avoid leaving visible `AutoClaw` references in headings, navig
 
 Minimum verification for implementation:
 
-- open `docs/index.html` locally and confirm the page renders without a build step
+- open `site/index.html` locally and confirm the page renders without a build step
 - verify desktop layout keeps the two-column hero and three-card flow layout
 - verify mobile layout stacks correctly and buttons remain usable
 - verify all configurable links are populated from one JS config object
@@ -204,4 +204,4 @@ Minimum verification for implementation:
 
 ## 11. Docs Review Rule
 
-This work adds a publishable landing page under `docs/`, so `README.md` and `README.zh-CN.md` must be reviewed during implementation. Update them only if they should mention GitHub Pages hosting, custom-domain usage, or the new landing-page entry point.
+This work adds a publishable landing page under `site/`, so `README.md` and `README.zh-CN.md` must be reviewed during implementation. Update them only if they should mention GitHub Pages hosting, custom-domain usage, or the new landing-page entry point.

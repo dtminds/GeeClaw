@@ -430,10 +430,10 @@ own `node_modules/`.
 
 ### GitHub Pages Landing Page
 
-This repository also ships a static marketing landing page under [`docs/`](docs/).
+This repository also ships a static marketing landing page under [`site/`](site/).
 
-- Open [`docs/index.html`](docs/index.html) directly for local preview.
-- Publish the repository's `docs/` directory with GitHub Pages to host it.
+- Open [`site/index.html`](site/index.html) directly for local preview.
+- Publish the repository's `site/` directory with GitHub Pages to host it.
 - The page uses relative local asset paths plus config-driven external URLs so the same files work under both a GitHub Pages project URL and a custom domain such as `www.geeclaw.cn`.
 
 ### Tech Stack
