@@ -21,8 +21,6 @@ const sessionState = {
   },
   init: vi.fn(async () => undefined),
   loginWithWechat: vi.fn(async () => undefined),
-  submitInviteCode: vi.fn(async () => undefined),
-  skipInviteCode: vi.fn(async () => undefined),
   logout: vi.fn(async () => undefined),
 };
 
