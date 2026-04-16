@@ -87,6 +87,7 @@ export function hasPersistedOptimisticUserCopy(
   messages: RawMessage[],
   candidate: RawMessage,
   anchorTimestampMs: number | null,
+  isConversationStart = false,
 ): boolean {
   if (candidate.role !== 'user') return false;
 
@@ -103,7 +104,12 @@ export function hasPersistedOptimisticUserCopy(
     if (anchorTimestampMs != null && messageTimestampMs != null && messageTimestampMs <= anchorTimestampMs) {
       return false;
     }
-    if (candidateTimestampMs != null && messageTimestampMs != null && messageTimestampMs < candidateTimestampMs - 2_000) {
+    if (
+      !isConversationStart
+      && candidateTimestampMs != null
+      && messageTimestampMs != null
+      && messageTimestampMs < candidateTimestampMs - 2_000
+    ) {
       return false;
     }
 
