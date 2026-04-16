@@ -22,7 +22,6 @@ const ALL_BUNDLED_PLUGINS: BundledPluginSpec[] = [
   { pluginId: 'wecom-openclaw-plugin', npmName: '@wecom/wecom-openclaw-plugin', displayName: '企业微信' },
   { pluginId: 'openclaw-weixin', npmName: '@tencent-weixin/openclaw-weixin', displayName: '微信' },
   { pluginId: 'openclaw-lark', npmName: '@larksuite/openclaw-lark', displayName: '飞书' },
-  { pluginId: 'lossless-claw', npmName: '@martian-engineering/lossless-claw', displayName: 'Lossless Claw' },
   { pluginId: 'geeclaw-plugin', npmName: 'geeclaw-plugin', displayName: 'geeclaw-plugin' },
 ];
 
@@ -337,7 +336,7 @@ export function getAlwaysEnabledBundledPluginIds(): string[] {
   return [...ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS];
 }
 
-function getManagedBundledPluginPolicy(pluginId: string): {
+export function getManagedBundledPluginPolicy(pluginId: string): {
   allowedConfigKeys?: string[];
   config?: Record<string, unknown>;
   slots?: Record<string, string>;
@@ -411,7 +410,8 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
         );
         let entryChanged = false;
 
-        if (entry.enabled !== true) {
+        const shouldPreserveExplicitDisable = pluginId === 'lossless-claw' && entry.enabled === false;
+        if (!shouldPreserveExplicitDisable && entry.enabled !== true) {
           entry.enabled = true;
           entryChanged = true;
         }
@@ -474,7 +474,7 @@ export async function ensureAlwaysEnabledBundledPluginsConfigured(): Promise<{
           }
         }
 
-        if (policy?.slots) {
+        if (policy?.slots && pluginId !== 'lossless-claw') {
           for (const [slotKey, slotValue] of Object.entries(policy.slots)) {
             if (nextSlots[slotKey] !== slotValue) {
               nextSlots[slotKey] = slotValue;

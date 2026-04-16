@@ -31,7 +31,7 @@ Important properties of the coordinator:
 
 - it serializes writes through an in-memory queue
 - each mutation reads the latest file, applies a targeted patch, then writes back once
-- it always ensures `commands.restart = false` on write
+- it always ensures `commands.restart = true` on write
 
 Do not add new startup logic that directly does its own `readFile(openclaw.json) -> mutate -> writeFile(openclaw.json)` flow.
 
@@ -53,20 +53,27 @@ Current order:
 3. `syncProxyConfigToOpenClaw(appSettings)`
 4. `sanitizeOpenClawConfig()`
 5. `syncOpenClawSafetySettings(appSettings)`
-6. `syncBundledPluginLoadPathsToOpenClaw()`
-7. `ensureAlwaysEnabledBundledPluginsConfigured()`
-8. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
-9. `syncBrowserConfigToOpenClaw()`
-10. `ensureAlwaysEnabledSkillsConfigured()`
-11. `syncAllProviderRuntimeConfigToOpenClaw()`
+6. `syncOpenClawSsrfPolicySettings()`
+7. `syncBundledPluginLoadPathsToOpenClaw()`
+8. `syncPreinstalledSkillLoadPathsToOpenClaw()`
+9. `migrateManagedPreinstalledSkillsToBundledSource()`
+10. `ensureAlwaysEnabledBundledPluginsConfigured()`
+11. `syncGatewayTokenToConfig(appSettings.gatewayToken)`
+12. `syncBrowserConfigToOpenClaw()`
+13. `syncExplicitSkillTogglesToOpenClaw()`
+14. `ensureAlwaysEnabledSkillsConfigured()`
+15. `syncAllProviderRuntimeConfigToOpenClaw()`
 
 Why this order matters:
 
 - `channels` and `agents` run first because their source of truth lives in GeeClaw stores; if they were deleted from `openclaw.json`, they must be restored before later startup patches touch the file
 - `sanitize` runs after the store-backed sections are restored, so it repairs the latest config shape
 - `safety` runs after sanitize so GeeClaw can restore runtime-required tool policy defaults without clobbering sibling `tools.*` config
+- SSRF policy settings run after safety so GeeClaw can restore runtime-required managed SSRF invariants without folding browser and web fetch ownership into the generic safety-settings patch
 - bundled plugin load paths run after sanitize so GeeClaw can rewrite the current app-resource plugin roots in one place
+- preinstalled skill load paths and managed-copy migration run before skill policy cleanup so GeeClaw can normalize bundled skill discovery roots before explicit toggles and always-enabled policy reconcile against the final source layout
 - always-enabled bundled plugin policy runs after load-path sync so protected plugin ids are already discoverable
+- explicit skill toggles replay before always-enabled skill cleanup so persisted user intent is restored before policy-only implicit-enable normalization runs
 - `skills` policy cleanup happens before Gateway launch, so policy skills start in the correct implicit-enable state
 - `providers` run late because they patch multiple runtime-facing sections and should operate on the already-repaired document
 
@@ -179,13 +186,29 @@ Responsibilities:
 - restore `agents.defaults.maxConcurrent`
 - remove invalid `skills.enabled` or `skills.disabled` root keys
 - remove stale plugin load paths
-- ensure `commands.restart = false`
+- ensure `commands.restart = true`
 - mirror default channel account credentials to top-level channel config when required
 - remove stale Moonshot/Kimi nested API key config
 
 Source of truth:
 
 - the current `openclaw.json` document plus local managed paths
+
+### SSRF Policy Settings
+
+Main file:
+
+- `electron/utils/openclaw-ssrf-policy-settings.ts`
+
+Responsibilities:
+
+- enforce `tools.web.fetch.ssrfPolicy.allowRfc2544BenchmarkRange = true`
+- enforce `browser.ssrfPolicy.dangerouslyAllowPrivateNetwork = true`
+- preserve unrelated siblings under `tools.web.fetch` and `browser`
+
+Source of truth:
+
+- GeeClaw runtime compatibility requirements
 
 ### Gateway Token and Browser Defaults
 

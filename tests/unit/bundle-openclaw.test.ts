@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('bundle-openclaw cleanup helpers', () => {
@@ -39,5 +42,87 @@ describe('bundle-openclaw cleanup helpers', () => {
 
     expect(rmSync).not.toHaveBeenCalled();
     expect(mkdirSync).toHaveBeenCalledWith('/tmp/build/openclaw', { recursive: true });
+  });
+
+  it('skips filtered packages when copying installed runtime node_modules', async () => {
+    const { copyInstalledNodeModules } = await import('../../scripts/lib/openclaw-bundle-filters.mjs');
+
+    const sourceRoot = mkdtempSync(path.join(tmpdir(), 'bundle-openclaw-src-'));
+    const destRoot = mkdtempSync(path.join(tmpdir(), 'bundle-openclaw-dest-'));
+    const sourceNodeModules = path.join(sourceRoot, 'node_modules');
+    const destNodeModules = path.join(destRoot, 'node_modules');
+
+    const createPackage = (packageName: string) => {
+      const packageDir = path.join(sourceNodeModules, ...packageName.split('/'));
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(
+        path.join(packageDir, 'package.json'),
+        JSON.stringify({ name: packageName, version: '1.0.0' }),
+        'utf8',
+      );
+    };
+
+    createPackage('openclaw');
+    createPackage('typescript');
+    createPackage('@discordjs/opus');
+    createPackage('@types/node');
+    createPackage('chalk');
+
+    const result = copyInstalledNodeModules(sourceNodeModules, destNodeModules);
+
+    expect(result).toEqual({
+      copiedCount: 1,
+      skippedCount: 3,
+      discoveredCount: 4,
+    });
+    expect(existsSync(path.join(destNodeModules, 'chalk', 'package.json'))).toBe(true);
+    expect(existsSync(path.join(destNodeModules, 'typescript'))).toBe(false);
+    expect(existsSync(path.join(destNodeModules, '@discordjs', 'opus'))).toBe(false);
+    expect(existsSync(path.join(destNodeModules, '@types', 'node'))).toBe(false);
+  });
+
+  it('falls back to recursive entry copies when bulk directory copy hits EINVAL', async () => {
+    const { copyTreeWithFallback } = await import('../../scripts/lib/openclaw-copy-tree.mjs');
+
+    const cpSync = vi.fn((source: string) => {
+      if (source === '/src') {
+        const error = new Error('Invalid argument') as NodeJS.ErrnoException;
+        error.code = 'EINVAL';
+        throw error;
+      }
+    });
+
+    const mkdirSync = vi.fn();
+    const readdirSync = vi.fn((dir: string) => {
+      if (dir === '/src') {
+        return [
+          { name: 'dist', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
+          { name: 'package.json', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        ];
+      }
+      if (dir === '/src/dist') {
+        return [
+          { name: 'entry.js', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        ];
+      }
+      return [];
+    });
+    const logFallback = vi.fn();
+
+    copyTreeWithFallback('/src', '/dest', {
+      fsImpl: {
+        cpSync,
+        mkdirSync,
+        readdirSync,
+      } as unknown as typeof import('node:fs'),
+      pathImpl: path,
+      normalizePath: (value: string) => value,
+      logFallback,
+    });
+
+    expect(logFallback).toHaveBeenCalledWith('/src', expect.objectContaining({ code: 'EINVAL' }));
+    expect(mkdirSync).toHaveBeenCalledWith('/dest', { recursive: true });
+    expect(cpSync).toHaveBeenCalledWith('/src/dist', '/dest/dist', { recursive: true, dereference: true });
+    expect(cpSync).toHaveBeenCalledWith('/src/package.json', '/dest/package.json', { recursive: true, dereference: true });
   });
 });

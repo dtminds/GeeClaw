@@ -6,6 +6,7 @@ import type {
   ProviderWithKeyInfo,
 } from '@/lib/providers';
 import { getConfiguredProviderModels } from '@/lib/providers';
+import { getStoredCustomProviderRuntimeKey } from '../../shared/providers/runtime-provider-key';
 
 export interface ProviderSnapshot {
   accounts: ProviderAccount[];
@@ -88,6 +89,13 @@ export function getProviderAccountRuntimeKey(
     const browserOAuthProviderId = BROWSER_OAUTH_RUNTIME_PROVIDER_IDS[account.vendorId];
     if (browserOAuthProviderId) {
       return browserOAuthProviderId;
+    }
+  }
+
+  if (account.vendorId === 'custom') {
+    const explicitRuntimeProviderId = getStoredCustomProviderRuntimeKey(account.metadata);
+    if (explicitRuntimeProviderId) {
+      return explicitRuntimeProviderId;
     }
   }
 

@@ -1,0 +1,124 @@
+name: Desktop CI Dist Lite
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/check.yml"
+      - ".github/workflows/desktop-ci-dist-lite.yml"
+      - "electron-builder.yml"
+      - "openclaw-runtime/**"
+      - "package.json"
+      - "plugins/openclaw/**"
+      - "pnpm-lock.yaml"
+      - "resources/**"
+      - "scripts/**"
+      - "src/**"
+      - "tsconfig.json"
+      - "tsconfig.node.json"
+      - "vite.config.ts"
+      - "vitest.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-dist-lite-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-macos-dir:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      CACHE_ARCH: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Restore npm cache for openclaw-runtime installs
+        uses: actions/cache@v4
+        with:
+          path: openclaw-runtime/.npm-cache
+          key: ${{ runner.os }}-${{ env.CACHE_ARCH }}-openclaw-runtime-npm-cache-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.CACHE_ARCH }}-openclaw-runtime-npm-cache-
+
+      - name: Restore Electron build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-${{ env.CACHE_ARCH }}-electron-builder-cache-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'electron-builder.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.CACHE_ARCH }}-electron-builder-cache-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned macOS app bundle
+        run: pnpm run package:mac:dir:sidecar
+
+      - name: Verify packaged desktop artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          packaged_apps=(release/mac*/GeeClaw.app)
+          if [ "${#packaged_apps[@]}" -eq 0 ]; then
+            echo "No packaged GeeClaw.app bundle was produced under release/mac*" >&2
+            exit 1
+          fi
+
+          packaged_app="${packaged_apps[0]}"
+          packaged_executable="${packaged_app}/Contents/MacOS/GeeClaw"
+          packaged_asar="${packaged_app}/Contents/Resources/app.asar"
+
+          printf 'Built artifacts:\n'
+          printf ' - %s\n' "${packaged_apps[@]}"
+
+          test -d "${packaged_app}"
+          test -x "${packaged_executable}"
+          test -f "${packaged_asar}"
+
+      - name: Collect packaging diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-diagnostics
+
+          if [ -d release ]; then
+            find release -maxdepth 4 \( -type d -o -type f \) | sort > ci-diagnostics/release-tree.txt
+          else
+            echo "release/ not found" > ci-diagnostics/release-tree.txt
+          fi
+
+          if [ -f builder-debug.yml ]; then
+            cp builder-debug.yml ci-diagnostics/builder-debug.yml
+          fi
+
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-ci-dist-lite-macos
+          path: |
+            ci-diagnostics/**
+          if-no-files-found: warn
+          retention-days: 7

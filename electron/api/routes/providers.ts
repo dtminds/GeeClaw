@@ -21,11 +21,38 @@ import { validateApiKeyWithProvider } from '../../services/providers/provider-va
 import { getProviderService } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
 import type { ProviderAccount } from '../../shared/providers/types';
+import { getProviderDefinition } from '../../shared/providers/registry';
+import { resolveEffectiveProviderModelEntries } from '../../shared/providers/config-models';
 import { logger } from '../../utils/logger';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { getOpenClawProviderKeyForType } from '../../utils/provider-keys';
+import { normalizeProviderModelList } from '../../shared/providers/config-models';
+import { syncAllAgentConfigToOpenClaw } from '../../services/agents/agent-runtime-sync';
 
 const legacyProviderRoutesWarned = new Set<string>();
+
+function collectConfiguredModelRefs(modelConfig: Awaited<ReturnType<typeof getDefaultAgentModelConfig>>): string[] {
+  return normalizeProviderModelList([
+    modelConfig.model.primary,
+    ...modelConfig.model.fallbacks,
+    modelConfig.imageModel.primary,
+    ...modelConfig.imageModel.fallbacks,
+    modelConfig.pdfModel.primary,
+    ...modelConfig.pdfModel.fallbacks,
+    modelConfig.imageGenerationModel.primary,
+    ...modelConfig.imageGenerationModel.fallbacks,
+    modelConfig.videoGenerationModel.primary,
+    ...modelConfig.videoGenerationModel.fallbacks,
+  ]);
+}
+
+function getEffectiveAccountModelRefs(account: ProviderAccount, providerKey: string): string[] {
+  return normalizeProviderModelList(
+    resolveEffectiveProviderModelEntries(account, getProviderDefinition(account.vendorId)).map((model) => (
+      `${providerKey}/${model.id}`
+    )),
+  );
+}
 
 export async function handleProviderRoutes(
   req: IncomingMessage,
@@ -57,6 +84,7 @@ export async function handleProviderRoutes(
       const body = await parseJsonBody<{ account: ProviderAccount; apiKey?: string }>(req);
       const account = await providerService.createAccount(body.account, body.apiKey);
       await syncSavedProviderToRuntime(providerAccountToConfig(account), body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true, account });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -96,8 +124,33 @@ export async function handleProviderRoutes(
         sendJson(res, 404, { success: false, error: 'Provider account not found' });
         return true;
       }
+
+      const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId, existing.metadata);
+      const currentModelConfig = await getDefaultAgentModelConfig();
+      const blockingRefs = collectConfiguredModelRefs(currentModelConfig)
+        .filter((ref) => ref.startsWith(`${providerKey}/`));
+      if (blockingRefs.length > 0) {
+        const nextAccount: ProviderAccount = {
+          ...existing,
+          ...body.updates,
+          id: accountId,
+        };
+        const nextEffectiveRefs = new Set(getEffectiveAccountModelRefs(nextAccount, providerKey));
+        const removedBlockingRefs = blockingRefs.filter((ref) => !nextEffectiveRefs.has(ref));
+        if (removedBlockingRefs.length > 0) {
+          sendJson(res, 400, {
+            success: false,
+            blockedByFallback: true,
+            blockingRefs: removedBlockingRefs,
+            error: `BLOCKED_BY_FALLBACK:${removedBlockingRefs.join(',')}`,
+          });
+          return true;
+        }
+      }
+
       const nextAccount = await providerService.updateAccount(accountId, body.updates, body.apiKey);
       await syncUpdatedProviderToRuntime(providerAccountToConfig(nextAccount), body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true, account: nextAccount });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -125,11 +178,12 @@ export async function handleProviderRoutes(
         return true;
       }
 
-      // Guard: block deletion if any agent fallback model refs belong to this provider.
+      // Guard: block deletion if any configured default model slot still points at this provider.
       if (existing) {
-        const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId);
-        const { fallbacks } = await getDefaultAgentModelConfig();
-        const blocking = fallbacks.filter((ref) => ref.startsWith(`${providerKey}/`));
+        const providerKey = getOpenClawProviderKeyForType(existing.vendorId, accountId, existing.metadata);
+        const modelConfig = await getDefaultAgentModelConfig();
+        const blocking = collectConfiguredModelRefs(modelConfig)
+          .filter((ref) => ref.startsWith(`${providerKey}/`));
         if (blocking.length > 0) {
           sendJson(res, 400, {
             success: false,
@@ -148,6 +202,7 @@ export async function handleProviderRoutes(
         ctx.gatewayManager,
         runtimeProviderKey,
       );
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -272,6 +327,7 @@ export async function handleProviderRoutes(
         }
       }
       await syncSavedProviderToRuntime(config, body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -319,6 +375,7 @@ export async function handleProviderRoutes(
         }
       }
       await syncUpdatedProviderToRuntime(nextConfig, body.apiKey, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -339,6 +396,7 @@ export async function handleProviderRoutes(
       }
       await providerService.deleteLegacyProvider(providerId);
       await syncDeletedProviderToRuntime(existing, providerId, ctx.gatewayManager);
+      await syncAllAgentConfigToOpenClaw();
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });

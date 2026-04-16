@@ -1,6 +1,7 @@
+import { StrictMode } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -125,11 +126,25 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 describe('Chat requested-agent navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    chatState.messages = [];
+    chatState.loading = false;
+    chatState.currentDesktopSessionId = 'desktop-main-tmp';
+    chatState.currentSessionKey = 'agent:main:geeclaw_tmp_123';
+    chatState.loadHistory = vi.fn(async () => undefined);
+    chatState.loadDesktopSessionSummaries = vi.fn(async () => undefined);
+    chatState.loadSessions = vi.fn(async () => undefined);
+    chatState.openAgentMainSession = vi.fn(async () => undefined);
+    chatState.cleanupEmptySession = vi.fn(async () => undefined);
+    agentsState.fetchAgents = vi.fn(async () => undefined);
+  });
+
   it('opens the requested agent main session after chat page mount', async () => {
     const { Chat } = await import('@/pages/Chat');
 
     render(
-      <MemoryRouter initialEntries={[{ pathname: '/chat', state: { requestedAgentId: 'writer' } }]}>
+      <MemoryRouter initialEntries={[{ pathname: '/chat', key: 'req-writer-open', state: { requestedAgentId: 'writer' } }]}>
         <Chat />
       </MemoryRouter>,
     );
@@ -148,7 +163,7 @@ describe('Chat requested-agent navigation', () => {
     const { Chat } = await import('@/pages/Chat');
 
     render(
-      <MemoryRouter initialEntries={[{ pathname: '/chat', state: { requestedAgentId: 'writer' } }]}>
+      <MemoryRouter initialEntries={[{ pathname: '/chat', key: 'req-writer-no-wait', state: { requestedAgentId: 'writer' } }]}>
         <Chat />
       </MemoryRouter>,
     );
@@ -159,5 +174,43 @@ describe('Chat requested-agent navigation', () => {
     });
 
     fetchAgentsDeferred.resolve();
+  });
+
+  it('consumes requestedAgentId before a strict-mode remount can reopen the session', async () => {
+    const openDeferred = createDeferred<void>();
+    chatState.openAgentMainSession = vi.fn(() => openDeferred.promise);
+
+    const { Chat } = await import('@/pages/Chat');
+
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[{ pathname: '/chat', key: 'req-main-strict', state: { requestedAgentId: 'main' } }]}>
+          <Chat />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(chatState.openAgentMainSession).toHaveBeenCalledTimes(1);
+      expect(chatState.openAgentMainSession).toHaveBeenCalledWith('main');
+    });
+
+    openDeferred.resolve();
+  });
+
+  it('loads startup history only once after the initial session selection resolves', async () => {
+    const { Chat } = await import('@/pages/Chat');
+
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Chat />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(agentsState.fetchAgents).toHaveBeenCalled();
+      expect(chatState.loadSessions).toHaveBeenCalledTimes(1);
+      expect(chatState.loadHistory).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -7,6 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
 import { logger } from './logger';
+import { getHydratedOpenClawSidecarRootIfReady } from './openclaw-sidecar';
 
 export {
   quoteForCmd,
@@ -101,6 +102,20 @@ export function getResourcesDir(): string {
   return join(__dirname, '../../resources');
 }
 
+function resolveDevelopmentPrebuiltOpenClawSidecarRoot(): string | null {
+  if (process.env.GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR !== '1') {
+    return null;
+  }
+
+  const normalizedArch = process.arch === 'amd64' ? 'x64' : process.arch;
+  const target = `${process.platform}-${normalizedArch}`;
+  if (!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(target)) {
+    return null;
+  }
+
+  return join(process.cwd(), 'build', 'prebuilt-sidecar-runtime', target);
+}
+
 /**
  * Get the official agent marketplace catalog path inside resources.
  */
@@ -117,15 +132,25 @@ export function getPreloadPath(): string {
 
 /**
  * Get OpenClaw package directory
- * - Production (packaged): from resources/openclaw (copied by electron-builder extraResources)
- * - Development: from node_modules/openclaw
+ * - Production (packaged): prefer the hydrated sidecar extracted under userData/runtime/
+ *   from the packaged runtime archive, falling back to legacy resources/openclaw builds.
+ * - Development: from the repo-local openclaw-runtime install
  */
 export function getOpenClawDir(): string {
   if (app.isPackaged) {
+    const hydratedSidecarRoot = getHydratedOpenClawSidecarRootIfReady();
+    if (hydratedSidecarRoot) {
+      return hydratedSidecarRoot;
+    }
     return join(process.resourcesPath, 'openclaw');
   }
-  // Development: use node_modules/openclaw
-  return join(__dirname, '../../node_modules/openclaw');
+
+  const developmentPrebuiltSidecarRoot = resolveDevelopmentPrebuiltOpenClawSidecarRoot();
+  if (developmentPrebuiltSidecarRoot) {
+    return developmentPrebuiltSidecarRoot;
+  }
+
+  return join(process.cwd(), 'openclaw-runtime', 'node_modules', 'openclaw');
 }
 
 /**

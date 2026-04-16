@@ -10,7 +10,6 @@ const mockToastError = vi.fn();
 
 const translations: Record<string, string> = {
   'agentSettingsDialog.title': 'Agent Settings',
-  'agentSettingsDialog.description': 'Manage your agent profile',
   'agentSettingsDialog.navigation': 'Agent settings sections',
   'agentSettingsDialog.sections.general.label': 'General',
   'agentSettingsDialog.sections.general.title': 'General',
@@ -22,6 +21,9 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.general.agentIdLabel': 'Agent ID',
   'agentSettingsDialog.general.modelLabel': 'Model',
   'agentSettingsDialog.general.inheritedSuffix': '(inherited)',
+  'agentSettingsDialog.general.activeMemoryLabel': 'Active Memory',
+  'agentSettingsDialog.general.activeMemoryDescription': 'Allow this agent to read and write Active Memory.',
+  'agentSettingsDialog.general.activeMemoryDisabledHint': 'Enable Active Memory first in Settings -> Memory.',
   'agentSettingsDialog.general.deleteLabel': 'Delete Agent',
   'agentSettingsDialog.general.deleteTitle': 'Delete Agent',
   'agentSettingsDialog.general.deleteMessage': 'Delete this agent?',
@@ -102,6 +104,40 @@ vi.mock('sonner', () => ({
 const initialAgentsState = useAgentsStore.getState();
 const initialSkillsState = useSkillsStore.getState();
 
+function buildMemorySnapshot(overrides?: {
+  activeMemory?: Partial<{
+    enabled: boolean;
+    agents: string[];
+    model: string | null;
+    modelMode: 'automatic' | 'custom';
+    status: 'enabled' | 'disabled' | 'unavailable';
+  }>;
+}) {
+  return {
+    availableModels: [],
+    dreaming: {
+      enabled: true,
+      status: 'enabled' as const,
+    },
+    activeMemory: {
+      enabled: true,
+      agents: ['main'],
+      model: null,
+      modelMode: 'automatic' as const,
+      status: 'enabled' as const,
+      ...overrides?.activeMemory,
+    },
+    losslessContent: {
+      enabled: false,
+      installedVersion: null,
+      requiredVersion: '0.5.2',
+      summaryModel: null,
+      summaryModelMode: 'automatic' as const,
+      status: 'not-installed' as const,
+    },
+  };
+}
+
 describe('AgentSettingsDialog shell', () => {
   beforeEach(() => {
     mockHostApiFetch.mockReset();
@@ -109,6 +145,21 @@ describe('AgentSettingsDialog shell', () => {
     mockToastError.mockReset();
     useAgentsStore.setState(initialAgentsState, true);
     useSkillsStore.setState(initialSkillsState, true);
+    mockHostApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot());
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve(personaSnapshot);
+      }
+      if (path === '/api/agents/helper/persona') {
+        return Promise.resolve({
+          ...personaSnapshot,
+          agentId: 'helper',
+        });
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
   });
 
   const personaSnapshot = {
@@ -182,11 +233,17 @@ describe('AgentSettingsDialog shell', () => {
     expect(screen.getByRole('tabpanel', { name: 'General' })).toBeInTheDocument();
     expect(screen.getByTestId('agent-settings-content')).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden');
     expect(screen.getByRole('tabpanel', { name: 'General' })).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto');
+    const generalPanelRoot = screen.getByRole('tabpanel', { name: 'General' }).firstElementChild as HTMLElement;
+    const generalPanelContent = generalPanelRoot.children[1] as HTMLElement;
+    const deleteCard = screen.getByRole('button', { name: 'Delete Agent' }).closest('div');
+    expect(generalPanelRoot).toHaveClass('min-h-full');
+    expect(generalPanelRoot).not.toHaveClass('h-full');
+    expect(generalPanelContent).not.toHaveClass('flex-1');
+    expect(generalPanelContent).not.toHaveClass('min-h-0');
+    expect(deleteCard).not.toHaveClass('mt-auto');
     expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toHaveClass('h-[min(88vh,860px)]', 'min-h-[620px]');
 
-    expect(screen.getByLabelText('Agent Name')).toHaveValue('Writer Bot');
-    expect(screen.getByLabelText('Agent ID')).toHaveValue('writer');
-    expect(screen.getByLabelText('Model')).toHaveValue('gpt-4.1');
+    expect(screen.getByLabelText('Agent Name - writer')).toHaveValue('Writer Bot');
     expect(screen.getByRole('button', { name: 'Delete Agent' })).toBeInTheDocument();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
@@ -289,9 +346,17 @@ describe('AgentSettingsDialog shell', () => {
       },
     };
 
-    mockHostApiFetch
-      .mockResolvedValueOnce(personaSnapshot)
-      .mockResolvedValueOnce(refreshedSnapshot);
+    let personaRequestCount = 0;
+    mockHostApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot());
+      }
+      if (path === '/api/agents/writer/persona') {
+        personaRequestCount += 1;
+        return Promise.resolve(personaRequestCount === 1 ? personaSnapshot : refreshedSnapshot);
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
 
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -313,7 +378,9 @@ describe('AgentSettingsDialog shell', () => {
     const refreshedInput = await screen.findByLabelText('IDENTITY.md');
 
     await waitFor(() => {
-      expect(mockHostApiFetch).toHaveBeenCalledTimes(2);
+      expect(
+        mockHostApiFetch.mock.calls.filter(([path]) => path === '/api/agents/writer/persona'),
+      ).toHaveLength(2);
       expect(refreshedInput).toHaveValue('identity refreshed');
     });
   });
@@ -331,9 +398,18 @@ describe('AgentSettingsDialog shell', () => {
       },
     };
 
-    mockHostApiFetch
-      .mockResolvedValueOnce(soulSnapshot)
-      .mockReturnValueOnce(savePromise);
+    mockHostApiFetch.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot());
+      }
+      if (path === '/api/agents/writer/persona' && options?.method === 'PUT') {
+        return savePromise;
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve(soulSnapshot);
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
 
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -367,15 +443,24 @@ describe('AgentSettingsDialog shell', () => {
   });
 
   it('saves persona section changes through the persona api', async () => {
-    mockHostApiFetch
-      .mockResolvedValueOnce(personaSnapshot)
-      .mockResolvedValueOnce({
-        ...personaSnapshot,
-        files: {
-          ...personaSnapshot.files,
-          identity: { exists: true, content: 'updated identity' },
-        },
-      });
+    mockHostApiFetch.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot());
+      }
+      if (path === '/api/agents/writer/persona' && options?.method === 'PUT') {
+        return Promise.resolve({
+          ...personaSnapshot,
+          files: {
+            ...personaSnapshot.files,
+            identity: { exists: true, content: 'updated identity' },
+          },
+        });
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve(personaSnapshot);
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
 
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -393,7 +478,7 @@ describe('AgentSettingsDialog shell', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mockHostApiFetch).toHaveBeenLastCalledWith('/api/agents/writer/persona', {
+      expect(mockHostApiFetch).toHaveBeenCalledWith('/api/agents/writer/persona', {
         method: 'PUT',
         body: JSON.stringify({ identity: 'updated identity' }),
       });
@@ -401,9 +486,17 @@ describe('AgentSettingsDialog shell', () => {
   });
 
   it('disables edits for locked persona files', async () => {
-    mockHostApiFetch.mockResolvedValueOnce({
-      ...personaSnapshot,
-      lockedFiles: ['identity'],
+    mockHostApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot());
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve({
+          ...personaSnapshot,
+          lockedFiles: ['identity'],
+        });
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
     });
 
     useAgentsStore.setState({
@@ -503,8 +596,6 @@ describe('AgentSettingsDialog shell', () => {
   });
 
   it('saves avatar changes from the general panel immediately', async () => {
-    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
-
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -523,6 +614,76 @@ describe('AgentSettingsDialog shell', () => {
       });
     });
     expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('shows and updates the current agent active-memory membership', async () => {
+    mockHostApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot({
+          activeMemory: {
+            enabled: true,
+            agents: ['main', 'writer'],
+          },
+        }));
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve(personaSnapshot);
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
+
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+      updateAgentSettings,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    const activeMemorySwitch = await screen.findByRole('switch', { name: 'Active Memory' });
+    expect(activeMemorySwitch).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(activeMemorySwitch);
+
+    await waitFor(() => {
+      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
+        activeMemoryEnabled: false,
+      });
+    });
+  });
+
+  it('disables the active-memory toggle when global active memory is off', async () => {
+    mockHostApiFetch.mockImplementation((path: string) => {
+      if (path === '/api/settings/memory') {
+        return Promise.resolve(buildMemorySnapshot({
+          activeMemory: {
+            enabled: false,
+            agents: [],
+            status: 'disabled',
+          },
+        }));
+      }
+      if (path === '/api/agents/writer/persona') {
+        return Promise.resolve(personaSnapshot);
+      }
+      throw new Error(`Unhandled hostApiFetch mock for ${path}`);
+    });
+
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+      updateAgentSettings,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    const activeMemorySwitch = await screen.findByRole('switch', { name: 'Active Memory' });
+    expect(activeMemorySwitch).toBeDisabled();
+    expect(screen.getByText('Enable Active Memory first in Settings -> Memory.')).toBeInTheDocument();
   });
 
   it('locks preset skills and enforces the six-skill limit', async () => {

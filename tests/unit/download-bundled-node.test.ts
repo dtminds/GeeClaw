@@ -76,13 +76,4 @@ describe('download-bundled-node script', () => {
     expect(readlinkSync(npmLinkPath)).toBe('../lib/node_modules/npm/bin/npm-cli.js');
     expect(readlinkSync(npxLinkPath)).toBe('../lib/node_modules/npm/bin/npx-cli.js');
   });
-
-  it('treats zx script execution as a main-module invocation', async () => {
-    const { shouldRunAsMainModule } = await import('../../scripts/download-bundled-node.mjs');
-
-    expect(shouldRunAsMainModule(
-      ['/opt/homebrew/Cellar/node/25.8.1/bin/node', '/opt/homebrew/bin/zx', 'scripts/download-bundled-node.mjs', '--platform=mac'],
-      'file:///Users/lsave/.codex/worktrees/8868/ClawX/scripts/download-bundled-node.mjs',
-    )).toBe(true);
-  });
 });

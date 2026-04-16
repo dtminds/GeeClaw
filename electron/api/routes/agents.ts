@@ -18,7 +18,7 @@ import {
   updateMarketplaceAgent,
   updateAgentPersona,
   updateAgentSettings,
-  updateDefaultAgentFallbacks,
+  updateDefaultAgentModelConfig,
 } from '../../utils/agent-config';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -141,8 +141,8 @@ export async function handleAgentRoutes(
 
   if (url.pathname === '/api/agents/default-model' && req.method === 'PUT') {
     try {
-      const body = await parseJsonBody<{ fallbacks?: string[] }>(req);
-      const snapshot = await updateDefaultAgentFallbacks(body.fallbacks ?? []);
+      const body = await parseJsonBody(req);
+      const snapshot = await updateDefaultAgentModelConfig(body);
       scheduleGatewayReload(ctx, 'update-default-agent-model');
       sendJson(res, 200, { success: true, ...snapshot });
     } catch (error) {
@@ -211,12 +211,14 @@ export async function handleAgentRoutes(
         const body = await parseJsonBody<{
           name?: string;
           avatarPresetId?: string;
+          activeMemoryEnabled?: boolean;
           skillScope?: { mode: 'default' | 'specified'; skills?: string[] };
         }>(req);
         const agentId = decodeURIComponent(parts[0]);
         const snapshot = await updateAgentSettings(agentId, {
           name: body.name,
           avatarPresetId: body.avatarPresetId,
+          activeMemoryEnabled: typeof body.activeMemoryEnabled === 'boolean' ? body.activeMemoryEnabled : undefined,
           skillScope: body.skillScope?.mode === 'specified'
             ? { mode: 'specified', skills: body.skillScope.skills ?? [] }
             : body.skillScope?.mode === 'default'

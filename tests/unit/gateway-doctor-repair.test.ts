@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const forkMock = vi.fn();
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+  },
   utilityProcess: {
     fork: forkMock,
   },
@@ -85,7 +88,7 @@ describe('runOpenClawDoctorRepair', () => {
     vi.clearAllMocks();
   });
 
-  it('disables bundled plugin bootstrap while running doctor repair', async () => {
+  it('runs doctor repair without GeeClaw-specific bundled-plugin overrides', async () => {
     forkMock.mockImplementation((_entryPath: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
       const child = new MockUtilityChild();
       queueMicrotask(() => child.emit('exit', 0));
@@ -103,12 +106,14 @@ describe('runOpenClawDoctorRepair', () => {
         cwd: '/opt/openclaw',
         stdio: 'pipe',
         env: expect.objectContaining({
-          OPENCLAW_DISABLE_BUNDLED_PLUGINS: '1',
           OPENCLAW_STATE_DIR: '/Users/test/.openclaw-geeclaw',
           OPENCLAW_CONFIG_PATH: '/Users/test/.openclaw-geeclaw/openclaw.json',
         }),
       }),
     );
+
+    const forkOptions = forkMock.mock.calls[0]?.[2];
+    expect(forkOptions?.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
   });
 
   it('does not log success after timing out and later receiving exit 0', async () => {

@@ -95,7 +95,7 @@ export interface CronTask {
 export interface ProviderConfig {
   id: string;
   name: string;
-  type: 'openai' | 'anthropic' | 'geekai' | 'ollama' | 'custom';
+  type: 'openai' | 'anthropic' | 'geeclaw' | 'ollama' | 'custom';
   apiKey?: string;
   baseUrl?: string;
   model?: string;

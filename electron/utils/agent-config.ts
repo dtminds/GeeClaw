@@ -18,12 +18,17 @@ import {
   resolveMarketplaceAvatarPresetId,
   shouldReplaceAgentAvatarOnMarketplaceSync,
 } from './agent-avatar';
-import { getConfiguredProviderModels, normalizeProviderModelList } from '../shared/providers/config-models';
-import { getProviderConfig as getProviderRegistryConfig } from './provider-registry';
+import {
+  getDefaultProviderModelEntries,
+  normalizeProviderModelList,
+  resolveProviderModelCatalogState,
+  resolveEffectiveProviderModelEntries,
+} from '../shared/providers/config-models';
+import { getProviderDefinition } from '../shared/providers/registry';
 import { getOpenClawProviderKeyForType } from './provider-keys';
 import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill-scope';
 import { mapWithConcurrency } from './promise-pool';
-import { listProviderAccounts, providerAccountToConfig } from '../services/providers/provider-store';
+import { listProviderAccounts, providerAccountToConfig, saveProviderAccount } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
 import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
 import {
@@ -31,6 +36,7 @@ import {
   isPresetSupportedOnPlatform,
   type AgentPresetPlatform,
 } from './agent-preset-platforms';
+import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { deleteDesktopSessionsForAgent } from './desktop-sessions';
 import {
   getAgentMarketplaceCatalogEntry,
@@ -62,14 +68,27 @@ const PRESET_AGENT_SECTION_END = '<!-- preset_agent_instruction:end -->';
 
 interface AgentModelConfig {
   primary?: string;
+  fallbacks?: string[];
   [key: string]: unknown;
 }
 
 interface AgentDefaultsConfig {
   workspace?: string;
   model?: string | AgentModelConfig;
+  imageModel?: string | AgentModelConfig;
+  pdfModel?: string | AgentModelConfig;
+  imageGenerationModel?: string | AgentModelConfig;
+  videoGenerationModel?: string | AgentModelConfig;
   [key: string]: unknown;
 }
+
+const DEFAULT_AGENT_MODEL_SLOT_KEYS = [
+  'model',
+  'imageModel',
+  'pdfModel',
+  'imageGenerationModel',
+  'videoGenerationModel',
+] as const;
 
 interface AgentListEntry extends Record<string, unknown> {
   id: string;
@@ -111,6 +130,8 @@ interface AgentConfigDocument extends Record<string, unknown> {
   };
 }
 
+type ConfigRecord = Record<string, unknown>;
+
 type ManagedLockedField = 'id' | 'workspace' | 'persona';
 type PersonaFieldKey = 'identity' | 'master' | 'soul' | 'memory';
 type ManagedAgentSource = 'preset' | 'marketplace';
@@ -149,6 +170,7 @@ export interface AgentSettingsUpdate {
   name?: string;
   skillScope?: AgentSkillScope;
   avatarPresetId?: AgentAvatarPresetId;
+  activeMemoryEnabled?: boolean;
 }
 
 export interface AgentSummary {
@@ -244,10 +266,29 @@ export interface AvailableProviderModelGroup {
   modelRefs: string[];
 }
 
+export interface AgentModelSlotSnapshot {
+  configured: boolean;
+  primary: string | null;
+  fallbacks: string[];
+}
+
 export interface DefaultAgentModelConfigSnapshot {
+  model: AgentModelSlotSnapshot;
+  imageModel: AgentModelSlotSnapshot;
+  pdfModel: AgentModelSlotSnapshot;
+  imageGenerationModel: AgentModelSlotSnapshot;
+  videoGenerationModel: AgentModelSlotSnapshot;
   primary: string | null;
   fallbacks: string[];
   availableModels: AvailableProviderModelGroup[];
+}
+
+export interface DefaultAgentModelConfigUpdate {
+  model: AgentModelSlotSnapshot;
+  imageModel: AgentModelSlotSnapshot;
+  pdfModel: AgentModelSlotSnapshot;
+  imageGenerationModel: AgentModelSlotSnapshot;
+  videoGenerationModel: AgentModelSlotSnapshot;
 }
 
 const PERSONA_FILE_MAP = {
@@ -259,6 +300,76 @@ const PERSONA_FILE_MAP = {
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function asConfigRecord(value: unknown): ConfigRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as ConfigRecord
+    : undefined;
+}
+
+function ensureConfigRecord(target: ConfigRecord, key: string): ConfigRecord {
+  const existing = asConfigRecord(target[key]);
+  if (existing) {
+    return existing;
+  }
+
+  const next: ConfigRecord = {};
+  target[key] = next;
+  return next;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function updateActiveMemoryAgentMembership(
+  config: AgentConfigDocument,
+  agentId: string,
+  enabled: boolean,
+): boolean {
+  const root = config as ConfigRecord;
+  const plugins = enabled ? ensureConfigRecord(root, 'plugins') : asConfigRecord(root.plugins);
+  if (!plugins) {
+    return false;
+  }
+
+  const entries = enabled ? ensureConfigRecord(plugins, 'entries') : asConfigRecord(plugins.entries);
+  if (!entries) {
+    return false;
+  }
+
+  const activeMemoryEntry = enabled
+    ? ensureConfigRecord(entries, 'active-memory')
+    : asConfigRecord(entries['active-memory']);
+  if (!activeMemoryEntry) {
+    return false;
+  }
+
+  const activeMemoryConfig = enabled
+    ? ensureConfigRecord(activeMemoryEntry, 'config')
+    : asConfigRecord(activeMemoryEntry.config);
+  if (!activeMemoryConfig) {
+    return false;
+  }
+
+  const currentAgents = readStringArray(activeMemoryConfig.agents);
+  const nextAgents = enabled
+    ? (currentAgents.includes(agentId) ? currentAgents : [...currentAgents, agentId])
+    : currentAgents.filter((entry) => entry !== agentId);
+
+  if (stringArraysEqual(currentAgents, nextAgents)) {
+    return false;
+  }
+
+  activeMemoryConfig.agents = nextAgents;
+  return true;
 }
 
 function normalizeManagedAgentSource(source: unknown): ManagedAgentSource {
@@ -831,39 +942,226 @@ function readDefaultAgentModelConfig(
   return { primary: null, fallbacks: [] };
 }
 
-function getRegistryProviderModelRefs(providerId: string, providerKey: string): string[] {
-  return normalizeProviderModelList(
-    (getProviderRegistryConfig(providerId)?.models ?? []).map((model) => {
-      const modelId = typeof model?.id === 'string' ? model.id.trim() : '';
-      if (!modelId) {
-        return undefined;
-      }
-      return `${providerKey}/${modelId}`;
-    }),
+function readOptionalAgentModelConfig(
+  config: AgentConfigDocument,
+  key: keyof Pick<AgentDefaultsConfig, 'imageModel' | 'pdfModel' | 'imageGenerationModel' | 'videoGenerationModel'>,
+): AgentModelSlotSnapshot {
+  const defaults = (
+    config.agents && typeof config.agents === 'object'
+      ? (config.agents as AgentsConfig).defaults
+      : undefined
   );
+  const modelConfig = defaults?.[key];
+
+  if (typeof modelConfig === 'string') {
+    const primary = modelConfig.trim() || null;
+    return {
+      configured: Boolean(primary),
+      primary,
+      fallbacks: [],
+    };
+  }
+
+  if (modelConfig && typeof modelConfig === 'object') {
+    const primary = typeof modelConfig.primary === 'string' && modelConfig.primary.trim()
+      ? modelConfig.primary.trim()
+      : null;
+    const fallbacks = normalizeProviderModelList(
+      Array.isArray((modelConfig as Record<string, unknown>).fallbacks)
+        ? ((modelConfig as Record<string, unknown>).fallbacks as Array<string | null | undefined>)
+        : [],
+    );
+
+    return {
+      configured: Boolean(primary || fallbacks.length > 0),
+      primary,
+      fallbacks,
+    };
+  }
+
+  return {
+    configured: false,
+    primary: null,
+    fallbacks: [],
+  };
+}
+
+function buildDefaultAgentModelSnapshot(config: AgentConfigDocument): Omit<DefaultAgentModelConfigSnapshot, 'availableModels'> {
+  const model = readDefaultAgentModelConfig(config);
+  const imageModel = readOptionalAgentModelConfig(config, 'imageModel');
+  const pdfModel = readOptionalAgentModelConfig(config, 'pdfModel');
+  const imageGenerationModel = readOptionalAgentModelConfig(config, 'imageGenerationModel');
+  const videoGenerationModel = readOptionalAgentModelConfig(config, 'videoGenerationModel');
+
+  return {
+    model: {
+      configured: Boolean(model.primary || model.fallbacks.length > 0),
+      primary: model.primary,
+      fallbacks: model.fallbacks,
+    },
+    imageModel,
+    pdfModel,
+    imageGenerationModel,
+    videoGenerationModel,
+    primary: model.primary,
+    fallbacks: model.fallbacks,
+  };
+}
+
+function validateAgentModelSlot(
+  slot: AgentModelSlotSnapshot,
+  label: string,
+  availableRefs: Set<string>,
+  options?: { allowEmptyPrimary?: boolean },
+): AgentModelSlotSnapshot {
+  const configured = Boolean(slot?.configured);
+  const primary = typeof slot?.primary === 'string' && slot.primary.trim() ? slot.primary.trim() : null;
+  const fallbacks = normalizeProviderModelList(slot?.fallbacks ?? []);
+
+  if (!configured) {
+    if (!options?.allowEmptyPrimary && fallbacks.length > 0) {
+      throw new Error(`${label} requires a primary model`);
+    }
+    return {
+      configured: false,
+      primary: null,
+      fallbacks: [],
+    };
+  }
+
+  if (!primary) {
+    if (options?.allowEmptyPrimary && fallbacks.length === 0) {
+      return {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      };
+    }
+    throw new Error(`${label} requires a primary model`);
+  }
+
+  if (!availableRefs.has(primary)) {
+    throw new Error(`Unknown ${label} primary model: ${primary}`);
+  }
+
+  const invalidFallbacks = fallbacks.filter((modelRef) => !availableRefs.has(modelRef));
+  if (invalidFallbacks.length > 0) {
+    throw new Error(`Unknown ${label} fallback models: ${invalidFallbacks.join(', ')}`);
+  }
+
+  return {
+    configured: true,
+    primary,
+    fallbacks,
+  };
 }
 
 function getConfiguredProviderModelRefs(
-  provider: { id: string; type: string; models?: string[]; model?: string; fallbackModels?: string[] },
+  provider: { id: string; type: string; models?: string[]; model?: string; fallbackModels?: string[]; metadata?: unknown },
   providerKey: string,
 ): string[] {
   return normalizeProviderModelList(
-    getConfiguredProviderModels(provider).map((model) => (
-      model.startsWith(`${providerKey}/`) ? model : `${providerKey}/${model}`
+    resolveEffectiveProviderModelEntries(provider, getProviderDefinition(provider.type)).map((model) => (
+      model.id.startsWith(`${providerKey}/`) ? model.id : `${providerKey}/${model.id}`
     )),
   );
 }
 
-async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
+function collectReferencedAgentModelRefs(config: AgentConfigDocument): string[] {
+  return normalizeProviderModelList(
+    DEFAULT_AGENT_MODEL_SLOT_KEYS.flatMap((key) => {
+      const slot = key === 'model'
+        ? readDefaultAgentModelConfig(config)
+        : readOptionalAgentModelConfig(config, key);
+      return [
+        slot.primary,
+        ...slot.fallbacks,
+      ];
+    }),
+  );
+}
+
+async function reconcileReferencedBuiltinModelRefs(
+  config: AgentConfigDocument,
+): Promise<void> {
+  const referencedRefs = collectReferencedAgentModelRefs(config);
+  if (referencedRefs.length === 0) {
+    return;
+  }
+
+  const providers = await listProviderAccounts();
+
+  await Promise.all(providers.map(async (provider) => {
+    const providerKey = getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata);
+    const prefix = `${providerKey}/`;
+    const referencedIds = normalizeProviderModelList(
+      referencedRefs
+        .filter((ref) => ref.startsWith(prefix))
+        .map((ref) => ref.slice(prefix.length)),
+    );
+
+    if (referencedIds.length === 0) {
+      return;
+    }
+
+    const providerDefinition = getProviderDefinition(provider.vendorId);
+    const builtinIds = new Set(
+      getDefaultProviderModelEntries(providerDefinition).map((model) => model.id),
+    );
+    const effectiveIds = new Set(
+      resolveEffectiveProviderModelEntries(provider, providerDefinition).map((model) => model.id),
+    );
+    const catalog = resolveProviderModelCatalogState(provider) ?? {
+      disabledBuiltinModelIds: [],
+      disabledCustomModelIds: [],
+      builtinModelOverrides: [],
+      customModels: [],
+    };
+
+    let changed = false;
+    for (const modelId of referencedIds) {
+      if (effectiveIds.has(modelId) || builtinIds.has(modelId)) {
+        continue;
+      }
+      if (catalog.customModels.some((model) => model.id === modelId)) {
+        continue;
+      }
+
+      catalog.customModels.push({
+        id: modelId,
+        name: modelId,
+        reasoning: false,
+      });
+      effectiveIds.add(modelId);
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    await saveProviderAccount({
+      ...provider,
+      metadata: {
+        ...(provider.metadata ?? {}),
+        modelCatalog: {
+          disabledBuiltinModelIds: catalog.disabledBuiltinModelIds,
+          disabledCustomModelIds: catalog.disabledCustomModelIds,
+          builtinModelOverrides: catalog.builtinModelOverrides,
+          customModels: catalog.customModels,
+        },
+      },
+    });
+  }));
+}
+
+export async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
   const providers = (await listProviderAccounts()).map(providerAccountToConfig);
 
   return providers
     .map((provider) => {
-      const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id);
-      const modelRefs = normalizeProviderModelList([
-        ...getConfiguredProviderModelRefs(provider, providerKey),
-        ...getRegistryProviderModelRefs(provider.type, providerKey),
-      ]);
+      const providerKey = getOpenClawProviderKeyForType(provider.type, provider.id, provider.metadata);
+      const modelRefs = getConfiguredProviderModelRefs(provider, providerKey);
 
       return {
         providerId: provider.id,
@@ -1303,38 +1601,66 @@ export async function listConfiguredAgentIds(): Promise<string[]> {
 
 export async function getDefaultAgentModelConfig(): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const { primary, fallbacks } = readDefaultAgentModelConfig(config);
+  await reconcileReferencedBuiltinModelRefs(config);
   return {
-    primary,
-    fallbacks,
+    ...buildDefaultAgentModelSnapshot(config),
     availableModels: await listAvailableProviderModelGroups(),
   };
 }
 
-export async function updateDefaultAgentFallbacks(
-  fallbacks: string[],
+export async function updateDefaultAgentModelConfig(
+  nextConfig: DefaultAgentModelConfigUpdate,
 ): Promise<DefaultAgentModelConfigSnapshot> {
   const config = await readOpenClawConfig() as AgentConfigDocument;
-  const normalizedFallbacks = normalizeProviderModelList(fallbacks);
+  await reconcileReferencedBuiltinModelRefs(config);
   const availableModels = await listAvailableProviderModelGroups();
   const availableRefs = new Set(availableModels.flatMap((provider) => provider.modelRefs));
-  const invalidRefs = normalizedFallbacks.filter((modelRef) => !availableRefs.has(modelRef));
-
-  if (invalidRefs.length > 0) {
-    throw new Error(`Unknown fallback models: ${invalidRefs.join(', ')}`);
-  }
 
   const defaults = (
     config.agents && typeof config.agents === 'object'
       ? (((config.agents as AgentsConfig).defaults ?? {}) as AgentDefaultsConfig)
       : {}
   );
-  const current = readDefaultAgentModelConfig(config);
+  const model = validateAgentModelSlot(nextConfig.model, 'chat model', availableRefs, { allowEmptyPrimary: true });
+  const imageModel = validateAgentModelSlot(nextConfig.imageModel, 'image model', availableRefs);
+  const pdfModel = validateAgentModelSlot(nextConfig.pdfModel, 'pdf model', availableRefs);
+  const imageGenerationModel = validateAgentModelSlot(
+    nextConfig.imageGenerationModel,
+    'image generation model',
+    availableRefs,
+  );
+  const videoGenerationModel = validateAgentModelSlot(
+    nextConfig.videoGenerationModel,
+    'video generation model',
+    availableRefs,
+  );
 
-  defaults.model = {
-    primary: current.primary ?? undefined,
-    fallbacks: normalizedFallbacks,
-  };
+  if (model.configured) {
+    defaults.model = {
+      primary: model.primary ?? undefined,
+      fallbacks: model.fallbacks,
+    };
+  } else {
+    delete defaults.model;
+  }
+
+  for (const [key, slot] of [
+    ['imageModel', imageModel],
+    ['pdfModel', pdfModel],
+    ['imageGenerationModel', imageGenerationModel],
+    ['videoGenerationModel', videoGenerationModel],
+  ] as const) {
+    if (slot.configured) {
+      defaults[key] = {
+        primary: slot.primary ?? undefined,
+        fallbacks: slot.fallbacks,
+      };
+    } else {
+      delete defaults[key];
+    }
+  }
+
+  delete defaults.models;
 
   config.agents = {
     ...(config.agents && typeof config.agents === 'object' ? (config.agents as AgentsConfig) : {}),
@@ -1344,10 +1670,32 @@ export async function updateDefaultAgentFallbacks(
   await persistAgentConfigAndPatchRuntime(config);
 
   return {
-    primary: current.primary,
-    fallbacks: normalizedFallbacks,
+    model,
+    imageModel,
+    pdfModel,
+    imageGenerationModel,
+    videoGenerationModel,
+    primary: model.primary,
+    fallbacks: model.fallbacks,
     availableModels,
   };
+}
+
+export async function updateDefaultAgentFallbacks(
+  fallbacks: string[],
+): Promise<DefaultAgentModelConfigSnapshot> {
+  const current = await getDefaultAgentModelConfig();
+  return await updateDefaultAgentModelConfig({
+    model: {
+      configured: Boolean(current.model.primary || fallbacks.length > 0),
+      primary: current.model.primary,
+      fallbacks,
+    },
+    imageModel: current.imageModel,
+    pdfModel: current.pdfModel,
+    imageGenerationModel: current.imageGenerationModel,
+    videoGenerationModel: current.videoGenerationModel,
+  });
 }
 
 export async function listAgentPresetSummaries(): Promise<AgentMarketplaceSummary[]> {
@@ -1686,6 +2034,9 @@ export async function updateAgentSettings(
     }
     nextEntry = applyAgentSkillScope(nextEntry, nextScope);
   }
+  if (typeof updates.activeMemoryEnabled === 'boolean') {
+    updateActiveMemoryAgentMembership(config, agentId, updates.activeMemoryEnabled);
+  }
 
   entries[index] = nextEntry;
   config.agents = {
@@ -1694,6 +2045,16 @@ export async function updateAgentSettings(
   };
 
   await persistAgentConfigAndPatchRuntime(config);
+  if (typeof updates.activeMemoryEnabled === 'boolean') {
+    await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
+      const changed = updateActiveMemoryAgentMembership(
+        currentConfig as AgentConfigDocument,
+        agentId,
+        updates.activeMemoryEnabled as boolean,
+      );
+      return { changed, result: changed };
+    });
+  }
   if (updates.avatarPresetId) {
     await writeAgentAvatarMap(avatars);
   }
@@ -1835,7 +2196,13 @@ export async function deleteAgentConfig(
     };
   }
 
+  updateActiveMemoryAgentMembership(config, agentId, false);
+
   await persistAgentConfigAndPatchRuntime(config);
+  await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
+    const changed = updateActiveMemoryAgentMembership(currentConfig as AgentConfigDocument, agentId, false);
+    return { changed, result: changed };
+  });
   if (management[agentId]) {
     delete management[agentId];
     await writeAgentManagementMap(management);

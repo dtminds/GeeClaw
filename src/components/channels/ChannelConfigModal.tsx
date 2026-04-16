@@ -40,6 +40,7 @@ import weixinIcon from '@/assets/channels/weixin.svg';
 import qqIcon from '@/assets/channels/qq.svg';
 import { cn } from '@/lib/utils';
 import {
+  deriveChannelAccountIdFromExternalValue,
   isCanonicalChannelAccountId,
   normalizeOptionalChannelAccountId,
   resolveChannelAccountId,
@@ -253,7 +254,6 @@ export function ChannelConfigModal({
 
     const handleSuccess = (...args: unknown[]) => {
       const data = args[0] as { accountId?: string; botId?: string; secret?: string } | undefined;
-      const nextAccountId = data?.accountId || resolvedAccountId;
       const botId = data?.botId?.trim();
       const secret = data?.secret?.trim();
       void (async () => {
@@ -261,6 +261,10 @@ export function ChannelConfigModal({
           if (!botId || !secret) {
             throw new Error('WeCom scan result is missing bot credentials');
           }
+
+          const nextAccountId = accountId
+            ? resolvedAccountId
+            : deriveChannelAccountIdFromExternalValue(botId, 'wecom');
 
           const saveResult = await hostApiFetch<{ success?: boolean; error?: string }>('/api/channels/config', {
             method: 'POST',

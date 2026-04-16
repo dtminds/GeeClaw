@@ -44,7 +44,15 @@ interface AgentsState {
   fetchPresets: () => Promise<void>;
   createAgent: (name: string, id: string, avatarPresetId?: AgentAvatarPresetId) => Promise<void>;
   updateAgent: (agentId: string, name: string) => Promise<void>;
-  updateAgentSettings: (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope; avatarPresetId?: AgentAvatarPresetId }) => Promise<void>;
+  updateAgentSettings: (
+    agentId: string,
+    updates: {
+      name?: string;
+      skillScope?: AgentSkillScope;
+      avatarPresetId?: AgentAvatarPresetId;
+      activeMemoryEnabled?: boolean;
+    },
+  ) => Promise<void>;
   deleteAgent: (agentId: string) => Promise<void>;
   installMarketplaceAgent: (agentId: string) => Promise<void>;
   updateMarketplaceAgent: (agentId: string) => Promise<void>;
@@ -265,7 +273,15 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     await get().updateAgentSettings(agentId, { name });
   },
 
-  updateAgentSettings: async (agentId: string, updates: { name?: string; skillScope?: AgentSkillScope; avatarPresetId?: AgentAvatarPresetId }) => {
+  updateAgentSettings: async (
+    agentId: string,
+    updates: {
+      name?: string;
+      skillScope?: AgentSkillScope;
+      avatarPresetId?: AgentAvatarPresetId;
+      activeMemoryEnabled?: boolean;
+    },
+  ) => {
     set({ error: null });
     try {
       const snapshot = await hostApiFetch<AgentsSnapshot & { success?: boolean }>(

@@ -138,20 +138,6 @@
             "title": "Welcome to GeeClaw",
             "action": "Sign in"
         },
-        "needsInvite": {
-            "title": "Enter your invite code",
-            "placeholder": "Enter invite code",
-            "action": "Confirm",
-            "submitting": "Checking",
-            "skip": "Skip",
-            "switchAccount": "Switch account",
-            "errors": {
-                "required": "Enter an invite code to continue",
-                "invalid": "That invite code is invalid. Please try again.",
-                "sessionExpired": "Your session expired. Please sign in again.",
-                "generic": "We could not verify the invite code. Please try again."
-            }
-        },
         "authenticated": {
             "eyebrow": "Account ready",
             "title": "Signed in",
@@ -162,7 +148,12 @@
             "title": "Preparing GeeClaw",
             "body": "This may take a little longer the first time.",
             "caption": "First-time preparation can take a few minutes. Please keep this window open.",
-            "captionReturning": "Restoring services. This should only take a moment."
+            "captionReturning": "Restoring services. This should only take a moment.",
+            "managedPluginCaption": "Preparing {{plugin}} for this startup. Please keep this window open.",
+            "openclawExtractingTitle": "Preparing the OpenClaw runtime",
+            "openclawExtractingCaption": "First launch needs to unpack the runtime. Please keep this window open.",
+            "openclawUpdatingTitle": "Updating OpenClaw to {{version}}",
+            "openclawUpdatingCaption": "Replacing the bundled runtime. Please keep this window open."
         },
         "needsProvider": {
             "title": "Connect your AI service",
@@ -172,13 +163,14 @@
             "label": "Startup status",
             "default": "We are preparing a stable AI experience for you.",
             "login": "One quick sign-in and you are ready to continue.",
-            "invite": "This account still needs an invite code before you can continue.",
             "provider": "Next up: connect a model provider so GeeClaw can start chatting.",
             "error": "Something blocked startup, but you can retry from here."
         },
         "error": {
             "title": "GeeClaw needs attention",
             "body": "We could not finish preparing the app. Try again, or check the details below.",
+            "managedPluginTitle": "{{plugin}} plugin installation failed",
+            "managedPluginBody": "The plugin could not be installed. Related features may be unavailable until the next retry succeeds.",
             "retry": "Try again"
         },
         "gatewayRecovery": {

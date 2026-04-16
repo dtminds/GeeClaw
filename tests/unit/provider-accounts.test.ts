@@ -46,6 +46,17 @@ describe('provider account runtime namespaces', () => {
     }))).toBe('custom-customa1');
   });
 
+  it('prefers the stored custom runtime provider key when present', () => {
+    expect(getProviderAccountRuntimeKey(makeAccount({
+      id: 'custom-a1b2-c3d4',
+      vendorId: 'custom',
+      label: 'Custom API',
+      metadata: {
+        runtimeProviderKey: 'my-provider',
+      },
+    }))).toBe('my-provider');
+  });
+
   it('preserves existing multi-instance runtime keys', () => {
     expect(getProviderAccountRuntimeKey(makeAccount({
       id: 'custom-a1b2c3d4',

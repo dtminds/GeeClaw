@@ -1079,14 +1079,14 @@ export function Skills() {
 
   if (loading) {
     return (
-      <div className="flex flex-col dark:bg-background min-h-[calc(100vh-2.5rem)] items-center justify-center">
+      <div data-testid="skills-page" className="flex flex-col dark:bg-background min-h-[calc(100vh-2.5rem)] items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col dark:bg-background h-[calc(100vh)] overflow-hidden">
+    <div data-testid="skills-page" className="flex flex-col dark:bg-background h-[calc(100vh)] overflow-hidden">
       <div className="w-full max-w-6xl mx-auto flex flex-col h-full px-10 pt-16">
         
         {/* Header */}

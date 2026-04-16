@@ -29,7 +29,7 @@ import {
 import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { isInternalMessage } from '@/stores/chat';
-import { extractText, extractImages, extractToolUse, formatTimestamp } from './message-utils';
+import { extractText, extractImages, extractToolUse, formatTimestamp, shouldHideToolTrace } from './message-utils';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -439,6 +439,9 @@ function buildAssistantContentParts(
     ));
     const tools = showToolCalls ? extractToolUse(message) : [];
     for (const tool of tools) {
+      if (shouldHideToolTrace(tool.name)) {
+        continue;
+      }
       const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
       const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
       if (showToolCalls) {
@@ -487,6 +490,9 @@ function buildAssistantContentParts(
     }
 
     if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
+      if (shouldHideToolTrace(block.name)) {
+        continue;
+      }
       if (showToolCalls) {
         const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
         const formattedResult = formatToolResultText(toolStatus?.result, block.name);
@@ -526,6 +532,9 @@ function buildAssistantContentParts(
   if (showToolCalls) {
     const parsedTools = extractToolUse(message);
     for (const tool of parsedTools) {
+      if (shouldHideToolTrace(tool.name)) {
+        continue;
+      }
       const alreadyRendered = parts.some((part) => {
         if (part.type !== 'tool') return false;
         if (tool.id && part.id === tool.id) return true;

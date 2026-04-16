@@ -78,7 +78,6 @@
     },
     "agentSettingsDialog": {
         "title": "Agent Settings",
-        "description": "Manage this agent's profile, skills, and memory.",
         "navigation": "Agent settings sections",
         "panels": {
             "loading": "Loading agent persona...",
@@ -92,6 +91,9 @@
             "agentIdLabel": "Agent ID",
             "modelLabel": "Model",
             "inheritedSuffix": "(inherited)",
+            "activeMemoryLabel": "Active Memory",
+            "activeMemoryDescription": "Allow this agent to read and write Active Memory.",
+            "activeMemoryDisabledHint": "Enable Active Memory first in Settings -> Memory.",
             "deleteLabel": "Delete Agent",
             "deleteTitle": "Delete Agent",
             "deleteMessage": "Delete this agent? Its workspace and runtime directories will be removed.",
@@ -228,6 +230,12 @@
         "tip": "Tip: use `@agent-id` to route the next message and `/` to insert inline skills.",
         "gatewayDisconnectedPlaceholder": "Gateway not connected...",
         "cronFallbackPlaceholder": "This scheduled task run does not have a live session to continue.",
+        "modelProvidersRequiredPlaceholder": "Add a model provider before starting a chat.",
+        "modelConfigRequiredPlaceholder": "Choose a default chat model before starting a chat.",
+        "modelProvidersHint": "No models are available yet. Add and configure at least one model provider first.",
+        "modelConfigHint": "A default chat model is still missing. Set the primary chat model in Model Config first.",
+        "openModelProviders": "Open Model Providers",
+        "openModelConfig": "Open Model Config",
         "safety": {
             "title": "Safety",
             "toolPermission": "Tool Permission",

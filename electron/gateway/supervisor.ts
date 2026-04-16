@@ -1,8 +1,9 @@
-import { utilityProcess } from 'electron';
+import { app, utilityProcess } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
 import WebSocket from 'ws';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
+import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import { getOpenClawConfigDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { isPythonReady, setupManagedPython } from '../utils/uv-setup';
@@ -552,6 +553,10 @@ export async function findExistingGatewayProcess(options: {
 }
 
 export async function runOpenClawDoctorRepair(): Promise<boolean> {
+  if (app.isPackaged) {
+    await materializePackagedOpenClawSidecar();
+  }
+
   const runtime = await getConfiguredOpenClawRuntime();
   const commandPath = runtime.commandPath ?? runtime.entryPath;
   const openclawDir = runtime.dir;
@@ -583,7 +588,6 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
       OPENCLAW_STATE_DIR: openclawConfigDir,
       OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(openclawConfigDir),
       OPENCLAW_GATEWAY_PORT: String(PORTS.OPENCLAW_GATEWAY),
-      OPENCLAW_DISABLE_BUNDLED_PLUGINS: '1',
       OPENCLAW_NO_RESPAWN: '1',
     };
 

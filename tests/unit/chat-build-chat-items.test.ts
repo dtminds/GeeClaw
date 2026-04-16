@@ -54,4 +54,130 @@ describe('buildChatItems', () => {
     ]);
     expect(items.at(-1)?.isStreaming).toBe(true);
   });
+
+  it('filters process-only history and tool messages before rendering', () => {
+    const items = buildChatItems({
+      messages: [
+        assistantMessage('history-1', 'history', 1),
+        {
+          role: 'assistant',
+          id: 'history-process',
+          content: [{ type: 'toolCall', id: 'history-process', name: 'process', arguments: { action: 'poll' } }],
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'tool-process',
+          toolCallId: 'tool-process',
+          content: [{ type: 'toolCall', id: 'tool-process', name: 'process', arguments: { action: 'log' } }],
+          timestamp: 3,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'tool-bash',
+          toolCallId: 'tool-bash',
+          content: [{ type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } }],
+          timestamp: 4,
+        } as RawMessage,
+      ],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items.map((item) => item.message.id)).toEqual([
+      'history-1',
+      'tool-bash',
+    ]);
+  });
+
+  it('preserves stream and tool message alignment when skipping hidden process tool messages', () => {
+    const items = buildChatItems({
+      messages: [],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'tool-process',
+          toolCallId: 'tool-process',
+          content: [{ type: 'toolCall', id: 'tool-process', name: 'process', arguments: { action: 'poll' } }],
+          timestamp: 1,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'tool-bash',
+          toolCallId: 'tool-bash',
+          content: [{ type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } }],
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      streamSegments: [
+        { text: 'text-1', ts: 10 },
+        { text: 'text-2', ts: 20 },
+      ],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items.map((item) => item.message.id)).toEqual([
+      'stream-seg:agent:main:main:0',
+      'stream-seg:agent:main:main:1',
+      'tool-bash',
+    ]);
+  });
+
+  it('filters process-only standalone toolresult messages backed by toolResult blocks', () => {
+    const items = buildChatItems({
+      messages: [
+        {
+          role: 'toolresult',
+          id: 'toolresult-process',
+          content: [
+            {
+              type: 'toolResult',
+              id: 'tool-process',
+              name: 'process',
+              text: 'polling...',
+            },
+          ],
+          timestamp: 1,
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(0);
+  });
+
+  it('keeps history item keys stable when hidden process messages are removed', () => {
+    const items = buildChatItems({
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-process', name: 'process', arguments: { action: 'poll' } }],
+          timestamp: 1,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          content: 'visible assistant message',
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.key).toBe('msg:assistant:2:1');
+  });
 });

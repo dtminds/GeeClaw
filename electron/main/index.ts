@@ -4,13 +4,13 @@
  */
 import { app, BrowserWindow, nativeImage, session } from 'electron';
 import type { Server } from 'node:http';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray, updateTrayStatus } from './tray';
 import { createMenu } from './menu';
 
-import { appUpdater, registerUpdateHandlers } from './updater';
+import { getAppUpdater, registerUpdateHandlers } from './updater';
 import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
@@ -32,6 +32,7 @@ import {
 } from '../utils/skill-config';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
+import { localLlmProxyManager } from './local-llm-proxy';
 import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
@@ -43,6 +44,14 @@ import { openSafeExternalUrl } from '../utils/external-links';
 import { CliMarketplaceService } from '../utils/cli-marketplace';
 import { shouldDisableHardwareAcceleration } from './hardware-acceleration';
 import { loadRendererWindow } from './renderer-loader';
+import {
+  getOpenClawSidecarStatus,
+  subscribeOpenClawSidecarStatus,
+} from '../utils/openclaw-sidecar-status';
+import {
+  getManagedPluginStatus,
+  subscribeManagedPluginStatus,
+} from '../utils/managed-plugin-status';
 
 // Enable GPU hardware acceleration by default so motion-heavy branding and
 // other accelerated rendering paths work out of the box.
@@ -60,6 +69,11 @@ if (shouldDisableHardwareAcceleration(process.argv)) {
 // Must be called before app.whenReady() / before any window is created.
 if (process.platform === 'linux') {
   app.setDesktopName('geeclaw.desktop');
+}
+
+const e2eUserDataDir = process.env.GEECLAW_USER_DATA_DIR?.trim();
+if (e2eUserDataDir) {
+  app.setPath('userData', resolve(e2eUserDataDir));
 }
 
 // Prevent multiple instances of the app from running simultaneously.
@@ -105,10 +119,31 @@ const gatewayManager = new GatewayManager();
 const clawHubService = new ClawHubService();
 const cliMarketplaceService = new CliMarketplaceService();
 const hostEventBus = new HostEventBus();
+const appUpdater = getAppUpdater();
 let hostApiServer: Server | null = null;
 let hasReconciledSkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
+
+async function logGpuDiagnostics(): Promise<void> {
+  try {
+    logger.info('GPU launch switches', {
+      enableGpu: process.argv.includes('--enable-gpu'),
+      disableGpu: process.argv.includes('--disable-gpu'),
+      useAngle: app.commandLine.getSwitchValue('use-angle') || undefined,
+      useGl: app.commandLine.getSwitchValue('use-gl') || undefined,
+      disableGpuSandbox: app.commandLine.hasSwitch('disable-gpu-sandbox'),
+      inProcessGpu: app.commandLine.hasSwitch('in-process-gpu'),
+    });
+
+    logger.info('GPU feature status', app.getGPUFeatureStatus());
+
+    const gpuInfo = await app.getGPUInfo('basic');
+    logger.info('GPU basic info', gpuInfo);
+  } catch (error) {
+    logger.warn('Failed to collect GPU diagnostics:', error);
+  }
+}
 
 async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
   try {
@@ -227,12 +262,19 @@ async function initialize(): Promise<void> {
   logger.debug(
     `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}, pid=${process.pid}, ppid=${process.ppid}`
   );
+  void logGpuDiagnostics();
 
   // Warm up network optimization (non-blocking)
   void warmupNetworkOptimization();
 
   // Apply persisted proxy settings before creating windows or network requests.
   await applyProxySettings();
+
+  try {
+    await localLlmProxyManager.start();
+  } catch (error) {
+    logger.warn('Failed to start local LLM proxy:', error);
+  }
 
   // Set application menu
   createMenu();
@@ -417,6 +459,32 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('channel:openclaw-weixin-error', error);
   });
 
+  const emitOpenClawSidecarStatus = () => {
+    const status = getOpenClawSidecarStatus();
+    hostEventBus.emit('openclaw:sidecar-status', status);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('openclaw:sidecar-status', status);
+    }
+  };
+
+  subscribeOpenClawSidecarStatus(() => {
+    emitOpenClawSidecarStatus();
+  });
+  emitOpenClawSidecarStatus();
+
+  const emitManagedPluginStatus = () => {
+    const status = getManagedPluginStatus();
+    hostEventBus.emit('openclaw:managed-plugin-status', status);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('openclaw:managed-plugin-status', status);
+    }
+  };
+
+  subscribeManagedPluginStatus(() => {
+    emitManagedPluginStatus();
+  });
+  emitManagedPluginStatus();
+
   const gatewayAutoStart = await getSetting('gatewayAutoStart');
   logger.info(
     `Gateway app-ready auto-start is disabled; renderer bootstrap now decides when to start it (setting gatewayAutoStart=${gatewayAutoStart})`,
@@ -439,6 +507,18 @@ if (gotTheLock) {
 
   app.on('will-quit', () => {
     releaseProcessInstanceFileLock();
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    logger.warn('Electron child process exited', details);
+  });
+
+  app.on('render-process-gone', (_event, _webContents, details) => {
+    logger.warn('Electron render process exited', details);
+  });
+
+  app.on('gpu-info-update', () => {
+    logger.debug('Electron emitted gpu-info-update');
   });
 
   // When a second instance is launched, focus the existing window instead.
@@ -490,9 +570,14 @@ if (gotTheLock) {
     hostEventBus.closeAll();
     hostApiServer?.close();
 
-    const stopPromise = gatewayManager.stop({ shutdownExternal: false }).catch((error) => {
-      logger.warn('gatewayManager.stop() error during quit:', error);
-    });
+    const stopPromise = Promise.all([
+      gatewayManager.stop({ shutdownExternal: false }).catch((error) => {
+        logger.warn('gatewayManager.stop() error during quit:', error);
+      }),
+      localLlmProxyManager.stop().catch((error) => {
+        logger.warn('localLlmProxyManager.stop() error during quit:', error);
+      }),
+    ]);
     const timeoutPromise = new Promise<'timeout'>((resolve) => {
       setTimeout(() => resolve('timeout'), 5000);
     });
@@ -517,6 +602,13 @@ if (gotTheLock) {
     logger.error(`${reason}:`, error);
     try {
       void gatewayManager.stop({ shutdownExternal: false }).catch(() => {
+        // Ignore cleanup failures on crash paths.
+      });
+    } catch {
+      // Ignore cleanup failures on crash paths.
+    }
+    try {
+      void localLlmProxyManager.stop().catch(() => {
         // Ignore cleanup failures on crash paths.
       });
     } catch {

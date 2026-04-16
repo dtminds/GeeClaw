@@ -78,7 +78,6 @@
     },
     "agentSettingsDialog": {
         "title": "智能体设置",
-        "description": "管理该智能体的人设、技能和记忆",
         "navigation": "智能体设置分区",
         "panels": {
             "loading": "正在加载智能体人格...",
@@ -92,6 +91,9 @@
             "agentIdLabel": "智能体 ID",
             "modelLabel": "模型",
             "inheritedSuffix": "（继承）",
+            "activeMemoryLabel": "Active Memory",
+            "activeMemoryDescription": "启用主动记忆召回，增强根据记忆回答的能力",
+            "activeMemoryDisabledHint": "需先在 设置 -> 记忆 中开启 Active Memory。",
             "deleteLabel": "删除智能体",
             "deleteTitle": "删除智能体",
             "deleteMessage": "确认删除该智能体？其工作区与运行目录也会被移除。",
@@ -228,6 +230,12 @@
         "tip": "内容由 AI 生成，请注意甄别",
         "gatewayDisconnectedPlaceholder": "网关未连接...",
         "cronFallbackPlaceholder": "这条定时任务记录没有可继续对话的实时会话。",
+        "modelProvidersRequiredPlaceholder": "先配置模型服务商后才能开始对话",
+        "modelConfigRequiredPlaceholder": "先配置默认聊天模型后才能开始对话",
+        "modelProvidersHint": "当前还没有可用模型。先去添加并配置至少一个模型服务商。",
+        "modelConfigHint": "当前还没有默认聊天模型。先去“模型配置”里设置主聊天模型。",
+        "openModelProviders": "去配置模型服务商",
+        "openModelConfig": "去配置模型",
         "safety": {
             "title": "权限",
             "toolPermission": "工具权限",

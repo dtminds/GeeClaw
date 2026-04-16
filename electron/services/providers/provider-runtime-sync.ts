@@ -1,5 +1,10 @@
 import type { GatewayManager } from '../../gateway/manager';
-import { getConfiguredProviderModels } from '../../shared/providers/config-models';
+import {
+  getDefaultProviderModelEntries,
+  normalizeProviderModelEntries,
+  resolveEffectiveProviderModelEntries,
+} from '../../shared/providers/config-models';
+import { getProviderDefinition } from '../../shared/providers/registry';
 import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from './provider-store';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
@@ -20,11 +25,13 @@ import {
 import { getOpenClawProviderKeyForType, isMultiInstanceProviderType } from '../../utils/provider-keys';
 import { getDefaultAgentModelConfig } from '../../utils/agent-config';
 import { logger } from '../../utils/logger';
+import { getLocalLlmProxyPort } from '../../main/local-llm-proxy';
 
 const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
-const GOOGLE_OAUTH_DEFAULT_MODEL_REF = `${GOOGLE_OAUTH_RUNTIME_PROVIDER}/gemini-3-flash-preview`;
 const OPENAI_OAUTH_RUNTIME_PROVIDER = 'openai-codex';
-const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4`;
+const GEECLAW_PROVIDER_TYPE = 'geeclaw';
+const GEECLAW_RUNTIME_PROVIDER = 'geeclaw';
+const GEECLAW_ENV_VAR = 'GEECLAW_API_KEY';
 
 function isUnregisteredProviderType(type: string): boolean {
   return isMultiInstanceProviderType(type);
@@ -35,6 +42,44 @@ type RuntimeProviderSyncContext = {
   meta: ReturnType<typeof getProviderConfig>;
   api: string;
 };
+
+type ProviderRuntimeSyncResult = {
+  context: RuntimeProviderSyncContext | null;
+  removed: boolean;
+};
+
+function isGeeClawProvider(config: Pick<ProviderConfig, 'type'>): boolean {
+  return config.type === GEECLAW_PROVIDER_TYPE;
+}
+
+function getGeeClawProxyBaseUrl(): string | undefined {
+  const port = getLocalLlmProxyPort();
+  return port ? `http://127.0.0.1:${port}/proxy` : undefined;
+}
+
+async function resolveProviderApiKey(
+  config: ProviderConfig,
+  explicitApiKey?: string,
+): Promise<string | null> {
+  const trimmedExplicitKey = explicitApiKey?.trim();
+  if (trimmedExplicitKey) {
+    return trimmedExplicitKey;
+  }
+
+  const secret = await getProviderSecret(config.id);
+  if (secret?.type === 'api_key') {
+    return secret.apiKey;
+  }
+  if (secret?.type === 'local' && secret.apiKey) {
+    return secret.apiKey;
+  }
+
+  return await getApiKey(config.id);
+}
+
+async function removeGeeClawRuntimeProvider(config: ProviderConfig, runtimeProviderKey?: string): Promise<void> {
+  await removeDeletedProviderFromOpenClaw(config, config.id, runtimeProviderKey ?? GEECLAW_RUNTIME_PROVIDER);
+}
 
 function normalizeProviderBaseUrl(
   config: ProviderConfig,
@@ -67,8 +112,12 @@ function normalizeProviderBaseUrl(
   return normalized;
 }
 
-export function getOpenClawProviderKey(type: string, providerId: string): string {
-  return getOpenClawProviderKeyForType(type, providerId);
+export function getOpenClawProviderKey(
+  type: string,
+  providerId: string,
+  metadata?: ProviderConfig['metadata'],
+): string {
+  return getOpenClawProviderKeyForType(type, providerId, metadata);
 }
 
 async function resolveRuntimeProviderKey(config: ProviderConfig): Promise<string> {
@@ -81,7 +130,7 @@ async function resolveRuntimeProviderKey(config: ProviderConfig): Promise<string
       return OPENAI_OAUTH_RUNTIME_PROVIDER;
     }
   }
-  return getOpenClawProviderKey(config.type, config.id);
+  return getOpenClawProviderKey(config.type, config.id, account?.metadata ?? config.metadata);
 }
 
 async function getBrowserOAuthRuntimeProvider(config: ProviderConfig): Promise<string | null> {
@@ -105,8 +154,9 @@ async function getBrowserOAuthRuntimeProvider(config: ProviderConfig): Promise<s
 }
 
 export function getProviderModelRef(config: ProviderConfig, providerKeyOverride?: string): string | undefined {
-  const providerKey = providerKeyOverride ?? getOpenClawProviderKey(config.type, config.id);
-  const configuredModels = getConfiguredProviderModels(config);
+  const providerKey = providerKeyOverride ?? getOpenClawProviderKey(config.type, config.id, config.metadata);
+  const configuredModels = resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type))
+    .map((model) => model.id);
 
   if (configuredModels.length > 0) {
     const primaryModel = configuredModels[0];
@@ -126,14 +176,14 @@ export function getProviderModelRef(config: ProviderConfig, providerKeyOverride?
 }
 
 export function getProviderCatalogModelRefs(config: ProviderConfig): string[] {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
+  const providerKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
   const results: string[] = [];
   const seen = new Set<string>();
 
-  for (const model of getConfiguredProviderModels(config)) {
-    const modelRef = model.startsWith(`${providerKey}/`)
-      ? model
-      : `${providerKey}/${model}`;
+  for (const model of resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type))) {
+    const modelRef = model.id.startsWith(`${providerKey}/`)
+      ? model.id
+      : `${providerKey}/${model.id}`;
 
     if (seen.has(modelRef)) {
       continue;
@@ -155,32 +205,48 @@ export function getProviderCatalogModelIds(config: ProviderConfig): string[] {
     ));
 }
 
-function getRegistryProviderModelIds(config: ProviderConfig): string[] {
-  return (getProviderConfig(config.type)?.models ?? [])
-    .map((model) => (typeof model?.id === 'string' ? model.id.trim() : ''))
-    .filter(Boolean);
+export function getProviderCatalogModelEntries(config: ProviderConfig) {
+  const providerKey = getOpenClawProviderKey(config.type, config.id);
+
+  return resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type)).map((model) => {
+    const normalizedId = model.id.startsWith(`${providerKey}/`)
+      ? model.id.slice(providerKey.length + 1)
+      : model.id;
+    const normalizedName = model.name === model.id
+      ? normalizedId
+      : model.name;
+
+    return {
+      ...model,
+      id: normalizedId,
+      name: normalizedName,
+    };
+  });
 }
 
-function getDeclaredProviderModelIds(config: ProviderConfig): string[] {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
-  const results: string[] = [];
-  const seen = new Set<string>();
+function getDeclaredProviderModelEntries(config: ProviderConfig) {
+  const registryModels = normalizeProviderModelEntries(
+    getDefaultProviderModelEntries(getProviderDefinition(config.type)),
+  );
+  const configuredModels = getProviderCatalogModelEntries(config);
+  const mergedById = new Map<string, Record<string, unknown>>();
+  const orderedIds: string[] = [];
 
-  for (const modelId of [
-    ...getRegistryProviderModelIds(config),
-    ...getProviderCatalogModelIds(config),
-  ]) {
-    const normalized = modelId.startsWith(`${providerKey}/`)
-      ? modelId.slice(providerKey.length + 1)
-      : modelId;
-    if (!normalized || seen.has(normalized)) {
-      continue;
+  for (const group of [registryModels, configuredModels]) {
+    for (const model of group) {
+      if (!mergedById.has(model.id)) {
+        orderedIds.push(model.id);
+      }
+      mergedById.set(model.id, {
+        ...(mergedById.get(model.id) ?? {}),
+        ...model,
+      });
     }
-    seen.add(normalized);
-    results.push(normalized);
   }
 
-  return results;
+  return orderedIds
+    .map((id) => mergedById.get(id))
+    .filter((model): model is NonNullable<typeof model> => Boolean(model));
 }
 
 function scheduleGatewayRestart(
@@ -200,6 +266,53 @@ function scheduleGatewayRestart(
   gatewayManager.debouncedRestart(options?.delayMs);
 }
 
+function readDefaultChatModelSelection(snapshot: Awaited<ReturnType<typeof getDefaultAgentModelConfig>>): {
+  primary: string | null;
+  fallbacks: string[];
+} {
+  if (snapshot && typeof snapshot === 'object' && 'model' in snapshot) {
+    const model = snapshot.model;
+    if (model && typeof model === 'object') {
+      return {
+        primary: typeof model.primary === 'string' && model.primary.trim() ? model.primary.trim() : null,
+        fallbacks: Array.isArray(model.fallbacks) ? model.fallbacks : [],
+      };
+    }
+  }
+
+  return {
+    primary: typeof snapshot?.primary === 'string' && snapshot.primary.trim() ? snapshot.primary.trim() : null,
+    fallbacks: Array.isArray(snapshot?.fallbacks) ? snapshot.fallbacks : [],
+  };
+}
+
+function mapModelRefToRuntimeProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  modelRef?: string | null,
+): string | undefined {
+  if (!modelRef) {
+    return undefined;
+  }
+
+  const configuredProviderKey = getOpenClawProviderKey(config.type, config.id);
+  if (modelRef.startsWith(`${configuredProviderKey}/`)) {
+    return `${runtimeProviderKey}/${modelRef.slice(configuredProviderKey.length + 1)}`;
+  }
+
+  return modelRef;
+}
+
+function mapFallbackRefsToRuntimeProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  fallbackModelRefs: string[],
+): string[] {
+  return fallbackModelRefs.map((fallbackRef) => (
+    mapModelRefToRuntimeProvider(config, runtimeProviderKey, fallbackRef) ?? fallbackRef
+  ));
+}
+
 export async function syncProviderApiKeyToRuntime(
   providerType: string,
   providerId: string,
@@ -213,6 +326,10 @@ export async function syncAllProviderAuthToRuntime(): Promise<void> {
   const accounts = await listProviderAccounts();
 
   for (const account of accounts) {
+    if (account.vendorId === GEECLAW_PROVIDER_TYPE) {
+      continue;
+    }
+
     const runtimeProviderKey = await resolveRuntimeProviderKey({
       id: account.id,
       name: account.label,
@@ -258,6 +375,10 @@ async function syncProviderSecretToRuntime(
   runtimeProviderKey: string,
   apiKey: string | undefined,
 ): Promise<void> {
+  if (isGeeClawProvider(config)) {
+    return;
+  }
+
   const secret = await getProviderSecret(config.id);
   if (apiKey !== undefined) {
     const trimmedKey = apiKey.trim();
@@ -309,9 +430,27 @@ async function syncRuntimeProviderConfig(
   config: ProviderConfig,
   context: RuntimeProviderSyncContext,
 ): Promise<void> {
+  if (isGeeClawProvider(config)) {
+    const baseUrl = getGeeClawProxyBaseUrl();
+    if (!baseUrl) {
+      return;
+    }
+
+    await syncProviderConfigToOpenClaw(
+      context.runtimeProviderKey,
+      getProviderCatalogModelEntries(config),
+      {
+        baseUrl,
+        api: context.api,
+        apiKeyEnv: GEECLAW_ENV_VAR,
+      },
+    );
+    return;
+  }
+
   await syncProviderConfigToOpenClaw(
     context.runtimeProviderKey,
-    getProviderCatalogModelIds(config),
+    getProviderCatalogModelEntries(config),
     {
       baseUrl: normalizeProviderBaseUrl(config, config.baseUrl || context.meta?.baseUrl, context.api),
       api: context.api,
@@ -327,7 +466,22 @@ async function syncAgentProviderModelCatalog(
   context: RuntimeProviderSyncContext,
   apiKey: string | undefined,
 ): Promise<void> {
-  const models = getDeclaredProviderModelIds(config).map((id) => ({ id, name: id, reasoning: false }));
+  const models = getDeclaredProviderModelEntries(config);
+
+  if (isGeeClawProvider(config)) {
+    const baseUrl = getGeeClawProxyBaseUrl();
+    if (!baseUrl) {
+      return;
+    }
+
+    await updateAgentModelProvider(runtimeProviderKey, {
+      baseUrl,
+      api: context.api,
+      models,
+      apiKey: GEECLAW_ENV_VAR,
+    });
+    return;
+  }
   const baseUrl = normalizeProviderBaseUrl(
     config,
     config.baseUrl || context.meta?.baseUrl,
@@ -366,16 +520,26 @@ async function syncAgentProviderModelCatalog(
 async function syncProviderToRuntime(
   config: ProviderConfig,
   apiKey: string | undefined,
-): Promise<RuntimeProviderSyncContext | null> {
+): Promise<ProviderRuntimeSyncResult> {
   const context = await resolveRuntimeSyncContext(config);
   if (!context) {
-    return null;
+    return { context: null, removed: false };
+  }
+
+  if (isGeeClawProvider(config)) {
+    const resolvedKey = await resolveProviderApiKey(config, apiKey);
+    const proxyBaseUrl = getGeeClawProxyBaseUrl();
+
+    if (!config.enabled || !resolvedKey || !proxyBaseUrl) {
+      await removeGeeClawRuntimeProvider(config, context.runtimeProviderKey);
+      return { context: null, removed: true };
+    }
   }
 
   await syncProviderSecretToRuntime(config, context.runtimeProviderKey, apiKey);
   await syncRuntimeProviderConfig(config, context);
   await syncAgentProviderModelCatalog(config, context.runtimeProviderKey, context, apiKey);
-  return context;
+  return { context, removed: false };
 }
 
 async function removeDeletedProviderFromOpenClaw(
@@ -397,14 +561,14 @@ export async function syncSavedProviderToRuntime(
   apiKey: string | undefined,
   gatewayManager?: GatewayManager,
 ): Promise<void> {
-  const context = await syncProviderToRuntime(config, apiKey);
-  if (!context) {
+  const result = await syncProviderToRuntime(config, apiKey);
+  if (!result.context && !result.removed) {
     return;
   }
 
   scheduleGatewayRestart(
     gatewayManager,
-    `Scheduling Gateway restart after saving provider "${context.runtimeProviderKey}" config`,
+    `Scheduling Gateway restart after saving provider "${result.context?.runtimeProviderKey ?? config.id}" config`,
     { onlyIfRunning: true },
   );
 }
@@ -414,18 +578,34 @@ export async function syncUpdatedProviderToRuntime(
   apiKey: string | undefined,
   gatewayManager?: GatewayManager,
 ): Promise<void> {
-  const context = await syncProviderToRuntime(config, apiKey);
-  if (!context) {
+  const result = await syncProviderToRuntime(config, apiKey);
+  if (!result.context) {
+    if (result.removed) {
+      scheduleGatewayRestart(
+        gatewayManager,
+        `Scheduling Gateway restart after removing provider "${config.id}" from runtime`,
+      );
+    }
     return;
   }
 
-  const ock = context.runtimeProviderKey;
-  const { fallbacks } = await getDefaultAgentModelConfig();
+  const ock = result.context.runtimeProviderKey;
+  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
 
   const defaultProviderId = await getDefaultProvider();
-  if (defaultProviderId === config.id) {
-    const modelOverride = getProviderModelRef(config);
-    if (!isUnregisteredProviderType(config.type)) {
+  if (defaultProviderId === config.id && modelSnapshot.primary) {
+    const modelOverride = mapModelRefToRuntimeProvider(config, ock, modelSnapshot.primary);
+    const fallbacks = mapFallbackRefsToRuntimeProvider(config, ock, modelSnapshot.fallbacks);
+    if (isGeeClawProvider(config)) {
+      const baseUrl = getGeeClawProxyBaseUrl();
+      if (baseUrl) {
+        await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
+          baseUrl,
+          api: 'openai-completions',
+          apiKeyEnv: GEECLAW_ENV_VAR,
+        }, fallbacks);
+      }
+    } else if (!isUnregisteredProviderType(config.type)) {
       await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
     } else {
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
@@ -482,23 +662,65 @@ export async function syncDefaultProviderToRuntime(
     return;
   }
 
+  if (isGeeClawProvider(provider)) {
+    const runtimeProviderKey = await resolveRuntimeProviderKey(provider);
+    const providerKey = await resolveProviderApiKey(provider, undefined);
+    const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
+    const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.primary);
+    const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.fallbacks);
+    const baseUrl = getGeeClawProxyBaseUrl();
+
+    if (!provider.enabled || !providerKey || !baseUrl) {
+      await removeGeeClawRuntimeProvider(provider, runtimeProviderKey);
+      scheduleGatewayRestart(
+        gatewayManager,
+        `Scheduling Gateway restart after removing provider "${runtimeProviderKey}" from runtime`,
+        { onlyIfRunning: true },
+      );
+      return;
+    }
+
+    if (runtimePrimaryModel) {
+      await setOpenClawDefaultModelWithOverride(runtimeProviderKey, runtimePrimaryModel, {
+        baseUrl,
+        api: 'openai-completions',
+        apiKeyEnv: GEECLAW_ENV_VAR,
+      }, runtimeFallbacks);
+    }
+
+    const context = await resolveRuntimeSyncContext(provider);
+    if (context) {
+      await syncRuntimeProviderConfig(provider, context);
+      await syncAgentProviderModelCatalog(provider, runtimeProviderKey, context, providerKey);
+    }
+
+    scheduleGatewayRestart(
+      gatewayManager,
+      `Scheduling Gateway restart after provider switch to "${runtimeProviderKey}"`,
+      { onlyIfRunning: true },
+    );
+    return;
+  }
+
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
-  const { fallbacks } = await getDefaultAgentModelConfig();
+  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
+  const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary);
+  const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks);
   const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
   const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
 
   if (!isOAuthProvider) {
-    const modelOverride = getProviderModelRef(provider);
-
-    if (isUnregisteredProviderType(provider.type)) {
-      await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
-        api: provider.apiProtocol || 'openai-completions',
-      }, fallbacks);
-    } else {
-      await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
+    if (runtimePrimaryModel) {
+      if (isUnregisteredProviderType(provider.type)) {
+        await setOpenClawDefaultModelWithOverride(ock, runtimePrimaryModel, {
+          baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
+          api: provider.apiProtocol || 'openai-completions',
+        }, runtimeFallbacks);
+      } else {
+        await setOpenClawDefaultModel(ock, runtimePrimaryModel, runtimeFallbacks);
+      }
     }
 
     if (providerKey) {
@@ -522,17 +744,16 @@ export async function syncDefaultProviderToRuntime(
         });
       }
 
-      const primaryBrowserOAuthModel = getConfiguredProviderModels(provider)[0];
-      const modelOverride = primaryBrowserOAuthModel
-        ? (primaryBrowserOAuthModel.startsWith(`${browserOAuthRuntimeProvider}/`)
-          ? primaryBrowserOAuthModel
-          : `${browserOAuthRuntimeProvider}/${primaryBrowserOAuthModel}`)
-        : (browserOAuthRuntimeProvider === GOOGLE_OAUTH_RUNTIME_PROVIDER
-          ? GOOGLE_OAUTH_DEFAULT_MODEL_REF
-          : OPENAI_OAUTH_DEFAULT_MODEL_REF);
+      if (runtimePrimaryModel) {
+        await setOpenClawDefaultModel(browserOAuthRuntimeProvider, runtimePrimaryModel, runtimeFallbacks);
+        logger.info(`Configured openclaw.json for browser OAuth provider "${provider.id}"`);
+        scheduleGatewayRestart(
+          gatewayManager,
+          `Scheduling Gateway restart after provider switch to "${browserOAuthRuntimeProvider}"`,
+        );
+        return;
+      }
 
-      await setOpenClawDefaultModel(browserOAuthRuntimeProvider, modelOverride, fallbacks);
-      logger.info(`Configured openclaw.json for browser OAuth provider "${provider.id}"`);
       scheduleGatewayRestart(
         gatewayManager,
         `Scheduling Gateway restart after provider switch to "${browserOAuthRuntimeProvider}"`,
@@ -552,23 +773,24 @@ export async function syncDefaultProviderToRuntime(
 
     const targetProviderKey = 'minimax-portal';
 
-    await setOpenClawDefaultModelWithOverride(targetProviderKey, getProviderModelRef(provider), {
-      baseUrl,
-      api,
-      authHeader: true,
-      apiKeyEnv: 'minimax-oauth',
-    }, fallbacks);
+    if (runtimePrimaryModel) {
+      await setOpenClawDefaultModelWithOverride(targetProviderKey, runtimePrimaryModel, {
+        baseUrl,
+        api,
+        authHeader: true,
+        apiKeyEnv: 'minimax-oauth',
+      }, runtimeFallbacks);
 
-    logger.info(`Configured openclaw.json for OAuth provider "${provider.type}"`);
+      logger.info(`Configured openclaw.json for OAuth provider "${provider.type}"`);
+    }
 
     try {
-      const models = getProviderCatalogModelIds(provider).map((id) => ({ id, name: id, reasoning: false }));
       await updateAgentModelProvider(targetProviderKey, {
         baseUrl,
         api,
         authHeader: true,
         apiKey: 'minimax-oauth',
-        models,
+        models: getDeclaredProviderModelEntries(provider),
       });
     } catch (err) {
       logger.warn(`Failed to update models.json for OAuth provider "${targetProviderKey}":`, err);
@@ -602,19 +824,14 @@ export async function syncAllProviderRuntimeConfigToOpenClaw(): Promise<void> {
   const accounts = await listProviderAccounts();
   for (const account of accounts) {
     const config = providerAccountToConfig(account);
-    let context: Awaited<ReturnType<typeof resolveRuntimeSyncContext>>;
+    let result: ProviderRuntimeSyncResult;
     try {
-      context = await resolveRuntimeSyncContext(config);
-    } catch (err) {
-      logger.warn(`[startup-sync] Failed to resolve runtime context for "${account.id}":`, err);
-      continue;
-    }
-    if (!context) continue;
-    try {
-      await syncRuntimeProviderConfig(config, context);
+      result = await syncProviderToRuntime(config, undefined);
     } catch (err) {
       logger.warn(`[startup-sync] Failed to sync provider model catalog for "${account.id}":`, err);
+      continue;
     }
+    if (!result.context && !result.removed) continue;
   }
 
   // 3. Sync the default provider's primary model (agents.defaults.model).

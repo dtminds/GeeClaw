@@ -1,0 +1,181 @@
+name: OpenClaw Sidecar Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      sidecar_version:
+        description: Exact sidecar artifact version, e.g. 2026.4.10-r1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openclaw-sidecar-${{ inputs.sidecar_version }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: openclaw-sidecar-${{ matrix.sidecar_target }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            sidecar_target: darwin-arm64
+          - os: macos-15-intel
+            sidecar_target: darwin-x64
+          - os: windows-latest
+            sidecar_target: win32-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: openclaw-sidecar-${{ runner.os }}-${{ matrix.sidecar_target }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            openclaw-sidecar-${{ runner.os }}-${{ matrix.sidecar_target }}-pnpm-
+
+      - name: Restore npm cache for openclaw-runtime installs
+        uses: actions/cache@v4
+        with:
+          path: openclaw-runtime/.npm-cache
+          key: openclaw-sidecar-${{ runner.os }}-${{ matrix.sidecar_target }}-openclaw-runtime-${{ hashFiles('openclaw-runtime/package-lock.json', 'openclaw-runtime/package.json') }}
+          restore-keys: |
+            openclaw-sidecar-${{ runner.os }}-${{ matrix.sidecar_target }}-openclaw-runtime-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install repo-local OpenClaw runtime
+        run: pnpm run openclaw-runtime:install
+
+      - name: Bundle OpenClaw runtime
+        run: pnpm exec zx scripts/bundle-openclaw.mjs
+
+      - name: Build OpenClaw sidecar
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+        run: |
+          node scripts/build-openclaw-sidecar.mjs \
+            --target "${{ matrix.sidecar_target }}" \
+            --version "${{ inputs.sidecar_version }}" \
+            --output-dir release/sidecar
+
+      - name: Upload sidecar artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-sidecar-${{ matrix.sidecar_target }}
+          path: release/sidecar/*
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download sidecar artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-sidecar
+
+      - name: Inspect downloaded sidecar artifacts
+        run: find release-sidecar -type f -exec ls -lh {} \;
+
+      - name: Check existing GitHub release state
+        id: release_state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="openclaw-sidecar-v${{ inputs.sidecar_version }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft >/tmp/openclaw-sidecar-release.json 2>/dev/null; then
+            if [[ "$(jq -r '.isDraft' /tmp/openclaw-sidecar-release.json)" != "true" ]]; then
+              echo "::error::GitHub release ${TAG} already exists and is published. Use a new sidecar revision."
+              exit 1
+            fi
+            echo "state=draft" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=missing" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create draft GitHub release
+        if: steps.release_state.outputs.state == 'missing'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="openclaw-sidecar-v${{ inputs.sidecar_version }}"
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --draft \
+            --title "OpenClaw Sidecar ${{ inputs.sidecar_version }}" \
+            --notes "Draft OpenClaw sidecar release for ${{ inputs.sidecar_version }}"
+
+      - name: Generate pinned sidecar version manifest
+        run: |
+          node scripts/merge-openclaw-sidecar-version-manifest.mjs \
+            --input-dir release-sidecar \
+            --version "${{ inputs.sidecar_version }}" \
+            --output build/openclaw-sidecar-version.json
+          cat build/openclaw-sidecar-version.json
+
+      - name: Upload sidecar assets to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="openclaw-sidecar-v${{ inputs.sidecar_version }}"
+          mapfile -t SIDE_CAR_ASSETS < <(find release-sidecar -type f -name "*.tar.gz" | sort)
+
+          if [[ "${#SIDE_CAR_ASSETS[@]}" -eq 0 ]]; then
+            echo "::error::No OpenClaw sidecar tarballs were produced."
+            exit 1
+          fi
+
+          gh release upload "$TAG" \
+            "${SIDE_CAR_ASSETS[@]}" \
+            build/openclaw-sidecar-version.json \
+            --clobber \
+            --repo "${{ github.repository }}"
+
+      - name: Upload generated version manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-sidecar-version-manifest
+          path: build/openclaw-sidecar-version.json
+          retention-days: 7
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="openclaw-sidecar-v${{ inputs.sidecar_version }}"
+          gh release edit "$TAG" \
+            --draft=false \
+            --repo "${{ github.repository }}"

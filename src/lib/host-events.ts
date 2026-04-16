@@ -9,6 +9,8 @@ const HOST_EVENT_TO_IPC_CHANNEL: Record<string, string> = {
   'gateway:chat-message': 'gateway:chat-message',
   'gateway:channel-status': 'gateway:channel-status',
   'gateway:exit': 'gateway:exit',
+  'openclaw:sidecar-status': 'openclaw:sidecar-status',
+  'openclaw:managed-plugin-status': 'openclaw:managed-plugin-status',
   'oauth:code': 'oauth:code',
   'oauth:success': 'oauth:success',
   'oauth:error': 'oauth:error',

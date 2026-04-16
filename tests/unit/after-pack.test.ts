@@ -88,6 +88,30 @@ describe('after-pack bundled runtime sync', () => {
     expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'index.d.cts'))).toBe(false);
   });
 
+  it('removes nested node_modules .bin directories that can preserve invalid absolute symlinks', async () => {
+    const { cleanupUnnecessaryFiles } = await import('../../scripts/after-pack.cjs');
+
+    const packageRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-cleanup-bin-'));
+    tempDirs.push(packageRoot);
+
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'), { recursive: true });
+    mkdirSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin'), { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'),
+      'console.log("helper");\n',
+      'utf8',
+    );
+    symlinkSync(
+      '/tmp/outside-bundle/helper.js',
+      join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin', 'helper'),
+    );
+
+    cleanupUnnecessaryFiles(packageRoot);
+
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', '.bin'))).toBe(false);
+    expect(existsSync(join(packageRoot, 'node_modules', 'pkg', 'node_modules', 'helper', 'bin', 'helper.js'))).toBe(true);
+  });
+
   it('prunes built-in extension node_modules when all package identities match top-level packages', async () => {
     const { canPruneExtensionNodeModulesAgainstTopLevel, pruneExtensionNodeModulesAgainstTopLevel } = await import('../../scripts/after-pack.cjs');
 
@@ -208,5 +232,213 @@ describe('after-pack bundled runtime sync', () => {
     expect(lstatSync(extNodeModules).isDirectory()).toBe(true);
     expect(existsSync(join(extNodeModules, 'discord-api-types'))).toBe(false);
     expect(lstatSync(join(extNodeModules, 'magic-bytes.js')).isDirectory()).toBe(true);
+  });
+
+  it('merges built-in extension packages into the top-level bundle when shared chunks need them', async () => {
+    const { syncBuiltInExtensionNodeModules } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-extension-merge-'));
+    tempDirs.push(openclawRoot);
+
+    mkdirSync(join(openclawRoot, 'node_modules'), { recursive: true });
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'telegram', 'node_modules');
+    mkdirSync(join(extNodeModules, '@scope', 'shared-helper'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@scope', 'shared-helper', 'package.json'),
+      '{"name":"@scope/shared-helper","version":"1.0.0"}\n',
+      'utf8',
+    );
+
+    const result = syncBuiltInExtensionNodeModules(openclawRoot, openclawRoot);
+
+    expect(result).toEqual({
+      extensionNodeModules: 1,
+      mergedPackages: 1,
+    });
+    expect(existsSync(join(openclawRoot, 'node_modules', '@scope', 'shared-helper', 'package.json'))).toBe(true);
+  });
+
+  it('bundles compatibility runtime deps for plugins with undeclared workspace imports', async () => {
+    const { getExtraBundledPluginPackages } = await import('../../scripts/after-pack.cjs');
+
+    // expect(getExtraBundledPluginPackages('@martian-engineering/lossless-claw')).toEqual([
+    //   '@mariozechner/pi-coding-agent',
+    // ]);
+    expect(getExtraBundledPluginPackages('@soimy/dingtalk')).toEqual([]);
+  });
+
+  it('removes packages whose package.json os/cpu constraints do not match the target bundle', async () => {
+    const { cleanupNativePlatformPackages } = await import('../../scripts/after-pack.cjs');
+
+    const nodeModulesRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-native-'));
+    tempDirs.push(nodeModulesRoot);
+
+    mkdirSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64', 'package.json'),
+      '{"name":"@tloncorp/tlon-skill-darwin-arm64","version":"0.3.5"}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, '@tloncorp', 'tlon-skill', 'package.json'),
+      '{"name":"@tloncorp/tlon-skill","version":"0.3.5"}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, 'future-native-helper'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, 'future-native-helper', 'package.json'),
+      '{"name":"future-native-helper","version":"1.0.0","os":["darwin"],"cpu":["arm64"]}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(nodeModulesRoot, 'portable-helper'), { recursive: true });
+    writeFileSync(
+      join(nodeModulesRoot, 'portable-helper', 'package.json'),
+      '{"name":"portable-helper","version":"1.0.0","os":["darwin","linux"],"cpu":["x64","arm64"]}\n',
+      'utf8',
+    );
+
+    expect(cleanupNativePlatformPackages(nodeModulesRoot, 'darwin', 'x64')).toBe(2);
+    expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill-darwin-arm64'))).toBe(false);
+    expect(existsSync(join(nodeModulesRoot, '@tloncorp', 'tlon-skill'))).toBe(true);
+    expect(existsSync(join(nodeModulesRoot, 'future-native-helper'))).toBe(false);
+    expect(existsSync(join(nodeModulesRoot, 'portable-helper'))).toBe(true);
+  });
+
+  it('removes non-target native packages from built-in extension node_modules too', async () => {
+    const { cleanupExtensionNativePlatformPackages } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-extension-native-'));
+    tempDirs.push(openclawRoot);
+
+    const extNodeModules = join(openclawRoot, 'dist', 'extensions', 'discord', 'node_modules');
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu', 'package.json'),
+      '{"name":"@snazzah/davey-linux-x64-gnu","version":"0.0.0","os":["linux"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    mkdirSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'), { recursive: true });
+    writeFileSync(
+      join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc', 'package.json'),
+      '{"name":"@snazzah/davey-darwin-x64-msvc","version":"0.0.0","os":["darwin"],"cpu":["x64"]}\n',
+      'utf8',
+    );
+
+    expect(cleanupExtensionNativePlatformPackages(openclawRoot, 'darwin', 'x64')).toBe(1);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-linux-x64-gnu'))).toBe(false);
+    expect(existsSync(join(extNodeModules, '@snazzah', 'davey-darwin-x64-msvc'))).toBe(true);
+  });
+
+  it('prunes non-target prebuild directories before archiving the sidecar payload', async () => {
+    const { cleanupNativePrebuilds } = await import('../../scripts/after-pack.cjs');
+
+    const openclawRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-prebuilds-'));
+    tempDirs.push(openclawRoot);
+
+    const prebuildsDir = join(openclawRoot, 'node_modules', 'bare-fs', 'prebuilds');
+    mkdirSync(join(prebuildsDir, 'darwin-x64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-arm64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-universal'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'ios-x64-simulator'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'linux-x64'), { recursive: true });
+    writeFileSync(join(prebuildsDir, 'darwin-x64', 'bare-fs.bare'), 'x64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-arm64', 'bare-fs.bare'), 'arm64\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-universal', 'bare-fs.bare'), 'universal\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'ios-x64-simulator', 'bare-fs.bare'), 'ios\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'linux-x64', 'bare-fs.bare'), 'linux\n', 'utf8');
+
+    expect(cleanupNativePrebuilds(openclawRoot, 'darwin', 'x64')).toBe(3);
+    expect(existsSync(join(prebuildsDir, 'darwin-x64'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-universal'))).toBe(true);
+    expect(existsSync(join(prebuildsDir, 'darwin-arm64'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'ios-x64-simulator'))).toBe(false);
+    expect(existsSync(join(prebuildsDir, 'linux-x64'))).toBe(false);
+  });
+
+  it('only signs the native file types we explicitly allow for the sidecar payload', async () => {
+    const { isPotentialMacCodeSignCandidate } = await import('../../scripts/after-pack.cjs');
+
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/native.node')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/libvips.dylib')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/bare-fs.bare')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/spawn-helper')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/esbuild/bin/esbuild')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/node_modules/@esbuild/darwin-arm64/bin/esbuild')).toBe(true);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/tlon')).toBe(false);
+    expect(isPotentialMacCodeSignCandidate('/tmp/pkg/helper.so')).toBe(false);
+  });
+
+  it('archives the packaged OpenClaw runtime into a sidecar payload and removes the raw bundle', async () => {
+    const { createOpenClawSidecarArchive } = await import('../../scripts/after-pack.cjs');
+
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-resources-'));
+    const openclawRoot = join(resourcesDir, 'openclaw');
+    tempDirs.push(resourcesDir);
+
+    const entryPath = join(openclawRoot, 'openclaw.mjs');
+
+    mkdirSync(openclawRoot, { recursive: true });
+    writeFileSync(join(openclawRoot, 'package.json'), '{"name":"openclaw","version":"2026.4.10"}\n', 'utf8');
+    writeFileSync(entryPath, 'export {};\n', 'utf8');
+
+    const archiveInfo = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+
+    expect(archiveInfo).toMatchObject({
+      sidecarRoot: join(resourcesDir, 'runtime', 'openclaw'),
+      payloadPath: join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'),
+      version: '2026.4.10',
+    });
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
+    expect(existsSync(openclawRoot)).toBe(false);
+  });
+
+  it('builds Windows tar invocations without passing absolute drive-letter archive paths', async () => {
+    const { getTarCreateInvocation } = await import('../../scripts/after-pack.cjs');
+
+    expect(
+      getTarCreateInvocation('C:\\tmp\\sidecar\\payload.tar.gz', 'C:\\tmp\\openclaw', 'win32'),
+    ).toEqual({
+      command: 'tar.exe',
+      args: ['-czf', 'payload.tar.gz', '-C', 'C:\\tmp\\openclaw', '.'],
+      options: { stdio: 'inherit', cwd: 'C:\\tmp\\sidecar' },
+    });
+  });
+
+  it('copies a prebuilt OpenClaw sidecar into packaged resources when available', async () => {
+    const { copyPrebuiltOpenClawSidecar, getPrebuiltOpenClawSidecarRoot } = await import('../../scripts/after-pack.cjs');
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-project-'));
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-resources-'));
+    tempDirs.push(projectRoot, resourcesDir);
+
+    const prebuiltRoot = getPrebuiltOpenClawSidecarRoot(projectRoot, 'darwin', 'x64');
+    mkdirSync(prebuiltRoot, { recursive: true });
+    writeFileSync(
+      join(prebuiltRoot, 'archive.json'),
+      JSON.stringify({ format: 'tar.gz', path: 'payload.tar.gz', version: '2026.4.10-r1' }) + '\n',
+      'utf8',
+    );
+    writeFileSync(join(prebuiltRoot, 'payload.tar.gz'), 'payload\n', 'utf8');
+    writeFileSync(join(prebuiltRoot, 'manifest.json'), '{"version":"2026.4.10-r1"}\n', 'utf8');
+    writeFileSync(join(prebuiltRoot, 'SHA256SUMS'), 'deadbeef  payload.tar.gz\n', 'utf8');
+
+    const copied = copyPrebuiltOpenClawSidecar(projectRoot, resourcesDir, 'darwin', 'x64');
+
+    expect(copied).toMatchObject({
+      prebuiltRoot,
+      sidecarRoot: join(resourcesDir, 'runtime', 'openclaw'),
+      payloadPath: join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'),
+      version: '2026.4.10-r1',
+    });
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'archive.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'payload.tar.gz'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'manifest.json'))).toBe(true);
+    expect(existsSync(join(resourcesDir, 'runtime', 'openclaw', 'SHA256SUMS'))).toBe(true);
   });
 });

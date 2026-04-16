@@ -75,6 +75,48 @@ export function hasEquivalentFinalAssistantMessage(
   });
 }
 
+function getMessageAttachmentFingerprint(message: RawMessage): string {
+  return (message._attachedFiles || [])
+    .map((file) => file.filePath || file.url || file.fileName || '')
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
+
+export function hasPersistedOptimisticUserCopy(
+  messages: RawMessage[],
+  candidate: RawMessage,
+  anchorTimestampMs: number | null,
+  isConversationStart = false,
+): boolean {
+  if (candidate.role !== 'user') return false;
+
+  const candidateText = getMessageText(candidate.content).trim();
+  const candidateAttachments = getMessageAttachmentFingerprint(candidate);
+  const candidateTimestampMs = typeof candidate.timestamp === 'number' ? toMs(candidate.timestamp) : null;
+
+  return messages.some((message) => {
+    if (message.role !== 'user') return false;
+    if (getMessageText(message.content).trim() !== candidateText) return false;
+    if (getMessageAttachmentFingerprint(message) !== candidateAttachments) return false;
+
+    const messageTimestampMs = typeof message.timestamp === 'number' ? toMs(message.timestamp) : null;
+    if (anchorTimestampMs != null && messageTimestampMs != null && messageTimestampMs <= anchorTimestampMs) {
+      return false;
+    }
+    if (
+      !isConversationStart
+      && candidateTimestampMs != null
+      && messageTimestampMs != null
+      && messageTimestampMs < candidateTimestampMs - 2_000
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 export function stripRenderedPrefixFromStreamingText(
   fullText: string,
   streamSegments: Array<{ text: string; ts: number }>,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -306,5 +307,29 @@ describe('ChatInput preset agent skills loading', () => {
 
     expect(await screen.findByText('composer.safety.toolPermission')).toBeInTheDocument();
     expect(screen.getByText('composer.safety.approvalPolicy')).toBeInTheDocument();
+  });
+
+  it('renders the disabled model setup call-to-action when provided', async () => {
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <ChatInput
+            onSend={vi.fn()}
+            disabled
+            disabledHint="composer.modelSetupHint"
+            disabledAction={{
+              to: '/settings/model-providers',
+              label: 'composer.openModelProviders',
+            }}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(screen.getByText('composer.modelSetupHint')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'composer.openModelProviders' })).toHaveAttribute(
+      'href',
+      '/settings/model-providers',
+    );
   });
 });

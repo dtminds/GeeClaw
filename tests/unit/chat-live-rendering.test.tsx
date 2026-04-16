@@ -96,7 +96,7 @@ describe('chat live rendering', () => {
     expect(markdownBlocks).toHaveLength(2);
   });
 
-  it('renders friendly process and session tool card labels in Chinese', () => {
+  it('hides process tool cards while keeping session tool cards in Chinese', () => {
     render(
       <div>
         <ChatMessage
@@ -131,12 +131,12 @@ describe('chat live rendering', () => {
       </div>,
     );
 
-    expect(screen.getByText('process 查看进程状态')).toBeInTheDocument();
+    expect(screen.queryByText('process 查看进程状态')).not.toBeInTheDocument();
     expect(screen.getByText('启动子任务 整理日志')).toBeInTheDocument();
     expect(screen.getByText('等待子任务结果')).toBeInTheDocument();
   });
 
-  it('keeps process and session tool card labels in English outside Chinese locale', () => {
+  it('hides process tool cards while keeping session tool cards in English outside Chinese locale', () => {
     mockLanguage = 'en-US';
 
     render(
@@ -171,7 +171,7 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByText('process poll')).toBeInTheDocument();
+    expect(screen.queryByText('process poll')).not.toBeInTheDocument();
     expect(screen.getByText('sessions_spawn spawn · analyze logs')).toBeInTheDocument();
     expect(screen.getByText('sessions_yield yield')).toBeInTheDocument();
   });
@@ -449,7 +449,7 @@ describe('chat live rendering', () => {
     expect(screen.getByRole('img', { name: 'underwater-city' })).toHaveAttribute('src', 'https://example.com/underwater-city.png');
   });
 
-  it('preserves ClawX tool name mapping and icon while keeping the richer summary detail', () => {
+  it('preserves tool name mapping and icon while keeping the richer summary detail', () => {
     render(
       <ChatMessage
         message={{

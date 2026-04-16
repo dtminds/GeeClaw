@@ -2,7 +2,9 @@ import type { Location } from 'react-router-dom';
 
 export type SettingsModalSection =
   | 'appearance'
-  | 'models'
+  | 'memory'
+  | 'modelProviders'
+  | 'modelConfig'
   | 'webSearch'
   | 'safety'
   | 'gateway'
@@ -14,7 +16,9 @@ export type SettingsModalSection =
 
 const SETTINGS_SECTION_SEGMENTS: Record<SettingsModalSection, string> = {
   appearance: 'appearance',
-  models: 'models',
+  memory: 'memory',
+  modelProviders: 'model-providers',
+  modelConfig: 'model-config',
   webSearch: 'web-search',
   safety: 'safety',
   gateway: 'gateway',
@@ -46,6 +50,7 @@ export function getSettingsModalPath(section: SettingsModalSection): string {
 
 export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/appearance')) return 'appearance';
+  if (pathname.startsWith('/settings/memory')) return 'memory';
   if (pathname.startsWith('/settings/web-search')) return 'webSearch';
   if (pathname.startsWith('/settings/safety')) return 'safety';
   if (pathname.startsWith('/settings/gateway')) return 'gateway';
@@ -55,6 +60,8 @@ export function resolveSettingsSection(pathname: string): SettingsModalSection {
   if (pathname.startsWith('/settings/environment')) return 'environment';
   if (pathname.startsWith('/settings/general')) return 'general';
   if (pathname.startsWith('/settings/app')) return 'appearance';
-  if (pathname.startsWith('/settings/models')) return 'models';
+  if (pathname.startsWith('/settings/model-providers')) return 'modelProviders';
+  if (pathname.startsWith('/settings/model-config')) return 'modelConfig';
+  if (pathname.startsWith('/settings/models')) return 'modelProviders';
   return 'appearance';
 }

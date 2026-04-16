@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import { tmpdir } from 'node:os';
 import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
@@ -7,8 +7,23 @@ const forkMock = vi.fn();
 const spawnMock = vi.fn();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
-let openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
+let openclawRuntimeDir = join(process.cwd(), 'openclaw-runtime/node_modules/openclaw');
 let openclawRuntimeSource: 'bundled' | 'system' = 'bundled';
+let providerAccounts: Array<{
+  id: string;
+  vendorId: string;
+  enabled: boolean;
+  updatedAt: string;
+}> = [];
+const runtimeDirsToCleanup = new Set<string>();
+
+function createMockOpenClawRuntime(prefix: string): string {
+  const runtimeDir = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(join(runtimeDir, 'node_modules'), { recursive: true });
+  writeFileSync(join(runtimeDir, 'openclaw.mjs'), 'export {};', 'utf-8');
+  runtimeDirsToCleanup.add(runtimeDir);
+  return runtimeDir;
+}
 
 vi.mock('electron', () => ({
   app: {
@@ -50,9 +65,23 @@ vi.mock('@electron/utils/secure-storage', () => ({
   getProvider: vi.fn(async () => null),
 }));
 
+vi.mock('@electron/services/providers/provider-store', () => ({
+  listProviderAccounts: vi.fn(async () => providerAccounts),
+}));
+
 vi.mock('@electron/utils/provider-registry', () => ({
   getProviderEnvVar: vi.fn(() => null),
   getKeyableProviderTypes: vi.fn(() => []),
+  getProviderConfig: vi.fn((type: string) => {
+    if (type === 'geeclaw') {
+      return {
+        baseUrl: 'https://geekai.co/api/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'GEECLAW_API_KEY',
+      };
+    }
+    return undefined;
+  }),
 }));
 
 vi.mock('@electron/utils/openclaw-runtime', () => ({
@@ -98,12 +127,29 @@ vi.mock('@electron/utils/openclaw-config-sanitize', () => ({
   sanitizeOpenClawConfig: vi.fn(async () => {}),
 }));
 
+vi.mock('@electron/utils/openclaw-safety-settings', () => ({
+  syncOpenClawSafetySettings: vi.fn(async () => {}),
+}));
+
+vi.mock('@electron/utils/openclaw-ssrf-policy-settings', () => ({
+  syncOpenClawSsrfPolicySettings: vi.fn(async () => {}),
+}));
+
 vi.mock('@electron/utils/plugin-install', () => ({
   syncBundledPluginLoadPathsToOpenClaw: vi.fn(async () => {}),
   ensureAlwaysEnabledBundledPluginsConfigured: vi.fn(async () => ({
     success: true,
     updated: [],
   })),
+}));
+
+vi.mock('@electron/utils/openclaw-memory-settings', () => ({
+  syncLosslessClawInstallStateToOpenClaw: vi.fn(async () => false),
+  initializeMemoryDefaultsOnStartup: vi.fn(async () => false),
+}));
+
+vi.mock('@electron/utils/managed-plugin-installer', () => ({
+  ensureManagedPluginsReadyBeforeGatewayLaunch: vi.fn(async () => []),
 }));
 
 vi.mock('@electron/utils/proxy', () => ({
@@ -146,8 +192,177 @@ beforeEach(() => {
   vi.clearAllMocks();
   openclawConfigDir = '/Users/test/.openclaw-geeclaw';
   homeDir = '/Users/test';
-  openclawRuntimeDir = join(process.cwd(), 'node_modules/openclaw');
+  openclawRuntimeDir = createMockOpenClawRuntime('geeclaw-openclaw-runtime-');
   openclawRuntimeSource = 'bundled';
+  providerAccounts = [];
+});
+
+afterEach(() => {
+  for (const runtimeDir of runtimeDirsToCleanup) {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+  runtimeDirsToCleanup.clear();
+});
+
+describe('syncGatewayConfigBeforeLaunch', () => {
+  it('repairs managed SSRF policy settings before Gateway launch', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const { syncOpenClawSsrfPolicySettings } = await import('@electron/utils/openclaw-ssrf-policy-settings');
+
+    await syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788);
+
+    expect(syncOpenClawSsrfPolicySettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues startup patching when proxy sync fails', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    const { logger } = await import('@electron/utils/logger');
+
+    vi.mocked(syncProxyConfigToOpenClaw).mockRejectedValueOnce(new Error('proxy sync failed'));
+
+    await expect(syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788)).resolves.toBeUndefined();
+
+    expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+    expect(sanitizeOpenClawConfig).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith('Failed to sync proxy config to openclaw.json:', expect.any(Error));
+  });
+
+  it('initializes memory defaults after lossless install-state sync during startup patching', async () => {
+    const { syncGatewayConfigBeforeLaunch } = await import('@electron/gateway/config-sync');
+    const {
+      syncLosslessClawInstallStateToOpenClaw,
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
+    await syncGatewayConfigBeforeLaunch({
+      gatewayToken: 'gateway-token',
+      proxyEnabled: false,
+    } as Awaited<ReturnType<typeof import('@electron/utils/store').getAllSettings>>, 28788);
+
+    expect(syncLosslessClawInstallStateToOpenClaw).toHaveBeenCalledTimes(1);
+    expect(initializeMemoryDefaultsOnStartup).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(syncLosslessClawInstallStateToOpenClaw).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(initializeMemoryDefaultsOnStartup).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('installs managed plugins before startup config sync runs', async () => {
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      await prepareGatewayLaunchContext(28788);
+
+      expect(ensureManagedPluginsReadyBeforeGatewayLaunch).toHaveBeenCalledTimes(1);
+      expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        vi.mocked(syncProxyConfigToOpenClaw).mock.invocationCallOrder[0],
+      );
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('continues gateway launch when managed plugin preparation completes without blocking', async () => {
+    const { ensureManagedPluginsReadyBeforeGatewayLaunch } = await import('@electron/utils/managed-plugin-installer');
+    vi.mocked(ensureManagedPluginsReadyBeforeGatewayLaunch).mockResolvedValueOnce([]);
+
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      await expect(prepareGatewayLaunchContext(28788)).resolves.toMatchObject({
+        appSettings: {
+          gatewayToken: 'gateway-token',
+        },
+      });
+      expect(ensureManagedPluginsReadyBeforeGatewayLaunch).toHaveBeenCalledTimes(1);
+      expect(syncProxyConfigToOpenClaw).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('injects GEECLAW_API_KEY when an enabled GeeClaw account exists', async () => {
+    const { getApiKey } = await import('@electron/utils/secure-storage');
+
+    providerAccounts = [{
+      id: 'geeclaw-account',
+      vendorId: 'geeclaw',
+      enabled: true,
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    }];
+    vi.mocked(getApiKey).mockImplementation(async (providerId: string) => (
+      providerId === 'geeclaw-account' ? 'geeclaw-secret' : null
+    ));
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+      const context = await prepareGatewayLaunchContext(28788);
+      expect(context.forkEnv.GEECLAW_API_KEY).toBe('geeclaw-secret');
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not inject GEECLAW_API_KEY for disabled GeeClaw accounts', async () => {
+    const { getApiKey } = await import('@electron/utils/secure-storage');
+
+    providerAccounts = [{
+      id: 'geeclaw-account',
+      vendorId: 'geeclaw',
+      enabled: false,
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    }];
+    vi.mocked(getApiKey).mockImplementation(async (providerId: string) => (
+      providerId === 'geeclaw-account' ? 'geeclaw-secret' : null
+    ));
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+      const context = await prepareGatewayLaunchContext(28788);
+      expect(context.forkEnv.GEECLAW_API_KEY).toBeUndefined();
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('buildGatewayForkEnv', () => {
@@ -251,7 +466,7 @@ describe('prepareGatewayLaunchContext', () => {
     }
   });
 
-  it('patches doctor bundled runtime-deps repair to respect disabled bundled plugins', async () => {
+  it('does not rewrite bundled doctor sources during launch preparation', async () => {
     homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
     openclawRuntimeDir = mkdtempSync(join(tmpdir(), 'geeclaw-openclaw-'));
@@ -288,11 +503,9 @@ describe('prepareGatewayLaunchContext', () => {
     try {
       await prepareGatewayLaunchContext(28788);
 
-      const patchedDoctorSource = readFileSync(doctorPatchTarget, 'utf-8');
-      expect(patchedDoctorSource).toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS');
-      expect(patchedDoctorSource).toContain(
-        'if (bundledPluginsDisabledRaw === "1" || bundledPluginsDisabledRaw === "true") return;',
-      );
+      const bundledDoctorSource = readFileSync(doctorPatchTarget, 'utf-8');
+      expect(bundledDoctorSource).not.toContain('OPENCLAW_DISABLE_BUNDLED_PLUGINS');
+      expect(bundledDoctorSource).not.toContain('bundledPluginsDisabledRaw');
     } finally {
       rmSync(openclawRuntimeDir, { recursive: true, force: true });
       rmSync(openclawConfigDir, { recursive: true, force: true });
@@ -427,13 +640,13 @@ describe('prepareGatewayLaunchContext', () => {
       const [command, args, options] = spawnMock.mock.calls[0] as [string, string[], { cwd: string; stdio: string[]; windowsHide: boolean }];
       expect(command).toMatch(/node(?:\.exe)?$/);
       expect(args).toEqual([
-        join(process.cwd(), 'node_modules/openclaw/openclaw.mjs'),
+        join(openclawRuntimeDir, 'openclaw.mjs'),
         '--profile',
         'geeclaw',
         'setup',
       ]);
       expect(options).toEqual(expect.objectContaining({
-        cwd: join(process.cwd(), 'node_modules/openclaw'),
+        cwd: openclawRuntimeDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       }));
@@ -487,7 +700,7 @@ describe('prepareGatewayLaunchContext', () => {
 
       const launchContext = await launchPromise;
       expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
-      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       expect(launchContext.gatewayArgs).toEqual([
         '--profile',
         'geeclaw',
@@ -558,7 +771,7 @@ describe('prepareGatewayLaunchContext', () => {
       if (resolved) {
         const launchContext = await launchPromise;
         expect(launchContext.forkEnv.CUSTOM_RUNTIME_TOKEN).toBe('managed-secret');
-        expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('1');
+        expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       }
     } finally {
       exitHandler?.(0);
@@ -615,7 +828,7 @@ describe('prepareGatewayLaunchContext', () => {
 
       const launchContext = await launchPromise;
       expect(launchContext.forkEnv.OPENCLAW_SKIP_CHANNELS).toBe('');
-      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBe('');
+      expect(launchContext.forkEnv.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
       expect(launchContext.channelStartupSummary).toBe('enabled(discord)');
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });

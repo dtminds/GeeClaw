@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostApiFetchMock = vi.fn();
 
@@ -6,6 +6,7 @@ vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
 }));
 
+import { AppError } from '@/lib/error-model';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -111,6 +112,10 @@ describe('chat store session selection', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('keeps the targeted agent selected when session refresh does not include the newly created main session yet', async () => {
     hostApiFetchMock.mockResolvedValueOnce({
       success: true,
@@ -181,6 +186,43 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().currentAgentId).toBe('main');
   });
 
+  it('refreshes session selection without eagerly loading chat history', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      if (method === 'chat.history') {
+        return { messages: [] };
+      }
+      return {};
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: rpcMock,
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'writer',
+      isDraftSession: false,
+    });
+
+    hostApiFetchMock.mockResolvedValueOnce({
+      sessions: [writerSession, mainSession],
+    });
+
+    await useChatStore.getState().loadSessions();
+
+    expect(useChatStore.getState().currentSessionKey).toBe(writerSession.gatewaySessionKey);
+    expect(useChatStore.getState().currentDesktopSessionId).toBe(writerSession.id);
+    expect(rpcMock).toHaveBeenCalledWith('sessions.list', {});
+    expect(rpcMock).not.toHaveBeenCalledWith('chat.history', expect.anything());
+  });
+
   it('marks the chat as loading while opening an existing agent main session history', async () => {
     const historyDeferred = createDeferred<{ messages: [] }>();
 
@@ -217,6 +259,209 @@ describe('chat store session selection', () => {
     await openPromise;
 
     expect(useChatStore.getState().loading).toBe(false);
+  });
+
+  it('retries history loading when gateway startup unavailability is surfaced via structured error metadata', async () => {
+    vi.useFakeTimers();
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/api/desktop-sessions/desktop-main' && init?.method === 'PUT') {
+        return { success: true, session: { ...mainSession, lastMessagePreview: 'main session', updatedAt: 1000 } };
+      }
+      return { sessions: [] };
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [mainSession],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'main',
+      loading: false,
+      messages: [],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === mainSession.gatewaySessionKey) {
+          historyCalls += 1;
+          if (historyCalls === 1) {
+            throw new AppError('GATEWAY', 'gateway startup still warming history', undefined, {
+              gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+            });
+          }
+          return {
+            messages: [{ id: 'main-msg', role: 'assistant', content: 'main session', timestamp: 1 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().openAgentMainSession('main');
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(true);
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().error).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(historyCalls).toBe(2);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'main-msg', content: 'main session' }),
+    ]);
+    expect(useChatStore.getState().currentSessionKey).toBe(mainSession.gatewaySessionKey);
+    expect(useChatStore.getState().isDraftSession).toBe(false);
+  });
+
+  it('stops retrying chat history after bounded startup attempts and surfaces the error', async () => {
+    vi.useFakeTimers();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [mainSession],
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'main',
+      loading: false,
+      messages: [],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === mainSession.gatewaySessionKey) {
+          historyCalls += 1;
+          throw new AppError('GATEWAY', `startup unavailable attempt ${historyCalls}`, undefined, {
+            gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+          });
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().openAgentMainSession('main');
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(historyCalls).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(historyCalls).toBe(3);
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(historyCalls).toBe(4);
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(historyCalls).toBe(4);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().error).toContain('startup unavailable attempt 4');
+  });
+
+  it('keeps existing messages visible while startup retries run in the background', async () => {
+    vi.useFakeTimers();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [{ id: 'existing-msg', role: 'assistant', content: 'existing session', timestamp: 1 }],
+      error: null,
+    });
+
+    let historyCalls = 0;
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          historyCalls += 1;
+          if (historyCalls === 1) {
+            throw new AppError('GATEWAY', 'startup unavailable while existing messages are visible', undefined, {
+              gatewayErrorCode: 'CHAT_HISTORY_STARTUP_UNAVAILABLE',
+            });
+          }
+          return {
+            messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 2 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    const loadPromise = useChatStore.getState().loadHistory();
+    await Promise.resolve();
+
+    expect(historyCalls).toBe(1);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'existing-msg', content: 'existing session' }),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await loadPromise;
+
+    expect(historyCalls).toBe(2);
+    expect(useChatStore.getState().loading).toBe(false);
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
+    ]);
+  });
+
+  it('clears stale errors after a successful quiet history reload', async () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [{ id: 'existing-msg', role: 'assistant', content: 'existing session', timestamp: 1 }],
+      error: 'previous transient failure',
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 2 }],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
+    ]);
+    expect(useChatStore.getState().error).toBeNull();
   });
 
   it('ignores stale history responses after the selected session changes', async () => {
@@ -471,4 +716,353 @@ describe('chat store session selection', () => {
     expect(messages[1]?.id).toBe('new-msg');
     expect(messages[1]?.content).toBe('newer optimistic message');
   });
+
+  it('does not append the optimistic user message when history already contains the current send after a delayed start', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 30_000,
+      messages: [
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 30,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 30,
+              },
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 + 6,
+              },
+              {
+                id: 'assistant-delta',
+                role: 'assistant',
+                content: 'thinking',
+                timestamp: optimisticSentAtMs / 1000 + 6.2,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.map((message) => message.id)).toEqual([
+      'prev-assistant',
+      'persisted-user',
+      'assistant-delta',
+    ]);
+  });
+
+  it('keeps the new optimistic user message when an older run sent the same text', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 1_000,
+      messages: [
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 1,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'old-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 20,
+              },
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 1,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.at(-1)?.id).toBe('optimistic-user');
+    expect(messages.at(-1)?.content).toBe('你好');
+  });
+
+  it('keeps the current optimistic user message when the previous run used the same text within five seconds', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 1_000,
+      messages: [
+        {
+          id: 'previous-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000 - 2,
+        },
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 1,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'previous-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 2,
+              },
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 1,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.map((message) => message.id)).toEqual([
+      'previous-user',
+      'prev-assistant',
+      'optimistic-user',
+    ]);
+  });
+
+  it('does not append the first optimistic user message when history already contains its persisted copy', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: null,
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 10,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe('persisted-user');
+  });
+
+  it('ignores an older same-session history reload once a newer send has started', async () => {
+    const firstSentAtMs = 1_700_000_000_000;
+    const secondSentAtMs = firstSentAtMs + 2_000;
+    const historyDeferred = createDeferred<{ messages: Array<Record<string, unknown>> }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: false,
+      messages: [
+        {
+          id: 'persisted-user-1',
+          role: 'user',
+          content: '你好',
+          timestamp: firstSentAtMs / 1000,
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '第一轮回复',
+          timestamp: (firstSentAtMs + 1_000) / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return historyDeferred.promise;
+        }
+        return {};
+      }),
+    });
+
+    const lateReloadPromise = useChatStore.getState().loadHistory(true);
+
+    useChatStore.setState((state) => ({
+      ...state,
+      sending: true,
+      lastUserMessageAt: secondSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user-2',
+      pendingOptimisticUserAnchorAt: firstSentAtMs + 1_000,
+      historyRequestGeneration: state.historyRequestGeneration + 1,
+      messages: [
+        ...state.messages,
+        {
+          id: 'optimistic-user-2',
+          role: 'user',
+          content: '你好',
+          timestamp: secondSentAtMs / 1000,
+        },
+      ],
+    }));
+
+    historyDeferred.resolve({
+      messages: [
+        {
+          id: 'persisted-user-1',
+          role: 'user',
+          content: '你好',
+          timestamp: firstSentAtMs / 1000,
+        },
+      ],
+    });
+
+    await lateReloadPromise;
+
+    const messages = useChatStore.getState().messages;
+    expect(messages.map((message) => message.id)).toEqual([
+      'persisted-user-1',
+      'assistant-1',
+      'optimistic-user-2',
+    ]);
+  });
+
 });

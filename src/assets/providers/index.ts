@@ -8,21 +8,23 @@ import siliconflow from './siliconflow.svg';
 import minimaxPortal from './minimax.svg';
 import qwenPortal from './qwen.svg';
 import ollama from './ollama.svg';
+import geeclaw from './geeclaw.svg';
 import custom from './custom.svg';
 
 export const providerIcons: Record<string, string> = {
-    anthropic,
-    openai,
-    google,
-    openrouter,
-    geekai: custom,
-    ark,
-    moonshot,
-    siliconflow,
-    'minimax-portal': minimaxPortal,
-    'minimax-portal-cn': minimaxPortal,
-    modelstudio: qwenPortal,
-    'qwen-portal': qwenPortal,
-    ollama,
-    custom,
+  anthropic,
+  openai,
+  google,
+  openrouter,
+  geeclaw,
+  ark,
+  moonshot,
+  'moonshot-global': moonshot,
+  siliconflow,
+  'minimax-portal': minimaxPortal,
+  'minimax-portal-cn': minimaxPortal,
+  modelstudio: qwenPortal,
+  'qwen-portal': qwenPortal,
+  ollama,
+  custom,
 };

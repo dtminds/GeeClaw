@@ -82,6 +82,7 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
     qqbot: ['openclaw-qqbot'],
   };
   const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
+  const CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR = new Set(['wecom']);
 
   // Mirror of the production blocklist logic
   const skills = config.skills;
@@ -205,6 +206,10 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
         continue;
       }
 
+      if (CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR.has(channelType)) {
+        continue;
+      }
+
       const accounts = section.accounts as Record<string, Record<string, unknown>> | undefined;
       const defaultAccountId =
         typeof section.defaultAccount === 'string' && section.defaultAccount.trim()
@@ -226,9 +231,9 @@ async function sanitizeConfig(filePath: string): Promise<boolean> {
     }
   }
 
-  // Mirror: remove stale tools.web.search.kimi.apiKey when moonshot provider exists.
+  // Mirror: remove stale tools.web.search.kimi.apiKey when Moonshot provider exists.
   const providers = ((config.models as Record<string, unknown> | undefined)?.providers as Record<string, unknown> | undefined) || {};
-  if (providers.moonshot) {
+  if (providers.moonshot || providers['moonshot-global']) {
     const tools = (config.tools as Record<string, unknown> | undefined) || {};
     const web = (tools.web as Record<string, unknown> | undefined) || {};
     const search = (web.search as Record<string, unknown> | undefined) || {};
@@ -500,6 +505,34 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
     expect(kimi.baseUrl).toBe('https://api.moonshot.cn/v1');
   });
 
+  it('removes tools.web.search.kimi.apiKey when moonshot-global provider exists', async () => {
+    await writeConfig({
+      models: {
+        providers: {
+          'moonshot-global': { baseUrl: 'https://api.moonshot.ai/v1', api: 'openai-completions' },
+        },
+      },
+      tools: {
+        web: {
+          search: {
+            kimi: {
+              apiKey: 'stale-inline-key',
+              baseUrl: 'https://api.moonshot.ai/v1',
+            },
+          },
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    const kimi = ((((result.tools as Record<string, unknown>).web as Record<string, unknown>).search as Record<string, unknown>).kimi as Record<string, unknown>);
+    expect(kimi).not.toHaveProperty('apiKey');
+    expect(kimi.baseUrl).toBe('https://api.moonshot.ai/v1');
+  });
+
   it('keeps tools.web.search.kimi.apiKey when moonshot provider is absent', async () => {
     const original = {
       commands: {
@@ -595,6 +628,61 @@ describe('sanitizeOpenClawConfig (blocklist approach)', () => {
         botToken: 'telegram-token',
       },
     });
+  });
+
+  it('does not mirror the configured default account credentials to the wecom channel top level', async () => {
+    await writeConfig({
+      channels: {
+        wecom: {
+          enabled: true,
+          defaultAccount: 'helper',
+          accounts: {
+            helper: {
+              enabled: true,
+              botId: 'bot-helper',
+              secret: 'secret-helper',
+              dmPolicy: 'open',
+              allowFrom: ['*'],
+            },
+            sales: {
+              enabled: true,
+              botId: 'bot-sales',
+              secret: 'secret-sales',
+              dmPolicy: 'open',
+              allowFrom: ['*'],
+            },
+          },
+        },
+      },
+    });
+
+    const modified = await sanitizeConfig(configPath);
+    expect(modified).toBe(true);
+
+    const result = await readConfig();
+    expect(result.channels).toEqual({
+      wecom: {
+        enabled: true,
+        defaultAccount: 'helper',
+        accounts: {
+          helper: {
+            enabled: true,
+            botId: 'bot-helper',
+            secret: 'secret-helper',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+          sales: {
+            enabled: true,
+            botId: 'bot-sales',
+            secret: 'secret-sales',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+        },
+      },
+    });
+    expect(result.commands).toEqual({ restart: true });
   });
 
   it('strips dingtalk multi-account metadata while preserving flat credentials', async () => {

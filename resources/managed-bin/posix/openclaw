@@ -27,8 +27,8 @@ STATE_DIR="${HOME}/.openclaw-geeclaw"
 CONFIG_PATH="${STATE_DIR}/openclaw.json"
 PROFILE_NAME="geeclaw"
 
-if [ -f "$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs" ]; then
-  CLI="$PROJECT_ROOT/node_modules/openclaw/openclaw.mjs"
+if [ -f "$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs" ]; then
+  CLI="$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs"
   DEV_BUNDLED_ROOT="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)"
   DEV_BUNDLED_BIN="$PROJECT_ROOT/resources/bin/$(uname | tr '[:upper:]' '[:lower:]')-$(bin_arch)/bin"
   if [ -d "$DEV_BUNDLED_ROOT" ]; then
@@ -41,7 +41,17 @@ elif [ "$(uname)" = "Darwin" ]; then
   # macOS: <App>.app/Contents/Resources/managed-bin/openclaw
   # SCRIPT_DIR = .../Contents/Resources/managed-bin
   CONTENTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-  CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"
+  if [ -n "${GEECLAW_USER_DATA_DIR:-}" ]; then
+    USER_DATA_DIR="$GEECLAW_USER_DATA_DIR"
+  else
+    USER_DATA_DIR="$HOME/Library/Application Support/GeeClaw"
+  fi
+  SIDECAR_CLI="$USER_DATA_DIR/runtime/openclaw-sidecar/openclaw.mjs"
+  if [ -f "$SIDECAR_CLI" ]; then
+    CLI="$SIDECAR_CLI"
+  else
+    CLI="$CONTENTS_DIR/Resources/openclaw/openclaw.mjs"
+  fi
   BUNDLED_ROOT="$CONTENTS_DIR/Resources/bin"
   BUNDLED_BIN="$CONTENTS_DIR/Resources/bin/bin"
   if [ -d "$BUNDLED_ROOT" ]; then
@@ -54,7 +64,19 @@ else
   # Linux: /opt/GeeClaw/resources/managed-bin/openclaw
   # SCRIPT_DIR = .../resources/managed-bin
   INSTALL_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-  CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
+  if [ -n "${GEECLAW_USER_DATA_DIR:-}" ]; then
+    USER_DATA_DIR="$GEECLAW_USER_DATA_DIR"
+  elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    USER_DATA_DIR="$XDG_CONFIG_HOME/GeeClaw"
+  else
+    USER_DATA_DIR="$HOME/.config/GeeClaw"
+  fi
+  SIDECAR_CLI="$USER_DATA_DIR/runtime/openclaw-sidecar/openclaw.mjs"
+  if [ -f "$SIDECAR_CLI" ]; then
+    CLI="$SIDECAR_CLI"
+  else
+    CLI="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
+  fi
   BUNDLED_ROOT="$INSTALL_DIR/resources/bin"
   BUNDLED_BIN="$INSTALL_DIR/resources/bin/bin"
   if [ -d "$BUNDLED_ROOT" ]; then

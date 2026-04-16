@@ -3,11 +3,15 @@ import { constants } from 'fs';
 import { LEGACY_BUILTIN_CHANNEL_PLUGIN_IDS, LEGACY_BUILTIN_PLUGIN_ID_SET } from './legacy-built-in-plugins';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getManagedAgentWorkspacePath } from './managed-agent-workspace';
-import { OPENCLAW_PROVIDER_KEY_MOONSHOT } from './provider-keys';
+import {
+  OPENCLAW_PROVIDER_KEY_MOONSHOT,
+  OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL,
+} from './provider-keys';
 
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
 const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
+const CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR = new Set(['wecom']);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -240,6 +244,10 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           continue;
         }
 
+        if (CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR.has(channelType)) {
+          continue;
+        }
+
         const accounts = section.accounts as Record<string, Record<string, unknown>> | undefined;
         const defaultAccountId =
           typeof section.defaultAccount === 'string' && section.defaultAccount.trim()
@@ -285,7 +293,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       console.log(`[sanitize] Removed deprecated auth.profiles.${LEGACY_QWEN_PROVIDER}`);
     }
 
-    if (providers[OPENCLAW_PROVIDER_KEY_MOONSHOT]) {
+    if (providers[OPENCLAW_PROVIDER_KEY_MOONSHOT] || providers[OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL]) {
       const tools = (config.tools as Record<string, unknown> | undefined) || {};
       const web = (tools.web as Record<string, unknown> | undefined) || {};
       const search = (web.search as Record<string, unknown> | undefined) || {};

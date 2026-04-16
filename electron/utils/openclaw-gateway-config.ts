@@ -1,12 +1,13 @@
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 
 export async function syncGatewayTokenToConfig(token: string, gatewayPort?: number): Promise<void> {
-  await mutateOpenClawConfigDocument<void>((config) => {
+  const changed = await mutateOpenClawConfigDocument<boolean>((config) => {
     const gateway = (
       config.gateway && typeof config.gateway === 'object'
         ? { ...(config.gateway as Record<string, unknown>) }
         : {}
     ) as Record<string, unknown>;
+    const before = JSON.stringify(gateway);
 
     const auth = (
       gateway.auth && typeof gateway.auth === 'object'
@@ -35,11 +36,18 @@ export async function syncGatewayTokenToConfig(token: string, gatewayPort?: numb
     if (typeof gatewayPort === 'number' && Number.isFinite(gatewayPort) && gatewayPort > 0) {
       gateway.port = gatewayPort;
     }
-    config.gateway = gateway;
 
-    return { changed: true, result: undefined };
+    const nextChanged = JSON.stringify(gateway) !== before;
+    if (nextChanged) {
+      config.gateway = gateway;
+    }
+
+    return { changed: nextChanged, result: nextChanged };
   });
-  console.log('Synced gateway token to openclaw.json');
+
+  if (changed) {
+    console.log('Synced gateway token to openclaw.json');
+  }
 }
 
 export async function syncBrowserConfigToOpenClaw(): Promise<void> {

@@ -1,13 +1,14 @@
 import { app } from 'electron';
 import path from 'path';
 import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'fs';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile } from 'fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { getAllSettings } from '../utils/store';
 import { resolveGeeClawAppEnvironment } from '../utils/app-env';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
+import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import { getOpenClawConfigDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { listConfiguredChannels } from '../utils/channel-config';
@@ -16,6 +17,7 @@ import { buildProxyEnv, resolveProxySettings } from '../utils/proxy';
 import { syncProxyConfigToOpenClaw } from '../utils/openclaw-proxy';
 import { syncAllProviderRuntimeConfigToOpenClaw } from '../services/providers/provider-runtime-sync';
 import { syncAllAgentConfigToOpenClaw } from "../services/agents/agent-runtime-sync";
+import { listProviderAccounts } from '../services/providers/provider-store';
 import {
   ensureAlwaysEnabledSkillsConfigured,
   migrateManagedPreinstalledSkillsToBundledSource,
@@ -24,10 +26,16 @@ import {
 } from '../utils/skill-config';
 import { sanitizeOpenClawConfig } from '../utils/openclaw-config-sanitize';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
+import { syncOpenClawSsrfPolicySettings } from '../utils/openclaw-ssrf-policy-settings';
 import {
   ensureAlwaysEnabledBundledPluginsConfigured,
   syncBundledPluginLoadPathsToOpenClaw,
 } from '../utils/plugin-install';
+import { ensureManagedPluginsReadyBeforeGatewayLaunch } from '../utils/managed-plugin-installer';
+import {
+  initializeMemoryDefaultsOnStartup,
+  syncLosslessClawInstallStateToOpenClaw,
+} from '../utils/openclaw-memory-settings';
 
 import { syncAllChannelConfigToOpenClaw } from '../services/channels/channel-runtime-sync';
 import {
@@ -42,7 +50,7 @@ import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
 import { getBundledNodePath } from '../utils/managed-bin';
-import { ensureOpenClawDoctorBundledRuntimeDepsPatch } from '../utils/openclaw-doctor-patch';
+import { mutateOpenClawConfigDocument } from '../utils/openclaw-config-coordinator';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
@@ -222,21 +230,11 @@ function getManagedSessionsDir(openclawConfigDir: string): string {
   return path.join(openclawConfigDir, 'agents', 'main', 'sessions');
 }
 
-async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPort: number): Promise<void> {
-  const configPath = getManagedOpenClawConfigPath(openclawConfigDir);
-
-  await mkdir(openclawConfigDir, { recursive: true });
-
-  let config: Record<string, unknown> = {};
-  if (existsSync(configPath)) {
-    try {
-      config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
-    } catch (error) {
-      throw new Error(`Failed to parse managed OpenClaw config at ${configPath}: ${String(error)}`, {
-        cause: error,
-      });
-    }
-  }
+function reconcileManagedWorkspaceBootstrap(
+  config: Record<string, unknown>,
+  gatewayPort: number,
+): boolean {
+  let changed = false;
 
   const agents = (
     config.agents && typeof config.agents === 'object'
@@ -254,22 +252,71 @@ async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPo
       : {}
   ) as Record<string, unknown>;
 
-  defaults.workspace = getManagedAgentWorkspacePath('main');
-  heartbeat.every = MANAGED_AGENT_HEARTBEAT_EVERY;
+  const managedWorkspacePath = getManagedAgentWorkspacePath('main');
+  if (defaults.workspace !== managedWorkspacePath) {
+    defaults.workspace = managedWorkspacePath;
+    changed = true;
+  }
+  if (heartbeat.every !== MANAGED_AGENT_HEARTBEAT_EVERY) {
+    heartbeat.every = MANAGED_AGENT_HEARTBEAT_EVERY;
+    changed = true;
+  }
+  if (defaults.maxConcurrent !== MANAGED_AGENT_MAX_CONCURRENT) {
+    defaults.maxConcurrent = MANAGED_AGENT_MAX_CONCURRENT;
+    changed = true;
+  }
+
   defaults.heartbeat = heartbeat;
-  defaults.maxConcurrent = MANAGED_AGENT_MAX_CONCURRENT;
   agents.defaults = defaults;
-  config.agents = agents;
 
   const gateway = (
     config.gateway && typeof config.gateway === 'object'
       ? { ...(config.gateway as Record<string, unknown>) }
       : {}
   ) as Record<string, unknown>;
-  gateway.port = gatewayPort;
-  config.gateway = gateway;
+  if (gateway.port !== gatewayPort) {
+    gateway.port = gatewayPort;
+    changed = true;
+  }
 
-  await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  if (changed) {
+    config.agents = agents;
+    config.gateway = gateway;
+  }
+
+  return changed;
+}
+
+async function ensureManagedWorkspaceConfig(openclawConfigDir: string, gatewayPort: number): Promise<void> {
+  const configPath = getManagedOpenClawConfigPath(openclawConfigDir);
+
+  await mkdir(openclawConfigDir, { recursive: true });
+
+  if (existsSync(configPath)) {
+    try {
+      JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    } catch (error) {
+      throw new Error(`Failed to parse managed OpenClaw config at ${configPath}: ${String(error)}`, {
+        cause: error,
+      });
+    }
+  }
+
+  await mutateOpenClawConfigDocument<void>((config) => ({
+    changed: reconcileManagedWorkspaceBootstrap(config, gatewayPort),
+    result: undefined,
+  }));
+}
+
+async function runStartupPatchStep(
+  errorMessage: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    logger.warn(errorMessage, err);
+  }
 }
 
 function resolveOpenClawSetupCommand(entryScript: string): {
@@ -501,17 +548,13 @@ export async function syncGatewayConfigBeforeLaunch(
   // Sync channels and agents FIRST so that if they were manually deleted from
   // openclaw.json, they are restored from the local store before any other
   // startup routine calls writeOpenClawConfig() and accidentally wipes the store.
-  try {
+  await runStartupPatchStep('Failed to sync channel configs to openclaw.json on startup:', async () => {
     await syncAllChannelConfigToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync channel configs to openclaw.json on startup:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync agent configs to openclaw.json on startup:', async () => {
     await syncAllAgentConfigToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync agent configs to openclaw.json on startup:', err);
-  }
+  });
 
   try {
     cleanupStaleBuiltInExtensions(getOpenClawConfigDir());
@@ -519,73 +562,65 @@ export async function syncGatewayConfigBeforeLaunch(
     logger.warn('Failed to clean stale built-in extensions:', err);
   }
 
-  await syncProxyConfigToOpenClaw(appSettings);
+  await runStartupPatchStep('Failed to sync proxy config to openclaw.json:', async () => {
+    await syncProxyConfigToOpenClaw(appSettings);
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sanitize openclaw.json:', async () => {
     await sanitizeOpenClawConfig();
-  } catch (err) {
-    logger.warn('Failed to sanitize openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync safety settings to openclaw.json:', async () => {
     await syncOpenClawSafetySettings(appSettings);
-  } catch (err) {
-    logger.warn('Failed to sync safety settings to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync SSRF policy settings to openclaw.json:', async () => {
+    await syncOpenClawSsrfPolicySettings();
+  });
+
+  await runStartupPatchStep('Failed to sync bundled plugin load paths to openclaw.json:', async () => {
     await syncBundledPluginLoadPathsToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync bundled plugin load paths to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync lossless-claw install state to openclaw.json:', async () => {
+    await syncLosslessClawInstallStateToOpenClaw();
+  });
+
+  await runStartupPatchStep('Failed to initialize memory defaults in openclaw.json:', async () => {
+    await initializeMemoryDefaultsOnStartup();
+  });
+
+  await runStartupPatchStep('Failed to sync bundled skill load paths to openclaw.json:', async () => {
     await syncPreinstalledSkillLoadPathsToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync bundled skill load paths to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to migrate managed preinstalled skills to bundled sources:', async () => {
     await migrateManagedPreinstalledSkillsToBundledSource();
-  } catch (err) {
-    logger.warn('Failed to migrate managed preinstalled skills to bundled sources:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync always-enabled bundled plugins to openclaw.json:', async () => {
     await ensureAlwaysEnabledBundledPluginsConfigured();
-  } catch (err) {
-    logger.warn('Failed to sync always-enabled bundled plugins to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync gateway token to openclaw.json:', async () => {
     await syncGatewayTokenToConfig(appSettings.gatewayToken, port);
-  } catch (err) {
-    logger.warn('Failed to sync gateway token to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync browser config to openclaw.json:', async () => {
     await syncBrowserConfigToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync browser config to openclaw.json:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync explicit skill toggles to openclaw.json on startup:', async () => {
     await syncExplicitSkillTogglesToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync explicit skill toggles to openclaw.json on startup:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync always-enabled skills to openclaw.json on startup:', async () => {
     await ensureAlwaysEnabledSkillsConfigured();
-  } catch (err) {
-    logger.warn('Failed to sync always-enabled skills to openclaw.json on startup:', err);
-  }
+  });
 
-  try {
+  await runStartupPatchStep('Failed to sync provider configs to openclaw.json on startup:', async () => {
     await syncAllProviderRuntimeConfigToOpenClaw();
-  } catch (err) {
-    logger.warn('Failed to sync provider configs to openclaw.json on startup:', err);
-  }
+  });
 }
 
 async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>; loadedProviderKeyCount: number }> {
@@ -599,7 +634,7 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
       const defaultProvider = await getProvider(defaultProviderId);
       const defaultProviderType = defaultProvider?.type;
       const defaultProviderKey = await getApiKey(defaultProviderId);
-      if (defaultProviderType && defaultProviderKey) {
+      if (defaultProvider?.enabled && defaultProviderType && defaultProviderKey) {
         const envVar = getProviderEnvVar(defaultProviderType);
         if (envVar) {
           providerEnv[envVar] = defaultProviderKey;
@@ -626,12 +661,27 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
     }
   }
 
+  try {
+    const geeclawAccount = (await listProviderAccounts())
+      .filter((account) => account.vendorId === 'geeclaw' && account.enabled)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+
+    if (geeclawAccount && !providerEnv.GEECLAW_API_KEY) {
+      const geeclawKey = await getApiKey(geeclawAccount.id);
+      if (geeclawKey) {
+        providerEnv.GEECLAW_API_KEY = geeclawKey;
+        loadedProviderKeyCount++;
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to load GeeClaw API key for environment injection:', err);
+  }
+
   return { providerEnv, loadedProviderKeyCount };
 }
 
 async function resolveChannelStartupPolicy(): Promise<{
   skipChannels: boolean;
-  disableBundledPlugins: boolean;
   channelStartupSummary: string;
 }> {
   try {
@@ -639,27 +689,28 @@ async function resolveChannelStartupPolicy(): Promise<{
     if (configuredChannels.length === 0) {
       return {
         skipChannels: true,
-        disableBundledPlugins: true,
         channelStartupSummary: 'skipped(no configured channels)',
       };
     }
 
     return {
       skipChannels: false,
-      disableBundledPlugins: false,
       channelStartupSummary: `enabled(${configuredChannels.join(',')})`,
     };
   } catch (error) {
     logger.warn('Failed to determine configured channels for gateway launch:', error);
     return {
       skipChannels: false,
-      disableBundledPlugins: false,
       channelStartupSummary: 'enabled(unknown)',
     };
   }
 }
 
 export async function prepareGatewayLaunchContext(port: number): Promise<GatewayLaunchContext> {
+  if (app.isPackaged) {
+    await materializePackagedOpenClawSidecar();
+  }
+
   const runtime = await getConfiguredOpenClawRuntime();
   const openclawDir = runtime.dir;
   const entryScript = runtime.entryPath;
@@ -671,10 +722,6 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   if (!entryScript || !existsSync(entryScript)) {
     throw new Error(`OpenClaw entry script not found at: ${entryScript}`);
-  }
-
-  if (runtime.source === 'bundled') {
-    ensureOpenClawDoctorBundledRuntimeDepsPatch(openclawDir);
   }
 
   const mode = app.isPackaged ? 'packaged' : 'dev';
@@ -701,6 +748,14 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     gatewayPort: port,
   });
 
+  await ensureManagedPluginsReadyBeforeGatewayLaunch({
+    openclawConfigDir,
+    finalPath,
+    managedAppEnv,
+    uvEnv,
+    proxyEnv,
+  });
+
   await syncGatewayConfigBeforeLaunch(appSettings, port);
 
   if (runtime.source === 'bundled') {
@@ -715,7 +770,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     '--allow-unconfigured',
   ]);
   const { providerEnv, loadedProviderKeyCount } = await loadProviderEnv();
-  const { skipChannels, disableBundledPlugins, channelStartupSummary } = await resolveChannelStartupPolicy();
+  const { skipChannels, channelStartupSummary } = await resolveChannelStartupPolicy();
   const resolvedProxy = resolveProxySettings(appSettings);
   const proxySummary = appSettings.proxyEnabled
     ? `http=${resolvedProxy.httpProxy || '-'}, https=${resolvedProxy.httpsProxy || '-'}, all=${resolvedProxy.allProxy || '-'}`
@@ -731,7 +786,6 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
       ...proxyEnv,
       OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
       OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
-      OPENCLAW_DISABLE_BUNDLED_PLUGINS: disableBundledPlugins ? '1' : '',
       CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',
     },
     openclawConfigDir,

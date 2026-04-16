@@ -1,7 +1,7 @@
 appId: app.dtminds.geeclaw
 productName: GeeClaw
 copyright: Copyright © 2026 GeeClaw
-compression: maximum
+compression: normal
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 directories:
@@ -27,7 +27,9 @@ extraResources:
       - "!managed-bin/**"
       - "!screenshot/**"
   # OpenClaw package (node_modules copied separately by afterPack hook
-  # because electron-builder respects .gitignore which excludes node_modules/)
+  # because electron-builder respects .gitignore which excludes node_modules/.
+  # afterPack completes the runtime, then archives it into runtime/openclaw/
+  # and removes the raw bundle before signing.)
   - from: build/openclaw/
     to: openclaw/
   - from: build/preinstalled-skills/
@@ -75,13 +77,7 @@ mac:
   icon: resources/icons/icon.icns
   target:
     - target: dmg
-      arch:
-        - x64
-        - arm64
     - target: zip
-      arch:
-        - x64
-        - arm64
   darkModeSupport: true
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -125,7 +121,6 @@ win:
     - target: nsis
       arch:
         - x64
-        - arm64
 
 nsis:
   oneClick: false

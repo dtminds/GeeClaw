@@ -49,7 +49,7 @@ Building AI agents shouldn't require mastering the command line. GeeClaw was des
 | Complex CLI setup | One-click installation with a simplified startup flow |
 | Configuration files | Visual settings with real-time validation |
 | Process management | Automatic gateway lifecycle management |
-| Multiple AI providers | Unified provider configuration panel |
+| Multiple AI providers | Separate Model Providers and Model Config settings |
 | Skill/plugin installation | Built-in skill marketplace and management |
 
 ### OpenClaw Inside
@@ -98,13 +98,14 @@ Environment variables for bundled search skills:
 Global runtime environment variables can now be managed directly in **Settings → Environment**. GeeClaw injects them into its managed Gateway and Agent runtimes, uses them when checking preset install requirements such as `requires.env`, and restarts the Gateway automatically after you save changes.
 
 ### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
+Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. GeeClaw now separates provider setup from model assignment: configure accounts under **Settings → Model Providers**, then choose the default chat / image / video models under **Settings → Model Config**. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in. The built-in **GeeClaw** provider accepts only an API key and routes OpenClaw traffic through a local loopback proxy, so runtime config stores `http://127.0.0.1:<port>/proxy` plus an env-backed key reference instead of the real upstream endpoint.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
 
 ### 📦 Bundled OpenClaw Runtime
 GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
+The packaged runtime currently excludes the upstream Tlon skill binaries so macOS signing and notarization remain stable.
 
 ---
 
@@ -143,12 +144,20 @@ pnpm dev
 ```
 ### First Launch
 
-When you launch GeeClaw for the first time, the **Setup Wizard** will guide you through:
+When you launch GeeClaw for the first time, the **Setup Wizard** focuses on getting the managed runtime ready:
 
 1. **Language & Region** – Configure your preferred locale
-2. **AI Provider** – Add providers with API keys or OAuth (for providers that support browser/device login)
-3. **Skill Bundles** – Select pre-configured skills for common use cases
-4. **Verification** – Test your configuration before entering the main interface
+2. **Runtime Preparation** – Verify the bundled OpenClaw runtime and supporting tools
+3. **Skill Bundles** – Install the default local skill/tool bundle
+4. **Enter the App** – Start using GeeClaw immediately after setup completes
+
+Model setup is now handled inside the main app:
+
+- Open **Settings → Model Providers** to add providers and their model catalogs.
+- The built-in **GeeClaw** provider is fixed-config: you only enter its API key, while the real upstream base URL stays hidden behind GeeClaw's local transparent proxy.
+- Open **Settings → Model Config** to choose the default chat model and optional image/PDF/image-generation/video-generation model slots.
+- If no provider models exist, the chat composer stays disabled and links you to **Model Providers**.
+- If provider models exist but no default chat model is configured, the chat composer links you to **Model Config** instead.
 
 GeeClaw manages its own OpenClaw runtime and state directory. If you already have legacy OpenClaw data under `~/.openclaw`, keep it as-is for migration or manual import; GeeClaw does not switch over to your system `openclaw` command for normal runtime operation.
 
@@ -181,6 +190,8 @@ Notes:
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
 - On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
 - The managed `openclaw` wrappers also pin `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`, `OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`, and default to `--profile geeclaw` so terminal usage matches GeeClaw's managed runtime.
+- On packaged Windows builds, uninstalling GeeClaw can remove `%LOCALAPPDATA%\\geeclaw`, `%APPDATA%\\geeclaw`, and `~/.geeclaw` on request, but it preserves `~/.openclaw-geeclaw` so managed OpenClaw state survives reinstall unless you delete it manually.
+- In packaged builds, those wrappers prefer the hydrated OpenClaw sidecar under the app's user-data runtime directory and fall back to the legacy bundled `resources/openclaw` layout when the sidecar has not been materialized yet.
 
 ### OpenCLI Browser Bridge Check
 
@@ -203,6 +214,18 @@ Open **Settings → Environment** to manage app-level environment variables for 
 - These values are merged into the managed Gateway process and inherited by managed Agent runs.
 - Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
 - Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
+
+### Memory Settings
+
+Open **Settings → Memory** to manage a small, beginner-friendly subset of OpenClaw memory features without editing `openclaw.json` directly.
+
+- The page currently exposes **Dreaming**, **Active Memory**, and **Lossless Claw** only.
+- Dreaming writes `plugins.entries["memory-core"].config.dreaming.enabled`.
+- Active Memory writes `plugins.entries["active-memory"].config.enabled`, optional `config.model`, and restores `config.agents = ["main"]` plus `config.modelFallbackPolicy = "default-remote"` when enabling.
+- Lossless Claw writes `plugins.entries["lossless-claw"].config.summaryModel` and toggles `plugins.slots.contextEngine` between `lossless-claw` and `legacy` while the plugin is installed.
+- GeeClaw checks `~/.openclaw-geeclaw/extensions/lossless-claw/package.json` before gateway startup and only installs or upgrades `lossless-claw` when the pinned version is missing or mismatched.
+- If `lossless-claw` installation fails during startup, GeeClaw blocks gateway launch, clears the managed `extensions/lossless-claw` directory to avoid partial installs, and leaves the feature unavailable until the next retry succeeds.
+- Saving Memory settings debounces a managed Gateway reload so the updated config takes effect immediately.
 
 ### Web Search Providers
 
@@ -304,6 +327,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 │   ├── i18n/                # Localization resources
 │   └── types/               # TypeScript type definitions
 ├── tests/
+│   ├── e2e/                 # Playwright Electron smoke coverage
 │   └── unit/                # Vitest unit/integration-like tests
 ├── resources/                # Static assets (icons/images)
 └── scripts/                  # Build and utility scripts
@@ -313,7 +337,7 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 ```bash
 # Development
 pnpm run init             # Install dependencies + download uv and bundled Node/npm
-pnpm dev                  # Start with hot reload
+pnpm dev                  # Start with hot reload (prefers repo-local openclaw-runtime)
 
 # Quality
 pnpm lint                 # Run ESLint
@@ -322,21 +346,81 @@ pnpm typecheck            # TypeScript validation
 
 # Testing
 pnpm test                 # Run unit tests
+pnpm run test:e2e         # Run macOS-only Electron smoke E2E (downloads the pinned OpenClaw sidecar first)
+pnpm run test:e2e:headed  # Run the same Electron smoke E2E with a visible window
 pnpm run verify           # Lint + typecheck + unit tests
 
 # Build & Package
 pnpm run build:vite       # Build frontend only
+pnpm run openclaw-runtime:prepare  # Ensure the repo-local runtime exists for local development
+pnpm run openclaw-runtime:install  # Refresh the repo-local OpenClaw runtime used by development and non-sidecar packaging
 pnpm run bundle:openclaw-plugins  # Refresh bundled OpenClaw plugin mirrors
-pnpm build                # Full production build (with packaging assets)
-pnpm package              # Package for current platform
-pnpm package:mac          # Package for macOS
-pnpm package:win          # Package for Windows
-pnpm package:linux        # Package for Linux
+pnpm run openclaw-sidecar:build -- --target darwin-arm64 --version 2026.4.10-r1  # Build a standalone OpenClaw sidecar artifact
+pnpm run openclaw-sidecar:download -- --target darwin-x64  # Download the pinned sidecar archive into build/prebuilt-sidecar/
+pnpm package:dev          # Prepare local packaging assets for non-sidecar development packaging
+pnpm package:mac:dir      # Build a local macOS dir package against the repo-local runtime
+pnpm package:mac:dir:quick # Fast local macOS dir packaging; reuses existing build/openclaw*, plugins, and skills assets
 ```
+
+### Electron E2E Smoke Test
+
+GeeClaw now includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
+
+- `pnpm run test:e2e` builds the app and launches the real Electron main process from `dist-electron/main/index.js`.
+- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar archive into `build/prebuilt-sidecar/`, hydrates it into `build/prebuilt-sidecar-runtime/`, and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
+- The test uses isolated temporary `HOME` and Electron `userData` directories so it does not touch your normal GeeClaw profile.
+- In E2E mode, GeeClaw skips setup/login/provider gating only. It still starts the real managed OpenClaw/Gateway stack before entering the main UI.
+- The current smoke coverage verifies that the app can boot into the main shell and navigate between Dashboard, Skills, and Channels.
 
 ### Release Notes For Auto-Update
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
+
+Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and for any local packaging flow that does not explicitly opt into a prebuilt sidecar. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
+
+In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
+
+For release CI, GeeClaw now requires a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`openclaw-runtime/version.json`](openclaw-runtime/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. If that tracked pin file is disabled, missing, or missing the current target asset, the release workflow fails fast instead of falling back to a local runtime rebuild.
+
+### OpenClaw Runtime Workflow
+
+For local development, initialize and refresh the runtime like this:
+
+```bash
+pnpm install
+pnpm run openclaw-runtime:prepare
+pnpm dev
+```
+
+- `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
+- Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
+- Treat sidecars as release artifacts, not as the default development input.
+
+To update the pinned sidecar version used by release CI:
+
+```bash
+gh release download openclaw-sidecar-v2026.4.10-r1 \
+  --pattern openclaw-sidecar-version.json \
+  --dir /tmp/openclaw-sidecar-v2026.4.10-r1
+cp /tmp/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-version.json \
+  openclaw-runtime/version.json
+```
+
+- Replace the tag with the exact sidecar release tag you want to pin.
+- Commit the updated [`openclaw-runtime/version.json`](openclaw-runtime/version.json) alongside the release change that should consume it.
+
+To verify a sidecar release artifact locally before running the full release workflow:
+
+```bash
+pnpm run openclaw-sidecar:download -- --target darwin-arm64
+pnpm run build:vite
+pnpm run package:resources
+GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
+```
+
+- Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
+- The `package:release:*` flows expect the prebuilt sidecar archive under `build/prebuilt-sidecar/<target>/`.
+- In the packaged app, confirm `Contents/Resources/runtime/openclaw/payload.tar.gz` exists and that the log shows `Using prebuilt OpenClaw sidecar`.
 
 Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
 without adding the plugin package to the app's top-level `node_modules/`. The

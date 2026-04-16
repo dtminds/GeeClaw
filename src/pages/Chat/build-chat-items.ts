@@ -1,4 +1,5 @@
 import type { RawMessage } from '@/stores/chat';
+import { shouldHideToolTrace } from './message-utils';
 
 export type ChatRenderItem = {
   key: string;
@@ -33,6 +34,39 @@ function makeAssistantTextMessage(text: string, timestamp: number, id: string): 
   };
 }
 
+function isHiddenToolOnlyMessage(message: RawMessage): boolean {
+  const role = (message.role || '').toLowerCase();
+  if ((role === 'toolresult' || role === 'tool_result') && shouldHideToolTrace(message.toolName)) {
+    return true;
+  }
+
+  if (!Array.isArray(message.content)) {
+    return false;
+  }
+
+  let sawHiddenToolBlock = false;
+  for (const block of message.content) {
+    if (!block || typeof block !== 'object') {
+      return false;
+    }
+
+    if (
+      (block.type === 'tool_use'
+        || block.type === 'toolCall'
+        || block.type === 'tool_result'
+        || block.type === 'toolResult')
+      && shouldHideToolTrace(block.name)
+    ) {
+      sawHiddenToolBlock = true;
+      continue;
+    }
+
+    return false;
+  }
+
+  return sawHiddenToolBlock;
+}
+
 export function buildChatItems({
   messages,
   toolMessages,
@@ -41,11 +75,18 @@ export function buildChatItems({
   streamingTextStartedAt,
   sessionKey,
 }: BuildChatItemsOptions): ChatRenderItem[] {
-  const items: ChatRenderItem[] = messages.map((message, index) => ({
-    key: messageKey(message, index),
-    message,
-    isStreaming: false,
-  }));
+  const items: ChatRenderItem[] = [];
+  messages.forEach((message, index) => {
+    if (isHiddenToolOnlyMessage(message)) {
+      return;
+    }
+
+    items.push({
+      key: messageKey(message, index),
+      message,
+      isStreaming: false,
+    });
+  });
 
   const maxLen = Math.max(streamSegments.length, toolMessages.length);
   for (let index = 0; index < maxLen; index += 1) {
@@ -59,7 +100,7 @@ export function buildChatItems({
     }
 
     const toolMessage = toolMessages[index];
-    if (toolMessage) {
+    if (toolMessage && !isHiddenToolOnlyMessage(toolMessage)) {
       items.push({
         key: messageKey(toolMessage, messages.length + index),
         message: toolMessage,

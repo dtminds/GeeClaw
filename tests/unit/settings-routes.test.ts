@@ -19,6 +19,9 @@ const buildWebSearchProviderAvailabilityMapMock = vi.fn();
 const buildWebSearchProviderEnvVarStatusMapMock = vi.fn();
 const deleteWebSearchProviderConfigMock = vi.fn();
 const readWebSearchSettingsSnapshotMock = vi.fn();
+const readMemorySettingsSnapshotMock = vi.fn();
+const applyMemorySettingsPatchMock = vi.fn();
+const installManagedPluginNowMock = vi.fn();
 const readOpenClawConfigDocumentMock = vi.fn();
 const mutateOpenClawConfigDocumentMock = vi.fn();
 const parseJsonBodyMock = vi.fn();
@@ -60,6 +63,15 @@ vi.mock('@electron/utils/openclaw-web-search-config', () => ({
   readWebSearchSettingsSnapshot: (...args: unknown[]) => readWebSearchSettingsSnapshotMock(...args),
 }));
 
+vi.mock('@electron/utils/openclaw-memory-settings', () => ({
+  readMemorySettingsSnapshot: (...args: unknown[]) => readMemorySettingsSnapshotMock(...args),
+  applyMemorySettingsPatch: (...args: unknown[]) => applyMemorySettingsPatchMock(...args),
+}));
+
+vi.mock('@electron/utils/managed-plugin-installer', () => ({
+  installManagedPluginNow: (...args: unknown[]) => installManagedPluginNowMock(...args),
+}));
+
 vi.mock('@electron/utils/openclaw-config-coordinator', () => ({
   readOpenClawConfigDocument: (...args: unknown[]) => readOpenClawConfigDocumentMock(...args),
   mutateOpenClawConfigDocument: (...args: unknown[]) => mutateOpenClawConfigDocumentMock(...args),
@@ -99,6 +111,34 @@ describe('handleSettingsRoutes', () => {
         enabled: false,
       },
       providerConfigByProvider: {},
+    });
+    readMemorySettingsSnapshotMock.mockResolvedValue({
+      dreaming: {
+        enabled: false,
+        status: 'disabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+        installJob: null,
+      },
+    });
+    applyMemorySettingsPatchMock.mockResolvedValue(false);
+    installManagedPluginNowMock.mockResolvedValue({
+      action: 'installed',
+      pluginId: 'lossless-claw',
+      installedVersion: '0.9.1',
+      previousVersion: null,
     });
     readOpenClawConfigDocumentMock.mockResolvedValue({});
     mutateOpenClawConfigDocumentMock.mockImplementation(async (
@@ -236,6 +276,179 @@ describe('handleSettingsRoutes', () => {
       200,
       expect.objectContaining({ success: true }),
     );
+  });
+
+  it('returns the memory settings snapshot', async () => {
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+        modelMode: 'custom',
+        status: 'enabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: '0.5.2',
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'disabled',
+        installJob: null,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+
+    await handleSettingsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/memory'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(readMemorySettingsSnapshotMock).toHaveBeenCalledWith({});
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({
+        dreaming: expect.objectContaining({ status: 'enabled' }),
+        activeMemory: expect.objectContaining({ model: 'openai/gpt-5.4-mini' }),
+      }),
+    );
+  });
+
+  it('persists memory settings and debounces a gateway reload when config changed', async () => {
+    parseJsonBodyMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+      },
+    });
+    applyMemorySettingsPatchMock.mockResolvedValueOnce(true);
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: true,
+        model: 'openai/gpt-5.4-mini',
+        modelMode: 'custom',
+        status: 'enabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.5.2',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+        installJob: null,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const debouncedReload = vi.fn();
+
+    await handleSettingsRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/settings/memory'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(mutateOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(applyMemorySettingsPatchMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        dreaming: {
+          enabled: true,
+        },
+      }),
+    );
+    expect(debouncedReload).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      expect.objectContaining({ success: true }),
+    );
+  });
+
+  it('starts lossless-claw installation on demand and returns the current memory snapshot', async () => {
+    readMemorySettingsSnapshotMock.mockResolvedValueOnce({
+      dreaming: {
+        enabled: false,
+        status: 'disabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: '0.9.1',
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'disabled',
+        installJob: null,
+      },
+    });
+
+    const { handleSettingsRoutes } = await import('@electron/api/routes/settings');
+    const res = {} as ServerResponse;
+    const restart = vi.fn();
+    const debouncedReload = vi.fn();
+
+    const handled = await handleSettingsRoutes(
+      { method: 'POST' } as IncomingMessage,
+      res,
+      new URL('http://127.0.0.1:13210/api/settings/memory/lossless-claw/install'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload,
+          restart,
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(installManagedPluginNowMock).toHaveBeenCalledWith({ pluginId: 'lossless-claw' });
+    expect(readOpenClawConfigDocumentMock).toHaveBeenCalledTimes(1);
+    expect(readMemorySettingsSnapshotMock).toHaveBeenCalledWith({});
+    expect(debouncedReload).not.toHaveBeenCalled();
+    expect(restart).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(res, 202, {
+      success: true,
+      settings: expect.objectContaining({
+        losslessClaw: expect.objectContaining({
+          installedVersion: '0.9.1',
+          status: 'disabled',
+        }),
+      }),
+    });
   });
 
   it('returns normalized web search provider descriptors', async () => {

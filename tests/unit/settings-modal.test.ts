@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getSettingsModalPath, resolveSettingsSection } from '@/lib/settings-modal';
 
 describe('settings modal paths', () => {
+  it('builds the memory settings path', () => {
+    expect(getSettingsModalPath('memory')).toBe('/settings/memory');
+  });
+
   it('builds the opencli settings path', () => {
     expect(getSettingsModalPath('opencli')).toBe('/settings/opencli');
   });
@@ -16,6 +20,14 @@ describe('settings modal paths', () => {
 
   it('builds the web search settings path', () => {
     expect(getSettingsModalPath('webSearch')).toBe('/settings/web-search');
+  });
+
+  it('builds the model provider settings path', () => {
+    expect(getSettingsModalPath('modelProviders')).toBe('/settings/model-providers');
+  });
+
+  it('builds the model config settings path', () => {
+    expect(getSettingsModalPath('modelConfig')).toBe('/settings/model-config');
   });
 
   it('builds the cli marketplace settings path', () => {
@@ -37,9 +49,23 @@ describe('settings modal paths', () => {
     expect(resolveSettingsSection('/settings/environment/runtime')).toBe('environment');
   });
 
+  it('resolves the memory settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/memory')).toBe('memory');
+    expect(resolveSettingsSection('/settings/memory/lossless')).toBe('memory');
+  });
+
   it('resolves the web search settings section from the route', () => {
     expect(resolveSettingsSection('/settings/web-search')).toBe('webSearch');
     expect(resolveSettingsSection('/settings/web-search/providers')).toBe('webSearch');
+  });
+
+  it('resolves the model provider settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/model-providers')).toBe('modelProviders');
+    expect(resolveSettingsSection('/settings/models')).toBe('modelProviders');
+  });
+
+  it('resolves the model config settings section from the route', () => {
+    expect(resolveSettingsSection('/settings/model-config')).toBe('modelConfig');
   });
 
   it('resolves the cli marketplace settings section from the route', () => {

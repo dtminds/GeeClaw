@@ -10,7 +10,7 @@ if /i "%1"=="update" (
     echo.
     echo To update openclaw, update GeeClaw:
     echo   Open GeeClaw ^> Settings ^> Check for Updates
-    echo   Or download the latest version from https://claw-x.com
+    echo   Or download the latest version from https://www.geeclaw.cn
     exit /b 0
 )
 
@@ -30,7 +30,22 @@ set OPENCLAW_EMBEDDED_IN=GeeClaw
 set "OPENCLAW_STATE_DIR=%STATE_DIR%"
 set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"
 set "NODE_EXE=%~dp0..\bin\node.exe"
-set "OPENCLAW_ENTRY=%~dp0..\openclaw\openclaw.mjs"
+set "LEGACY_ENTRY=%~dp0..\openclaw\openclaw.mjs"
+
+if defined GEECLAW_USER_DATA_DIR (
+    set "USER_DATA_DIR=%GEECLAW_USER_DATA_DIR%"
+) else if defined APPDATA (
+    set "USER_DATA_DIR=%APPDATA%\GeeClaw"
+) else (
+    set "USER_DATA_DIR=%USERPROFILE%\AppData\Roaming\GeeClaw"
+)
+
+set "SIDECAR_ENTRY=%USER_DATA_DIR%\runtime\openclaw-sidecar\openclaw.mjs"
+if exist "%SIDECAR_ENTRY%" (
+    set "OPENCLAW_ENTRY=%SIDECAR_ENTRY%"
+) else (
+    set "OPENCLAW_ENTRY=%LEGACY_ENTRY%"
+)
 
 if not exist "%OPENCLAW_ENTRY%" (
     echo Error: bundled openclaw entry not found at %OPENCLAW_ENTRY%

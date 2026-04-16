@@ -1,233 +1,47 @@
-/**
- * Provider Types & UI Metadata — single source of truth for the frontend.
- *
- * NOTE: Backend provider metadata is being refactored toward the new
- * account-based registry, but the renderer still keeps a local compatibility
- * layer so TypeScript project boundaries remain stable during the migration.
- */
-
-export const PROVIDER_TYPES = [
-  'anthropic',
-  'openai',
-  'google',
-  'openrouter',
-  'geekai',
-  'ark',
-  'moonshot',
-  'siliconflow',
-  'minimax-portal',
-  'minimax-portal-cn',
-  'modelstudio',
-  'ollama',
-  'custom',
-] as const;
-export type ProviderType = (typeof PROVIDER_TYPES)[number];
-
-export const BUILTIN_PROVIDER_TYPES = [
-  'anthropic',
-  'openai',
-  'google',
-  'openrouter',
-  'geekai',
-  'ark',
-  'moonshot',
-  'siliconflow',
-  'minimax-portal',
-  'minimax-portal-cn',
-  'modelstudio',
-  'ollama',
-] as const;
-
-export const OLLAMA_PLACEHOLDER_API_KEY = 'ollama-local';
-
-export type ProviderProtocol =
-  | 'openai-completions'
-  | 'openai-responses'
-  | 'anthropic-messages';
-
-export interface ProviderConfig {
-  id: string;
-  name: string;
-  type: ProviderType;
-  baseUrl?: string;
-  apiProtocol?: ProviderProtocol;
-  models?: string[];
-  /** @deprecated legacy single-model field kept for migration compatibility */
-  model?: string;
-  /** @deprecated legacy provider-level fallback field kept for migration compatibility */
-  fallbackModels?: string[];
-  /** @deprecated legacy provider-level fallback field kept for migration compatibility */
-  fallbackProviderIds?: string[];
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProviderWithKeyInfo extends ProviderConfig {
-  hasKey: boolean;
-  keyMasked: string | null;
-}
-
-export interface ProviderTypeInfo {
-  id: ProviderType;
-  name: string;
-  icon: string;
-  invertIconInDark?: boolean;
-  placeholder: string;
-  model?: string;
-  requiresApiKey: boolean;
-  defaultBaseUrl?: string;
-  showBaseUrl?: boolean;
-  showModelId?: boolean;
-  showModelIdInDevModeOnly?: boolean;
-  modelIdPlaceholder?: string;
-  defaultModelId?: string;
-  isOAuth?: boolean;
-  supportsApiKey?: boolean;
-  apiKeyUrl?: string;
-  docsUrl?: string;
-  docsUrlZh?: string;
-  codePlanPresetBaseUrl?: string;
-  codePlanPresetModelId?: string;
-  codePlanDocsUrl?: string;
-  hidden?: boolean;
-}
-
-export interface ProviderCodePlanPreset {
-  baseUrl: string;
-  modelId: string;
-}
-
-export type ProviderAuthMode =
-  | 'api_key'
-  | 'oauth_device'
-  | 'oauth_browser'
-  | 'local';
-
-export type ProviderVendorCategory =
-  | 'official'
-  | 'compatible'
-  | 'local'
-  | 'custom';
-
-export interface ProviderVendorInfo extends ProviderTypeInfo {
-  category: ProviderVendorCategory;
-  envVar?: string;
-  supportedAuthModes: ProviderAuthMode[];
-  defaultAuthMode: ProviderAuthMode;
-  supportsMultipleAccounts: boolean;
-}
-
-export interface ProviderAccount {
-  id: string;
-  vendorId: ProviderType;
-  label: string;
-  authMode: ProviderAuthMode;
-  baseUrl?: string;
-  apiProtocol?: ProviderProtocol;
-  models?: string[];
-  /** @deprecated legacy single-model field kept for migration compatibility */
-  model?: string;
-  /** @deprecated legacy provider-level fallback field kept for migration compatibility */
-  fallbackModels?: string[];
-  /** @deprecated legacy provider-level fallback field kept for migration compatibility */
-  fallbackAccountIds?: string[];
-  enabled: boolean;
-  isDefault: boolean;
-  metadata?: {
-    region?: string;
-    email?: string;
-    resourceUrl?: string;
-    customModels?: string[];
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
 import { providerIcons } from '@/assets/providers';
+import {
+  getProviderTypeInfo as getSharedProviderTypeInfo,
+  getProviderUiInfoList,
+} from '../../shared/providers/registry.ts';
+import {
+  getConfiguredProviderModelEntries as getSharedConfiguredProviderModelEntries,
+  getConfiguredProviderModels as getSharedConfiguredProviderModels,
+  getDefaultProviderModelEntries as getSharedDefaultProviderModelEntries,
+  normalizeProviderModelEntries as normalizeSharedProviderModelEntries,
+  normalizeProviderModelList as normalizeSharedProviderModelList,
+  resolveEffectiveProviderModelEntries as resolveSharedEffectiveProviderModelEntries,
+} from '../../shared/providers/config-models.ts';
+export {
+  BUILTIN_PROVIDER_TYPES,
+  OLLAMA_PLACEHOLDER_API_KEY,
+  PROVIDER_TYPES,
+  type ProviderAccount,
+  type ProviderAuthMode,
+  type ProviderCodePlanPreset,
+  type ProviderConfig,
+  type ProviderModelCatalogMode,
+  type ProviderModelCatalogState,
+  type ProviderConfiguredModel,
+  type ProviderModelEntry,
+  type ProviderModelInputModality,
+  type ProviderProtocol,
+  type ProviderType,
+  type ProviderTypeInfo,
+  type ProviderVendorCategory,
+  type ProviderVendorInfo,
+  type ProviderWithKeyInfo,
+} from '../../shared/providers/types.ts';
+import {
+  OLLAMA_PLACEHOLDER_API_KEY,
+  type ProviderCodePlanPreset,
+  type ProviderConfig,
+  type ProviderConfiguredModel,
+  type ProviderModelEntry,
+  type ProviderType,
+  type ProviderTypeInfo,
+} from '../../shared/providers/types.ts';
 
-/** All supported provider types with UI metadata */
-export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    icon: '🤖',
-    placeholder: 'sk-ant-api03-...',
-    model: 'Claude',
-    requiresApiKey: true,
-    docsUrl: 'https://platform.claude.com/docs/en/api/overview',
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    icon: '💚',
-    placeholder: 'sk-proj-...',
-    model: 'GPT',
-    requiresApiKey: true,
-    isOAuth: true,
-    supportsApiKey: true,
-    defaultModelId: 'gpt-5.4',
-    showModelId: true,
-    showModelIdInDevModeOnly: true,
-    modelIdPlaceholder: 'gpt-5.4',
-    apiKeyUrl: 'https://platform.openai.com/api-keys',
-  },
-  {
-    id: 'google',
-    name: 'Google',
-    icon: '🔷',
-    invertIconInDark: false,
-    placeholder: 'AIza...',
-    model: 'Gemini',
-    requiresApiKey: true,
-    isOAuth: true,
-    supportsApiKey: true,
-    defaultModelId: 'gemini-3-flash-preview',
-    showModelId: true,
-    showModelIdInDevModeOnly: true,
-    modelIdPlaceholder: 'gemini-3-flash-preview',
-    apiKeyUrl: 'https://aistudio.google.com/app/apikey',
-  },
-  { id: 'openrouter', name: 'OpenRouter', icon: '🌐', placeholder: 'sk-or-v1-...', model: 'Multi-Model', requiresApiKey: true, showModelId: true, modelIdPlaceholder: 'openai/gpt-5.4', defaultModelId: 'openai/gpt-5.4', docsUrl: 'https://openrouter.ai/models' },
-  { id: 'minimax-portal-cn', name: 'MiniMax', icon: '☁️', invertIconInDark: false, placeholder: 'sk-...', model: 'MiniMax', requiresApiKey: false, isOAuth: true, supportsApiKey: true, defaultModelId: 'MiniMax-M2.7', apiKeyUrl: 'https://platform.minimaxi.com/' },
-  { id: 'moonshot', name: 'Moonshot', icon: '🌙', placeholder: 'sk-...', model: 'Kimi', requiresApiKey: true, defaultBaseUrl: 'https://api.moonshot.cn/v1', defaultModelId: 'kimi-k2.5', docsUrl: 'https://platform.moonshot.cn/' },
-  { id: 'siliconflow', name: 'SiliconFlow', icon: '🌊', invertIconInDark: false, placeholder: 'sk-...', model: 'Multi-Model', requiresApiKey: true, defaultBaseUrl: 'https://api.siliconflow.cn/v1', showModelId: true, showModelIdInDevModeOnly: true, modelIdPlaceholder: 'deepseek-ai/DeepSeek-V3', defaultModelId: 'deepseek-ai/DeepSeek-V3', docsUrl: 'https://docs.siliconflow.cn/cn/userguide/introduction' },
-  { id: 'minimax-portal', name: 'MiniMax (Global)', icon: '☁️', invertIconInDark: false, placeholder: 'sk-...', model: 'MiniMax', requiresApiKey: false, isOAuth: true, supportsApiKey: true, defaultModelId: 'MiniMax-M2.7', apiKeyUrl: 'https://platform.minimax.io' },
-  {
-    id: 'modelstudio',
-    name: '阿里云百炼',
-    icon: '☁️',
-    invertIconInDark: false,
-    placeholder: 'sk-...',
-    model: 'Qwen',
-    requiresApiKey: true,
-    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    showBaseUrl: true,
-    defaultModelId: 'qwen3.6-plus',
-    showModelId: true,
-    modelIdPlaceholder: 'qwen3.6-plus',
-    apiKeyUrl: 'https://bailian.console.aliyun.com/',
-    docsUrl: 'https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope',
-    codePlanPresetBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-    codePlanPresetModelId: 'qwen3.5-plus',
-    codePlanDocsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan',
-  },
-  { id: 'ark', name: '火山方舟', icon: 'A', invertIconInDark: false, placeholder: 'your-ark-api-key', model: 'Doubao', requiresApiKey: true, defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'ep-20260228000000-xxxxx', docsUrl: 'https://www.volcengine.com/', codePlanPresetBaseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3', codePlanPresetModelId: 'ark-code-latest', codePlanDocsUrl: 'https://www.volcengine.com/docs/82379/1928261?lang=zh' },
-  { id: 'geekai', name: 'GeekAI', icon: '🦞', placeholder: 'sk-...', model: 'Multi-Model', requiresApiKey: true, showModelId: true, defaultModelId: 'qwen3.5-flash', hidden: true},
-  { id: 'ollama', name: 'Ollama', icon: '🦙', placeholder: 'Not required', requiresApiKey: false, defaultBaseUrl: 'http://localhost:11434/v1', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'qwen3:latest' },
-  {
-    id: 'custom',
-    name: 'Custom',
-    icon: '⚙️',
-    placeholder: 'API key...',
-    requiresApiKey: true,
-    showBaseUrl: true,
-    showModelId: true,
-    modelIdPlaceholder: 'your-provider/model-id',
-    docsUrl: 'https://icnnp7d0dymg.feishu.cn/wiki/BmiLwGBcEiloZDkdYnGc8RWnn6d#Ee1ldfvKJoVGvfxc32mcILwenth',
-    docsUrlZh: 'https://icnnp7d0dymg.feishu.cn/wiki/BmiLwGBcEiloZDkdYnGc8RWnn6d#IWQCdfe5fobGU3xf3UGcgbLynGh',
-  },
-];
+export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = getProviderUiInfoList();
 
 /** Get the SVG logo URL for a provider type, falls back to undefined */
 export function getProviderIconUrl(type: ProviderType | string): string | undefined {
@@ -245,12 +59,12 @@ export const SETUP_PROVIDERS = PROVIDER_TYPE_INFO.filter((provider) => !provider
 
 /** Get type info by provider type id */
 export function getProviderTypeInfo(type: ProviderType): ProviderTypeInfo | undefined {
-  return PROVIDER_TYPE_INFO.find((t) => t.id === type);
+  return getSharedProviderTypeInfo(type);
 }
 
 export function getProviderDocsUrl(
   provider: Pick<ProviderTypeInfo, 'docsUrl' | 'docsUrlZh'> | undefined,
-  language: string
+  language: string,
 ): string | undefined {
   if (!provider?.docsUrl) {
     return undefined;
@@ -265,17 +79,23 @@ export function getProviderDocsUrl(
 
 export function shouldShowProviderModelId(
   provider: Pick<ProviderTypeInfo, 'showModelId' | 'showModelIdInDevModeOnly'> | undefined,
-  devModeUnlocked: boolean
+  devModeUnlocked: boolean,
 ): boolean {
   if (!provider?.showModelId) return false;
   if (provider.showModelIdInDevModeOnly && !devModeUnlocked) return false;
   return true;
 }
 
+export function getDefaultProviderModelEntries(
+  provider: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
+): ProviderModelEntry[] {
+  return getSharedDefaultProviderModelEntries(provider);
+}
+
 export function resolveProviderModelForSave(
   provider: Pick<ProviderTypeInfo, 'defaultModelId' | 'showModelId' | 'showModelIdInDevModeOnly'> | undefined,
   modelId: string,
-  devModeUnlocked: boolean
+  devModeUnlocked: boolean,
 ): string | undefined {
   if (!shouldShowProviderModelId(provider, devModeUnlocked)) {
     return undefined;
@@ -329,30 +149,40 @@ export function resolveProviderApiKeyForSave(type: ProviderType | string, apiKey
 }
 
 export function normalizeProviderModelList(models?: Iterable<string | null | undefined>): string[] {
-  const seen = new Set<string>();
-  const results: string[] = [];
+  return normalizeSharedProviderModelList(models);
+}
 
-  for (const value of models ?? []) {
-    const normalized = typeof value === 'string' ? value.trim() : '';
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    results.push(normalized);
-  }
+export function normalizeProviderModelEntries(
+  models?: Iterable<ProviderConfiguredModel | null | undefined>,
+): ProviderModelEntry[] {
+  return normalizeSharedProviderModelEntries(models);
+}
 
-  return results;
+export function providerModelEntriesEqual(
+  left?: Iterable<ProviderConfiguredModel | null | undefined>,
+  right?: Iterable<ProviderConfiguredModel | null | undefined>,
+): boolean {
+  const normalizedLeft = normalizeProviderModelEntries(left);
+  const normalizedRight = normalizeProviderModelEntries(right);
+
+  return JSON.stringify(normalizedLeft) === JSON.stringify(normalizedRight);
 }
 
 export function getConfiguredProviderModels(
-  provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels'>
+  provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels'>,
 ): string[] {
-  if (provider.models && provider.models.length > 0) {
-    return normalizeProviderModelList(provider.models);
-  }
+  return getSharedConfiguredProviderModels(provider);
+}
 
-  return normalizeProviderModelList([
-    provider.model,
-    ...(provider.fallbackModels ?? []),
-  ]);
+export function getConfiguredProviderModelEntries(
+  provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels'>,
+): ProviderModelEntry[] {
+  return getSharedConfiguredProviderModelEntries(provider);
+}
+
+export function getEffectiveProviderModelEntries(
+  provider: Pick<ProviderConfig, 'models' | 'model' | 'fallbackModels' | 'metadata'>,
+  typeInfo: Pick<ProviderTypeInfo, 'defaultModels' | 'defaultModelId'> | undefined,
+): ProviderModelEntry[] {
+  return resolveSharedEffectiveProviderModelEntries(provider, typeInfo);
 }

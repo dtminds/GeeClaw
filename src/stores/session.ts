@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import i18n from '@/i18n';
+import { shouldSkipE2ELogin } from '@/lib/e2e';
 import { hostApiFetch } from '@/lib/host-api';
 import { toast } from 'sonner';
 import { USER_STATUS_ACTIVE, type UserStatus } from '../../shared/auth/user-status';
@@ -37,8 +37,6 @@ interface SessionStoreState {
   isInitialized: boolean;
   init: () => Promise<void>;
   loginWithWechat: () => Promise<void>;
-  submitInviteCode: (inviteCode: string) => Promise<void>;
-  skipInviteCode: () => Promise<void>;
   logout: () => Promise<void>;
   // Compatibility methods
   loginMock: () => Promise<void>;
@@ -78,29 +76,6 @@ function toUserFacingAuthMessage(error: unknown): string {
   return `登录失败（${code}），请稍后重试`;
 }
 
-function toUserFacingInviteCodeMessage(error: unknown): string {
-  const raw = toErrorMessage(error);
-  const normalized = raw.toLowerCase();
-  if (
-    normalized.includes('no active session')
-    || normalized.includes('invite session expired')
-    || normalized.includes('unauthorized')
-    || normalized.includes('(401)')
-  ) {
-    return i18n.t('setup:startup.needsInvite.errors.sessionExpired');
-  }
-  if (normalized.includes('invite code is required')) {
-    return i18n.t('setup:startup.needsInvite.errors.required');
-  }
-  if (normalized.includes('invalid invite code')) {
-    return i18n.t('setup:startup.needsInvite.errors.invalid');
-  }
-  if (raw.trim() && !normalized.startsWith('invite bind request failed') && raw !== 'Unknown session error') {
-    return raw;
-  }
-  return i18n.t('setup:startup.needsInvite.errors.generic');
-}
-
 function isLoginCanceledError(error: unknown): boolean {
   const raw = toErrorMessage(error).toLowerCase();
   return raw.includes('login window was closed before completing wechat authentication');
@@ -109,6 +84,15 @@ function isLoginCanceledError(error: unknown): boolean {
 async function showAuthFailureNotice(message: string): Promise<void> {
   toast.error(message);
 }
+
+const E2E_SESSION_ACCOUNT: SessionAccount = {
+  id: 'geeclaw-e2e',
+  email: 'e2e@geeclaw.local',
+  displayName: 'GeeClaw E2E',
+  nickName: 'GeeClaw E2E',
+  userId: 0,
+  userStatus: USER_STATUS_ACTIVE,
+};
 
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   status: 'checking',
@@ -119,6 +103,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (get().isInitialized) return;
 
     set({ status: 'checking' });
+    if (shouldSkipE2ELogin()) {
+      set({
+        status: 'authenticated',
+        account: E2E_SESSION_ACCOUNT,
+        isInitialized: true,
+      });
+      return;
+    }
+
     console.info('[SessionStore(Renderer)] init -> requesting /api/session');
     const raw = await hostApiFetch<unknown>('/api/session');
     const session = parseSessionResponse(raw);
@@ -136,6 +129,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   loginWithWechat: async () => {
     const previous = get();
     set({ status: 'checking' });
+    if (shouldSkipE2ELogin()) {
+      set({
+        status: 'authenticated',
+        account: E2E_SESSION_ACCOUNT,
+        isInitialized: true,
+      });
+      return;
+    }
+
     try {
       console.info('[SessionStore(Renderer)] loginWithWechat -> requesting /api/session/wechat/login');
       const raw = await hostApiFetch<unknown>('/api/session/wechat/login', {
@@ -166,57 +168,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       });
       throw error;
     }
-  },
-
-  submitInviteCode: async (inviteCode) => {
-    const previous = get();
-    try {
-      console.info('[SessionStore(Renderer)] submitInviteCode -> requesting /api/session/invite-code');
-      const raw = await hostApiFetch<unknown>('/api/session/invite-code', {
-        method: 'POST',
-        body: JSON.stringify({ inviteCode }),
-      });
-      const session = parseSessionResponse(raw);
-      console.info('[SessionStore(Renderer)] submitInviteCode <-', {
-        status: session.status,
-        accountId: session.account?.id || null,
-        userStatus: session.account?.userStatus ?? null,
-      });
-      set({
-        status: session.status,
-        account: session.account,
-        isInitialized: true,
-      });
-    } catch (error) {
-      const message = toErrorMessage(error);
-      console.error('[SessionStore(Renderer)] submitInviteCode failed:', message);
-      await showAuthFailureNotice(toUserFacingInviteCodeMessage(error));
-      set({
-        status: previous.status,
-        account: previous.account,
-        isInitialized: true,
-      });
-      throw error;
-    }
-  },
-
-  skipInviteCode: async () => {
-    const current = get();
-    if (current.status !== 'authenticated' || !current.account) {
-      const error = new Error('No active session');
-      await showAuthFailureNotice(toUserFacingInviteCodeMessage(error));
-      throw error;
-    }
-
-    console.info(`[SessionStore(Renderer)] skipInviteCode -> setting userStatus=${USER_STATUS_ACTIVE} locally`);
-    set({
-      status: 'authenticated',
-      account: {
-        ...current.account,
-        userStatus: USER_STATUS_ACTIVE,
-      },
-      isInitialized: true,
-    });
   },
 
   logout: async () => {

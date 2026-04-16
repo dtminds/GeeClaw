@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   PROVIDER_TYPES,
   PROVIDER_TYPE_INFO,
+  SETUP_PROVIDERS,
+  getDefaultProviderModelEntries,
   getProviderDocsUrl,
   getProviderCodePlanPreset,
+  getProviderIconUrl,
   isProviderCodePlanMode,
   resolveProviderApiKeyForSave,
   resolveProviderModelForSave,
@@ -37,20 +40,36 @@ describe('provider metadata', () => {
     );
   });
 
-  it('includes GeekAI in the frontend provider registry', () => {
-    expect(PROVIDER_TYPES).toContain('geekai');
+  it('does not expose GeekAI in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).not.toContain('geekai');
+    expect(PROVIDER_TYPE_INFO.find((provider) => provider.id === 'geekai')).toBeUndefined();
+  });
+
+  it('includes GeeClaw in the frontend provider registry', () => {
+    expect(PROVIDER_TYPES).toContain('geeclaw');
 
     expect(PROVIDER_TYPE_INFO).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'geekai',
-          name: 'GeekAI',
+          id: 'geeclaw',
+          name: 'GeeClaw',
           requiresApiKey: true,
+          defaultModelId: 'qwen3.6-plus',
+          showBaseUrl: false,
           showModelId: true,
-          defaultModelId: 'qwen3.5-flash',
         }),
-      ])
+      ]),
     );
+
+    expect(SETUP_PROVIDERS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'geeclaw',
+          name: 'GeeClaw',
+        }),
+      ]),
+    );
+    expect(getProviderIconUrl('geeclaw')).toBeTruthy();
   });
 
   it('includes ark in the backend provider registry', () => {
@@ -80,13 +99,19 @@ describe('provider metadata', () => {
     });
   });
 
-  it('includes GeekAI in the backend provider registry', () => {
-    expect(BUILTIN_PROVIDER_TYPES).toContain('geekai');
-    expect(getProviderEnvVar('geekai')).toBe('GEEKAI_API_KEY');
-    expect(getProviderConfig('geekai')).toEqual(expect.objectContaining({
+  it('does not expose GeekAI in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).not.toContain('geekai');
+    expect(getProviderEnvVar('geekai')).toBeUndefined();
+    expect(getProviderConfig('geekai')).toBeUndefined();
+  });
+
+  it('includes GeeClaw in the backend provider registry', () => {
+    expect(BUILTIN_PROVIDER_TYPES).toContain('geeclaw');
+    expect(getProviderEnvVar('geeclaw')).toBe('GEECLAW_API_KEY');
+    expect(getProviderConfig('geeclaw')).toEqual(expect.objectContaining({
       baseUrl: 'https://geekai.co/api/v1',
       api: 'openai-completions',
-      apiKeyEnv: 'GEEKAI_API_KEY',
+      apiKeyEnv: 'GEECLAW_API_KEY',
     }));
   });
 
@@ -99,7 +124,6 @@ describe('provider metadata', () => {
       supportsApiKey: true,
       defaultModelId: 'gpt-5.4',
       showModelId: true,
-      showModelIdInDevModeOnly: true,
       modelIdPlaceholder: 'gpt-5.4',
       apiKeyUrl: 'https://platform.openai.com/api-keys',
     });
@@ -120,7 +144,6 @@ describe('provider metadata', () => {
       supportsApiKey: true,
       defaultModelId: 'gemini-3-flash-preview',
       showModelId: true,
-      showModelIdInDevModeOnly: true,
       modelIdPlaceholder: 'gemini-3-flash-preview',
       apiKeyUrl: 'https://aistudio.google.com/app/apikey',
     });
@@ -137,9 +160,29 @@ describe('provider metadata', () => {
     );
   });
 
+  it('exposes a separate Moonshot Global provider config', () => {
+    const moonshotGlobal = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'moonshot-global');
+
+    expect(moonshotGlobal).toMatchObject({
+      id: 'moonshot-global',
+      name: 'Moonshot (Global)',
+      defaultBaseUrl: 'https://api.moonshot.ai/v1',
+      defaultModelId: 'kimi-k2.5',
+      docsUrl: 'https://platform.moonshot.ai/',
+    });
+    expect(getProviderEnvVar('moonshot-global')).toBe('MOONSHOT_GLOBAL_API_KEY');
+    expect(getProviderEnvVars('moonshot-global')).toEqual(['MOONSHOT_GLOBAL_API_KEY']);
+    expect(getProviderConfig('moonshot-global')).toEqual(
+      expect.objectContaining({
+        baseUrl: 'https://api.moonshot.ai/v1',
+        apiKeyEnv: 'MOONSHOT_GLOBAL_API_KEY',
+      })
+    );
+  });
+
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geekai', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'geeclaw', 'ark', 'moonshot', 'moonshot-global', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
   });
 
@@ -181,22 +224,63 @@ describe('provider metadata', () => {
     );
   });
 
-  it('exposes OpenRouter model overrides by default and keeps SiliconFlow developer-only', () => {
+  it('exposes built-in provider model overrides by default', () => {
+    const anthropic = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'anthropic');
     const openai = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openai');
     const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
     const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
+    const moonshot = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'moonshot');
+    const minimax = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'minimax-portal');
 
+    expect(anthropic).toMatchObject({
+      showModelId: true,
+      defaultModelId: 'claude-sonnet-4-6',
+      defaultModels: [
+        expect.objectContaining({
+          id: 'claude-opus-4-6',
+          name: 'claude-opus-4-6',
+          reasoning: false,
+        }),
+        expect.objectContaining({
+          id: 'claude-sonnet-4-6',
+          name: 'claude-sonnet-4-6',
+          reasoning: false,
+        }),
+      ],
+    });
     expect(openai).toMatchObject({
       showModelId: true,
-      showModelIdInDevModeOnly: true,
       defaultModelId: 'gpt-5.4',
+      defaultModels: [
+        expect.objectContaining({
+          id: 'gpt-5.4',
+          name: 'gpt-5.4',
+          reasoning: false,
+        }),
+      ],
     });
     expect(google).toMatchObject({
       showModelId: true,
-      showModelIdInDevModeOnly: true,
       defaultModelId: 'gemini-3-flash-preview',
+      defaultModels: [
+        expect.objectContaining({
+          id: 'gemini-3-flash-preview',
+          name: 'gemini-3-flash-preview',
+          reasoning: false,
+        }),
+        expect.objectContaining({
+          id: 'gemini-3.1-pro-preview',
+          name: 'gemini-3.1-pro-preview',
+          reasoning: false,
+        }),
+        expect.objectContaining({
+          id: 'gemini-3.1-flash-lite-preview',
+          name: 'gemini-3.1-flash-lite-preview',
+          reasoning: false,
+        }),
+      ],
     });
     expect(openrouter).toMatchObject({
       showModelId: true,
@@ -204,37 +288,53 @@ describe('provider metadata', () => {
     });
     expect(siliconflow).toMatchObject({
       showModelId: true,
-      showModelIdInDevModeOnly: true,
       defaultModelId: 'deepseek-ai/DeepSeek-V3',
     });
     expect(modelstudio).toMatchObject({
       showModelId: true,
       defaultModelId: 'qwen3.6-plus',
     });
+    expect(moonshot).toMatchObject({
+      showModelId: true,
+      defaultModelId: 'kimi-k2.5',
+      defaultModels: [
+        expect.objectContaining({
+          id: 'kimi-k2.5',
+          contextWindow: 256000,
+          maxTokens: 8192,
+        }),
+      ],
+    });
+    expect(minimax).toMatchObject({
+      showModelId: true,
+      defaultModelId: 'MiniMax-M2.7',
+    });
 
-    expect(shouldShowProviderModelId(openai, false)).toBe(false);
-    expect(shouldShowProviderModelId(google, false)).toBe(false);
+    expect(shouldShowProviderModelId(anthropic, false)).toBe(true);
+    expect(shouldShowProviderModelId(openai, false)).toBe(true);
+    expect(shouldShowProviderModelId(google, false)).toBe(true);
     expect(shouldShowProviderModelId(openrouter, false)).toBe(true);
-    expect(shouldShowProviderModelId(siliconflow, false)).toBe(false);
+    expect(shouldShowProviderModelId(siliconflow, false)).toBe(true);
     expect(shouldShowProviderModelId(modelstudio, false)).toBe(true);
-    expect(shouldShowProviderModelId(openai, true)).toBe(true);
-    expect(shouldShowProviderModelId(google, true)).toBe(true);
-    expect(shouldShowProviderModelId(openrouter, true)).toBe(true);
-    expect(shouldShowProviderModelId(siliconflow, true)).toBe(true);
-    expect(shouldShowProviderModelId(modelstudio, true)).toBe(true);
+    expect(shouldShowProviderModelId(moonshot, false)).toBe(true);
+    expect(shouldShowProviderModelId(minimax, false)).toBe(true);
   });
 
-  it('saves OpenRouter model overrides by default and keeps SiliconFlow developer-only', () => {
+  it('saves built-in provider model overrides by default', () => {
+    const anthropic = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'anthropic');
     const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
     const openrouter = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'openrouter');
     const siliconflow = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'siliconflow');
     const ark = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'ark');
     const modelstudio = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'modelstudio');
+    const moonshot = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'moonshot');
 
-    expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBeUndefined();
+    expect(resolveProviderModelForSave(anthropic, 'claude-opus-4-6', false)).toBe('claude-opus-4-6');
+    expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
-    expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBeUndefined();
+    expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
     expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-plus', false)).toBe('qwen3.5-plus');
+    expect(resolveProviderModelForSave(moonshot, 'kimi-k2.5', false)).toBe('kimi-k2.5');
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
@@ -248,6 +348,39 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
     expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.6-plus');
+  });
+
+  it('derives structured default model entries for built-in providers', () => {
+    const moonshot = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'moonshot');
+    const google = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'google');
+
+    expect(getDefaultProviderModelEntries(moonshot)).toEqual([
+      {
+        id: 'kimi-k2.5',
+        name: 'kimi-k2.5',
+        reasoning: false,
+        contextWindow: 256000,
+        maxTokens: 8192,
+      },
+    ]);
+
+    expect(getDefaultProviderModelEntries(google)).toEqual([
+      {
+        id: 'gemini-3-flash-preview',
+        name: 'gemini-3-flash-preview',
+        reasoning: false,
+      },
+      {
+        id: 'gemini-3.1-pro-preview',
+        name: 'gemini-3.1-pro-preview',
+        reasoning: false,
+      },
+      {
+        id: 'gemini-3.1-flash-lite-preview',
+        name: 'gemini-3.1-flash-lite-preview',
+        reasoning: false,
+      },
+    ]);
   });
 
   it('normalizes provider API keys for save flow', () => {

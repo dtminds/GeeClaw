@@ -20,6 +20,7 @@ import {
 } from '../utils/openclaw-cli';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../utils/store';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
+import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import {
   saveProviderKeyToOpenClaw,
 } from '../utils/openclaw-auth';
@@ -61,7 +62,7 @@ import {
   syncUpdatedProviderToRuntime,
 } from '../services/providers/provider-runtime-sync';
 import { validateApiKeyWithProvider } from '../services/providers/provider-validation';
-import { appUpdater } from './updater';
+import { getAppUpdater } from './updater';
 import { updateTrayMenu, type TrayTranslations } from './tray';
 import { proxyAwareFetch } from '../utils/proxy-fetch';
 import { syncOpenClawSafetySettings } from '../utils/openclaw-safety-settings';
@@ -69,6 +70,8 @@ import { openSafeExternalUrl } from '../utils/external-links';
 import { registerHostApiProxyHandlers } from './ipc/host-api-proxy';
 import { isProxyKey, mapAppErrorCode, type AppRequest, type AppResponse } from './ipc/request-helpers';
 import type { CronSchedule } from '../../src/types/cron';
+
+const appUpdater = getAppUpdater();
 
 function getManagedChannelPluginInstallError(channelType: string): string | null {
   const installResult = ensureManagedChannelPluginInstalled(channelType);
@@ -1000,6 +1003,14 @@ function registerGatewayHandlers(
     timeoutMs?: number;
   };
 
+  const resolveGatewayRpcErrorCode = (method: string, error: unknown): string | undefined => {
+    const message = String(error).toLowerCase();
+    if (method === 'chat.history' && message.includes('chat.history unavailable during gateway startup')) {
+      return 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
+    }
+    return undefined;
+  };
+
   // Get Gateway status
   ipcMain.handle('gateway:status', async () => {
     await gatewayManager.attachToExistingGatewayIfAvailable({
@@ -1049,8 +1060,9 @@ function registerGatewayHandlers(
       const result = await gatewayManager.rpc(method, params, timeoutMs);
       return { success: true, result };
     } catch (error) {
+      const errorCode = resolveGatewayRpcErrorCode(method, error);
       logger.warn(`[gateway:rpc] ${method} failed (timeoutMs=${timeoutMs ?? 30000}): ${String(error)}`);
-      return { success: false, error: String(error) };
+      return { success: false, error: String(error), errorCode };
     }
   });
 
@@ -1316,6 +1328,9 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
   // Get a shell command to run OpenClaw CLI without modifying PATH
   ipcMain.handle('openclaw:getCliCommand', async () => {
     try {
+      if (app.isPackaged) {
+        await materializePackagedOpenClawSidecar();
+      }
       const status = await getConfiguredOpenClawRuntime();
       if (!status.packageExists) {
         return { success: false, error: status.error || 'OpenClaw runtime not found' };
@@ -1331,6 +1346,9 @@ function registerOpenClawHandlers(gatewayManager: GatewayManager): void {
 
   ipcMain.handle('openclaw:installCli', async () => {
     try {
+      if (app.isPackaged) {
+        await materializePackagedOpenClawSidecar();
+      }
       const status = await getConfiguredOpenClawRuntime();
       if (!status.packageExists) {
         return { success: false, error: status.error || 'OpenClaw runtime not found' };

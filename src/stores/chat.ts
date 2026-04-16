@@ -4,6 +4,7 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
+import { AppError } from '@/lib/error-model';
 import { hostApiFetch } from '@/lib/host-api';
 import {
   cleanUserMessageText,
@@ -48,6 +49,7 @@ import {
   getMessageText,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
+  hasPersistedOptimisticUserCopy,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
   toSessionPreview,
@@ -106,8 +108,12 @@ interface ChatState {
   toolStreamById: Map<string, ToolStreamEntry>;
   toolStreamOrder: string[];
   toolMessages: RawMessage[];
+  toolResultHistoryReloadedIds: Set<string>;
   pendingFinal: boolean;
   lastUserMessageAt: number | null;
+  pendingOptimisticUserId: string | null;
+  pendingOptimisticUserAnchorAt: number | null;
+  historyRequestGeneration: number;
   /** Images collected from tool results, attached to the next assistant message */
   pendingToolImages: AttachedFileMeta[];
   pendingToolHiddenCount: number;
@@ -167,11 +173,30 @@ let _lastChatEventAt = 0;
 // If no streaming events arrive within a few seconds, we periodically
 // poll chat.history to surface intermediate tool-call turns.
 let _historyPollTimer: ReturnType<typeof setTimeout> | null = null;
+let _historyStartupRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _historyStartupRetryState: { requestKey: string; attempt: number } | null = null;
 
 // Timer for delayed error finalization. When the Gateway reports a mid-stream
 // error (e.g. "terminated"), it may retry internally and recover. We wait
 // before committing the error to give the recovery path a chance.
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
+const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+
+function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
+
+function summarizeChatSelection(
+  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
+): Record<string, unknown> {
+  return {
+    currentSessionKey: state.currentSessionKey,
+    currentDesktopSessionId: state.currentDesktopSessionId,
+    currentAgentId: state.currentAgentId,
+    isDraftSession: state.isDraftSession,
+    currentViewMode: state.currentViewMode,
+  };
+}
 
 function createEmptyToolRuntimeState() {
   return {
@@ -181,6 +206,7 @@ function createEmptyToolRuntimeState() {
     toolStreamById: new Map<string, ToolStreamEntry>(),
     toolStreamOrder: [] as string[],
     toolMessages: [] as RawMessage[],
+    toolResultHistoryReloadedIds: new Set<string>(),
   };
 }
 
@@ -250,20 +276,68 @@ function clearHistoryPoll(): void {
   }
 }
 
+function clearHistoryStartupRetryTimer(): void {
+  if (_historyStartupRetryTimer) {
+    clearTimeout(_historyStartupRetryTimer);
+    _historyStartupRetryTimer = null;
+  }
+}
+
+function clearHistoryStartupRetry(): void {
+  clearHistoryStartupRetryTimer();
+  _historyStartupRetryState = null;
+}
+
+function getHistoryStartupErrorCode(error: unknown): string | undefined {
+  if (error instanceof AppError) {
+    const code = error.details?.gatewayErrorCode;
+    return typeof code === 'string' ? code : undefined;
+  }
+  if (error && typeof error === 'object') {
+    const code = (error as { gatewayErrorCode?: unknown }).gatewayErrorCode;
+    if (typeof code === 'string') {
+      return code;
+    }
+    const detailsCode = (error as { details?: { gatewayErrorCode?: unknown } }).details?.gatewayErrorCode;
+    return typeof detailsCode === 'string' ? detailsCode : undefined;
+  }
+  return undefined;
+}
+
+function isHistoryUnavailableDuringGatewayStartup(error: unknown): boolean {
+  const structuredCode = getHistoryStartupErrorCode(error);
+  if (structuredCode === CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE) {
+    return true;
+  }
+  return String(error).toLowerCase().includes('chat.history unavailable during gateway startup');
+}
+
+function getHistoryRequestKey(request: {
+  sessionKey: string;
+  desktopSessionId: string;
+  viewMode: ChatViewMode;
+  cronRunId: string;
+  generation: number;
+}): string {
+  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}::${request.generation}`;
+}
+
 function isSameHistoryRequest(
   request: {
     sessionKey: string;
     desktopSessionId: string;
     viewMode: ChatViewMode;
     cronRunId: string;
+    generation: number;
   },
-  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun'>,
+  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun' | 'historyRequestGeneration'>,
 ): boolean {
   return (
     state.currentSessionKey === request.sessionKey
     && state.currentDesktopSessionId === request.desktopSessionId
     && state.currentViewMode === request.viewMode
     && (state.selectedCronRun?.id ?? '') === request.cronRunId
+    && state.historyRequestGeneration === request.generation
   );
 }
 
@@ -467,6 +541,80 @@ function syncToolMessages(
     .filter((message): message is RawMessage => Boolean(message));
 }
 
+function collectPersistedToolCallIds(messages: RawMessage[]): Set<string> {
+  const persisted = new Set<string>();
+
+  for (const message of messages) {
+    if (!message) continue;
+
+    if (isToolResultRole(message.role) && message.toolCallId) {
+      persisted.add(message.toolCallId);
+    }
+
+    for (const status of message._toolStatuses || []) {
+      const toolCallId = status.toolCallId || status.id;
+      if (!toolCallId) continue;
+      if (status.status !== 'running' || typeof status.result === 'string') {
+        persisted.add(toolCallId);
+      }
+    }
+  }
+
+  return persisted;
+}
+
+function reconcileToolRuntimeWithHistory(
+  toolStreamOrder: string[],
+  toolStreamById: Map<string, ToolStreamEntry>,
+  toolResultHistoryReloadedIds: Set<string>,
+  messages: RawMessage[],
+): {
+  toolStreamOrder: string[];
+  toolStreamById: Map<string, ToolStreamEntry>;
+  toolMessages: RawMessage[];
+  toolResultHistoryReloadedIds: Set<string>;
+} {
+  const persistedToolCallIds = collectPersistedToolCallIds(messages);
+  if (persistedToolCallIds.size === 0) {
+    return {
+      toolStreamOrder,
+      toolStreamById,
+      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
+      toolResultHistoryReloadedIds,
+    };
+  }
+
+  let changed = false;
+  const nextToolStreamOrder = toolStreamOrder.filter((toolCallId) => {
+    const keep = !persistedToolCallIds.has(toolCallId);
+    if (!keep) changed = true;
+    return keep;
+  });
+
+  if (!changed) {
+    return {
+      toolStreamOrder,
+      toolStreamById,
+      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
+      toolResultHistoryReloadedIds,
+    };
+  }
+
+  const nextToolStreamById = new Map(toolStreamById);
+  const nextReloadedIds = new Set(toolResultHistoryReloadedIds);
+  for (const toolCallId of persistedToolCallIds) {
+    nextToolStreamById.delete(toolCallId);
+    nextReloadedIds.delete(toolCallId);
+  }
+
+  return {
+    toolStreamOrder: nextToolStreamOrder,
+    toolStreamById: nextToolStreamById,
+    toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
+    toolResultHistoryReloadedIds: nextReloadedIds,
+  };
+}
+
 /** Extract media file refs from [media attached: <path> (<mime>) | ...] patterns */
 // ── Store ────────────────────────────────────────────────────────
 
@@ -483,8 +631,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   toolStreamById: new Map<string, ToolStreamEntry>(),
   toolStreamOrder: [],
   toolMessages: [],
+  toolResultHistoryReloadedIds: new Set<string>(),
   pendingFinal: false,
   lastUserMessageAt: null,
+  pendingOptimisticUserId: null,
+  pendingOptimisticUserAnchorAt: null,
+  historyRequestGeneration: 0,
   pendingToolImages: [],
   pendingToolHiddenCount: 0,
 
@@ -505,11 +657,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Load desktop sessions ──
 
   loadSessions: async () => {
+    const startedAt = Date.now();
     try {
       const previousGatewayKey = get().currentSessionKey;
       const previousDesktopSessionId = get().currentDesktopSessionId;
       const previousIsDraft = get().isDraftSession;
       const previousDesktopSessions = get().desktopSessions;
+      logChatTrace('loadSessions:start', {
+        previousGatewayKey,
+        previousDesktopSessionId,
+        previousIsDraft,
+        previousDesktopSessionsCount: previousDesktopSessions.length,
+        ...summarizeChatSelection(get()),
+      });
       let desktopSessions: DesktopSessionSummary[] = [];
       let preferredMainSessionKey = '';
       let sessionTokenInfoByKey = get().sessionTokenInfoByKey;
@@ -561,11 +721,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         selectedCronRun: null,
         sessionTokenInfoByKey,
       });
+      logChatTrace('loadSessions:done', {
+        durationMs: Date.now() - startedAt,
+        preferredMainSessionKey,
+        desktopSessionsCount: desktopSessions.length,
+        activeSessionId: activeSession?.id ?? '',
+        activeSessionKey: activeSession?.gatewaySessionKey ?? '',
+        tokenInfoCount: Object.keys(sessionTokenInfoByKey).length,
+        ...summarizeChatSelection(get()),
+      });
 
-      if (activeSession?.gatewaySessionKey && activeSession.gatewaySessionKey !== previousGatewayKey) {
-        get().loadHistory();
-      }
     } catch (err) {
+      logChatTrace('loadSessions:error', {
+        durationMs: Date.now() - startedAt,
+        error: String(err),
+        ...summarizeChatSelection(get()),
+      });
       console.warn('Failed to load sessions:', err);
     }
   },
@@ -595,9 +766,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Open agent main session ──
 
   openAgentMainSession: async (agentId: string) => {
+    const startedAt = Date.now();
     const normalizedAgentId = agentId || 'main';
     const mainSessionKey = resolveMainSessionKeyForKnownAgent(normalizedAgentId);
     const existingMainSession = get().desktopSessions.find((session) => session.gatewaySessionKey === mainSessionKey);
+    logChatTrace('openAgentMainSession:start', {
+      agentId,
+      normalizedAgentId,
+      mainSessionKey,
+      existingMainSessionId: existingMainSession?.id ?? '',
+      ...summarizeChatSelection(get()),
+    });
 
     if (existingMainSession) {
       set({
@@ -614,8 +793,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: null,
         pendingFinal: false,
         lastUserMessageAt: null,
+        pendingOptimisticUserId: null,
+        pendingOptimisticUserAnchorAt: null,
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
+      });
+      logChatTrace('openAgentMainSession:reuse-existing', {
+        durationMs: Date.now() - startedAt,
+        selectedSessionId: existingMainSession.id,
+        selectedSessionKey: existingMainSession.gatewaySessionKey,
+        ...summarizeChatSelection(get()),
       });
       await get().loadHistory(true);
       return;
@@ -638,11 +825,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: null,
         pendingFinal: false,
         lastUserMessageAt: null,
+        pendingOptimisticUserId: null,
+        pendingOptimisticUserAnchorAt: null,
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
       }));
+      logChatTrace('openAgentMainSession:created', {
+        durationMs: Date.now() - startedAt,
+        createdSessionId: createdMainSession.id,
+        createdSessionKey: createdMainSession.gatewaySessionKey,
+        ...summarizeChatSelection(get()),
+      });
       await get().loadHistory(true);
     } catch (createError) {
+      logChatTrace('openAgentMainSession:error', {
+        durationMs: Date.now() - startedAt,
+        error: String(createError),
+        ...summarizeChatSelection(get()),
+      });
       console.warn(`Failed to create main session for agent ${normalizedAgentId}:`, createError);
     }
   },
@@ -652,6 +852,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   switchSession: (desktopSessionId: string) => {
     const target = get().desktopSessions.find((session) => session.id === desktopSessionId);
     if (!target) return;
+    logChatTrace('switchSession:start', {
+      targetSessionId: desktopSessionId,
+      targetSessionKey: target.gatewaySessionKey,
+      ...summarizeChatSelection(get()),
+    });
     set({
       isDraftSession: false,
       currentDesktopSessionId: target.id,
@@ -665,8 +870,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
       pendingFinal: false,
       lastUserMessageAt: null,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
+    });
+    logChatTrace('switchSession:selected', {
+      targetSessionId: target.id,
+      targetSessionKey: target.gatewaySessionKey,
+      ...summarizeChatSelection(get()),
     });
     get().loadHistory();
   },
@@ -686,6 +898,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
       pendingFinal: false,
       lastUserMessageAt: null,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
       thinkingLevel: null,
@@ -696,6 +910,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Delete desktop session ──
 
   deleteSession: async (desktopSessionId: string) => {
+    logChatTrace('deleteSession:start', {
+      desktopSessionId,
+      ...summarizeChatSelection(get()),
+      desktopSessionsCount: get().desktopSessions.length,
+    });
     try {
       await deleteDesktopSessionRequest(desktopSessionId);
     } catch (err) {
@@ -739,8 +958,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
       pendingFinal: false,
       lastUserMessageAt: null,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
+    });
+    logChatTrace('deleteSession:done', {
+      deletedSessionId: desktopSessionId,
+      nextSessionId: next?.id ?? '',
+      nextSessionKey: next?.gatewaySessionKey ?? '',
+      remainingCount: remaining.length,
+      ...summarizeChatSelection(get()),
     });
 
     if (currentDesktopSessionId === desktopSessionId && next?.gatewaySessionKey) {
@@ -776,11 +1004,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── New temporary session ──
 
   newTemporarySession: async (agentId?: string) => {
+    const nextAgentId = agentId || get().currentAgentId || 'main';
+    logChatTrace('newTemporarySession:start', {
+      requestedAgentId: agentId ?? '',
+      resolvedAgentId: nextAgentId,
+      ...summarizeChatSelection(get()),
+    });
     set({
       isDraftSession: true,
       currentDesktopSessionId: '',
       currentSessionKey: '',
-      currentAgentId: agentId || get().currentAgentId || 'main',
+      currentAgentId: nextAgentId,
       currentViewMode: 'session',
       selectedCronRun: null,
       messages: [],
@@ -789,9 +1023,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
       pendingFinal: false,
       lastUserMessageAt: null,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
+    logChatTrace('newTemporarySession:selected', summarizeChatSelection(get()));
   },
 
   // ── Cleanup empty session on navigate away ──
@@ -802,14 +1039,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (desktopSessions.length <= 1) return;
     const currentSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
     if (!currentSession || isMainSessionKey(currentSession.gatewaySessionKey)) return;
+    logChatTrace('cleanupEmptySession:delete-current', {
+      currentDesktopSessionId,
+      currentSessionKey: currentSession.gatewaySessionKey,
+      desktopSessionsCount: desktopSessions.length,
+      messagesCount: messages.length,
+      ...summarizeChatSelection(get()),
+    });
     await get().deleteSession(currentDesktopSessionId);
   },
 
   // ── Load chat history ──
 
   loadHistory: async (quiet = false) => {
-    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun } = get();
+    const startedAt = Date.now();
+    clearHistoryStartupRetryTimer();
+    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun, historyRequestGeneration } = get();
+    logChatTrace('loadHistory:start', {
+      quiet,
+      requestSessionKey: currentSessionKey,
+      requestDesktopSessionId: currentDesktopSessionId,
+      requestViewMode: currentViewMode,
+      requestCronRunId: selectedCronRun?.id ?? '',
+      ...summarizeChatSelection(get()),
+    });
     if (!currentSessionKey) {
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:skip-no-session', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        ...summarizeChatSelection(get()),
+      });
       if (!quiet) set({ loading: false });
       return;
     }
@@ -818,6 +1078,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       desktopSessionId: currentDesktopSessionId,
       viewMode: currentViewMode,
       cronRunId: selectedCronRun?.id ?? '',
+      generation: historyRequestGeneration,
     };
     if (!quiet) set({ loading: true, error: null });
 
@@ -848,17 +1109,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
-        set({
+        clearHistoryStartupRetry();
+        set((state) => ({
           messages: displayMessages,
           thinkingLevel: null,
           loading: false,
           error: null,
-        });
+          ...reconcileToolRuntimeWithHistory(
+            state.toolStreamOrder,
+            state.toolStreamById,
+            state.toolResultHistoryReloadedIds,
+            displayMessages,
+          ),
+        }));
       } catch (err) {
         console.warn('Failed to load cron run history:', err);
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
+        clearHistoryStartupRetry();
         set({ messages: [], loading: false, error: String(err) });
       }
       return;
@@ -872,6 +1141,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         'chat.history',
         { sessionKey: currentSessionKey, limit: 200 },
       );
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:rpc-resolved', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        requestSessionKey: currentSessionKey,
+        rawMessagesCount: Array.isArray(data?.messages) ? data.messages.length : 0,
+        thinkingLevel: data?.thinkingLevel ? String(data.thinkingLevel) : '',
+      });
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
 
@@ -887,24 +1164,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const userMsgAt = get().lastUserMessageAt;
         if (get().sending && userMsgAt) {
           const userMsMs = toMs(userMsgAt);
-          const hasRecentUser = enrichedMessages.some(
-            (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
-          );
-          if (!hasRecentUser) {
-            const currentMsgs = get().messages;
-            const optimistic = [...currentMsgs].reverse().find(
-              (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
+          const { messages: currentMsgs, pendingOptimisticUserId, pendingOptimisticUserAnchorAt } = get();
+          const optimistic = pendingOptimisticUserId
+            ? currentMsgs.find((message) => message.id === pendingOptimisticUserId)
+            : [...currentMsgs].reverse().find(
+                (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
+              );
+          const optimisticIndex = optimistic ? currentMsgs.indexOf(optimistic) : -1;
+          const isConversationStart = optimisticIndex >= 0
+            && !currentMsgs.slice(0, optimisticIndex).some(
+              (message) => message.role === 'user' || message.role === 'assistant',
             );
-            if (optimistic) {
-              finalMessages = [...enrichedMessages, optimistic];
-            }
+          if (optimistic && !hasPersistedOptimisticUserCopy(
+            enrichedMessages,
+            optimistic,
+            pendingOptimisticUserAnchorAt,
+            isConversationStart,
+          )) {
+            finalMessages = [...enrichedMessages, optimistic];
           }
         }
 
         if (!isSameHistoryRequest(request, get())) {
+          logChatTrace('loadHistory:stale-before-apply', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            ...summarizeChatSelection(get()),
+          });
           return;
         }
-        set({ messages: finalMessages, thinkingLevel, loading: false });
+        clearHistoryStartupRetry();
+        set((state) => ({
+          messages: finalMessages,
+          thinkingLevel,
+          loading: false,
+          error: null,
+          ...reconcileToolRuntimeWithHistory(
+            state.toolStreamOrder,
+            state.toolStreamById,
+            state.toolResultHistoryReloadedIds,
+            finalMessages,
+          ),
+        }));
+        logChatTrace('loadHistory:applied', {
+          quiet,
+          durationMs: Date.now() - startedAt,
+          requestSessionKey: request.sessionKey,
+          finalMessagesCount: finalMessages.length,
+          pendingFinal: get().pendingFinal,
+          sending: get().sending,
+          ...summarizeChatSelection(get()),
+        });
 
         void tokenInfoPromise.then((tokenInfoResult) => {
           if (!isSameHistoryRequest(request, get())) {
@@ -1029,11 +1340,98 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       } else {
         if (!isSameHistoryRequest(request, get())) {
+          logChatTrace('loadHistory:stale-empty', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            ...summarizeChatSelection(get()),
+          });
           return;
         }
-        set({ messages: [], loading: false });
+        clearHistoryStartupRetry();
+        set({ messages: [], loading: false, error: null });
+        logChatTrace('loadHistory:empty', {
+          quiet,
+          durationMs: Date.now() - startedAt,
+          requestSessionKey: request.sessionKey,
+          ...summarizeChatSelection(get()),
+        });
       }
     } catch (err) {
+      if (isHistoryUnavailableDuringGatewayStartup(err)) {
+        const currentState = get();
+        const shouldRetrySameRequest = isSameHistoryRequest(request, currentState);
+        if (shouldRetrySameRequest) {
+          const requestKey = getHistoryRequestKey(request);
+          const nextAttempt = _historyStartupRetryState?.requestKey === requestKey
+            ? _historyStartupRetryState.attempt + 1
+            : 1;
+          const keepLoading = currentState.messages.length === 0;
+          const retryDelayMs = CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS[nextAttempt - 1];
+          if (!retryDelayMs) {
+            clearHistoryStartupRetry();
+            logChatTrace('loadHistory:startup-retry-exhausted', {
+              quiet,
+              durationMs: Date.now() - startedAt,
+              requestSessionKey: request.sessionKey,
+              attempts: nextAttempt - 1,
+              error: String(err),
+              ...summarizeChatSelection(currentState),
+            });
+            set({
+              error: String(err),
+              loading: false,
+              ...(keepLoading ? { messages: [] } : {}),
+            });
+            return;
+          }
+          _historyStartupRetryState = {
+            requestKey,
+            attempt: nextAttempt,
+          };
+          set({
+            error: null,
+            loading: keepLoading,
+          });
+          _historyStartupRetryTimer = setTimeout(() => {
+            if (!isSameHistoryRequest(request, get())) {
+              clearHistoryStartupRetry();
+              return;
+            }
+            logChatTrace('loadHistory:startup-retry', {
+              quiet,
+              attempt: nextAttempt,
+              retryDelayMs,
+              requestSessionKey: request.sessionKey,
+              requestDesktopSessionId: request.desktopSessionId,
+              requestViewMode: request.viewMode,
+              requestCronRunId: request.cronRunId,
+              ...summarizeChatSelection(get()),
+            });
+            void get().loadHistory(true);
+          }, retryDelayMs);
+          logChatTrace('loadHistory:startup-unavailable', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            attempt: nextAttempt,
+            requestSessionKey: request.sessionKey,
+            keepLoading,
+            retryScheduled: true,
+            retryDelayMs,
+            error: String(err),
+            ...summarizeChatSelection(currentState),
+          });
+          return;
+        }
+      }
+      clearHistoryStartupRetry();
+      logChatTrace('loadHistory:error', {
+        quiet,
+        durationMs: Date.now() - startedAt,
+        requestSessionKey: request.sessionKey,
+        error: String(err),
+        ...summarizeChatSelection(get()),
+      });
       console.warn('Failed to load chat history:', err);
       if (!isSameHistoryRequest(request, get())) {
         return;
@@ -1078,6 +1476,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           error: null,
           pendingFinal: false,
           lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
@@ -1105,6 +1505,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           error: null,
           pendingFinal: false,
           lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         }));
@@ -1127,6 +1529,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentSessionKey: createdSession.gatewaySessionKey,
         currentAgentId: getAgentIdFromSessionKey(createdSession.gatewaySessionKey),
       }));
+      logChatTrace('sendMessage:created-session-for-draft', {
+        createdSessionId: createdSession.id,
+        createdSessionKey: createdSession.gatewaySessionKey,
+        draftAgentId,
+        ...summarizeChatSelection(get()),
+      });
       currentSessionKey = createdSession.gatewaySessionKey;
       currentDesktopSessionId = createdSession.id;
       isDraftSession = false;
@@ -1159,6 +1567,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingTextStartedAt: nowMs / 1000,
       pendingFinal: false,
       lastUserMessageAt: nowMs,
+      pendingOptimisticUserId: userMsg.id || null,
+      pendingOptimisticUserAnchorAt: (() => {
+        const previousMessage = s.messages[s.messages.length - 1];
+        return typeof previousMessage?.timestamp === 'number' ? toMs(previousMessage.timestamp) : null;
+      })(),
+      historyRequestGeneration: s.historyRequestGeneration + 1,
     }));
 
     // Update desktop session metadata as soon as the first user message is sent.
@@ -1227,11 +1641,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
       clearHistoryPoll();
+      logChatTrace('sendMessage:safety-timeout', {
+        sessionKey: state.currentSessionKey,
+        desktopSessionId: state.currentDesktopSessionId,
+        lastChatEventAgeMs: Date.now() - _lastChatEventAt,
+        pendingFinal: state.pendingFinal,
+        streamingTextLength: state.streamingText.length,
+        toolMessagesCount: state.toolMessages.length,
+        streamSegmentsCount: state.streamSegments.length,
+        ...summarizeChatSelection(state),
+      });
       set({
         error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
         sending: false,
         activeRunId: null,
         lastUserMessageAt: null,
+        pendingOptimisticUserId: null,
+        pendingOptimisticUserAnchorAt: null,
       });
     };
     setTimeout(checkStuck, 30_000);
@@ -1294,6 +1720,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!result.success) {
         const errorMsg = result.error || 'Failed to send message';
         if (isRecoverableChatSendTimeout(errorMsg)) {
+          logChatTrace('sendMessage:recoverable-timeout', {
+            error: errorMsg,
+            sessionKey: currentSessionKey,
+            desktopSessionId: currentDesktopSessionId,
+            ...summarizeChatSelection(get()),
+          });
           console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
           set({ error: errorMsg });
         } else {
@@ -1306,6 +1738,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (err) {
       const errStr = String(err);
       if (isRecoverableChatSendTimeout(errStr)) {
+        logChatTrace('sendMessage:recoverable-timeout', {
+          error: errStr,
+          sessionKey: currentSessionKey,
+          desktopSessionId: currentDesktopSessionId,
+          ...summarizeChatSelection(get()),
+        });
         console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
         set({ error: errStr });
       } else {
@@ -1326,6 +1764,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ...createEmptyToolRuntimeState(),
       pendingFinal: false,
       lastUserMessageAt: null,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
@@ -1555,6 +1995,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 sending: hasOutput ? false : s.sending,
                 activeRunId: hasOutput ? null : s.activeRunId,
                 pendingFinal: hasOutput ? false : true,
+                pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
+                pendingOptimisticUserAnchorAt: hasOutput ? null : s.pendingOptimisticUserAnchorAt,
                 ...clearPendingImages,
               };
             }
@@ -1564,6 +2006,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               sending: hasOutput ? false : s.sending,
               activeRunId: hasOutput ? null : s.activeRunId,
               pendingFinal: hasOutput ? false : true,
+              pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
+              pendingOptimisticUserAnchorAt: hasOutput ? null : s.pendingOptimisticUserAnchorAt,
               ...clearPendingImages,
             };
           });
@@ -1576,6 +2020,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             sending: false,
             activeRunId: null,
             pendingFinal: false,
+            lastUserMessageAt: null,
+            pendingOptimisticUserId: null,
+            pendingOptimisticUserAnchorAt: null,
             ...createEmptyToolRuntimeState(),
           });
           get().loadHistory();
@@ -1605,6 +2052,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           error: errorMsg,
           ...createEmptyToolRuntimeState(),
           pendingFinal: false,
+          lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
@@ -1625,13 +2075,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 sending: false,
                 activeRunId: null,
                 lastUserMessageAt: null,
+                pendingOptimisticUserId: null,
+                pendingOptimisticUserAnchorAt: null,
               });
               state.loadHistory(true);
             }
           }, ERROR_RECOVERY_GRACE_MS);
         } else {
           clearHistoryPoll();
-          set({ sending: false, activeRunId: null, lastUserMessageAt: null });
+          set({
+            sending: false,
+            activeRunId: null,
+            lastUserMessageAt: null,
+            pendingOptimisticUserId: null,
+            pendingOptimisticUserAnchorAt: null,
+          });
         }
         break;
       }
@@ -1644,6 +2102,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...createEmptyToolRuntimeState(),
           pendingFinal: false,
           lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
@@ -1709,6 +2169,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? ((data.isError === true || outputLooksErrored) ? 'error' : 'completed')
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
+    const shouldReloadHistoryForMissingResult = phase === 'result'
+      && output === undefined
+      && !get().toolResultHistoryReloadedIds.has(toolCallId);
 
     _lastChatEventAt = Date.now();
     clearHistoryPoll();
@@ -1721,6 +2184,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const nextToolStreamById = new Map(s.toolStreamById);
       const nextToolStreamOrder = [...s.toolStreamOrder];
+      const nextToolResultHistoryReloadedIds = new Set(s.toolResultHistoryReloadedIds);
       let nextStreamSegments = s.streamSegments;
       let nextStreamingText = s.streamingText;
       let nextStreamingTextStartedAt = s.streamingTextStartedAt;
@@ -1746,6 +2210,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           durationMs,
           startedAt,
           updatedAt: Date.now(),
+          historyReloadRequestedAt: shouldReloadHistoryForMissingResult ? Date.now() : undefined,
           message: {} as RawMessage,
         };
         nextToolStreamOrder.push(toolCallId);
@@ -1758,7 +2223,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           status: mergeToolStatus(entry.status, status),
           durationMs: durationMs ?? entry.durationMs,
           updatedAt: Date.now(),
+          historyReloadRequestedAt: shouldReloadHistoryForMissingResult
+            ? (entry.historyReloadRequestedAt ?? Date.now())
+            : entry.historyReloadRequestedAt,
         };
+      }
+
+      if (shouldReloadHistoryForMissingResult) {
+        nextToolResultHistoryReloadedIds.add(toolCallId);
       }
 
       entry.message = buildToolStreamMessage(entry);
@@ -1776,9 +2248,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamSegments: nextStreamSegments,
         toolStreamById: nextToolStreamById,
         toolStreamOrder: nextToolStreamOrder,
+        toolResultHistoryReloadedIds: nextToolResultHistoryReloadedIds,
         toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
       };
     });
+
+    if (shouldReloadHistoryForMissingResult) {
+      void get().loadHistory(true);
+    }
   },
 
   handleAgentDeleted: async (agentId: string) => {

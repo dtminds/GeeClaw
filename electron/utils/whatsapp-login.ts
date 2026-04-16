@@ -8,16 +8,61 @@ import { cleanupCancelledWhatsAppLogin, getWhatsAppAccountCredentialsDir } from 
 
 const require = createRequire(import.meta.url);
 
-// Resolve dependencies from OpenClaw package context (pnpm-safe)
-const openclawPath = getOpenClawDir();
-const openclawResolvedPath = getOpenClawResolvedDir();
-// Primary: resolves from OpenClaw's real (dereferenced) path in the pnpm store.
-const openclawRequire = createRequire(join(openclawResolvedPath, 'package.json'));
-// Fallback: resolves from the symlink path so Node can walk back to the
-// project-level node_modules in dev mode.
-const projectRequire = createRequire(join(openclawPath, 'package.json'));
+type OpenClawPackageContext = {
+    openclawPath: string;
+    openclawResolvedPath: string;
+    openclawRequire: NodeJS.Require;
+    projectRequire: NodeJS.Require;
+};
+
+type QrDependencies = {
+    QRCode: new (typeNumber: number, errorCorrectionLevel: unknown) => {
+        addData: (input: string) => void;
+        make: () => void;
+        getModuleCount: () => number;
+        isDark: (row: number, col: number) => boolean;
+    };
+    QRErrorCorrectLevel: {
+        L: unknown;
+    };
+};
+
+type BaileysRuntime = {
+    baileysPath: string;
+    makeWASocket: (options: Record<string, unknown>) => BaileysSocket;
+    initAuth: (authDir: string) => Promise<{
+        state: unknown;
+        saveCreds: () => Promise<void>;
+    }>;
+    DisconnectReason: {
+        loggedOut?: number;
+    };
+    fetchLatestBaileysVersion: () => Promise<{ version: number[] }>;
+};
+
+let openclawPackageContext: OpenClawPackageContext | null = null;
+let qrDependencies: QrDependencies | null = null;
+let baileysRuntime: BaileysRuntime | null = null;
+
+function getOpenClawPackageContext(): OpenClawPackageContext {
+    if (openclawPackageContext) {
+        return openclawPackageContext;
+    }
+
+    const openclawPath = getOpenClawDir();
+    const openclawResolvedPath = getOpenClawResolvedDir();
+    openclawPackageContext = {
+        openclawPath,
+        openclawResolvedPath,
+        openclawRequire: createRequire(join(openclawResolvedPath, 'package.json')),
+        projectRequire: createRequire(join(openclawPath, 'package.json')),
+    };
+
+    return openclawPackageContext;
+}
 
 function resolveOpenClawPackageJson(packageName: string): string {
+    const { openclawPath, openclawResolvedPath, openclawRequire, projectRequire } = getOpenClawPackageContext();
     const specifier = `${packageName}/package.json`;
     // 1. Prefer OpenClaw's own dependency graph.
     try {
@@ -39,20 +84,48 @@ function resolveOpenClawPackageJson(packageName: string): string {
     }
 }
 
-const baileysPath = dirname(resolveOpenClawPackageJson('@whiskeysockets/baileys'));
-const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
+function getBaileysRuntime(): BaileysRuntime {
+    if (baileysRuntime) {
+        return baileysRuntime;
+    }
 
-// Load Baileys dependencies dynamically
-const {
-    default: makeWASocket,
-    useMultiFileAuthState: initAuth, // Rename to avoid React hook linter error
-    DisconnectReason,
-    fetchLatestBaileysVersion
-} = require(baileysPath);
+    const baileysPath = dirname(resolveOpenClawPackageJson('@whiskeysockets/baileys'));
+    const loaded = require(baileysPath) as {
+        default: BaileysRuntime['makeWASocket'];
+        useMultiFileAuthState: BaileysRuntime['initAuth'];
+        DisconnectReason: BaileysRuntime['DisconnectReason'];
+        fetchLatestBaileysVersion: BaileysRuntime['fetchLatestBaileysVersion'];
+    };
 
-// Load QRCode dependencies dynamically
-const QRCodeModule = require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js'));
-const QRErrorCorrectLevelModule = require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'QRErrorCorrectLevel.js'));
+    baileysRuntime = {
+        baileysPath,
+        makeWASocket: loaded.default,
+        initAuth: loaded.useMultiFileAuthState,
+        DisconnectReason: loaded.DisconnectReason,
+        fetchLatestBaileysVersion: loaded.fetchLatestBaileysVersion,
+    };
+
+    return baileysRuntime;
+}
+
+function getQrDependencies(): QrDependencies {
+    if (qrDependencies) {
+        return qrDependencies;
+    }
+
+    const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
+    qrDependencies = {
+        QRCode: require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js')) as QrDependencies['QRCode'],
+        QRErrorCorrectLevel: require(join(
+            qrcodeTerminalPath,
+            'vendor',
+            'QRCode',
+            'QRErrorCorrectLevel.js',
+        )) as QrDependencies['QRErrorCorrectLevel'],
+    };
+
+    return qrDependencies;
+}
 
 // Types from Baileys (approximate since we don't have types for dynamic require)
 interface BaileysError extends Error {
@@ -69,10 +142,8 @@ type ConnectionState = {
 
 // --- QR Generation Logic (Adapted from OpenClaw) ---
 
-const QRCode = QRCodeModule;
-const QRErrorCorrectLevel = QRErrorCorrectLevelModule;
-
 function createQrMatrix(input: string) {
+    const { QRCode, QRErrorCorrectLevel } = getQrDependencies();
     const qr = new QRCode(-1, QRErrorCorrectLevel.L);
     qr.addData(input);
     qr.make();
@@ -243,6 +314,8 @@ export class WhatsAppLoginManager extends EventEmitter {
         if (!this.active) return;
 
         try {
+            const { makeWASocket, initAuth, fetchLatestBaileysVersion, DisconnectReason, baileysPath } = getBaileysRuntime();
+
             // Path where OpenClaw expects WhatsApp credentials
             const authDir = getWhatsAppAccountCredentialsDir(accountId);
 

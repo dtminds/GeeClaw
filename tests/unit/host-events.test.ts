@@ -68,6 +68,54 @@ describe('host-events', () => {
     expect(offMock).not.toHaveBeenCalled();
   });
 
+  it('maps openclaw sidecar status host events through IPC', async () => {
+    const onMock = vi.mocked(window.electron.ipcRenderer.on);
+    const offMock = vi.mocked(window.electron.ipcRenderer.off);
+    const captured: Array<(...args: unknown[]) => void> = [];
+    const cleanup = vi.fn();
+    onMock.mockImplementation((_, cb: (...args: unknown[]) => void) => {
+      captured.push(cb);
+      return cleanup;
+    });
+
+    const { subscribeHostEvent } = await import('@/lib/host-events');
+    const handler = vi.fn();
+    const unsubscribe = subscribeHostEvent('openclaw:sidecar-status', handler);
+
+    expect(onMock).toHaveBeenCalledWith('openclaw:sidecar-status', expect.any(Function));
+
+    captured[0]({ stage: 'extracting', version: '2026.4.10' });
+    expect(handler).toHaveBeenCalledWith({ stage: 'extracting', version: '2026.4.10' });
+
+    unsubscribe();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(offMock).not.toHaveBeenCalled();
+  });
+
+  it('maps managed plugin status host events through IPC', async () => {
+    const onMock = vi.mocked(window.electron.ipcRenderer.on);
+    const offMock = vi.mocked(window.electron.ipcRenderer.off);
+    const captured: Array<(...args: unknown[]) => void> = [];
+    const cleanup = vi.fn();
+    onMock.mockImplementation((_, cb: (...args: unknown[]) => void) => {
+      captured.push(cb);
+      return cleanup;
+    });
+
+    const { subscribeHostEvent } = await import('@/lib/host-events');
+    const handler = vi.fn();
+    const unsubscribe = subscribeHostEvent('openclaw:managed-plugin-status', handler);
+
+    expect(onMock).toHaveBeenCalledWith('openclaw:managed-plugin-status', expect.any(Function));
+
+    captured[0]({ pluginId: 'lossless-claw', stage: 'installing' });
+    expect(handler).toHaveBeenCalledWith({ pluginId: 'lossless-claw', stage: 'installing' });
+
+    unsubscribe();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(offMock).not.toHaveBeenCalled();
+  });
+
   it('does not use SSE fallback by default for unknown events', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { subscribeHostEvent } = await import('@/lib/host-events');

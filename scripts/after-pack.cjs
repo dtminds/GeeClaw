@@ -19,9 +19,16 @@
  *      @mariozechner/clipboard).
  */
 
-const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync } = require('fs');
-const { join, dirname, basename, relative } = require('path');
+const { execFileSync } = require('child_process');
+const { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } = require('fs');
+const path = require('path');
+const { basename, dirname, isAbsolute, join, relative } = path;
 const { normWinFsPath: normWin, realpathCompat } = require('./lib/windows-paths.cjs');
+const { cleanupUnnecessaryFiles } = require('./lib/package-cleanup.cjs');
+const {
+  bundlePluginMirrors,
+  getExtraBundledPluginPackages,
+} = require('./lib/openclaw-plugin-bundler.cjs');
 
 // ── Arch helpers ─────────────────────────────────────────────────────────────
 // electron-builder Arch enum: 0=ia32, 1=x64, 2=armv7l, 3=arm64, 4=universal
@@ -75,6 +82,14 @@ function copyPathPreservingLinks(sourcePath, destPath) {
 }
 
 exports.copyPathPreservingLinks = copyPathPreservingLinks;
+exports.getExtraBundledPluginPackages = getExtraBundledPluginPackages;
+
+function createPrefixedLogger(prefix) {
+  return {
+    log: (message) => console.log(`${prefix}${message}`),
+    warn: (message) => console.warn(`${prefix}${message}`),
+  };
+}
 
 function readPackageIdentity(packageDir) {
   const packageJsonPath = join(packageDir, 'package.json');
@@ -232,56 +247,67 @@ function pruneExtensionNodeModulesAgainstTopLevel(openclawRoot) {
 
 exports.pruneExtensionNodeModulesAgainstTopLevel = pruneExtensionNodeModulesAgainstTopLevel;
 
-// ── General cleanup ──────────────────────────────────────────────────────────
+function syncBuiltInExtensionNodeModules(buildOpenclawRoot, openclawRoot) {
+  const topLevelNodeModulesDir = join(openclawRoot, 'node_modules');
+  const buildExtDir = join(buildOpenclawRoot, 'dist', 'extensions');
+  const packExtDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(buildExtDir) || !existsSync(topLevelNodeModulesDir)) {
+    return { extensionNodeModules: 0, mergedPackages: 0 };
+  }
 
-function cleanupUnnecessaryFiles(dir) {
-  let removedCount = 0;
+  let extensionNodeModules = 0;
+  let mergedPackages = 0;
 
-  const REMOVE_DIRS = new Set([
-    'test', 'tests', '__tests__', '.github', 'examples', 'example',
-  ]);
-  const REMOVE_FILE_EXTS = [
-    '.d.ts',
-    '.d.ts.map',
-    '.d.mts',
-    '.d.cts',
-    '.js.map',
-    '.mjs.map',
-    '.mts.map',
-    '.cts.map',
-    '.ts.map',
-    '.markdown',
-  ];
-  const REMOVE_FILE_NAMES = new Set([
-    '.DS_Store', 'README.md', 'CHANGELOG.md', 'LICENSE.md', 'CONTRIBUTING.md',
-    'tsconfig.json', '.npmignore', '.eslintrc', '.prettierrc', '.editorconfig',
-  ]);
+  for (const extEntry of readdirSync(buildExtDir, { withFileTypes: true })) {
+    if (!extEntry.isDirectory()) continue;
 
-  function walk(currentDir) {
-    let entries;
-    try { entries = readdirSync(currentDir, { withFileTypes: true }); } catch { return; }
+    const srcNM = join(buildExtDir, extEntry.name, 'node_modules');
+    if (!existsSync(srcNM)) continue;
 
-    for (const entry of entries) {
-      const fullPath = join(currentDir, entry.name);
+    const destExtNM = join(packExtDir, extEntry.name, 'node_modules');
+    if (!existsSync(destExtNM)) {
+      copyPathPreservingLinks(srcNM, destExtNM);
+    }
+    extensionNodeModules++;
 
-      if (entry.isDirectory()) {
-        if (REMOVE_DIRS.has(entry.name)) {
-          try { rmSync(fullPath, { recursive: true, force: true }); removedCount++; } catch { /* */ }
-        } else {
-          walk(fullPath);
+    for (const pkgEntry of readdirSync(srcNM, { withFileTypes: true })) {
+      if (!pkgEntry.isDirectory() || pkgEntry.name === '.bin') continue;
+
+      const srcPkg = join(srcNM, pkgEntry.name);
+      const destPkg = join(topLevelNodeModulesDir, pkgEntry.name);
+
+      if (pkgEntry.name.startsWith('@')) {
+        for (const scopeEntry of readdirSync(srcPkg, { withFileTypes: true })) {
+          if (!scopeEntry.isDirectory()) continue;
+
+          const srcScoped = join(srcPkg, scopeEntry.name);
+          const destScoped = join(destPkg, scopeEntry.name);
+          if (existsSync(destScoped)) {
+            continue;
+          }
+
+          mkdirSync(dirname(destScoped), { recursive: true });
+          copyPathPreservingLinks(srcScoped, destScoped);
+          mergedPackages++;
         }
-      } else if (entry.isFile()) {
-        const name = entry.name;
-        if (REMOVE_FILE_NAMES.has(name) || REMOVE_FILE_EXTS.some(e => name.endsWith(e))) {
-          try { rmSync(fullPath, { force: true }); removedCount++; } catch { /* */ }
-        }
+        continue;
       }
+
+      if (existsSync(destPkg)) {
+        continue;
+      }
+
+      copyPathPreservingLinks(srcPkg, destPkg);
+      mergedPackages++;
     }
   }
 
-  walk(dir);
-  return removedCount;
+  return { extensionNodeModules, mergedPackages };
 }
+
+exports.syncBuiltInExtensionNodeModules = syncBuiltInExtensionNodeModules;
+
+// ── General cleanup ──────────────────────────────────────────────────────────
 
 exports.cleanupUnnecessaryFiles = cleanupUnnecessaryFiles;
 
@@ -302,6 +328,7 @@ function cleanupKoffi(nodeModulesDir, platform, arch) {
   }
   return removed;
 }
+exports.cleanupKoffi = cleanupKoffi;
 
 // ── Platform-specific: scoped native packages ────────────────────────────────
 // Packages like @napi-rs/canvas-darwin-arm64, @img/sharp-linux-x64, etc.
@@ -325,6 +352,7 @@ const PLATFORM_NATIVE_SCOPES = {
   '@napi-rs': /^canvas-(darwin|linux|win32)-(x64|arm64)/,
   '@img': /^sharp(?:-libvips)?-(darwin|linux(?:musl)?|win32)-(x64|arm64|arm|ppc64|riscv64|s390x)/,
   '@mariozechner': /^clipboard-(darwin|linux|win32)-(x64|arm64|universal)/,
+  '@tloncorp': /^tlon-skill-(darwin|linux|win32|windows)-(x64|arm64)/,
   '@snazzah': /^davey-(darwin|linux|android|freebsd|win32|wasm32)-(x64|arm64|arm|ia32|arm64-gnu|arm64-musl|x64-gnu|x64-musl|x64-msvc|arm64-msvc|ia32-msvc|arm-eabi|arm-gnueabihf|wasi)/,
   '@lydell': /^node-pty-(darwin|linux|win32)-(x64|arm64)/,
   '@reflink': /^reflink-(darwin|linux|win32)-(x64|arm64|x64-gnu|x64-musl|arm64-gnu|arm64-musl|x64-msvc|arm64-msvc)/,
@@ -344,8 +372,102 @@ const UNSCOPED_NATIVE_PACKAGES = [
  * e.g. "x64-msvc" -> "x64", "arm64-gnu" -> "arm64", "arm64-metal" -> "arm64"
  */
 function baseArch(rawArch) {
+  if (rawArch === 'x86_64') {
+    return 'x64';
+  }
+  if (rawArch.startsWith('arm64')) {
+    return 'arm64';
+  }
   const dash = rawArch.indexOf('-');
   return dash > 0 ? rawArch.slice(0, dash) : rawArch;
+}
+
+const PREBUILD_PLATFORM_ALIASES = {
+  ...PLATFORM_ALIASES,
+  ios: 'ios',
+  android: 'android',
+  freebsd: 'freebsd',
+  netbsd: 'netbsd',
+  openbsd: 'openbsd',
+  sunos: 'sunos',
+  aix: 'aix',
+  openharmony: 'openharmony',
+};
+
+function parseArchTokens(rawValue) {
+  return rawValue
+    .split('+')
+    .map((part) => baseArch(part))
+    .filter(Boolean);
+}
+
+function shouldKeepNativePrebuildDir(prebuildDirName, platform, arch) {
+  const parts = prebuildDirName.split('-').filter(Boolean);
+  if (parts.length === 0) {
+    return true;
+  }
+
+  const normalizedPlatform = PREBUILD_PLATFORM_ALIASES[parts[0]] || parts[0];
+  if (!(normalizedPlatform in PREBUILD_PLATFORM_ALIASES)) {
+    return true;
+  }
+  if (normalizedPlatform !== platform) {
+    return false;
+  }
+
+  const archTokens = parts.slice(1).flatMap(parseArchTokens);
+  if (archTokens.length === 0) {
+    return true;
+  }
+  if (archTokens.includes('universal')) {
+    return true;
+  }
+
+  return archTokens.includes(arch);
+}
+
+function readPackagePlatformConstraints(packageDir) {
+  const packageJsonPath = join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return null;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return {
+      os: Array.isArray(pkg.os) ? pkg.os.filter((entry) => typeof entry === 'string') : null,
+      cpu: Array.isArray(pkg.cpu) ? pkg.cpu.filter((entry) => typeof entry === 'string') : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function matchesPlatformConstraint(values, target, normalizeValue = (value) => value) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return true;
+  }
+
+  const normalizedTarget = normalizeValue(target);
+  const positives = [];
+
+  for (const rawValue of values) {
+    const isNegated = rawValue.startsWith('!');
+    const normalizedValue = normalizeValue(isNegated ? rawValue.slice(1) : rawValue);
+    if (isNegated) {
+      if (normalizedValue === normalizedTarget) {
+        return false;
+      }
+      continue;
+    }
+    positives.push(normalizedValue);
+  }
+
+  if (positives.length === 0) {
+    return true;
+  }
+
+  return positives.includes(normalizedTarget);
 }
 
 function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
@@ -409,8 +531,362 @@ function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
     }
   }
 
+  // 3. Generic package.json os/cpu filtering for future platform-native packages.
+  const packageDirs = [];
+
+  for (const entry of unscopedEntries) {
+    const fullPath = join(nodeModulesDir, entry);
+    let stats;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
+    if (!stats.isDirectory()) continue;
+    if (entry === '.bin' || entry.startsWith('@')) continue;
+    packageDirs.push(fullPath);
+  }
+
+  for (const scope of Object.keys(PLATFORM_NATIVE_SCOPES)) {
+    const scopeDir = join(nodeModulesDir, scope);
+    if (!existsSync(scopeDir)) continue;
+    for (const entry of readdirSync(scopeDir)) {
+      const fullPath = join(scopeDir, entry);
+      let stats;
+      try {
+        stats = statSync(fullPath);
+      } catch {
+        continue;
+      }
+      if (!stats.isDirectory()) continue;
+      packageDirs.push(fullPath);
+    }
+  }
+
+  for (const packageDir of packageDirs) {
+    if (!existsSync(packageDir)) continue;
+
+    const constraints = readPackagePlatformConstraints(packageDir);
+    if (!constraints) continue;
+
+    const osMatches = matchesPlatformConstraint(
+      constraints.os,
+      platform,
+      (value) => PLATFORM_ALIASES[value] || value,
+    );
+    const cpuMatches = matchesPlatformConstraint(
+      constraints.cpu,
+      arch,
+      (value) => {
+        const normalized = baseArch(value);
+        return normalized === 'universal' ? arch : normalized;
+      },
+    );
+
+    if (!osMatches || !cpuMatches) {
+      try {
+        rmSync(packageDir, { recursive: true, force: true });
+        removed++;
+      } catch { /* */ }
+    }
+  }
+
   return removed;
 }
+exports.cleanupNativePlatformPackages = cleanupNativePlatformPackages;
+
+function cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch) {
+  const extensionsDir = join(openclawRoot, 'dist', 'extensions');
+  if (!existsSync(extensionsDir)) {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const extensionEntry of readdirSync(extensionsDir, { withFileTypes: true })) {
+    if (!extensionEntry.isDirectory()) continue;
+    const extensionNodeModulesDir = join(extensionsDir, extensionEntry.name, 'node_modules');
+    if (!existsSync(extensionNodeModulesDir)) continue;
+    removed += cleanupNativePlatformPackages(extensionNodeModulesDir, platform, arch);
+  }
+
+  return removed;
+}
+exports.cleanupExtensionNativePlatformPackages = cleanupExtensionNativePlatformPackages;
+
+function cleanupNativePrebuilds(rootDir, platform, arch) {
+  if (!existsSync(rootDir)) {
+    return 0;
+  }
+
+  let removed = 0;
+
+  function walk(currentDir) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const fullPath = join(currentDir, entry.name);
+      if (entry.name === 'prebuilds') {
+        let prebuildEntries;
+        try {
+          prebuildEntries = readdirSync(fullPath, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+
+        for (const prebuildEntry of prebuildEntries) {
+          if (!prebuildEntry.isDirectory()) {
+            continue;
+          }
+
+          if (shouldKeepNativePrebuildDir(prebuildEntry.name, platform, arch)) {
+            continue;
+          }
+
+          try {
+            rmSync(join(fullPath, prebuildEntry.name), { recursive: true, force: true });
+            removed++;
+          } catch {
+            // Ignore cleanup failures and keep scanning the rest of the tree.
+          }
+        }
+        continue;
+      }
+
+      walk(fullPath);
+    }
+  }
+
+  walk(rootDir);
+  return removed;
+}
+exports.cleanupNativePrebuilds = cleanupNativePrebuilds;
+
+function readBundleVersion(openclawRoot) {
+  const packageJsonPath = join(openclawRoot, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return typeof pkg.version === 'string' ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveTarCommand() {
+  return process.platform === 'win32' ? 'tar.exe' : 'tar';
+}
+
+function getTarCreateInvocation(archivePath, sourceDir, platform = process.platform) {
+  const pathImpl = platform === 'win32' ? path.win32 : path;
+  return {
+    command: platform === 'win32' ? 'tar.exe' : 'tar',
+    args: platform === 'win32'
+      ? ['-czf', pathImpl.basename(archivePath), '-C', sourceDir, '.']
+      : ['-czf', archivePath, '-C', sourceDir, '.'],
+    options: platform === 'win32'
+      ? { stdio: 'inherit', cwd: pathImpl.dirname(archivePath) }
+      : { stdio: 'inherit' },
+  };
+}
+exports.getTarCreateInvocation = getTarCreateInvocation;
+
+function createTarGzArchive(archivePath, sourceDir) {
+  const invocation = getTarCreateInvocation(archivePath, sourceDir);
+  execFileSync(invocation.command, invocation.args, invocation.options);
+}
+exports.createTarGzArchive = createTarGzArchive;
+
+function collectRegularFiles(rootDir) {
+  const files = [];
+
+  function walk(currentDir) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walk(rootDir);
+  return files;
+}
+
+function isPotentialMacCodeSignCandidate(filePath) {
+  const fileName = basename(filePath).toLowerCase();
+  return (
+    fileName.endsWith('.node')
+    || fileName.endsWith('.dylib')
+    || fileName.endsWith('.bare')
+    || fileName === 'spawn-helper'
+    || /\/node_modules\/(?:@esbuild\/[^/]+\/bin|esbuild\/bin)\/esbuild$/u.test(filePath.replace(/\\/gu, '/'))
+  );
+}
+exports.isPotentialMacCodeSignCandidate = isPotentialMacCodeSignCandidate;
+
+function readFileDescription(filePath) {
+  try {
+    return execFileSync('/usr/bin/file', ['-b', filePath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function resolveMacCodeSigningConfig(context) {
+  if (context.electronPlatformName !== 'darwin') {
+    return null;
+  }
+
+  const packager = context.packager;
+  const explicitIdentity = packager.platformSpecificBuildOptions?.identity;
+  if (explicitIdentity === null || explicitIdentity === 'null' || explicitIdentity === '-') {
+    return null;
+  }
+
+  const codeSigningInfo = packager.codeSigningInfo?.value
+    ? await packager.codeSigningInfo.value
+    : null;
+  const keychainFile = codeSigningInfo?.keychainFile || null;
+  const { findIdentity } = require('app-builder-lib/out/codeSign/macCodeSign');
+
+  const identity = await findIdentity(
+    'Developer ID Application',
+    typeof explicitIdentity === 'string' ? explicitIdentity : null,
+    keychainFile,
+  );
+  if (!identity) {
+    return null;
+  }
+
+  const configuredEntitlementsPath = packager.platformSpecificBuildOptions?.entitlementsInherit
+    || packager.platformSpecificBuildOptions?.entitlements
+    || 'entitlements.mac.plist';
+  const entitlementsPath = isAbsolute(configuredEntitlementsPath)
+    ? configuredEntitlementsPath
+    : join(__dirname, '..', configuredEntitlementsPath);
+
+  return {
+    identity: identity.hash || identity.name,
+    keychainFile,
+    entitlementsPath,
+  };
+}
+
+async function signOpenClawNativeBinaries(context, openclawRoot) {
+  const signingConfig = await resolveMacCodeSigningConfig(context);
+  if (!signingConfig || !existsSync(openclawRoot)) {
+    return 0;
+  }
+
+  return signMacCodeSignCandidatesInDirectory(openclawRoot, signingConfig);
+}
+
+async function signMacCodeSignCandidatesInDirectory(rootDir, signingConfig) {
+  if (!signingConfig || !existsSync(rootDir)) {
+    return 0;
+  }
+
+  const candidates = collectRegularFiles(rootDir)
+    .filter(isPotentialMacCodeSignCandidate)
+    .sort((left, right) => right.length - left.length);
+
+  let signed = 0;
+  for (const filePath of candidates) {
+    const description = readFileDescription(filePath);
+    if (!description.includes('Mach-O')) {
+      continue;
+    }
+
+    const isExecutable = description.includes('executable') || description.includes('bundle');
+    const args = [
+      '--force',
+      '--sign',
+      signingConfig.identity,
+      '--timestamp',
+      '--entitlements',
+      signingConfig.entitlementsPath,
+      ...(signingConfig.keychainFile ? ['--keychain', signingConfig.keychainFile] : []),
+      ...(isExecutable ? ['--options', 'runtime'] : []),
+      filePath,
+    ];
+
+    execFileSync('/usr/bin/codesign', args, { stdio: 'inherit' });
+    signed++;
+  }
+
+  return signed;
+}
+exports.signMacCodeSignCandidatesInDirectory = signMacCodeSignCandidatesInDirectory;
+
+function createOpenClawSidecarArchive(resourcesDir, openclawRoot, options = {}) {
+  if (!existsSync(openclawRoot)) {
+    return null;
+  }
+
+  const sidecarRoot = join(resourcesDir, 'runtime', 'openclaw');
+  const payloadPath = join(sidecarRoot, 'payload.tar.gz');
+  const version = typeof options.versionOverride === 'string' && options.versionOverride.length > 0
+    ? options.versionOverride
+    : readBundleVersion(openclawRoot);
+
+  rmSync(sidecarRoot, { recursive: true, force: true });
+  mkdirSync(sidecarRoot, { recursive: true });
+
+  createTarGzArchive(payloadPath, openclawRoot);
+
+  writeFileSync(
+    join(sidecarRoot, 'archive.json'),
+    JSON.stringify({
+      format: 'tar.gz',
+      path: 'payload.tar.gz',
+      version,
+    }, null, 2) + '\n',
+    'utf8',
+  );
+  writeFileSync(
+    join(sidecarRoot, 'package.json'),
+    '{\n  "name": "openclaw-sidecar",\n  "private": true\n}\n',
+    'utf8',
+  );
+
+  rmSync(openclawRoot, { recursive: true, force: true });
+
+  return {
+    sidecarRoot,
+    payloadPath,
+    version,
+  };
+}
+exports.createOpenClawSidecarArchive = createOpenClawSidecarArchive;
 
 // ── Broken module patcher ─────────────────────────────────────────────────────
 // Some bundled packages have transpiled CJS that sets `module.exports = exports.default`
@@ -587,119 +1063,57 @@ function patchBrokenModules(nodeModulesDir) {
     console.log(`[after-pack] 🩹 Patched ${count} broken module(s) in ${nodeModulesDir}`);
   }
 }
+exports.patchBrokenModules = patchBrokenModules;
 
-// ── Plugin bundler ───────────────────────────────────────────────────────────
-// Bundles a single OpenClaw plugin (and its transitive deps) from node_modules
-// directly into the packaged resources directory.  Mirrors the logic in
-// bundle-openclaw-plugins.mjs so the packaged app is self-contained even when
-// build/openclaw-plugins/ was not pre-generated.
-
-function getVirtualStoreNodeModules(realPkgPath) {
-  let dir = realPkgPath;
-  while (dir !== dirname(dir)) {
-    if (basename(dir) === 'node_modules') return dir;
-    dir = dirname(dir);
-  }
-  return null;
+function resolvePrebuiltOpenClawSidecarTarget(platform, arch) {
+  return `${platform}-${arch}`;
 }
 
-function listPkgs(nodeModulesDir) {
-  const result = [];
-  const nDir = normWin(nodeModulesDir);
-  if (!existsSync(nDir)) return result;
-  for (const entry of readdirSync(nDir)) {
-    if (entry === '.bin') continue;
-    // Use original (non-normWin) join for the logical path stored in result.fullPath,
-    // so callers can still call getVirtualStoreNodeModules() on it correctly.
-    const fullPath = join(nodeModulesDir, entry);
-    if (entry.startsWith('@')) {
-      let subs;
-      try { subs = readdirSync(normWin(fullPath)); } catch { continue; }
-      for (const sub of subs) {
-        result.push({ name: `${entry}/${sub}`, fullPath: join(fullPath, sub) });
-      }
-    } else {
-      result.push({ name: entry, fullPath });
-    }
-  }
-  return result;
+function getPrebuiltOpenClawSidecarRoot(projectRoot, platform, arch) {
+  return join(projectRoot, 'build', 'prebuilt-sidecar', resolvePrebuiltOpenClawSidecarTarget(platform, arch));
 }
+exports.getPrebuiltOpenClawSidecarRoot = getPrebuiltOpenClawSidecarRoot;
 
-function bundlePlugin(nodeModulesRoot, npmName, destDir) {
-  const pkgPath = join(nodeModulesRoot, ...npmName.split('/'));
-  if (!existsSync(pkgPath)) {
-    console.warn(`[after-pack] ⚠️  Plugin package not found: ${pkgPath}. Run pnpm install.`);
-    return false;
+function copyPrebuiltOpenClawSidecar(projectRoot, resourcesDir, platform, arch) {
+  const prebuiltRoot = getPrebuiltOpenClawSidecarRoot(projectRoot, platform, arch);
+  const archiveJsonPath = join(prebuiltRoot, 'archive.json');
+  const payloadPath = join(prebuiltRoot, 'payload.tar.gz');
+  if (!existsSync(archiveJsonPath) || !existsSync(payloadPath)) {
+    return null;
   }
 
-  let realPluginPath;
-  try { realPluginPath = realpathCompat(pkgPath); } catch { realPluginPath = pkgPath; }
+  const sidecarRoot = join(resourcesDir, 'runtime', 'openclaw');
+  rmSync(sidecarRoot, { recursive: true, force: true });
+  mkdirSync(sidecarRoot, { recursive: true });
+  cpSync(archiveJsonPath, join(sidecarRoot, 'archive.json'));
+  cpSync(payloadPath, join(sidecarRoot, 'payload.tar.gz'));
 
-  // Copy plugin package itself
-  if (existsSync(normWin(destDir))) rmSync(normWin(destDir), { recursive: true, force: true });
-  mkdirSync(normWin(destDir), { recursive: true });
-  cpSync(normWin(realPluginPath), normWin(destDir), { recursive: true, dereference: true });
-
-  // Collect transitive deps via pnpm virtual store BFS
-  const collected = new Map();
-  const queue = [];
-
-  const rootVirtualNM = getVirtualStoreNodeModules(realPluginPath);
-  if (!rootVirtualNM) {
-    console.warn(`[after-pack] ⚠️  Could not find virtual store for ${npmName}, skipping deps.`);
-    return true;
+  const manifestPath = join(prebuiltRoot, 'manifest.json');
+  if (existsSync(manifestPath)) {
+    cpSync(manifestPath, join(sidecarRoot, 'manifest.json'));
   }
-  queue.push({ nodeModulesDir: rootVirtualNM, skipPkg: npmName });
 
-  // Read peerDependencies from the plugin's package.json so we don't bundle
-  // packages that are provided by the host environment (e.g. openclaw itself).
-  const SKIP_PACKAGES = new Set(['typescript', '@playwright/test']);
-  const SKIP_SCOPES = ['@types/'];
+  const checksumsPath = join(prebuiltRoot, 'SHA256SUMS');
+  if (existsSync(checksumsPath)) {
+    cpSync(checksumsPath, join(sidecarRoot, 'SHA256SUMS'));
+  }
+
+  let version;
   try {
-    const pluginPkg = JSON.parse(
-      require('fs').readFileSync(join(destDir, 'package.json'), 'utf8')
-    );
-    for (const peer of Object.keys(pluginPkg.peerDependencies || {})) {
-      SKIP_PACKAGES.add(peer);
-    }
-  } catch { /* ignore */ }
-
-  while (queue.length > 0) {
-    const { nodeModulesDir, skipPkg } = queue.shift();
-    for (const { name, fullPath } of listPkgs(nodeModulesDir)) {
-      if (name === skipPkg) continue;
-      if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
-      let rp;
-      try { rp = realpathCompat(fullPath); } catch { continue; }
-      if (collected.has(rp)) continue;
-      collected.set(rp, name);
-      const depVirtualNM = getVirtualStoreNodeModules(rp);
-      if (depVirtualNM && depVirtualNM !== nodeModulesDir) {
-        queue.push({ nodeModulesDir: depVirtualNM, skipPkg: name });
-      }
-    }
+    const metadata = JSON.parse(readFileSync(archiveJsonPath, 'utf8'));
+    version = typeof metadata.version === 'string' ? metadata.version : undefined;
+  } catch {
+    version = undefined;
   }
 
-  // Copy flattened deps into destDir/node_modules
-  const destNM = join(destDir, 'node_modules');
-  mkdirSync(destNM, { recursive: true });
-  const copiedNames = new Set();
-  let count = 0;
-  for (const [rp, pkgName] of collected) {
-    if (copiedNames.has(pkgName)) continue;
-    copiedNames.add(pkgName);
-    const d = join(destNM, pkgName);
-    try {
-      mkdirSync(normWin(dirname(d)), { recursive: true });
-      cpSync(normWin(rp), normWin(d), { recursive: true, dereference: true });
-      count++;
-    } catch (e) {
-      console.warn(`[after-pack]   Skipped dep ${pkgName}: ${e.message}`);
-    }
-  }
-  console.log(`[after-pack] ✅ Plugin ${npmName}: copied ${count} deps to ${destDir}`);
-  return true;
+  return {
+    prebuiltRoot,
+    sidecarRoot,
+    payloadPath: join(sidecarRoot, 'payload.tar.gz'),
+    version,
+  };
 }
+exports.copyPrebuiltOpenClawSidecar = copyPrebuiltOpenClawSidecar;
 
 // ── Main hook ────────────────────────────────────────────────────────────────
 
@@ -707,11 +1121,12 @@ exports.default = async function afterPack(context) {
   const appOutDir = context.appOutDir;
   const platform = context.electronPlatformName; // 'win32' | 'darwin' | 'linux'
   const arch = resolveArch(context.arch);
+  const projectRoot = join(__dirname, '..');
 
   console.log(`[after-pack] Target: ${platform}/${arch}`);
 
-  const src = join(__dirname, '..', 'build', 'openclaw', 'node_modules');
-  const bundledPluginsBuildRoot = join(__dirname, '..', 'build', 'openclaw-plugins');
+  const src = join(projectRoot, 'build', 'openclaw', 'node_modules');
+  const bundledPluginsBuildRoot = join(projectRoot, 'build', 'openclaw-plugins');
 
   let resourcesDir;
   if (platform === 'darwin') {
@@ -723,31 +1138,37 @@ exports.default = async function afterPack(context) {
 
   const openclawRoot = join(resourcesDir, 'openclaw');
   const dest = join(openclawRoot, 'node_modules');
-  const nodeModulesRoot = join(__dirname, '..', 'node_modules');
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
+  const prebuiltSidecar = copyPrebuiltOpenClawSidecar(projectRoot, resourcesDir, platform, arch);
 
-  if (!existsSync(src)) {
-    console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
-    return;
+  copyBundledBinRuntimeResources(projectRoot, resourcesDir, platform, arch);
+
+  if (!prebuiltSidecar) {
+    if (!existsSync(src)) {
+      console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
+      return;
+    }
+
+    // 1. Copy node_modules (electron-builder skips it due to .gitignore)
+    const depCount = readdirSync(src, { withFileTypes: true })
+      .filter(d => d.isDirectory() && d.name !== '.bin')
+      .length;
+
+    console.log(`[after-pack] Copying ${depCount} openclaw dependencies to ${dest} ...`);
+    rmSync(normWin(dest), { recursive: true, force: true });
+    // Avoid fs.cp recursive directory fan-out here: the bundled OpenClaw tree is
+    // large enough on CI runners to trip EMFILE while copying package resources.
+    copyPathPreservingLinks(src, dest);
+    console.log('[after-pack] ✅ openclaw node_modules copied.');
+
+    // Patch broken modules whose CJS transpiled output sets module.exports = undefined,
+    // causing TypeError in Node.js 22+ ESM interop.
+    patchBrokenModules(dest);
+  } else {
+    console.log(
+      `[after-pack] ✅ Using prebuilt OpenClaw sidecar from ${prebuiltSidecar.prebuiltRoot}${prebuiltSidecar.version ? ` (v${prebuiltSidecar.version})` : ''}.`,
+    );
   }
-
-  copyBundledBinRuntimeResources(join(__dirname, '..'), resourcesDir, platform, arch);
-
-  // 1. Copy node_modules (electron-builder skips it due to .gitignore)
-  const depCount = readdirSync(src, { withFileTypes: true })
-    .filter(d => d.isDirectory() && d.name !== '.bin')
-    .length;
-
-  console.log(`[after-pack] Copying ${depCount} openclaw dependencies to ${dest} ...`);
-  rmSync(normWin(dest), { recursive: true, force: true });
-  // Avoid fs.cp recursive directory fan-out here: the bundled OpenClaw tree is
-  // large enough on CI runners to trip EMFILE while copying package resources.
-  copyPathPreservingLinks(src, dest);
-  console.log('[after-pack] ✅ openclaw node_modules copied.');
-
-  // Patch broken modules whose CJS transpiled output sets module.exports = undefined,
-  // causing TypeError in Node.js 22+ ESM interop.
-  patchBrokenModules(dest);
 
   // 1.1 Copy prebuilt OpenClaw plugin mirrors when available so local unpublished
   //     plugins under plugins/openclaw/ are included as well. Fall back to
@@ -775,105 +1196,82 @@ exports.default = async function afterPack(context) {
       }
     }
   } else {
-    const BUNDLED_PLUGINS = [
-      { npmName: '@soimy/dingtalk', pluginId: 'dingtalk' },
-      { npmName: '@wecom/wecom-openclaw-plugin', pluginId: 'wecom-openclaw-plugin' },
-      { npmName: '@larksuite/openclaw-lark', pluginId: 'openclaw-lark' },
-      { npmName: '@martian-engineering/lossless-claw', pluginId: 'lossless-claw' },
-    ];
+    const fallbackLogger = createPrefixedLogger('[after-pack] ');
+    const { plugins } = bundlePluginMirrors({
+      rootDir: join(__dirname, '..'),
+      outputRoot: pluginsDestRoot,
+      logger: fallbackLogger,
+    });
 
-    mkdirSync(pluginsDestRoot, { recursive: true });
-    for (const { npmName, pluginId } of BUNDLED_PLUGINS) {
-      const pluginDestDir = join(pluginsDestRoot, pluginId);
-      console.log(`[after-pack] Bundling plugin ${npmName} -> ${pluginDestDir}`);
-      const ok = bundlePlugin(nodeModulesRoot, npmName, pluginDestDir);
-      if (ok) {
-        const pluginNM = join(pluginDestDir, 'node_modules');
-        cleanupUnnecessaryFiles(pluginDestDir);
-        if (existsSync(pluginNM)) {
-          cleanupKoffi(pluginNM, platform, arch);
-          cleanupNativePlatformPackages(pluginNM, platform, arch);
-        }
+    for (const plugin of plugins) {
+      const pluginNM = join(plugin.outputDir, 'node_modules');
+      cleanupUnnecessaryFiles(plugin.outputDir);
+      if (existsSync(pluginNM)) {
+        cleanupKoffi(pluginNM, platform, arch);
+        cleanupNativePlatformPackages(pluginNM, platform, arch);
       }
     }
   }
 
-  // 1.2 Copy built-in extension node_modules that electron-builder skipped.
-  //     OpenClaw 3.31+ ships built-in extensions (discord, qqbot, etc.) under
-  //     dist/extensions/<ext>/node_modules/. These are skipped by extraResources
-  //     because .gitignore contains "node_modules/".
-  //
-  //     Extension code is loaded via shared chunks in dist/ (e.g. outbound-*.js)
-  //     which resolve modules from the top-level openclaw/node_modules/, NOT from
-  //     the extension's own node_modules/. So we must merge extension deps into
-  //     the top-level node_modules/ as well.
-  const buildExtDir = join(__dirname, '..', 'build', 'openclaw', 'dist', 'extensions');
-  const packExtDir = join(openclawRoot, 'dist', 'extensions');
-  if (existsSync(buildExtDir)) {
-    let extNMCount = 0;
-    let mergedPkgCount = 0;
-    for (const extEntry of readdirSync(buildExtDir, { withFileTypes: true })) {
-      if (!extEntry.isDirectory()) continue;
-      const srcNM = join(buildExtDir, extEntry.name, 'node_modules');
-      if (!existsSync(srcNM)) continue;
-
-      // Copy to extension's own node_modules (for direct requires from extension code)
-      const destExtNM = join(packExtDir, extEntry.name, 'node_modules');
-      if (!existsSync(destExtNM)) {
-        cpSync(srcNM, destExtNM, { recursive: true });
-      }
-      extNMCount++;
-
-      // Merge into top-level openclaw/node_modules/ (for shared chunks in dist/)
-      for (const pkgEntry of readdirSync(srcNM, { withFileTypes: true })) {
-        if (!pkgEntry.isDirectory() || pkgEntry.name === '.bin') continue;
-        const srcPkg = join(srcNM, pkgEntry.name);
-        const destPkg = join(dest, pkgEntry.name);
-
-        if (pkgEntry.name.startsWith('@')) {
-          // Scoped package — iterate sub-entries
-          for (const scopeEntry of readdirSync(srcPkg, { withFileTypes: true })) {
-            if (!scopeEntry.isDirectory()) continue;
-            const srcScoped = join(srcPkg, scopeEntry.name);
-            const destScoped = join(destPkg, scopeEntry.name);
-            if (!existsSync(destScoped)) {
-              mkdirSync(dirname(destScoped), { recursive: true });
-              cpSync(srcScoped, destScoped, { recursive: true });
-              mergedPkgCount++;
-            }
-          }
-        } else {
-          if (!existsSync(destPkg)) {
-            cpSync(srcPkg, destPkg, { recursive: true });
-            mergedPkgCount++;
-          }
-        }
-      }
-    }
-    if (extNMCount > 0) {
-      console.log(`[after-pack] ✅ Copied node_modules for ${extNMCount} built-in extension(s), merged ${mergedPkgCount} packages into top-level.`);
+  if (!prebuiltSidecar) {
+    // 1.2 Copy built-in extension node_modules that electron-builder skipped.
+    //     OpenClaw 3.31+ ships built-in extensions (discord, qqbot, etc.) under
+    //     dist/extensions/<ext>/node_modules/. These are skipped by extraResources
+    //     because .gitignore contains "node_modules/".
+    //
+    //     Extension code is loaded via shared chunks in dist/ (e.g. outbound-*.js)
+    //     which resolve modules from the top-level openclaw/node_modules/, NOT from
+    //     the extension's own node_modules/. So we must merge extension deps into
+    //     the top-level node_modules/ as well.
+    const { extensionNodeModules, mergedPackages } = syncBuiltInExtensionNodeModules(join(projectRoot, 'build', 'openclaw'), openclawRoot);
+    if (extensionNodeModules > 0) {
+      console.log(
+        `[after-pack] ✅ Copied node_modules for ${extensionNodeModules} built-in extension(s), merged ${mergedPackages} packages into top-level.`,
+      );
       if (platform === 'darwin') {
         const { removedExtensions, removedPackages } = pruneExtensionNodeModulesAgainstTopLevel(openclawRoot);
         console.log(`[after-pack] ✅ Pruned ${removedExtensions} built-in extension node_modules and ${removedPackages} duplicate extension package directories.`);
       }
     }
-  }
 
-  // 2. General cleanup on the full openclaw directory (not just node_modules)
-  console.log('[after-pack] 🧹 Cleaning up unnecessary files ...');
-  const removedRoot = cleanupUnnecessaryFiles(openclawRoot);
-  console.log(`[after-pack] ✅ Removed ${removedRoot} unnecessary files/directories.`);
+    // 2. General cleanup on the full openclaw directory (not just node_modules)
+    console.log('[after-pack] 🧹 Cleaning up unnecessary files ...');
+    const removedRoot = cleanupUnnecessaryFiles(openclawRoot);
+    console.log(`[after-pack] ✅ Removed ${removedRoot} unnecessary files/directories.`);
 
-  // 3. Platform-specific: strip koffi non-target platform binaries
-  const koffiRemoved = cleanupKoffi(dest, platform, arch);
-  if (koffiRemoved > 0) {
-    console.log(`[after-pack] ✅ koffi: removed ${koffiRemoved} non-target platform binaries (kept ${platform}_${arch}).`);
-  }
+    // 3. Platform-specific: strip koffi non-target platform binaries
+    const koffiRemoved = cleanupKoffi(dest, platform, arch);
+    if (koffiRemoved > 0) {
+      console.log(`[after-pack] ✅ koffi: removed ${koffiRemoved} non-target platform binaries (kept ${platform}_${arch}).`);
+    }
 
-  // 4. Platform-specific: strip wrong-platform native packages
-  const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
-  if (nativeRemoved > 0) {
-    console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+    // 4. Platform-specific: strip wrong-platform native packages
+    const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
+    if (nativeRemoved > 0) {
+      console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+    }
+
+    const extensionNativeRemoved = cleanupExtensionNativePlatformPackages(openclawRoot, platform, arch);
+    if (extensionNativeRemoved > 0) {
+      console.log(`[after-pack] ✅ Removed ${extensionNativeRemoved} non-target native packages from built-in extension node_modules.`);
+    }
+
+    const prebuildsRemoved = cleanupNativePrebuilds(openclawRoot, platform, arch);
+    if (prebuildsRemoved > 0) {
+      console.log(`[after-pack] ✅ Removed ${prebuildsRemoved} non-target native prebuild directories.`);
+    }
+
+    const signedOpenClawBinaries = await signOpenClawNativeBinaries(context, openclawRoot);
+    if (signedOpenClawBinaries > 0) {
+      console.log(`[after-pack] ✅ Signed ${signedOpenClawBinaries} OpenClaw native binaries before archiving.`);
+    }
+
+    const archivedSidecar = createOpenClawSidecarArchive(resourcesDir, openclawRoot);
+    if (archivedSidecar) {
+      console.log(
+        `[after-pack] ✅ Archived OpenClaw sidecar to ${archivedSidecar.payloadPath}${archivedSidecar.version ? ` (v${archivedSidecar.version})` : ''}.`,
+      );
+    }
   }
 
   const asarUnpackedDir = join(resourcesDir, 'app.asar.unpacked');

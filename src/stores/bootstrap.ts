@@ -1,17 +1,13 @@
 import { create } from 'zustand';
-import { USER_STATUS_REQUIRES_INVITE } from '../../shared/auth/user-status';
-import { buildProviderListItems, fetchProviderSnapshot } from '@/lib/provider-accounts';
 import { useGatewayStore } from '@/stores/gateway';
 import { useSettingsStore } from '@/stores/settings';
-import { useSessionStore, type SessionAccount } from '@/stores/session';
+import { useSessionStore } from '@/stores/session';
 
 export type BootstrapPhase =
   | 'idle'
   | 'checking_session'
   | 'needs_login'
-  | 'needs_invite_code'
   | 'preparing'
-  | 'needs_provider'
   | 'ready'
   | 'error';
 
@@ -20,10 +16,7 @@ interface BootstrapStoreState {
   error: string | null;
   init: () => Promise<void>;
   loginAndContinue: () => Promise<void>;
-  submitInviteCodeAndContinue: (inviteCode: string) => Promise<void>;
-  skipInviteCodeAndContinue: () => Promise<void>;
   logoutToLogin: () => Promise<void>;
-  continueAfterProvider: () => Promise<void>;
   retry: () => Promise<void>;
 }
 
@@ -33,10 +26,6 @@ const GATEWAY_READY_TIMEOUT_MS = 45000;
 function isLoginCanceledError(error: unknown): boolean {
   const message = String(error).toLowerCase();
   return message.includes('login window was closed before completing wechat authentication');
-}
-
-function requiresInviteCode(account: SessionAccount | null | undefined): boolean {
-  return account?.userStatus === USER_STATUS_REQUIRES_INVITE;
 }
 
 async function waitForGatewayRunning(timeoutMs = GATEWAY_READY_TIMEOUT_MS): Promise<void> {
@@ -78,30 +67,6 @@ async function waitForGatewayRunning(timeoutMs = GATEWAY_READY_TIMEOUT_MS): Prom
   });
 }
 
-async function hasUsableProvider(): Promise<boolean> {
-  const snapshot = await fetchProviderSnapshot();
-  const items = buildProviderListItems(
-    snapshot.accounts,
-    snapshot.statuses,
-    snapshot.vendors,
-    snapshot.defaultAccountId,
-  );
-
-  const isUsable = (item: (typeof items)[number]) => {
-    const { account, status } = item;
-    if (account.authMode === 'oauth_device' || account.authMode === 'oauth_browser' || account.authMode === 'local') {
-      return true;
-    }
-    return status?.hasKey ?? false;
-  };
-
-  const defaultItem = snapshot.defaultAccountId
-    ? items.find((item) => item.account.id === snapshot.defaultAccountId)
-    : null;
-
-  return (defaultItem ? isUsable(defaultItem) : false) || items.some(isUsable);
-}
-
 async function ensureGatewayReady(): Promise<void> {
   await useGatewayStore.getState().init();
   let gateway = useGatewayStore.getState();
@@ -125,27 +90,9 @@ async function ensureGatewayReady(): Promise<void> {
 
 async function continueBootstrap(set: (patch: Partial<BootstrapStoreState>) => void): Promise<void> {
   set({ phase: 'preparing', error: null });
-
-  if (!(await hasUsableProvider())) {
-    set({ phase: 'needs_provider' });
-    return;
-  }
-
   await ensureGatewayReady();
   useSettingsStore.getState().markSetupComplete();
   set({ phase: 'ready', error: null });
-}
-
-async function continueFromAuthenticatedSession(
-  set: (patch: Partial<BootstrapStoreState>) => void,
-): Promise<void> {
-  const session = useSessionStore.getState();
-  if (requiresInviteCode(session.account)) {
-    set({ phase: 'needs_invite_code', error: null });
-    return;
-  }
-
-  await continueBootstrap(set);
 }
 
 export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
@@ -172,7 +119,7 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
           set({ phase: 'needs_login', error: null });
           return;
         }
-        await continueFromAuthenticatedSession(set);
+        await continueBootstrap(set);
       } catch (error) {
         set({ phase: 'error', error: String(error) });
       } finally {
@@ -187,47 +134,11 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
     try {
       set({ phase: 'checking_session', error: null });
       await useSessionStore.getState().loginWithWechat();
-      await continueFromAuthenticatedSession(set);
+      await continueBootstrap(set);
     } catch (error) {
       const session = useSessionStore.getState();
       if (isLoginCanceledError(error) || session.status !== 'authenticated') {
         set({ phase: 'needs_login', error: null });
-        return;
-      }
-      set({ phase: 'error', error: String(error) });
-    }
-  },
-
-  submitInviteCodeAndContinue: async (inviteCode) => {
-    try {
-      await useSessionStore.getState().submitInviteCode(inviteCode);
-      await continueFromAuthenticatedSession(set);
-    } catch (error) {
-      const session = useSessionStore.getState();
-      if (session.status !== 'authenticated') {
-        set({ phase: 'needs_login', error: null });
-        return;
-      }
-      if (requiresInviteCode(session.account)) {
-        set({ phase: 'needs_invite_code', error: null });
-        return;
-      }
-      set({ phase: 'error', error: String(error) });
-    }
-  },
-
-  skipInviteCodeAndContinue: async () => {
-    try {
-      await useSessionStore.getState().skipInviteCode();
-      await continueFromAuthenticatedSession(set);
-    } catch (error) {
-      const session = useSessionStore.getState();
-      if (session.status !== 'authenticated') {
-        set({ phase: 'needs_login', error: null });
-        return;
-      }
-      if (requiresInviteCode(session.account)) {
-        set({ phase: 'needs_invite_code', error: null });
         return;
       }
       set({ phase: 'error', error: String(error) });
@@ -244,14 +155,6 @@ export const useBootstrapStore = create<BootstrapStoreState>((set) => ({
         // ignore gateway stop failures on logout
       }
       set({ phase: 'needs_login', error: null });
-    }
-  },
-
-  continueAfterProvider: async () => {
-    try {
-      await continueBootstrap(set);
-    } catch (error) {
-      set({ phase: 'error', error: String(error) });
     }
   },
 
