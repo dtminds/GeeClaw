@@ -75,10 +75,19 @@ function buildUpstreamUrl(rawUrl: string, upstreamBaseUrl: string): string {
   }
 
   const upstreamPath = incoming.pathname === GEECLAW_PROXY_PREFIX
-    ? '/'
+    ? ''
     : incoming.pathname.slice(GEECLAW_PROXY_PREFIX.length);
+  const upstream = new URL(upstreamBaseUrl.endsWith('/') ? upstreamBaseUrl : `${upstreamBaseUrl}/`);
+  const basePath = upstream.pathname.replace(/\/+$/, '');
+  const normalizedUpstreamPath = basePath.endsWith('/v1') && (upstreamPath === '/v1' || upstreamPath.startsWith('/v1/'))
+    ? upstreamPath.slice('/v1'.length)
+    : upstreamPath;
+  upstream.pathname = normalizedUpstreamPath
+    ? `${basePath}${normalizedUpstreamPath.startsWith('/') ? normalizedUpstreamPath : `/${normalizedUpstreamPath}`}`
+    : basePath || '/';
+  upstream.search = incoming.search;
 
-  return new URL(`${upstreamPath}${incoming.search}`, upstreamBaseUrl.endsWith('/') ? upstreamBaseUrl : `${upstreamBaseUrl}/`).toString();
+  return upstream.toString();
 }
 
 function copyResponseHeaders(res: ServerResponse, headers: Headers): void {
@@ -88,6 +97,18 @@ function copyResponseHeaders(res: ServerResponse, headers: Headers): void {
     }
     res.setHeader(key, value);
   });
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return error.name === 'AbortError'
+    || message === 'terminated'
+    || message === 'aborted'
+    || message.includes('abort');
 }
 
 export class LocalLlmProxyManager {
@@ -166,6 +187,20 @@ export class LocalLlmProxyManager {
   }
 
   private readonly handleRequest: RequestListener = async (req, res) => {
+    const upstreamController = new AbortController();
+    const abortUpstream = () => {
+      if (!upstreamController.signal.aborted) {
+        upstreamController.abort();
+      }
+    };
+
+    req.once('aborted', abortUpstream);
+    res.once('close', () => {
+      if (!res.writableEnded) {
+        abortUpstream();
+      }
+    });
+
     try {
       const rawUrl = req.url || '/';
       if (!rawUrl.startsWith(GEECLAW_PROXY_PREFIX)) {
@@ -180,6 +215,7 @@ export class LocalLlmProxyManager {
         method: req.method || 'GET',
         headers: toOutgoingHeaders(req.headers),
         body,
+        signal: upstreamController.signal,
       });
 
       res.statusCode = response.status;
@@ -192,18 +228,52 @@ export class LocalLlmProxyManager {
 
       await new Promise<void>((resolve, reject) => {
         const bodyStream = Readable.fromWeb(response.body as globalThis.ReadableStream<Uint8Array>);
-        bodyStream.on('error', reject);
-        res.on('close', resolve);
-        res.on('error', reject);
+        const cleanup = () => {
+          bodyStream.off('error', onError);
+          bodyStream.off('end', onEnd);
+          res.off('close', onClose);
+          res.off('error', onError);
+        };
+        const onError = (error: Error) => {
+          cleanup();
+          reject(error);
+        };
+        const onEnd = () => {
+          cleanup();
+          resolve();
+        };
+        const onClose = () => {
+          abortUpstream();
+          bodyStream.destroy();
+          cleanup();
+          resolve();
+        };
+
+        bodyStream.on('error', onError);
+        bodyStream.on('end', onEnd);
+        res.on('close', onClose);
+        res.on('error', onError);
         bodyStream.pipe(res);
-        bodyStream.on('end', resolve);
       });
     } catch (error) {
+      if (upstreamController.signal.aborted && isAbortLikeError(error)) {
+        logger.debug('Local LLM proxy request aborted');
+        if (!res.writableEnded && !res.destroyed) {
+          res.destroy();
+        }
+        return;
+      }
+
       logger.warn('Local LLM proxy request failed:', error);
+      if (res.destroyed) {
+        return;
+      }
       if (!res.headersSent) {
         res.statusCode = 502;
       }
-      res.end('Bad Gateway');
+      if (!res.writableEnded) {
+        res.end('Bad Gateway');
+      }
     }
   };
 }

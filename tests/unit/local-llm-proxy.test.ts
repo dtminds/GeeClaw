@@ -1,7 +1,17 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { createServer, type Server } from 'node:http';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createServer, request as httpRequest, type Server } from 'node:http';
+
+vi.mock('@electron/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 import { LocalLlmProxyManager } from '@electron/main/local-llm-proxy';
+import { logger } from '@electron/utils/logger';
 
 function listen(server: Server, port = 0): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -21,13 +31,25 @@ function listen(server: Server, port = 0): Promise<number> {
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
     server.close((error) => {
-      if (error) {
+      if (error && (error as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
         reject(error);
         return;
       }
       resolve();
     });
   });
+}
+
+async function waitFor<T>(read: () => T | null | undefined, timeoutMs = 200): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const value = read();
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for value');
 }
 
 describe('LocalLlmProxyManager', () => {
@@ -49,7 +71,7 @@ describe('LocalLlmProxyManager', () => {
   it('falls back from port 19100 when it is already occupied', async () => {
     const occupied = createServer();
     serversToClose.add(occupied);
-    await listen(occupied, 19100);
+    const occupiedPort = await listen(occupied);
 
     const upstream = createServer((_req, res) => {
       res.statusCode = 200;
@@ -60,18 +82,19 @@ describe('LocalLlmProxyManager', () => {
 
     const manager = new LocalLlmProxyManager({
       upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
-      startPort: 19100,
-      maxPort: 19102,
+      startPort: occupiedPort,
+      maxPort: occupiedPort + 2,
     });
     managersToStop.add(manager);
 
     const { port } = await manager.start();
 
-    expect(port).toBe(19101);
-    expect(manager.getPort()).toBe(19101);
+    expect(port).toBeGreaterThan(occupiedPort);
+    expect(port).toBeLessThanOrEqual(occupiedPort + 2);
+    expect(manager.getPort()).toBe(port);
   });
 
-  it('rewrites the /proxy prefix and preserves method, query, and body', async () => {
+  it('rewrites the /proxy prefix under the configured upstream base path and preserves method, query, and body', async () => {
     let seenUrl = '';
     let seenMethod = '';
     let seenBody = '';
@@ -92,7 +115,7 @@ describe('LocalLlmProxyManager', () => {
     const upstreamPort = await listen(upstream);
 
     const manager = new LocalLlmProxyManager({
-      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/api/v1`,
       startPort: 19110,
       maxPort: 19112,
     });
@@ -109,7 +132,7 @@ describe('LocalLlmProxyManager', () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ ok: true });
-    expect(seenUrl).toBe('/v1/chat/completions?stream=true');
+    expect(seenUrl).toBe('/api/v1/chat/completions?stream=true');
     expect(seenMethod).toBe('POST');
     expect(seenBody).toContain('"model":"geeclaw/qwen3.6-plus"');
   });
@@ -145,5 +168,58 @@ describe('LocalLlmProxyManager', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
     expect(await response.text()).toBe('data: first\\n\\ndata: second\\n\\n');
+  });
+
+  it('aborts the upstream fetch without warning when the client disconnects', async () => {
+    let upstreamSignal: AbortSignal | undefined;
+
+    const manager = new LocalLlmProxyManager({
+      startPort: 19130,
+      maxPort: 19132,
+      upstreamBaseUrl: 'http://127.0.0.1:9',
+      fetchImpl: async (_url, init) => {
+        upstreamSignal = init?.signal;
+        if (!upstreamSignal) {
+          throw new Error('missing abort signal');
+        }
+
+        return await new Promise<Response>((_resolve, reject) => {
+          upstreamSignal!.addEventListener('abort', () => reject(new TypeError('terminated')), { once: true });
+        });
+      },
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const request = httpRequest({
+      hostname: '127.0.0.1',
+      port,
+      path: '/proxy/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+    request.write(JSON.stringify({ stream: true }));
+    request.end();
+
+    await waitFor(() => upstreamSignal);
+
+    const requestClosed = new Promise<void>((resolve, reject) => {
+      request.once('close', resolve);
+      request.once('error', (error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') {
+          resolve();
+          return;
+        }
+        reject(error);
+      });
+    });
+    request.destroy();
+    await requestClosed;
+
+    await waitFor(() => upstreamSignal?.aborted ? true : undefined);
+    expect(upstreamSignal?.aborted).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
