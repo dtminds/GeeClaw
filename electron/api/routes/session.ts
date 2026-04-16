@@ -8,7 +8,6 @@ import {
   logoutSession,
   mockLogin,
   mockLogout,
-  submitInviteCode,
 } from '../../utils/session-store';
 
 export async function handleAuthSessionRoutes(
@@ -47,22 +46,6 @@ export async function handleAuthSessionRoutes(
       sendJson(res, 200, state);
     } catch (error) {
       logger.error('[SessionRoute] Logout failed:', error);
-      sendJson(res, 500, { success: false, error: String(error) });
-    }
-    return true;
-  }
-
-  if (url.pathname === '/api/session/invite-code' && req.method === 'POST') {
-    try {
-      logger.info('[SessionRoute] POST /api/session/invite-code called');
-      const body = await parseJsonBody<{ inviteCode?: string }>(req).catch(() => ({}));
-      const state = await submitInviteCode(body.inviteCode || '');
-      logger.info(
-        `[SessionRoute] Invite code accepted -> status=${state.status}, accountId=${state.account?.id || '(none)'}, userStatus=${state.account?.userStatus ?? '(unset)'}`,
-      );
-      sendJson(res, 200, state);
-    } catch (error) {
-      logger.error('[SessionRoute] Invite code verification failed:', error);
       sendJson(res, 500, { success: false, error: String(error) });
     }
     return true;

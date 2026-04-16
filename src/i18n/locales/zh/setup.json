@@ -138,20 +138,6 @@
             "title": "欢迎使用 GeeClaw",
             "action": "登录"
         },
-        "needsInvite": {
-            "title": "输入邀请码，获得免费Token（词元）",
-            "placeholder": "输入邀请码",
-            "action": "确认",
-            "submitting": "校验中",
-            "skip": "跳过",
-            "switchAccount": "切换账号",
-            "errors": {
-                "required": "请输入邀请码后再继续",
-                "invalid": "邀请码无效，请检查后重试",
-                "sessionExpired": "登录状态已失效，请重新登录",
-                "generic": "邀请码校验失败，请稍后重试"
-            }
-        },
         "authenticated": {
             "eyebrow": "账户已就绪",
             "title": "已登录",
@@ -177,7 +163,6 @@
             "label": "当前状态",
             "default": "我们正在为您准备一个稳定、顺滑的 AI 使用体验",
             "login": "完成一次快速登录后，就可以继续了",
-            "invite": "该账号尚未开通，请先输入邀请码继续",
             "provider": "下一步：连接模型提供商，让 GeeClaw 可以开始聊天",
             "error": "启动过程遇到了一点问题，您可以直接在这里重试"
         },

@@ -6,8 +6,6 @@ type BootstrapState = {
   phase: string;
   error: string | null;
   loginAndContinue: ReturnType<typeof vi.fn>;
-  submitInviteCodeAndContinue: ReturnType<typeof vi.fn>;
-  skipInviteCodeAndContinue: ReturnType<typeof vi.fn>;
   logoutToLogin: ReturnType<typeof vi.fn>;
   retry: ReturnType<typeof vi.fn>;
 };
@@ -33,8 +31,6 @@ const bootstrapState: BootstrapState = {
   phase: 'preparing',
   error: null,
   loginAndContinue: vi.fn(),
-  submitInviteCodeAndContinue: vi.fn(),
-  skipInviteCodeAndContinue: vi.fn(),
   logoutToLogin: vi.fn(),
   retry: vi.fn(),
 };

@@ -138,20 +138,6 @@
             "title": "Welcome to GeeClaw",
             "action": "Sign in"
         },
-        "needsInvite": {
-            "title": "Enter your invite code",
-            "placeholder": "Enter invite code",
-            "action": "Confirm",
-            "submitting": "Checking",
-            "skip": "Skip",
-            "switchAccount": "Switch account",
-            "errors": {
-                "required": "Enter an invite code to continue",
-                "invalid": "That invite code is invalid. Please try again.",
-                "sessionExpired": "Your session expired. Please sign in again.",
-                "generic": "We could not verify the invite code. Please try again."
-            }
-        },
         "authenticated": {
             "eyebrow": "Account ready",
             "title": "Signed in",
@@ -177,7 +163,6 @@
             "label": "Startup status",
             "default": "We are preparing a stable AI experience for you.",
             "login": "One quick sign-in and you are ready to continue.",
-            "invite": "This account still needs an invite code before you can continue.",
             "provider": "Next up: connect a model provider so GeeClaw can start chatting.",
             "error": "Something blocked startup, but you can retry from here."
         },
