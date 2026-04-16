@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -83,60 +83,42 @@ export function MemorySettingsSection() {
   const [activeMemoryModelDraft, setActiveMemoryModelDraft] = useState('');
   const [losslessMode, setLosslessMode] = useState<'automatic' | 'custom'>('automatic');
   const [losslessModelDraft, setLosslessModelDraft] = useState('');
+  const losslessInstallInFlightRef = useRef(false);
 
-  const applySnapshot = (snapshot: MemorySettingsSnapshot) => {
+  const applySnapshot = useCallback((snapshot: MemorySettingsSnapshot) => {
     setSettings(snapshot);
     setActiveMemoryMode(snapshot.activeMemory.modelMode);
     setActiveMemoryModelDraft(snapshot.activeMemory.model ?? '');
     setLosslessMode(snapshot.losslessClaw.summaryModelMode);
     setLosslessModelDraft(snapshot.losslessClaw.summaryModel ?? '');
-  };
+    losslessInstallInFlightRef.current = snapshot.losslessClaw.installJob?.stage === 'checking'
+      || snapshot.losslessClaw.installJob?.stage === 'installing';
+  }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const showLoadFailedToast = useEffectEvent((error: unknown) => {
+    toast.error(`${t('memory.toast.loadFailed')}: ${toUserMessage(error)}`);
+  });
 
-    (async () => {
-      try {
-        const snapshot = await hostApiFetch<MemorySettingsSnapshot>('/api/settings/memory');
-        if (cancelled) return;
-        applySnapshot(snapshot);
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(`${t('memory.toast.loadFailed')}: ${toUserMessage(error)}`);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
+  const loadSettings = useEffectEvent(async (options?: {
+    successToastKey?: string;
+  }) => {
+    const snapshot = await hostApiFetch<MemorySettingsSnapshot>('/api/settings/memory');
+    applySnapshot(snapshot);
+    if (options?.successToastKey) {
+      toast.success(t(options.successToastKey));
+    }
+    return snapshot;
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  const handleManagedPluginStatus = useEffectEvent((payload: ManagedPluginStatus | null) => {
+    if (payload && payload.pluginId !== 'lossless-claw') {
+      return;
+    }
 
-  useEffect(() => {
-    return subscribeHostEvent<ManagedPluginStatus | null>('openclaw:managed-plugin-status', (payload) => {
-      if (payload && payload.pluginId !== 'lossless-claw') {
-        return;
-      }
-
+    if (payload?.stage === 'failed') {
+      losslessInstallInFlightRef.current = false;
       setSettings((current) => {
         if (!current) {
-          return current;
-        }
-
-        const losslessReady = (
-          current.losslessClaw.installedVersion === current.losslessClaw.requiredVersion
-          && (current.losslessClaw.status === 'disabled' || current.losslessClaw.status === 'enabled')
-        );
-        const lateProgressEvent = Boolean(
-          payload
-          && (payload.stage === 'checking' || payload.stage === 'installing')
-          && losslessReady
-        );
-        if (lateProgressEvent) {
           return current;
         }
 
@@ -148,7 +130,74 @@ export function MemorySettingsSection() {
           },
         };
       });
+      toast.error(`${t('memory.toast.installFailed')}: ${payload.error || payload.message}`);
+      return;
+    }
+
+    if (payload?.stage === 'checking' || payload?.stage === 'installing') {
+      losslessInstallInFlightRef.current = true;
+    }
+
+    if (payload === null && losslessInstallInFlightRef.current) {
+      losslessInstallInFlightRef.current = false;
+      void loadSettings({ successToastKey: 'memory.toast.installSuccess' }).catch((error) => {
+        showLoadFailedToast(error);
+      });
+    }
+
+    setSettings((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const losslessReady = (
+        current.losslessClaw.installedVersion === current.losslessClaw.requiredVersion
+        && (current.losslessClaw.status === 'disabled' || current.losslessClaw.status === 'enabled')
+      );
+      const lateProgressEvent = Boolean(
+        payload
+        && (payload.stage === 'checking' || payload.stage === 'installing')
+        && losslessReady
+      );
+      if (lateProgressEvent) {
+        return current;
+      }
+
+      return {
+        ...current,
+        losslessClaw: {
+          ...current.losslessClaw,
+          installJob: payload,
+        },
+      };
     });
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await loadSettings();
+        if (cancelled) return;
+      } catch (error) {
+        if (!cancelled) {
+          showLoadFailedToast(error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return subscribeHostEvent<ManagedPluginStatus | null>('openclaw:managed-plugin-status', handleManagedPluginStatus);
   }, []);
 
   const savePatch = async (patch: MemorySettingsPatch, savingId: string) => {
@@ -178,7 +227,6 @@ export function MemorySettingsSection() {
         { method: 'POST' },
       );
       applySnapshot(response.settings);
-      toast.success(t('memory.toast.installSuccess'));
     } catch (error) {
       toast.error(`${t('memory.toast.installFailed')}: ${toUserMessage(error)}`);
     } finally {

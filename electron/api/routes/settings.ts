@@ -272,9 +272,11 @@ export async function handleSettingsRoutes(
 
   if (url.pathname === '/api/settings/memory/lossless-claw/install' && req.method === 'POST') {
     try {
-      await installManagedPluginNow({ pluginId: 'lossless-claw' });
+      void installManagedPluginNow({ pluginId: 'lossless-claw' }).catch(() => {
+        // Install progress and failures are surfaced through managed-plugin status events.
+      });
       const config = await readOpenClawConfigDocument();
-      sendJson(res, 200, {
+      sendJson(res, 202, {
         success: true,
         settings: await readMemorySettingsSnapshot(config),
       });

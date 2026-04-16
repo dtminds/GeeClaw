@@ -14,7 +14,7 @@ import { getUvMirrorEnv } from './uv-env';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
 import { getManagedPlugin, getManagedPlugins, type ManagedPluginDefinition } from './managed-plugin-registry';
-import { getManagedPluginStatus, setManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
+import { setManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
 
 type RunCommandResult = {
   stdout: string;
@@ -574,6 +574,16 @@ export async function installManagedPluginNow(options: {
     throw new Error(`Unknown managed plugin: ${options.pluginId}`);
   }
 
+  emitManagedPluginStatus(
+    plugin,
+    buildManagedPluginStepStatus({
+      plugin,
+      stage: 'checking',
+      message: plugin.installMessage,
+      installedVersion: null,
+    }),
+  );
+
   const installPromise = (async () => {
     const appSettings = await getAllSettings();
     const managedAppEnv = await resolveGeeClawAppEnvironment({});
@@ -590,16 +600,6 @@ export async function installManagedPluginNow(options: {
     });
     const installedVersion = await getInstalledPluginVersion(openclawConfigDir, plugin.pluginId);
 
-    emitManagedPluginStatus(
-      plugin,
-      buildManagedPluginStepStatus({
-        plugin,
-        stage: 'checking',
-        message: plugin.installMessage,
-        installedVersion,
-      }),
-    );
-
     try {
       const result = await ensureManagedPluginInstalled({
         plugin,
@@ -609,6 +609,15 @@ export async function installManagedPluginNow(options: {
         installPolicy: 'reconcile',
       });
 
+      emitManagedPluginStatus(
+        plugin,
+        buildManagedPluginStepStatus({
+          plugin,
+          stage: 'installed',
+          message: plugin.installMessage,
+          installedVersion: result.installedVersion,
+        }),
+      );
       emitManagedPluginStatus(plugin, null);
       return result;
     } catch (error) {

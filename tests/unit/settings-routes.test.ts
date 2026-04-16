@@ -393,7 +393,7 @@ describe('handleSettingsRoutes', () => {
     );
   });
 
-  it('installs lossless-claw on demand and returns the refreshed memory snapshot', async () => {
+  it('starts lossless-claw installation on demand and returns the current memory snapshot', async () => {
     readMemorySettingsSnapshotMock.mockResolvedValueOnce({
       dreaming: {
         enabled: false,
@@ -440,7 +440,7 @@ describe('handleSettingsRoutes', () => {
     expect(readMemorySettingsSnapshotMock).toHaveBeenCalledWith({});
     expect(debouncedReload).not.toHaveBeenCalled();
     expect(restart).not.toHaveBeenCalled();
-    expect(sendJsonMock).toHaveBeenCalledWith(res, 200, {
+    expect(sendJsonMock).toHaveBeenCalledWith(res, 202, {
       success: true,
       settings: expect.objectContaining({
         losslessClaw: expect.objectContaining({

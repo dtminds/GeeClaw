@@ -240,15 +240,31 @@ describe('MemorySettingsSection', () => {
         installJob: null,
       },
     };
+    const acceptedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installJob: {
+          pluginId: 'lossless-claw',
+          displayName: 'lossless-claw',
+          stage: 'checking',
+          message: '正在安装记忆增强插件',
+          targetVersion: '0.9.1',
+          installedVersion: null,
+        },
+      },
+    };
+    let getCallCount = 0;
 
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/memory/lossless-claw/install' && init?.method === 'POST') {
         return {
           success: true,
-          settings: updatedSnapshot,
+          settings: acceptedSnapshot,
         };
       }
-      return initialSnapshot;
+      getCallCount += 1;
+      return getCallCount === 1 ? initialSnapshot : updatedSnapshot;
     });
 
     render(<MemorySettingsSection />);
@@ -261,7 +277,16 @@ describe('MemorySettingsSection', () => {
         method: 'POST',
       });
     });
-    expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      managedPluginStatusHandler?.(null);
+    });
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+    });
+    expect(screen.queryByRole('button', { name: 'memory.actions.install' })).not.toBeInTheDocument();
   });
 
   it('ignores late install progress events after lossless-claw has already refreshed to installed state', async () => {
@@ -296,20 +321,46 @@ describe('MemorySettingsSection', () => {
         installJob: null,
       },
     };
+    const acceptedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installJob: {
+          pluginId: 'lossless-claw',
+          displayName: 'lossless-claw',
+          stage: 'checking',
+          message: '正在安装记忆增强插件',
+          targetVersion: '0.9.1',
+          installedVersion: null,
+        },
+      },
+    };
+    let getCallCount = 0;
 
     hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/api/settings/memory/lossless-claw/install' && init?.method === 'POST') {
         return {
           success: true,
-          settings: updatedSnapshot,
+          settings: acceptedSnapshot,
         };
       }
-      return initialSnapshot;
+      getCallCount += 1;
+      return getCallCount === 1 ? initialSnapshot : updatedSnapshot;
     });
 
     render(<MemorySettingsSection />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'memory.actions.install' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/memory/lossless-claw/install', {
+        method: 'POST',
+      });
+    });
+
+    await act(async () => {
+      managedPluginStatusHandler?.(null);
+    });
 
     await waitFor(() => {
       expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
