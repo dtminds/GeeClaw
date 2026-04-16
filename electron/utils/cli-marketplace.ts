@@ -52,7 +52,7 @@ export type CliMarketplaceInstallMethodStatus = {
   label: 'managed-npm' | 'brew' | 'curl' | 'npm' | 'custom';
   command?: string;
   available: boolean;
-  unavailableReason?: 'missing-command' | 'unsupported-platform' | 'runtime-missing';
+  unavailableReason?: 'missing-command' | 'runtime-missing';
   missingCommands?: string[];
   managed: boolean;
 };
@@ -65,7 +65,7 @@ export type CliMarketplaceStatusItem = {
   description: string;
   homepage?: string;
   installed: boolean;
-  actionLabel: CliMarketplaceActionLabel;
+  actionLabel: CliMarketplaceActionLabel | null;
   source: 'system' | 'geeclaw' | 'none';
   installMethods: CliMarketplaceInstallMethodStatus[];
 };
@@ -242,6 +242,11 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
     const normalizedInstallMethods = normalizeInstallMethods(entry);
     if (normalizedInstallMethods.length === 0) {
       throw new Error(`[cli-marketplace] Entry ${label} must include at least one install method`);
+    }
+
+    const managedMethodCount = normalizedInstallMethods.filter((method) => method.type === 'managed-npm').length;
+    if (managedMethodCount > 1) {
+      throw new Error(`[cli-marketplace] Entry ${label} must not include multiple managed-npm install methods`);
     }
   });
 }
@@ -494,13 +499,14 @@ export class CliMarketplaceService {
 
     const { installed, source } = await this.detectEntrySource(entry);
     const installMethods = await this.resolveInstallMethodStatuses(entry);
+    const managedMethod = getManagedInstallMethod(entry);
     return {
       id: entry.id,
       title: entry.title,
       description: entry.description ?? '',
       homepage: entry.homepage,
       installed,
-      actionLabel: installed ? 'reinstall' : 'install',
+      actionLabel: managedMethod ? (installed ? 'reinstall' : 'install') : null,
       source,
       installMethods,
     };

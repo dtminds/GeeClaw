@@ -123,6 +123,7 @@ describe('cli marketplace service', () => {
       expect.objectContaining({
         id: 'foo',
         source: 'none',
+        actionLabel: null,
         installMethods: [
           expect.objectContaining({
             type: 'manual',
@@ -158,6 +159,7 @@ describe('cli marketplace service', () => {
       expect.objectContaining({
         id: 'foo',
         source: 'none',
+        actionLabel: null,
         installMethods: [
           expect.objectContaining({
             type: 'manual',
@@ -250,7 +252,7 @@ describe('cli marketplace service', () => {
         id: 'baz',
         installed: true,
         source: 'system',
-        actionLabel: 'reinstall',
+        actionLabel: null,
         installMethods: [
           expect.objectContaining({
             type: 'manual',
@@ -415,6 +417,28 @@ describe('cli marketplace service', () => {
     });
 
     await expect(service.getCatalog()).rejects.toThrow('binNames');
+  });
+
+  it('throws when catalog entries define multiple managed-npm install methods', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'dup-managed',
+          title: 'Dup Managed CLI',
+          binNames: ['dup-managed'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/dup-managed-a' },
+            { type: 'managed-npm', packageName: '@geeclaw-test/dup-managed-b' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('multiple managed-npm');
   });
 
   it('forces shell execution for absolute npm.cmd installs on Windows', async () => {
