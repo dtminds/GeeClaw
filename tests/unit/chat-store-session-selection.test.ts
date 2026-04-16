@@ -728,6 +728,8 @@ describe('chat store session selection', () => {
       loading: false,
       sending: true,
       lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 30_000,
       messages: [
         {
           id: 'prev-assistant',
@@ -800,6 +802,8 @@ describe('chat store session selection', () => {
       loading: false,
       sending: true,
       lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 1_000,
       messages: [
         {
           id: 'prev-assistant',
@@ -850,6 +854,80 @@ describe('chat store session selection', () => {
     expect(messages).toHaveLength(3);
     expect(messages.at(-1)?.id).toBe('optimistic-user');
     expect(messages.at(-1)?.content).toBe('你好');
+  });
+
+  it('keeps the current optimistic user message when the previous run used the same text within five seconds', async () => {
+    const optimisticSentAtMs = 1_700_000_000_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: optimisticSentAtMs - 1_000,
+      messages: [
+        {
+          id: 'previous-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000 - 2,
+        },
+        {
+          id: 'prev-assistant',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: optimisticSentAtMs / 1000 - 1,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'previous-user',
+                role: 'user',
+                content: '你好',
+                timestamp: optimisticSentAtMs / 1000 - 2,
+              },
+              {
+                id: 'prev-assistant',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: optimisticSentAtMs / 1000 - 1,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages).toHaveLength(3);
+    expect(messages.map((message) => message.id)).toEqual([
+      'previous-user',
+      'prev-assistant',
+      'optimistic-user',
+    ]);
   });
 
 });

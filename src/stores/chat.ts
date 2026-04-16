@@ -1158,19 +1158,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const userMsgAt = get().lastUserMessageAt;
         if (get().sending && userMsgAt) {
           const userMsMs = toMs(userMsgAt);
-          const hasRecentUser = enrichedMessages.some(
-            (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
-          );
-          if (!hasRecentUser) {
-            const { messages: currentMsgs, pendingOptimisticUserId, pendingOptimisticUserAnchorAt } = get();
-            const optimistic = pendingOptimisticUserId
-              ? currentMsgs.find((message) => message.id === pendingOptimisticUserId)
-              : [...currentMsgs].reverse().find(
-                  (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
-                );
-            if (optimistic && !hasPersistedOptimisticUserCopy(enrichedMessages, optimistic, pendingOptimisticUserAnchorAt)) {
-              finalMessages = [...enrichedMessages, optimistic];
-            }
+          const { messages: currentMsgs, pendingOptimisticUserId, pendingOptimisticUserAnchorAt } = get();
+          const optimistic = pendingOptimisticUserId
+            ? currentMsgs.find((message) => message.id === pendingOptimisticUserId)
+            : [...currentMsgs].reverse().find(
+                (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
+              );
+          if (optimistic && !hasPersistedOptimisticUserCopy(enrichedMessages, optimistic, pendingOptimisticUserAnchorAt)) {
+            finalMessages = [...enrichedMessages, optimistic];
           }
         }
 
