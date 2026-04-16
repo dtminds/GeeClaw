@@ -31,6 +31,7 @@ export type ExtractManagedPluginPackage = (options: {
 export type EnsureManagedPluginInstalledOptions = {
   plugin: ManagedPluginDefinition;
   configDir: string;
+  currentVersion?: string | null;
   runCommand?: RunManagedPluginCommand;
   extractPackage?: ExtractManagedPluginPackage;
   commandEnv?: NodeJS.ProcessEnv;
@@ -232,7 +233,10 @@ export async function ensureManagedPluginInstalled(
   const runCommand = options.runCommand ?? defaultRunManagedPluginCommand;
   const extractPackage = options.extractPackage ?? defaultExtractManagedPluginPackage;
   const finalDir = getPluginFinalDir(options.configDir, options.plugin.pluginId);
-  const currentVersion = await getInstalledPluginVersion(options.configDir, options.plugin.pluginId);
+  const currentVersion = options.currentVersion ?? await getInstalledPluginVersion(
+    options.configDir,
+    options.plugin.pluginId,
+  );
   if (currentVersion === options.plugin.targetVersion) {
     return {
       action: 'noop',
@@ -327,6 +331,7 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
       const result = await ensureManagedPluginInstalled({
         plugin,
         configDir: options.openclawConfigDir,
+        currentVersion: installedVersion,
         commandEnv: env,
       });
 
