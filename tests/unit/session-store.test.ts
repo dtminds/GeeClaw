@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const bindInviteCodeMock = vi.fn();
 const fetchGeeclawUserInfoMock = vi.fn();
 const runWechatLoginFlowMock = vi.fn();
 
@@ -22,10 +21,6 @@ class MockStore<T extends Record<string, unknown>> {
     mockStoreShape[key as keyof MockSessionStoreShape] = value as MockSessionStoreShape[keyof MockSessionStoreShape];
   }
 }
-
-vi.mock('@electron/services/auth/invite-bind', () => ({
-  bindInviteCode: (...args: unknown[]) => bindInviteCodeMock(...args),
-}));
 
 vi.mock('@electron/services/auth/user-info', () => ({
   fetchGeeclawUserInfo: (...args: unknown[]) => fetchGeeclawUserInfoMock(...args),

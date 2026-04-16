@@ -3,11 +3,9 @@ import { safeStorage } from 'electron';
 import type { BrowserWindow } from 'electron';
 import {
   isUserStatus,
-  USER_STATUS_ACTIVE,
   USER_STATUS_DISABLED,
   type UserStatus,
 } from '../../shared/auth/user-status';
-import { bindInviteCode } from '../services/auth/invite-bind';
 import { fetchGeeclawUserInfo } from '../services/auth/user-info';
 import { runWechatLoginFlow } from '../services/auth/wechat-auth';
 import { logger } from './logger';
@@ -252,46 +250,6 @@ export async function loginWithWechat(mainWindow: BrowserWindow | null): Promise
   return {
     status: 'authenticated',
     account,
-  };
-}
-
-export async function submitInviteCode(inviteCode: string): Promise<SessionState> {
-  const trimmedInviteCode = inviteCode.trim();
-  if (!trimmedInviteCode) {
-    throw new Error('Invite code is required');
-  }
-
-  const state = await readStoredSessionState();
-  if (state.status !== 'authenticated' || !state.account) {
-    throw new Error('No active session');
-  }
-
-  const store = await getSessionStore();
-  const currentAccount = (store.get('account') as SessionAccount | null) ?? state.account;
-  if (!currentAccount) {
-    throw new Error('No active session');
-  }
-
-  const accessToken = await getSessionAccessToken();
-  if (!accessToken) {
-    throw new Error('No active session');
-  }
-
-  await bindInviteCode(trimmedInviteCode, accessToken);
-
-  const nextAccount: SessionAccount = {
-    ...currentAccount,
-    userStatus: USER_STATUS_ACTIVE,
-  };
-
-  store.set('account', nextAccount);
-  logger.info(
-    `[SessionStore] Invite code accepted for accountId=${nextAccount.id}. userStatus=${currentAccount.userStatus ?? '(unset)'} -> ${nextAccount.userStatus}`,
-  );
-
-  return {
-    status: 'authenticated',
-    account: nextAccount,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import {
@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useBootstrapStore, type BootstrapPhase } from '@/stores/bootstrap';
 import { useSettingsStore } from '@/stores/settings';
 import { subscribeHostEvent } from '@/lib/host-events';
@@ -18,7 +17,6 @@ import geeclawIcon from '@/assets/logo.svg';
 const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
   idle: 10,
   checking_session: 22,
-  needs_invite_code: 44,
   preparing: 72,
   ready: 100,
 };
@@ -45,27 +43,15 @@ export function Startup() {
   const phase = useBootstrapStore((state) => state.phase);
   const error = useBootstrapStore((state) => state.error);
   const loginAndContinue = useBootstrapStore((state) => state.loginAndContinue);
-  const submitInviteCodeAndContinue = useBootstrapStore((state) => state.submitInviteCodeAndContinue);
-  const skipInviteCodeAndContinue = useBootstrapStore((state) => state.skipInviteCodeAndContinue);
-  const logoutToLogin = useBootstrapStore((state) => state.logoutToLogin);
   const retry = useBootstrapStore((state) => state.retry);
   // const account = useSessionStore((state) => state.account);
   const setupComplete = useSettingsStore((state) => state.setupComplete);
 
-  const [inviteCode, setInviteCode] = useState('');
-  const [isSubmittingInviteCode, setIsSubmittingInviteCode] = useState(false);
   const [sidecarStatus, setSidecarStatus] = useState<OpenClawSidecarStatus | null>(null);
   const [managedPluginStatus, setManagedPluginStatus] = useState<ManagedPluginStatus | null>(null);
 
   const progress = phaseProgress[phase] ?? 12;
   const isLoadingPhase = phase === 'idle' || phase === 'checking_session' || phase === 'preparing';
-
-  useEffect(() => {
-    if (phase !== 'needs_invite_code') {
-      setInviteCode('');
-      setIsSubmittingInviteCode(false);
-    }
-  }, [phase]);
 
   useEffect(() => {
     return subscribeHostEvent<OpenClawSidecarStatus>('openclaw:sidecar-status', (payload) => {
@@ -78,20 +64,6 @@ export function Startup() {
       setManagedPluginStatus(payload);
     });
   }, []);
-
-  const handleInviteCodeSubmit = useCallback(async () => {
-    const trimmedInviteCode = inviteCode.trim();
-    if (!trimmedInviteCode || isSubmittingInviteCode) {
-      return;
-    }
-
-    setIsSubmittingInviteCode(true);
-    try {
-      await submitInviteCodeAndContinue(trimmedInviteCode);
-    } finally {
-      setIsSubmittingInviteCode(false);
-    }
-  }, [inviteCode, isSubmittingInviteCode, submitInviteCodeAndContinue]);
 
   const loadingCopy = useMemo(() => {
     if (phase === 'preparing') {
@@ -145,9 +117,6 @@ export function Startup() {
   const statusMessage = useMemo(() => {
     if (phase === 'needs_login') {
       return t('startup.status.login');
-    }
-    if (phase === 'needs_invite_code') {
-      return t('startup.status.invite');
     }
     if (phase === 'error') {
       return t('startup.status.error');
@@ -234,75 +203,6 @@ export function Startup() {
             {t('startup.needsLogin.action')}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-        </div>
-      );
-    }
-
-    if (phase === 'needs_invite_code') {
-      return (
-        <div className="mx-auto flex w-full max-w-[34rem] flex-col items-center gap-7 text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 14 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            className="modal-card-surface relative flex h-36 w-36 items-center justify-center rounded-[2rem] border backdrop-blur-sm"
-          >
-            <div className="absolute inset-3 rounded-[1.5rem] bg-gradient-to-br from-white/95 via-white/55 to-sky-100/52 dark:from-white/12 dark:via-white/4 dark:to-sky-400/12" />
-            <img src={geeclawIcon} alt="GeeClaw" className="h-24 w-24 drop-shadow-[0_16px_18px_rgba(255,125,90,0.16)]" />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full space-y-5"
-          >
-            <h2 className="text-balance text-lg font-bold tracking-[-0.04em] text-foreground dark:text-white/95">
-              {t('startup.needsInvite.title')}
-            </h2>
-            <form
-              className="mx-auto flex w-full max-w-[24rem] flex-col items-center gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleInviteCodeSubmit();
-              }}
-            >
-              <Input
-                value={inviteCode}
-                onChange={(event) => setInviteCode(event.target.value)}
-                placeholder={t('startup.needsInvite.placeholder')}
-                autoFocus
-                className="modal-field-surface h-12 rounded-full border px-5 text-center text-base shadow-[0_16px_32px_-24px_rgba(15,23,42,0.32)]"
-              />
-              <Button
-                type="submit"
-                disabled={!inviteCode.trim() || isSubmittingInviteCode}
-                className="h-12 min-w-44 rounded-full bg-slate-950 px-6 text-sm font-medium text-white shadow-[0_20px_35px_-24px_rgba(15,23,42,0.9)] hover:bg-slate-800 dark:bg-white/94 dark:text-slate-950 dark:hover:bg-white"
-              >
-                {isSubmittingInviteCode ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {isSubmittingInviteCode
-                  ? t('startup.needsInvite.submitting')
-                  : t('startup.needsInvite.action')}
-              </Button>
-            </form>
-            <div className="flex items-center justify-center gap-6">
-              <button
-                type="button"
-                className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline dark:text-white/65 dark:hover:text-white/92"
-                onClick={() => void skipInviteCodeAndContinue()}
-              >
-                {t('startup.needsInvite.skip')}
-              </button>
-              <button
-                type="button"
-                className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline dark:text-white/65 dark:hover:text-white/92"
-                onClick={() => void logoutToLogin()}
-              >
-                {t('startup.needsInvite.switchAccount')}
-              </button>
-            </div>
-          </motion.div>
         </div>
       );
     }
