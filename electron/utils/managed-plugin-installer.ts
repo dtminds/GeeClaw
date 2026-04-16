@@ -14,7 +14,7 @@ import { getUvMirrorEnv } from './uv-env';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
 import { getManagedPlugin, getManagedPlugins, type ManagedPluginDefinition } from './managed-plugin-registry';
-import { setManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
+import { getManagedPluginStatus, setManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
 
 type RunCommandResult = {
   stdout: string;
@@ -269,7 +269,17 @@ function emitManagedPluginStatus(
   status: ManagedPluginStatus | null,
   onStatus?: (status: ManagedPluginStatus | null) => void,
 ): void {
-  if (!status || status.pluginId === plugin.pluginId) {
+  if (status === null) {
+    const current = getManagedPluginStatus();
+    if (current && current.pluginId !== plugin.pluginId && current.stage !== 'installed' && current.stage !== 'failed') {
+      return;
+    }
+    setManagedPluginStatus(status);
+    onStatus?.(status);
+    return;
+  }
+
+  if (status.pluginId === plugin.pluginId) {
     setManagedPluginStatus(status);
     onStatus?.(status);
   }
