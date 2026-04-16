@@ -23,6 +23,20 @@ describe('handleCliMarketplaceRoutes', () => {
         installed: true,
         actionLabel: 'reinstall',
         source: 'system',
+        installMethods: [
+          {
+            type: 'managed-npm',
+            label: 'GeeClaw managed npm',
+            packageName: '@geeclaw-test/feishu-cli',
+          },
+          {
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install feishu',
+            requiresCommands: ['brew'],
+            missingCommands: ['brew'],
+          },
+        ],
       },
     ]);
 
@@ -46,6 +60,19 @@ describe('handleCliMarketplaceRoutes', () => {
           installed: true,
           actionLabel: 'reinstall',
           source: 'system',
+          installMethods: [
+            expect.objectContaining({
+              type: 'managed-npm',
+              status: 'available',
+            }),
+            expect.objectContaining({
+              type: 'manual',
+              label: 'brew',
+              command: 'brew install feishu',
+              status: 'missing-command',
+              missingCommands: ['brew'],
+            }),
+          ],
         }),
       ],
     );
