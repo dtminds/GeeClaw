@@ -237,15 +237,16 @@ Open **Settings → Web Search** to manage OpenClaw `web_search` providers witho
 
 ### CLI Market
 
-Open **Settings → CLI Market** to review a curated set of npm-based CLIs that GeeClaw knows how to detect, install, reinstall, and uninstall.
+Open **Settings → CLI Market** to review a curated set of CLIs that GeeClaw can detect and help install.
 
-- GeeClaw first checks whether the command already exists on your system and marks it as installed if found.
-- If the command is missing, GeeClaw installs it with the bundled Node/npm runtime into a GeeClaw-managed user-level prefix instead of requiring a system-wide `npm install -g`.
+- GeeClaw still determines install state by checking whether the target command already exists on your system.
+- Some entries are GeeClaw-managed npm installs. When those commands are missing, GeeClaw installs them with the bundled Node/npm runtime into a GeeClaw-managed user-level prefix instead of requiring a system-wide `npm install -g`.
 - On the first managed install, GeeClaw also adds that managed directory to your user PATH so newly opened terminals can use the command directly.
-- The current UI intentionally keeps the status simple: it shows only `Installed` / `Not installed`. Missing CLIs show an `Install` button; installed CLIs move `Reinstall` and `Uninstall` into a compact actions menu.
+- Other entries can expose manual install commands such as `brew` or `curl`. GeeClaw only surfaces those commands when the required installer command is already available on the machine.
+- System-installed CLIs are treated as read-only detections in this view. GeeClaw will not try to uninstall them for you.
 - GeeClaw does not compare versions in this view yet. Reinstall always uses the latest package version available from npm at the time you click it.
-- Some catalog entries can also declare follow-up Skills. GeeClaw automatically runs `npx skills add ... -y -g` after install and `npx skills remove ... -y -g` during uninstall.
-- Install and uninstall open a live log dialog so you can watch the full bundled `npm` and `npx skills` output in one place.
+- Some managed npm entries can also declare follow-up Skills. GeeClaw automatically runs `npx skills add ... -y -g` after install and `npx skills remove ... -y -g` during uninstall.
+- Managed install and uninstall actions open a live log dialog so you can watch the full bundled `npm` and `npx skills` output in one place.
 
 Managed install locations:
 
