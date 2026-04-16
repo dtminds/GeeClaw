@@ -109,12 +109,11 @@ describe('cli marketplace service', () => {
         {
           id: 'foo',
           title: 'Foo CLI',
-          packageName: '@geeclaw-test/foo-cli',
           binNames: ['foo'],
           installMethods: [
             { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
           ],
-        } as never,
+        },
       ],
       findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/opt/homebrew/bin/brew' : null)),
       commandExistsInManagedPrefix: vi.fn(async () => false),
@@ -129,7 +128,8 @@ describe('cli marketplace service', () => {
             type: 'manual',
             label: 'brew',
             command: 'brew install foo',
-            status: 'available',
+            available: true,
+            managed: false,
           }),
         ],
       }),
@@ -144,12 +144,11 @@ describe('cli marketplace service', () => {
         {
           id: 'foo',
           title: 'Foo CLI',
-          packageName: '@geeclaw-test/foo-cli',
           binNames: ['foo'],
           installMethods: [
             { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
           ],
-        } as never,
+        },
       ],
       findCommand: vi.fn(async () => null),
       commandExistsInManagedPrefix: vi.fn(async () => false),
@@ -164,8 +163,10 @@ describe('cli marketplace service', () => {
             type: 'manual',
             label: 'brew',
             command: 'brew install foo',
-            status: 'missing-command',
+            available: false,
+            unavailableReason: 'missing-command',
             missingCommands: ['brew'],
+            managed: false,
           }),
         ],
       }),
@@ -180,12 +181,10 @@ describe('cli marketplace service', () => {
         {
           id: 'bar',
           title: 'Bar CLI',
-          packageName: '@geeclaw-test/bar-cli',
           binNames: ['bar'],
           installMethods: [
             {
               type: 'managed-npm',
-              label: 'GeeClaw managed npm',
               packageName: '@geeclaw-test/bar-cli',
             },
             {
@@ -195,7 +194,7 @@ describe('cli marketplace service', () => {
               requiresCommands: ['brew'],
             },
           ],
-        } as never,
+        },
       ],
       findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/usr/local/bin/brew' : null)),
       commandExistsInManagedPrefix: vi.fn(async () => false),
@@ -207,14 +206,16 @@ describe('cli marketplace service', () => {
         installMethods: [
           expect.objectContaining({
             type: 'managed-npm',
-            packageName: '@geeclaw-test/bar-cli',
-            status: 'available',
+            label: 'managed-npm',
+            available: true,
+            managed: true,
           }),
           expect.objectContaining({
             type: 'manual',
             label: 'brew',
             command: 'brew install bar',
-            status: 'available',
+            available: true,
+            managed: false,
           }),
         ],
       }),
@@ -229,7 +230,6 @@ describe('cli marketplace service', () => {
         {
           id: 'baz',
           title: 'Baz CLI',
-          packageName: '@geeclaw-test/baz-cli',
           binNames: ['baz'],
           installMethods: [
             {
@@ -237,10 +237,9 @@ describe('cli marketplace service', () => {
               label: 'brew',
               command: 'brew install baz',
               requiresCommands: ['brew'],
-              uninstallCommand: 'brew uninstall baz',
             },
           ],
-        } as never,
+        },
       ],
       findCommand: vi.fn(async (bin: string) => (bin === 'baz' ? '/usr/local/bin/baz' : null)),
       commandExistsInManagedPrefix: vi.fn(async () => false),
@@ -261,6 +260,58 @@ describe('cli marketplace service', () => {
         ],
       }),
     ]);
+  });
+
+  it('rejects install for entries that only provide manual install methods', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+    });
+
+    await expect(service.install({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('rejects uninstall for entries that only provide manual install methods', async () => {
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.uninstall({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
   });
 
   it('installs a curated package into the GeeClaw prefix', async () => {
