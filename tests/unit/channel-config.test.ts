@@ -387,6 +387,110 @@ describe('saveChannelConfig', () => {
     });
   });
 
+  it('normalizes stale wecom multi-account config during startup channel sync', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+    mockStores();
+
+    const { getGeeClawChannelStore } = await import('../../electron/services/channels/store-instance');
+    const store = await getGeeClawChannelStore();
+    store.set('channels', {
+      wecom: {
+        accounts: {
+          alpha: {
+            enabled: true,
+            botId: 'bot-alpha',
+            secret: 'secret-alpha',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+          bravo: {
+            enabled: true,
+            botId: 'bot-bravo',
+            secret: 'secret-bravo',
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+          default: {
+            enabled: true,
+            dmPolicy: 'open',
+            allowFrom: ['*'],
+          },
+        },
+        defaultAccount: 'bravo',
+        enabled: true,
+        botId: 'bot-bravo',
+        secret: 'secret-bravo',
+      },
+    });
+
+    const { syncAllChannelConfigToOpenClaw } = await import('@electron/services/channels/channel-runtime-sync');
+    const { readOpenClawConfig } = await import('@electron/utils/channel-config');
+
+    await syncAllChannelConfigToOpenClaw();
+
+    const config = await readOpenClawConfig() as {
+      channels?: {
+        wecom?: {
+          enabled?: boolean;
+          defaultAccount?: string;
+          botId?: string;
+          secret?: string;
+          accounts?: Record<string, unknown>;
+        };
+      };
+    };
+    const storedChannels = store.get('channels') as {
+      wecom?: {
+        enabled?: boolean;
+        defaultAccount?: string;
+        botId?: string;
+        secret?: string;
+        accounts?: Record<string, unknown>;
+      };
+    };
+
+    expect(config.channels?.wecom).toEqual({
+      accounts: {
+        alpha: {
+          enabled: true,
+          botId: 'bot-alpha',
+          secret: 'secret-alpha',
+          dmPolicy: 'open',
+          allowFrom: ['*'],
+        },
+        bravo: {
+          enabled: true,
+          botId: 'bot-bravo',
+          secret: 'secret-bravo',
+          dmPolicy: 'open',
+          allowFrom: ['*'],
+        },
+      },
+      defaultAccount: 'bravo',
+      enabled: true,
+    });
+    expect(storedChannels.wecom).toEqual(config.channels?.wecom);
+  });
+
   it('enables the canonical openclaw-lark plugin id for feishu', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'channel-config-'));
     tempDirs.push(homeDir);

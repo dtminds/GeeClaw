@@ -1,5 +1,11 @@
 import { getGeeClawChannelStore } from './store-instance';
-import { readOpenClawConfig, reconcileManagedChannelPluginConfig, type OpenClawConfig } from '../../utils/channel-config';
+import {
+  normalizeManagedChannelConfig,
+  readOpenClawConfig,
+  reconcileManagedChannelPluginConfig,
+  writeOpenClawConfig,
+  type OpenClawConfig,
+} from '../../utils/channel-config';
 import { mutateOpenClawConfigDocument } from '../../utils/openclaw-config-coordinator';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -128,6 +134,22 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
   const store = await getGeeClawChannelStore();
   const storedChannels = store.get('channels') as Record<string, unknown> | undefined;
   const storedPlugins = store.get('plugins') as Record<string, unknown> | undefined;
+  const normalizedChannelsConfig = storedChannels
+    ? { channels: cloneValue(storedChannels) } as OpenClawConfig
+    : undefined;
+  const normalizedStoredChannels = normalizedChannelsConfig?.channels as Record<string, unknown> | undefined;
+  const channelsNormalized = normalizedChannelsConfig
+    ? normalizeManagedChannelConfig(normalizedChannelsConfig)
+    : false;
+
+  if (channelsNormalized) {
+    if (normalizedStoredChannels && Object.keys(normalizedStoredChannels).length > 0) {
+      store.set('channels', cloneValue(normalizedStoredChannels));
+    } else {
+      store.delete('channels');
+    }
+  }
+
   const managedStoredPlugins = storedPlugins
     ? Object.fromEntries(
         Object.entries(storedPlugins).filter(([pluginId]) => MANAGED_PLUGIN_ENTRY_ID_SET.has(pluginId)),
@@ -135,7 +157,7 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
     : undefined;
 
   let hasStoredConfigs = false;
-  if (storedChannels && Object.keys(storedChannels).length > 0) hasStoredConfigs = true;
+  if (normalizedStoredChannels && Object.keys(normalizedStoredChannels).length > 0) hasStoredConfigs = true;
   if (managedStoredPlugins && Object.keys(managedStoredPlugins).length > 0) hasStoredConfigs = true;
 
   if (!hasStoredConfigs) {
@@ -148,9 +170,9 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
     const config = document as OpenClawConfig;
     let modified = false;
 
-    if (storedChannels && Object.keys(storedChannels).length > 0) {
+    if (normalizedStoredChannels && Object.keys(normalizedStoredChannels).length > 0) {
       if (!config.channels) config.channels = {};
-      for (const [key, value] of Object.entries(storedChannels)) {
+      for (const [key, value] of Object.entries(normalizedStoredChannels)) {
         const nextValue = cloneValue(value);
         if (!isDeepStrictEqual(config.channels[key], nextValue)) {
           config.channels[key] = nextValue;
@@ -191,6 +213,7 @@ export async function syncAllChannelConfigToOpenClaw(): Promise<void> {
 
 async function migrateOpenClawConfigToStore(): Promise<void> {
   const config = await readOpenClawConfig();
+  const normalized = normalizeManagedChannelConfig(config);
   const store = await getGeeClawChannelStore();
   
   let migrated = false;
@@ -217,6 +240,14 @@ async function migrateOpenClawConfigToStore(): Promise<void> {
   }
 
   if (migrated) {
+    if (normalized) {
+      await writeOpenClawConfig(config, {
+        syncStores: {
+          channels: false,
+          agents: false,
+        },
+      });
+    }
     console.log('Migrated existing channel configurations from openclaw.json to local store.');
   }
 }

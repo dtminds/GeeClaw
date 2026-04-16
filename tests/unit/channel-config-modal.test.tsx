@@ -77,4 +77,50 @@ describe('ChannelConfigModal', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('dialog.accountIdInvalid');
     expect(hostApiFetchMock).not.toHaveBeenCalled();
   });
+
+  it('derives the wecom account ID from botId after QR login succeeds', async () => {
+    const onChannelSaved = vi.fn();
+    const onClose = vi.fn();
+    const eventHandlers = new Map<string, (...args: unknown[]) => void>();
+
+    subscribeHostEventMock.mockImplementation((eventName: string, handler: (...args: unknown[]) => void) => {
+      eventHandlers.set(eventName, handler);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    });
+
+    hostApiFetchMock.mockResolvedValue({ success: true });
+
+    render(
+      <ChannelConfigModal
+        fixedType="wecom"
+        onClose={onClose}
+        onChannelSaved={onChannelSaved}
+      />,
+    );
+
+    const successHandler = eventHandlers.get('channel:wecom-success');
+    expect(successHandler).toBeTypeOf('function');
+
+    successHandler?.({
+      accountId: 'default',
+      botId: 'Bot Alpha@Corp',
+      secret: 'secret-1',
+    });
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/channels/config', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          channelType: 'wecom',
+          config: { botId: 'Bot Alpha@Corp', secret: 'secret-1', enabled: true },
+          accountId: 'bot-alpha-corp',
+        }),
+      }));
+    });
+
+    expect(onChannelSaved).toHaveBeenCalledWith('wecom', 'bot-alpha-corp');
+    expect(onClose).toHaveBeenCalled();
+  });
 });
