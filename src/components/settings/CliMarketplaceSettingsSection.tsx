@@ -51,16 +51,21 @@ interface CliMarketplaceJob {
   error?: string;
 }
 
+type CliMarketplaceManualMethodStatus = CliMarketplaceInstallMethodStatus & {
+  type: 'manual';
+  label: CliMarketplaceManualMethodLabel;
+};
+
 function getManagedInstallMethod(item: CliMarketplaceItem): CliMarketplaceInstallMethodStatus | null {
   return item.installMethods.find((method) => method.type === 'managed-npm') ?? null;
 }
 
-function getManualInstallMethods(item: CliMarketplaceItem): Array<CliMarketplaceInstallMethodStatus & { type: 'manual' }> {
-  return item.installMethods.filter((method): method is CliMarketplaceInstallMethodStatus & { type: 'manual' } => method.type === 'manual');
+function getManualInstallMethods(item: CliMarketplaceItem): CliMarketplaceManualMethodStatus[] {
+  return item.installMethods.filter((method): method is CliMarketplaceManualMethodStatus => method.type === 'manual');
 }
 
-function getFirstAvailableManualInstallMethod(item: CliMarketplaceItem): (CliMarketplaceInstallMethodStatus & { type: 'manual'; command: string }) | null {
-  return item.installMethods.find((method): method is CliMarketplaceInstallMethodStatus & { type: 'manual'; command: string } => (
+function getFirstAvailableManualInstallMethod(item: CliMarketplaceItem): (CliMarketplaceManualMethodStatus & { command: string }) | null {
+  return item.installMethods.find((method): method is CliMarketplaceManualMethodStatus & { command: string } => (
     method.type === 'manual'
     && method.available
     && typeof method.command === 'string'
