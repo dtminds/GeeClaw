@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemorySettingsSection } from '@/components/settings/MemorySettingsSection';
 
@@ -8,6 +8,17 @@ const toastErrorMock = vi.fn();
 
 vi.mock('@/lib/host-api', () => ({
   hostApiFetch: (...args: unknown[]) => hostApiFetchMock(...args),
+}));
+
+vi.mock('@/lib/host-events', () => ({
+  subscribeHostEvent: vi.fn((_eventName: string, handler: (payload: unknown) => void) => {
+    managedPluginStatusHandler = handler;
+    return () => {
+      if (managedPluginStatusHandler === handler) {
+        managedPluginStatusHandler = null;
+      }
+    };
+  }),
 }));
 
 vi.mock('@/lib/api-client', () => ({
@@ -39,9 +50,12 @@ const availableModels = [
   },
 ];
 
+let managedPluginStatusHandler: ((payload: unknown) => void) | null = null;
+
 describe('MemorySettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    managedPluginStatusHandler = null;
   });
 
   it('hides dedicated and summary model settings while their features are disabled', async () => {
@@ -64,6 +78,7 @@ describe('MemorySettingsSection', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'disabled',
+        installJob: null,
       },
     };
     hostApiFetchMock.mockImplementation(async () => snapshot);
@@ -98,6 +113,7 @@ describe('MemorySettingsSection', () => {
         summaryModel: 'openai/gpt-5.4-mini',
         summaryModelMode: 'custom',
         status: 'enabled',
+        installJob: null,
       },
     };
     hostApiFetchMock.mockImplementation(async () => snapshot);
@@ -134,6 +150,7 @@ describe('MemorySettingsSection', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'disabled',
+        installJob: null,
       },
     };
     const updatedSnapshot = {
@@ -155,6 +172,7 @@ describe('MemorySettingsSection', () => {
         summaryModel: null,
         summaryModelMode: 'automatic',
         status: 'disabled',
+        installJob: null,
       },
     };
     hostApiFetchMock.mockImplementation(async (_path: string, init?: RequestInit) => {
@@ -188,5 +206,217 @@ describe('MemorySettingsSection', () => {
         ],
       ]));
     });
+  });
+
+  it('shows an install button for a missing lossless-claw plugin and triggers installation', async () => {
+    const initialSnapshot = {
+      availableModels,
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+        installJob: null,
+      },
+    };
+    const updatedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installedVersion: '0.9.1',
+        status: 'disabled',
+        installJob: null,
+      },
+    };
+    const acceptedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installJob: {
+          pluginId: 'lossless-claw',
+          displayName: 'lossless-claw',
+          stage: 'checking',
+          message: '正在安装记忆增强插件',
+          targetVersion: '0.9.1',
+          installedVersion: null,
+        },
+      },
+    };
+    let getCallCount = 0;
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/memory/lossless-claw/install' && init?.method === 'POST') {
+        return {
+          success: true,
+          settings: acceptedSnapshot,
+        };
+      }
+      getCallCount += 1;
+      return getCallCount === 1 ? initialSnapshot : updatedSnapshot;
+    });
+
+    render(<MemorySettingsSection />);
+
+    const installButton = await screen.findByRole('button', { name: 'memory.actions.install' });
+    fireEvent.click(installButton);
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/memory/lossless-claw/install', {
+        method: 'POST',
+      });
+    });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      managedPluginStatusHandler?.(null);
+    });
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+    });
+    expect(screen.queryByRole('button', { name: 'memory.actions.install' })).not.toBeInTheDocument();
+  });
+
+  it('ignores late install progress events after lossless-claw has already refreshed to installed state', async () => {
+    const initialSnapshot = {
+      availableModels,
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: null,
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'not-installed',
+        installJob: null,
+      },
+    };
+    const updatedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installedVersion: '0.9.1',
+        status: 'disabled',
+        installJob: null,
+      },
+    };
+    const acceptedSnapshot = {
+      ...initialSnapshot,
+      losslessClaw: {
+        ...initialSnapshot.losslessClaw,
+        installJob: {
+          pluginId: 'lossless-claw',
+          displayName: 'lossless-claw',
+          stage: 'checking',
+          message: '正在安装记忆增强插件',
+          targetVersion: '0.9.1',
+          installedVersion: null,
+        },
+      },
+    };
+    let getCallCount = 0;
+
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/memory/lossless-claw/install' && init?.method === 'POST') {
+        return {
+          success: true,
+          settings: acceptedSnapshot,
+        };
+      }
+      getCallCount += 1;
+      return getCallCount === 1 ? initialSnapshot : updatedSnapshot;
+    });
+
+    render(<MemorySettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'memory.actions.install' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/settings/memory/lossless-claw/install', {
+        method: 'POST',
+      });
+    });
+
+    await act(async () => {
+      managedPluginStatusHandler?.(null);
+    });
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith('memory.toast.installSuccess');
+    });
+
+    await act(async () => {
+      managedPluginStatusHandler?.({
+        pluginId: 'lossless-claw',
+        displayName: 'lossless-claw',
+        stage: 'installing',
+        message: '正在安装 lossless-claw 依赖…',
+        targetVersion: '0.9.1',
+        installedVersion: null,
+      });
+    });
+
+    expect(screen.queryByRole('button', { name: 'memory.actions.installInProgress' })).not.toBeInTheDocument();
+    expect(screen.queryByText('正在安装 lossless-claw 依赖…')).not.toBeInTheDocument();
+  });
+
+  it('shows an upgrade button and in-progress install copy for an unavailable lossless-claw plugin', async () => {
+    const snapshot = {
+      availableModels,
+      dreaming: {
+        enabled: true,
+        status: 'enabled',
+      },
+      activeMemory: {
+        enabled: false,
+        model: null,
+        modelMode: 'automatic',
+        status: 'disabled',
+      },
+      losslessClaw: {
+        enabled: false,
+        installedVersion: '0.9.2',
+        requiredVersion: '0.9.1',
+        summaryModel: null,
+        summaryModelMode: 'automatic',
+        status: 'unavailable',
+        installJob: {
+          pluginId: 'lossless-claw',
+          displayName: 'lossless-claw',
+          stage: 'installing',
+          message: '正在安装 lossless-claw 依赖…',
+          targetVersion: '0.9.1',
+          installedVersion: '0.9.2',
+        },
+      },
+    };
+    hostApiFetchMock.mockResolvedValue(snapshot);
+
+    render(<MemorySettingsSection />);
+
+    await screen.findByRole('button', { name: 'memory.actions.upgradeInProgress' });
+    expect(screen.getByText('memory.copy.losslessClaw.installingHint')).toBeInTheDocument();
+    expect(screen.getByText('正在安装 lossless-claw 依赖…')).toBeInTheDocument();
   });
 });

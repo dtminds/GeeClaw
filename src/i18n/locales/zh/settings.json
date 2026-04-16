@@ -63,13 +63,22 @@
         "enabled": "长对话会保留更多上下文",
         "disabled": "当前使用标准上下文管理",
         "not-installed": "该插件尚未安装",
-        "unavailable": "已安装插件版本与 GeeClaw 要求不匹配"
+        "unavailable": "已安装插件版本与 GeeClaw 要求不匹配",
+        "installingHint": "首次安装可能需要 10 分钟以上，请保持 GeeClaw 运行并耐心等待"
       }
+    },
+    "actions": {
+      "install": "安装",
+      "installInProgress": "安装中…",
+      "upgrade": "升级",
+      "upgradeInProgress": "升级中…"
     },
     "toast": {
       "loadFailed": "加载记忆设置失败",
       "saved": "记忆设置已更新",
-      "saveFailed": "保存记忆设置失败"
+      "saveFailed": "保存记忆设置失败",
+      "installSuccess": "Lossless Claw 插件安装完成",
+      "installFailed": "Lossless Claw 插件安装失败"
     }
   },
   "webSearch": {

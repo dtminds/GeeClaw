@@ -24,6 +24,7 @@ import {
   readMemorySettingsSnapshot,
   type MemorySettingsPatch,
 } from '../../utils/openclaw-memory-settings';
+import { installManagedPluginNow } from '../../utils/managed-plugin-installer';
 import {
   buildOpenClawSafetySettings,
   isApprovalPolicy,
@@ -263,6 +264,22 @@ export async function handleSettingsRoutes(
       }
 
       sendJson(res, 200, { success: true, settings });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/settings/memory/lossless-claw/install' && req.method === 'POST') {
+    try {
+      void installManagedPluginNow({ pluginId: 'lossless-claw' }).catch(() => {
+        // Install progress and failures are surfaced through managed-plugin status events.
+      });
+      const config = await readOpenClawConfigDocument();
+      sendJson(res, 202, {
+        success: true,
+        settings: await readMemorySettingsSnapshot(config),
+      });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

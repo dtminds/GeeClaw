@@ -3,13 +3,18 @@ import { constants } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { resolveGeeClawAppEnvironment } from './app-env';
 import { getManagedOpenClawConfigPath } from './openclaw-managed-profile';
+import { getOpenClawConfigDir } from './paths';
+import { buildProxyEnv } from './proxy';
 import { getGeeClawRuntimePath } from './runtime-path';
 import { setPathEnvValue } from './env-path';
+import { getAllSettings } from './store';
+import { getUvMirrorEnv } from './uv-env';
 import { prepareWinSpawn } from './win-shell';
 import { logger } from './logger';
-import { getManagedPlugins, type ManagedPluginDefinition } from './managed-plugin-registry';
-import { setManagedPluginStatus } from './managed-plugin-status';
+import { getManagedPlugin, getManagedPlugins, type ManagedPluginDefinition } from './managed-plugin-registry';
+import { setManagedPluginStatus, type ManagedPluginStatus } from './managed-plugin-status';
 
 type RunCommandResult = {
   stdout: string;
@@ -35,6 +40,8 @@ export type EnsureManagedPluginInstalledOptions = {
   runCommand?: RunManagedPluginCommand;
   extractPackage?: ExtractManagedPluginPackage;
   commandEnv?: NodeJS.ProcessEnv;
+  installPolicy?: ManagedPluginInstallPolicy;
+  onStatus?: (status: ManagedPluginStatus | null) => void;
 };
 
 export type EnsureManagedPluginInstalledResult = {
@@ -52,6 +59,8 @@ export type EnsureManagedPluginsReadyBeforeGatewayLaunchOptions = {
   uvEnv: Record<string, string | undefined>;
   proxyEnv: Record<string, string | undefined>;
 };
+
+export type ManagedPluginInstallPolicy = 'startup' | 'reconcile';
 
 function resolveTarCommand(): string {
   return process.platform === 'win32' ? 'tar.exe' : 'tar';
@@ -131,6 +140,108 @@ async function getInstalledPluginVersion(configDir: string, pluginId: string): P
   }
 }
 
+type ParsedSemver = {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: Array<number | string> | null;
+};
+
+function parseSemver(version: string): ParsedSemver | null {
+  const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4]
+      ? match[4].split('.').map((segment) => (
+        /^\d+$/.test(segment) ? Number(segment) : segment
+      ))
+      : null,
+  };
+}
+
+function compareSemverIdentifiers(left: number | string, right: number | string): number {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right;
+  }
+  if (typeof left === 'number') {
+    return -1;
+  }
+  if (typeof right === 'number') {
+    return 1;
+  }
+  return left.localeCompare(right);
+}
+
+function compareManagedPluginVersions(left: string, right: string): number {
+  const parsedLeft = parseSemver(left);
+  const parsedRight = parseSemver(right);
+
+  if (!parsedLeft || !parsedRight) {
+    return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  if (parsedLeft.major !== parsedRight.major) {
+    return parsedLeft.major - parsedRight.major;
+  }
+  if (parsedLeft.minor !== parsedRight.minor) {
+    return parsedLeft.minor - parsedRight.minor;
+  }
+  if (parsedLeft.patch !== parsedRight.patch) {
+    return parsedLeft.patch - parsedRight.patch;
+  }
+
+  if (!parsedLeft.prerelease && !parsedRight.prerelease) {
+    return 0;
+  }
+  if (!parsedLeft.prerelease) {
+    return 1;
+  }
+  if (!parsedRight.prerelease) {
+    return -1;
+  }
+
+  const maxLength = Math.max(parsedLeft.prerelease.length, parsedRight.prerelease.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftSegment = parsedLeft.prerelease[index];
+    const rightSegment = parsedRight.prerelease[index];
+    if (leftSegment === undefined) {
+      return -1;
+    }
+    if (rightSegment === undefined) {
+      return 1;
+    }
+
+    const comparison = compareSemverIdentifiers(leftSegment, rightSegment);
+    if (comparison !== 0) {
+      return comparison;
+    }
+  }
+
+  return 0;
+}
+
+function shouldInstallManagedPlugin(
+  plugin: ManagedPluginDefinition,
+  currentVersion: string | null,
+  installPolicy: ManagedPluginInstallPolicy = 'startup',
+): boolean {
+  if (installPolicy === 'reconcile') {
+    return currentVersion !== plugin.targetVersion;
+  }
+
+  if (!currentVersion) {
+    return plugin.startupInstallPolicy === 'missing-or-outdated';
+  }
+
+  return compareManagedPluginVersions(currentVersion, plugin.targetVersion) < 0;
+}
+
 function createManagedPluginEnv(options: EnsureManagedPluginsReadyBeforeGatewayLaunchOptions): NodeJS.ProcessEnv {
   const { NODE_OPTIONS: _nodeOptions, ...forwardedEnv } = process.env;
   const forwardedEnvRecord = forwardedEnv as Record<string, string | undefined>;
@@ -150,6 +261,35 @@ function createManagedPluginEnv(options: EnsureManagedPluginsReadyBeforeGatewayL
     GCM_INTERACTIVE: 'never',
     GIT_ASKPASS: 'echo',
     SSH_ASKPASS: 'echo',
+  };
+}
+
+function emitManagedPluginStatus(
+  plugin: ManagedPluginDefinition,
+  status: ManagedPluginStatus | null,
+  onStatus?: (status: ManagedPluginStatus | null) => void,
+): void {
+  if (!status || status.pluginId === plugin.pluginId) {
+    setManagedPluginStatus(status);
+    onStatus?.(status);
+  }
+}
+
+function buildManagedPluginStepStatus(options: {
+  plugin: ManagedPluginDefinition;
+  stage: ManagedPluginStatus['stage'];
+  message: string;
+  installedVersion: string | null;
+  error?: string;
+}): ManagedPluginStatus {
+  return {
+    pluginId: options.plugin.pluginId,
+    displayName: options.plugin.displayName,
+    stage: options.stage,
+    message: options.message,
+    targetVersion: options.plugin.targetVersion,
+    installedVersion: options.installedVersion,
+    ...(options.error ? { error: options.error } : {}),
   };
 }
 
@@ -237,11 +377,11 @@ export async function ensureManagedPluginInstalled(
     options.configDir,
     options.plugin.pluginId,
   );
-  if (currentVersion === options.plugin.targetVersion) {
+  if (!shouldInstallManagedPlugin(options.plugin, currentVersion, options.installPolicy)) {
     return {
       action: 'noop',
       pluginId: options.plugin.pluginId,
-      installedVersion: currentVersion,
+      installedVersion: currentVersion ?? '',
       previousVersion: currentVersion,
     };
   }
@@ -252,6 +392,16 @@ export async function ensureManagedPluginInstalled(
   await mkdir(extractRoot, { recursive: true });
 
   try {
+    emitManagedPluginStatus(
+      options.plugin,
+      buildManagedPluginStepStatus({
+        plugin: options.plugin,
+        stage: 'installing',
+        message: `正在下载 ${options.plugin.displayName} 插件…`,
+        installedVersion: currentVersion,
+      }),
+      options.onStatus,
+    );
     const packResult = await runCommand({
       command: 'npm',
       args: ['pack', `${options.plugin.packageName}@${options.plugin.targetVersion}`, '--ignore-scripts', '--json'],
@@ -265,11 +415,31 @@ export async function ensureManagedPluginInstalled(
       destinationRoot: extractRoot,
     });
 
+    emitManagedPluginStatus(
+      options.plugin,
+      buildManagedPluginStepStatus({
+        plugin: options.plugin,
+        stage: 'installing',
+        message: `正在校验 ${options.plugin.displayName} 插件…`,
+        installedVersion: currentVersion,
+      }),
+      options.onStatus,
+    );
     const packageRoot = await resolveExtractedPackageRoot(extractRoot);
     const packageJson = await readPackageJson(packageRoot);
     validatePluginManifest(packageJson);
 
     if (hasDependencies(packageJson)) {
+      emitManagedPluginStatus(
+        options.plugin,
+        buildManagedPluginStepStatus({
+          plugin: options.plugin,
+          stage: 'installing',
+          message: `正在安装 ${options.plugin.displayName} 依赖…`,
+          installedVersion: currentVersion,
+        }),
+        options.onStatus,
+      );
       await runCommand({
         command: 'npm',
         args: ['install', '--omit=dev', '--ignore-scripts', '--silent'],
@@ -278,6 +448,16 @@ export async function ensureManagedPluginInstalled(
       });
     }
 
+    emitManagedPluginStatus(
+      options.plugin,
+      buildManagedPluginStepStatus({
+        plugin: options.plugin,
+        stage: 'installing',
+        message: `正在完成 ${options.plugin.displayName} 安装…`,
+        installedVersion: currentVersion,
+      }),
+      options.onStatus,
+    );
     await promotePluginDirectory({
       packageRoot,
       finalDir,
@@ -307,25 +487,32 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
 
   for (const plugin of plugins) {
     const installedVersion = await getInstalledPluginVersion(options.openclawConfigDir, plugin.pluginId);
-    setManagedPluginStatus({
-      pluginId: plugin.pluginId,
-      displayName: plugin.displayName,
-      stage: 'checking',
-      message: plugin.installMessage,
-      targetVersion: plugin.targetVersion,
-      installedVersion,
-    });
+    const shouldInstall = shouldInstallManagedPlugin(plugin, installedVersion, 'startup');
+    if (shouldInstall) {
+      emitManagedPluginStatus(
+        plugin,
+        buildManagedPluginStepStatus({
+          plugin,
+          stage: 'checking',
+          message: plugin.installMessage,
+          installedVersion,
+        }),
+      );
+    } else {
+      emitManagedPluginStatus(plugin, null);
+    }
 
     try {
-      if (installedVersion !== plugin.targetVersion) {
-        setManagedPluginStatus({
-          pluginId: plugin.pluginId,
-          displayName: plugin.displayName,
-          stage: 'installing',
-          message: plugin.installMessage,
-          targetVersion: plugin.targetVersion,
-          installedVersion,
-        });
+      if (shouldInstall) {
+        emitManagedPluginStatus(
+          plugin,
+          buildManagedPluginStepStatus({
+            plugin,
+            stage: 'installing',
+            message: plugin.installMessage,
+            installedVersion,
+          }),
+        );
       }
 
       const result = await ensureManagedPluginInstalled({
@@ -333,28 +520,35 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
         configDir: options.openclawConfigDir,
         currentVersion: installedVersion,
         commandEnv: env,
+        installPolicy: 'startup',
       });
 
       results.push(result);
-      setManagedPluginStatus({
-        pluginId: plugin.pluginId,
-        displayName: plugin.displayName,
-        stage: 'installed',
-        message: plugin.installMessage,
-        targetVersion: plugin.targetVersion,
-        installedVersion: result.installedVersion,
-      });
+      if (result.action === 'installed') {
+        emitManagedPluginStatus(
+          plugin,
+          buildManagedPluginStepStatus({
+            plugin,
+            stage: 'installed',
+            message: plugin.installMessage,
+            installedVersion: result.installedVersion,
+          }),
+        );
+      } else {
+        emitManagedPluginStatus(plugin, null);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setManagedPluginStatus({
-        pluginId: plugin.pluginId,
-        displayName: plugin.displayName,
-        stage: 'failed',
-        message: plugin.installMessage,
-        targetVersion: plugin.targetVersion,
-        installedVersion: null,
-        error: message,
-      });
+      emitManagedPluginStatus(
+        plugin,
+        buildManagedPluginStepStatus({
+          plugin,
+          stage: 'failed',
+          message: plugin.installMessage,
+          installedVersion: null,
+          error: message,
+        }),
+      );
       logger.error(`[managed-plugin] Failed to install ${plugin.pluginId}:`, error);
       if (plugin.requiredForStartup) {
         throw error;
@@ -363,4 +557,88 @@ export async function ensureManagedPluginsReadyBeforeGatewayLaunch(
   }
 
   return results;
+}
+
+const runningManagedPluginInstalls = new Map<string, Promise<EnsureManagedPluginInstalledResult>>();
+
+export async function installManagedPluginNow(options: {
+  pluginId: string;
+}): Promise<EnsureManagedPluginInstalledResult> {
+  const existing = runningManagedPluginInstalls.get(options.pluginId);
+  if (existing) {
+    return existing;
+  }
+
+  const plugin = getManagedPlugin(options.pluginId);
+  if (!plugin) {
+    throw new Error(`Unknown managed plugin: ${options.pluginId}`);
+  }
+
+  emitManagedPluginStatus(
+    plugin,
+    buildManagedPluginStepStatus({
+      plugin,
+      stage: 'checking',
+      message: plugin.installMessage,
+      installedVersion: null,
+    }),
+  );
+
+  const installPromise = (async () => {
+    const appSettings = await getAllSettings();
+    const managedAppEnv = await resolveGeeClawAppEnvironment({});
+    const uvEnv = await getUvMirrorEnv();
+    const proxyEnv = buildProxyEnv(appSettings);
+    const openclawConfigDir = getOpenClawConfigDir();
+    const finalPath = getGeeClawRuntimePath(process.env as Record<string, string | undefined>);
+    const commandEnv = createManagedPluginEnv({
+      openclawConfigDir,
+      finalPath,
+      managedAppEnv,
+      uvEnv,
+      proxyEnv,
+    });
+    const installedVersion = await getInstalledPluginVersion(openclawConfigDir, plugin.pluginId);
+
+    try {
+      const result = await ensureManagedPluginInstalled({
+        plugin,
+        configDir: openclawConfigDir,
+        currentVersion: installedVersion,
+        commandEnv,
+        installPolicy: 'reconcile',
+      });
+
+      emitManagedPluginStatus(
+        plugin,
+        buildManagedPluginStepStatus({
+          plugin,
+          stage: 'installed',
+          message: plugin.installMessage,
+          installedVersion: result.installedVersion,
+        }),
+      );
+      emitManagedPluginStatus(plugin, null);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitManagedPluginStatus(
+        plugin,
+        buildManagedPluginStepStatus({
+          plugin,
+          stage: 'failed',
+          message: plugin.installMessage,
+          installedVersion,
+          error: message,
+        }),
+      );
+      logger.error(`[managed-plugin] Failed to install ${plugin.pluginId}:`, error);
+      throw error;
+    } finally {
+      runningManagedPluginInstalls.delete(plugin.pluginId);
+    }
+  })();
+
+  runningManagedPluginInstalls.set(options.pluginId, installPromise);
+  return installPromise;
 }

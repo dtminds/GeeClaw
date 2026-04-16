@@ -63,13 +63,22 @@
         "enabled": "Long conversations keep more context available.",
         "disabled": "Standard context management is being used.",
         "not-installed": "This plugin is not installed.",
-        "unavailable": "Installed plugin version does not match GeeClaw requirements."
+        "unavailable": "Installed plugin version does not match GeeClaw requirements.",
+        "installingHint": "First-time installation can take more than 10 minutes. Keep GeeClaw running."
       }
+    },
+    "actions": {
+      "install": "Install",
+      "installInProgress": "Installing…",
+      "upgrade": "Upgrade",
+      "upgradeInProgress": "Upgrading…"
     },
     "toast": {
       "loadFailed": "Failed to load memory settings",
       "saved": "Memory settings updated",
-      "saveFailed": "Failed to save memory settings"
+      "saveFailed": "Failed to save memory settings",
+      "installSuccess": "Lossless Claw installed",
+      "installFailed": "Failed to install Lossless Claw"
     }
   },
   "webSearch": {
