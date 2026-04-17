@@ -37,6 +37,10 @@ function isUnregisteredProviderType(type: string): boolean {
   return isMultiInstanceProviderType(type);
 }
 
+function isSupportedRuntimeProviderType(type: string): boolean {
+  return Boolean(getProviderDefinition(type)) || isUnregisteredProviderType(type);
+}
+
 type RuntimeProviderSyncContext = {
   runtimeProviderKey: string;
   meta: ReturnType<typeof getProviderConfig>;
@@ -326,7 +330,7 @@ export async function syncAllProviderAuthToRuntime(): Promise<void> {
   const accounts = await listProviderAccounts();
 
   for (const account of accounts) {
-    if (account.vendorId === GEECLAW_PROVIDER_TYPE) {
+    if (account.vendorId === GEECLAW_PROVIDER_TYPE || !isSupportedRuntimeProviderType(account.vendorId)) {
       continue;
     }
 
