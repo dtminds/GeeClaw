@@ -30,8 +30,6 @@ import { hostApiFetch } from '@/lib/host-api';
 
 interface SetupStep {
   id: string;
-  title: string;
-  description: string;
 }
 
 const STEP = {
@@ -42,29 +40,12 @@ const STEP = {
 } as const;
 
 const steps: SetupStep[] = [
-  {
-    id: 'welcome',
-    title: 'Welcome to GeeClaw',
-    description: 'Your AI assistant is ready to be configured',
-  },
-  {
-    id: 'runtime',
-    title: 'Environment Check',
-    description: 'Verifying system requirements',
-  },
-  {
-    id: 'installing',
-    title: 'Setting Up',
-    description: 'Installing essential components',
-  },
-  {
-    id: 'complete',
-    title: 'All Set!',
-    description: 'GeeClaw is ready to use',
-  },
+  { id: 'welcome' },
+  { id: 'runtime' },
+  { id: 'installing' },
+  { id: 'complete' },
 ];
 
-// Default skills to auto-install (no additional API keys required)
 interface DefaultSkill {
   id: string;
   name: string;
@@ -83,13 +64,13 @@ interface InstallingContentProps {
   onSkip: () => void;
 }
 
-const defaultSkills: DefaultSkill[] = [
-  { id: 'opencode', name: 'OpenCode', description: 'AI coding assistant backend' },
-  { id: 'python-env', name: 'Python Environment', description: 'Python runtime for skills' },
-  { id: 'code-assist', name: 'Code Assist', description: 'Code analysis and suggestions' },
-  { id: 'file-tools', name: 'File Tools', description: 'File operations and management' },
-  { id: 'terminal', name: 'Terminal', description: 'Shell command execution' },
-];
+const DEFAULT_SKILL_IDS = [
+  'opencode',
+  'python-env',
+  'code-assist',
+  'file-tools',
+  'terminal',
+] as const;
 
 import geeclawIcon from '@/assets/logo.svg';
 
@@ -100,6 +81,11 @@ export function Setup() {
   const { t } = useTranslation(['setup', 'channels']);
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<number>(STEP.WELCOME);
+  const defaultSkills = useMemo<DefaultSkill[]>(() => DEFAULT_SKILL_IDS.map((id) => ({
+    id,
+    name: t(`installing.skills.${id}.name`),
+    description: t(`installing.skills.${id}.description`),
+  })), [t]);
 
   // Setup state
   // Installation state for the Installing step
@@ -378,7 +364,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'error',
-            message: openclawStatus.error || `${openclawStatus.displayName} not found`
+            message: openclawStatus.error || t('runtime.status.failedToStart')
           },
         }));
       } else if (openclawStatus.source === 'bundled' && !openclawStatus.isBuilt) {
@@ -386,7 +372,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'error',
-            message: `${openclawStatus.displayName} is missing dist`
+            message: t('runtime.status.failedToStart')
           },
         }));
       } else {
@@ -395,14 +381,20 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'success',
-            message: `${openclawStatus.displayName} ready${versionLabel}`
+            message: t('runtime.status.runtimeReady', {
+              displayName: openclawStatus.displayName,
+              versionLabel,
+            })
           },
         }));
       }
     } catch (error) {
       setChecks((prev) => ({
         ...prev,
-        openclaw: { status: 'error', message: `Check failed: ${error}` },
+        openclaw: {
+          status: 'error',
+          message: t('runtime.status.checkFailed', { error: String(error) }),
+        },
       }));
     }
 
@@ -426,7 +418,9 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
         ...prev,
         gateway: {
           status: 'checking',
-          message: currentGateway.state === 'starting' ? t('runtime.status.checking') : 'Waiting for gateway...'
+          message: currentGateway.state === 'starting'
+            ? t('runtime.status.startingGateway')
+            : t('runtime.status.waitingGateway')
         },
       }));
     }
@@ -454,12 +448,12 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
     } else if (gatewayStatus.state === 'error') {
       setChecks((prev) => ({
         ...prev,
-        gateway: { status: 'error', message: gatewayStatus.error || 'Failed to start' },
+        gateway: { status: 'error', message: gatewayStatus.error || t('runtime.status.failedToStart') },
       }));
     } else if (gatewayStatus.state === 'starting' || gatewayStatus.state === 'reconnecting') {
       setChecks((prev) => ({
         ...prev,
-        gateway: { status: 'checking', message: 'Starting...' },
+        gateway: { status: 'checking', message: t('runtime.status.startingGateway') },
       }));
     }
     // 'stopped' state: keep current check status (likely 'checking') to allow startup time
@@ -483,7 +477,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
         if (prev.gateway.status === 'checking') {
           return {
             ...prev,
-            gateway: { status: 'error', message: 'Gateway startup timed out' },
+            gateway: { status: 'error', message: t('runtime.status.gatewayTimeout') },
           };
         }
         return prev;
@@ -501,7 +495,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
   const handleStartGateway = async () => {
     setChecks((prev) => ({
       ...prev,
-      gateway: { status: 'checking', message: 'Starting...' },
+      gateway: { status: 'checking', message: t('runtime.status.startingGateway') },
     }));
     await startGateway();
   };
@@ -512,7 +506,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
       setLogContent(logs.content);
       setShowLogs(true);
     } catch {
-      setLogContent('(Failed to load logs)');
+      setLogContent(t('runtime.status.loadLogsFailed'));
       setShowLogs(true);
     }
   };
@@ -605,10 +599,10 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
         </div>
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-2 text-left">
-            <span>Gateway Service</span>
+            <span>{t('runtime.gateway')}</span>
             {checks.gateway.status === 'error' && (
               <Button variant="outline" size="sm" onClick={handleStartGateway}>
-                Start Gateway
+                {t('runtime.startGateway')}
               </Button>
             )}
           </div>
@@ -636,19 +630,19 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
       {showLogs && (
         <div className="mt-4 p-4 rounded-lg bg-black/40 border border-border">
           <div className="flex items-center justify-between mb-2">
-            <p className="font-medium text-foreground text-sm">Application Logs</p>
+            <p className="font-medium text-foreground text-sm">{t('runtime.logs.title')}</p>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleOpenLogDir}>
                 <ExternalLink className="h-3 w-3 mr-1" />
-                Open Log Folder
+                {t('runtime.logs.openFolder')}
               </Button>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowLogs(false)}>
-                Close
+                {t('runtime.logs.close')}
               </Button>
             </div>
           </div>
           <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded border border-border/60 bg-popover px-3 py-3 font-mono text-xs text-popover-foreground">
-            {logContent || '(No logs available yet)'}
+            {logContent || t('runtime.logs.noLogs')}
           </pre>
         </div>
       )}
@@ -831,9 +825,9 @@ function CompleteContent({ installedSkills }: CompleteContentProps) {
   const { t } = useTranslation('setup');
   const gatewayStatus = useGatewayStore((state) => state.status);
 
-  const installedSkillNames = defaultSkills
-    .filter((s) => installedSkills.includes(s.id))
-    .map((s) => s.name)
+  const installedSkillNames = DEFAULT_SKILL_IDS
+    .filter((id) => installedSkills.includes(id))
+    .map((id) => t(`installing.skills.${id}.name`))
     .join(', ');
 
   return (
