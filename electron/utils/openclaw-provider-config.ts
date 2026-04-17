@@ -324,6 +324,15 @@ function normalizeRuntimeProviderModels(
   }));
 }
 
+function formatProviderApiKeyReference(provider: string, apiKeyValue: string): string {
+  const envVar = getProviderEnvVar(provider);
+  if (envVar && apiKeyValue === envVar) {
+    return `\${${envVar}}`;
+  }
+
+  return apiKeyValue;
+}
+
 function upsertOpenClawProviderEntry(
   config: Record<string, unknown>,
   provider: string,
@@ -352,7 +361,7 @@ function upsertOpenClawProviderEntry(
     api: options.api,
     models: mergeProviderModels(registryModels, existingModels, runtimeModels),
   };
-  if (options.apiKeyEnv) nextProvider.apiKey = options.apiKeyEnv;
+  if (options.apiKeyEnv) nextProvider.apiKey = formatProviderApiKeyReference(provider, options.apiKeyEnv);
   if (options.headers && Object.keys(options.headers).length > 0) {
     nextProvider.headers = options.headers;
   } else {
@@ -585,7 +594,9 @@ export async function updateAgentModelProvider(
         delete existing.models;
       }
     }
-    if (entry.apiKey !== undefined) existing.apiKey = entry.apiKey;
+    if (entry.apiKey !== undefined) {
+      existing.apiKey = formatProviderApiKeyReference(providerType, entry.apiKey);
+    }
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
 
     providers[providerType] = existing;

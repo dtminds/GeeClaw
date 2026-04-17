@@ -45,7 +45,7 @@ function createGeeClawCompatibleProvider(
     envVar: options.envVar,
     supportedAuthModes: options.supportedAuthModes ?? ['api_key'],
     defaultAuthMode: options.defaultAuthMode ?? 'api_key',
-    supportsMultipleAccounts: options.supportsMultipleAccounts ?? true,
+    supportsMultipleAccounts: options.supportsMultipleAccounts ?? false,
     ...(options.showBaseUrl !== undefined ? { showBaseUrl: options.showBaseUrl } : {}),
     ...(options.showModelId !== undefined ? { showModelId: options.showModelId } : {}),
     ...(options.modelIdPlaceholder !== undefined ? { modelIdPlaceholder: options.modelIdPlaceholder } : {}),
@@ -99,7 +99,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'MINIMAX_CN_API_KEY',
     supportedAuthModes: ['oauth_device', 'api_key'],
     defaultAuthMode: 'oauth_device',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.minimaxi.com/anthropic',
       api: 'anthropic-messages',
@@ -124,7 +124,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'MOONSHOT_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.moonshot.cn/v1',
       api: 'openai-completions',
@@ -155,7 +155,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'MODELSTUDIO_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       api: 'openai-completions',
@@ -183,7 +183,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'ARK_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       api: 'openai-completions',
@@ -210,7 +210,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     docsUrl: 'https://platform.claude.com/docs/en/api/overview',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
   },
   {
     id: 'openai',
@@ -231,7 +231,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     apiKeyUrl: 'https://platform.openai.com/api-keys',
     supportedAuthModes: ['api_key', 'oauth_browser'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.openai.com/v1',
       api: 'openai-responses',
@@ -262,7 +262,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
     supportedAuthModes: ['api_key', 'oauth_browser'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
   },
   {
     id: 'openrouter',
@@ -281,7 +281,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'OPENROUTER_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://openrouter.ai/api/v1',
       api: 'openai-completions',
@@ -312,7 +312,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'MINIMAX_API_KEY',
     supportedAuthModes: ['oauth_device', 'api_key'],
     defaultAuthMode: 'oauth_device',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.minimax.io/anthropic',
       api: 'anthropic-messages',
@@ -337,7 +337,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'MOONSHOT_GLOBAL_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.moonshot.ai/v1',
       api: 'openai-completions',
@@ -363,7 +363,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     envVar: 'SILICONFLOW_API_KEY',
     supportedAuthModes: ['api_key'],
     defaultAuthMode: 'api_key',
-    supportsMultipleAccounts: true,
+    supportsMultipleAccounts: false,
     providerConfig: {
       baseUrl: 'https://api.siliconflow.cn/v1',
       api: 'openai-completions',

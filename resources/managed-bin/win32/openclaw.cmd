@@ -29,6 +29,7 @@ if defined PROFILE_VALUE if /i not "%PROFILE_VALUE%"=="%PROFILE_NAME%" (
 set OPENCLAW_EMBEDDED_IN=GeeClaw
 set "OPENCLAW_STATE_DIR=%STATE_DIR%"
 set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"
+set "PNPM_HOME=%~dp0"
 set "NODE_EXE=%~dp0..\bin\node.exe"
 set "LEGACY_ENTRY=%~dp0..\openclaw\openclaw.mjs"
 

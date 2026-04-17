@@ -35,6 +35,12 @@ vi.mock('@electron/utils/agent-config', () => ({
 }));
 
 vi.mock('@electron/utils/provider-registry', () => ({
+  getProviderEnvVar: vi.fn((type: string) => {
+    if (type === 'openai') {
+      return 'OPENAI_API_KEY';
+    }
+    return undefined;
+  }),
   getProviderConfig: vi.fn((type: string) => {
     if (type === 'openai') {
       return {
@@ -61,11 +67,17 @@ import { getProviderAccount } from '@electron/services/providers/provider-store'
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {
   syncDefaultProviderToRuntime,
+  syncProviderApiKeyToRuntime,
   syncSavedProviderToRuntime,
+  syncAllProviderAuthToRuntime,
   syncUpdatedProviderToRuntime,
 } from '@electron/services/providers/provider-runtime-sync';
 import { getDefaultAgentModelConfig } from '@electron/utils/agent-config';
-import { removeProviderKeyFromOpenClaw, saveOAuthTokenToOpenClaw } from '@electron/utils/openclaw-auth';
+import {
+  removeProviderKeyFromOpenClaw,
+  saveOAuthTokenToOpenClaw,
+  saveProviderKeyToOpenClaw,
+} from '@electron/utils/openclaw-auth';
 import {
   removeProviderFromOpenClaw,
   setOpenClawDefaultModel,
@@ -303,6 +315,54 @@ describe('provider runtime sync for browser OAuth', () => {
 
     expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
     expect(removeProviderFromOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('removes stale auth-profiles api_key entries when syncing an api_key provider key to runtime', async () => {
+    await syncProviderApiKeyToRuntime('openai', 'openai-account', 'sk-new');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+    expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('removes stale auth-profiles api_key entries instead of writing them during provider auth sync', async () => {
+    const { listProviderAccounts } = await import('@electron/services/providers/provider-store');
+
+    vi.mocked(listProviderAccounts).mockResolvedValue([
+      makeAccount({
+        authMode: 'api_key',
+        isDefault: false,
+      }),
+    ]);
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      authMode: 'api_key',
+      isDefault: false,
+    }));
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'api_key',
+      accountId: 'openai-account',
+      apiKey: 'sk-live',
+    });
+
+    await syncAllProviderAuthToRuntime();
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+    expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('clears stale auth-profiles api_key entries when switching the default provider in api_key mode', async () => {
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      authMode: 'api_key',
+      isDefault: true,
+    }));
+    vi.mocked(getApiKey).mockResolvedValue('sk-live');
+
+    await syncDefaultProviderToRuntime('openai-account');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+    expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
   });
 
   it('syncs Ollama provider config to runtime with the openai-completions protocol', async () => {

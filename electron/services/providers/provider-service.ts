@@ -108,6 +108,13 @@ async function assertCustomRuntimeProviderKeyAvailable(account: ProviderAccount)
   }
 }
 
+function assertProviderAccountMultiplicity(account: ProviderAccount): void {
+  const definition = getProviderDefinition(account.vendorId);
+  if (!definition?.supportsMultipleAccounts && account.id !== account.vendorId) {
+    throw new Error('Provider does not support multiple accounts');
+  }
+}
+
 export class ProviderService {
   async listVendors(): Promise<ProviderDefinition[]> {
     return PROVIDER_DEFINITIONS;
@@ -130,6 +137,7 @@ export class ProviderService {
 
   async createAccount(account: ProviderAccount, apiKey?: string): Promise<ProviderAccount> {
     await ensureProviderStoreMigrated();
+    assertProviderAccountMultiplicity(account);
     await assertCustomRuntimeProviderKeyAvailable(account);
     await saveProvider(providerAccountToConfig(account));
     await saveProviderAccount(account);

@@ -49,7 +49,7 @@ import {
 import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
-import { getBundledNodePath } from '../utils/managed-bin';
+import { getBundledNodePath, getManagedBinDir } from '../utils/managed-bin';
 import { mutateOpenClawConfigDocument } from '../utils/openclaw-config-coordinator';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
@@ -215,6 +215,7 @@ export function buildGatewayForkEnv(options: {
   return {
     ...forwardedEnvWithPath,
     ...options.injectedEnv,
+    PNPM_HOME: getManagedBinDir(),
     OPENCLAW_STATE_DIR: options.openclawConfigDir,
     OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(options.openclawConfigDir),
     OPENCLAW_GATEWAY_PORT: String(options.gatewayPort),
@@ -630,51 +631,47 @@ async function loadProviderEnv(): Promise<{ providerEnv: Record<string, string>;
 
   try {
     const defaultProviderId = await getDefaultProvider();
-    if (defaultProviderId) {
-      const defaultProvider = await getProvider(defaultProviderId);
-      const defaultProviderType = defaultProvider?.type;
-      const defaultProviderKey = await getApiKey(defaultProviderId);
-      if (defaultProvider?.enabled && defaultProviderType && defaultProviderKey) {
-        const envVar = getProviderEnvVar(defaultProviderType);
-        if (envVar) {
-          providerEnv[envVar] = defaultProviderKey;
-          loadedProviderKeyCount++;
-        }
+    const accounts = (await listProviderAccounts())
+      .filter((account) => account.enabled)
+      .sort((left, right) => {
+        if (left.id === defaultProviderId) return -1;
+        if (right.id === defaultProviderId) return 1;
+        return right.updatedAt.localeCompare(left.updatedAt);
+      });
+
+    for (const account of accounts) {
+      const envVar = getProviderEnvVar(account.vendorId);
+      if (!envVar || providerEnv[envVar]) {
+        continue;
       }
+
+      const key = await getApiKey(account.id);
+      if (!key) {
+        continue;
+      }
+
+      providerEnv[envVar] = key;
+      loadedProviderKeyCount++;
     }
   } catch (err) {
-    logger.warn('Failed to load default provider key for environment injection:', err);
+    logger.warn('Failed to load provider account keys for environment injection:', err);
   }
 
   for (const providerType of providerTypes) {
     try {
+      const envVar = getProviderEnvVar(providerType);
+      if (!envVar || providerEnv[envVar]) {
+        continue;
+      }
+
       const key = await getApiKey(providerType);
       if (key) {
-        const envVar = getProviderEnvVar(providerType);
-        if (envVar) {
-          providerEnv[envVar] = key;
-          loadedProviderKeyCount++;
-        }
+        providerEnv[envVar] = key;
+        loadedProviderKeyCount++;
       }
     } catch (err) {
       logger.warn(`Failed to load API key for ${providerType}:`, err);
     }
-  }
-
-  try {
-    const geeclawAccount = (await listProviderAccounts())
-      .filter((account) => account.vendorId === 'geeclaw' && account.enabled)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-
-    if (geeclawAccount && !providerEnv.GEECLAW_API_KEY) {
-      const geeclawKey = await getApiKey(geeclawAccount.id);
-      if (geeclawKey) {
-        providerEnv.GEECLAW_API_KEY = geeclawKey;
-        loadedProviderKeyCount++;
-      }
-    }
-  } catch (err) {
-    logger.warn('Failed to load GeeClaw API key for environment injection:', err);
   }
 
   return { providerEnv, loadedProviderKeyCount };

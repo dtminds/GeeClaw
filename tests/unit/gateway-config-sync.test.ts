@@ -70,7 +70,15 @@ vi.mock('@electron/services/providers/provider-store', () => ({
 }));
 
 vi.mock('@electron/utils/provider-registry', () => ({
-  getProviderEnvVar: vi.fn(() => null),
+  getProviderEnvVar: vi.fn((type: string) => {
+    if (type === 'geeclaw') {
+      return 'GEECLAW_API_KEY';
+    }
+    if (type === 'modelstudio') {
+      return 'MODELSTUDIO_API_KEY';
+    }
+    return null;
+  }),
   getKeyableProviderTypes: vi.fn(() => []),
   getProviderConfig: vi.fn((type: string) => {
     if (type === 'geeclaw') {
@@ -363,6 +371,38 @@ describe('syncGatewayConfigBeforeLaunch', () => {
       rmSync(homeDir, { recursive: true, force: true });
     }
   });
+
+  it('injects env-backed provider keys from enabled account ids, not only provider type ids', async () => {
+    const { getApiKey } = await import('@electron/utils/secure-storage');
+
+    providerAccounts = [{
+      id: 'modelstudio-work',
+      vendorId: 'modelstudio',
+      enabled: true,
+      updatedAt: '2026-04-17T00:00:00.000Z',
+    }];
+    vi.mocked(getApiKey).mockImplementation(async (providerId: string) => {
+      if (providerId === 'modelstudio-work') {
+        return 'dashscope-account-secret';
+      }
+      return null;
+    });
+
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    mkdirSync(join(homeDir, 'geeclaw', 'workspace'), { recursive: true });
+    mkdirSync(join(openclawConfigDir, 'agents', 'main', 'sessions'), { recursive: true });
+
+    try {
+      const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+      const context = await prepareGatewayLaunchContext(28788);
+      expect(context.forkEnv.MODELSTUDIO_API_KEY).toBe('dashscope-account-secret');
+      expect(context.loadedProviderKeyCount).toBe(1);
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('buildGatewayForkEnv', () => {
@@ -428,6 +468,22 @@ describe('buildGatewayForkEnv', () => {
     });
 
     expect(forkEnv.PATH).toBe('/Users/test/.geeclaw/npm-global/bin:/opt/geeclaw/bin:/usr/bin:/bin');
+  });
+
+  it('exports GeeClaw managed-bin as PNPM_HOME so node host services keep openclaw ahead of Homebrew', async () => {
+    const { buildGatewayForkEnv } = await import('@electron/gateway/config-sync');
+
+    const forkEnv = buildGatewayForkEnv({
+      baseEnv: {
+        PATH: '/opt/homebrew/bin:/usr/bin:/bin',
+      },
+      finalPath: '/Users/test/.geeclaw/npm-global/bin:/Users/test/GeeClaw/managed-bin:/opt/homebrew/bin:/usr/bin:/bin',
+      injectedEnv: {},
+      openclawConfigDir: '/Users/test/.openclaw-geeclaw',
+      gatewayPort: 28788,
+    });
+
+    expect(forkEnv.PNPM_HOME).toBe(`${process.cwd()}/resources/managed-bin/posix`);
   });
 });
 

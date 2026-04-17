@@ -87,6 +87,7 @@ export function getGeeClawRuntimeEnv(
 
 export function getGeeClawCommandSearchDirs(env: EnvMap = process.env): string[] {
   const pathEntries = splitPathEntries(env.PATH ?? env.Path ?? '');
+  const bundledEntries = getBundledPathEntries();
   const homeDir = env.HOME?.trim()
     || (process.platform === 'win32' ? env.USERPROFILE?.trim() : undefined)
     || homedir();
@@ -96,6 +97,7 @@ export function getGeeClawCommandSearchDirs(env: EnvMap = process.env): string[]
     const appData = env.APPDATA;
     return uniquePathEntries([
       getManagedNpmRuntimeBinDir(env),
+      ...bundledEntries,
       ...pathEntries,
       ...(appData ? [
         platformPath.join(appData, 'npm'),
@@ -106,6 +108,7 @@ export function getGeeClawCommandSearchDirs(env: EnvMap = process.env): string[]
 
   return uniquePathEntries([
     getManagedNpmRuntimeBinDir(env),
+    ...bundledEntries,
     ...pathEntries,
     platformPath.join(homeDir, '.local', 'bin'),
     '/opt/homebrew/bin',

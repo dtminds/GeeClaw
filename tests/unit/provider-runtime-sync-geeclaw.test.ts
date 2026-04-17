@@ -39,6 +39,12 @@ vi.mock('@electron/utils/agent-config', () => ({
 }));
 
 vi.mock('@electron/utils/provider-registry', () => ({
+  getProviderEnvVar: vi.fn((type: string) => {
+    if (type === 'geeclaw') {
+      return 'GEECLAW_API_KEY';
+    }
+    return undefined;
+  }),
   getProviderConfig: vi.fn((type: string) => {
     if (type === 'geeclaw') {
       return {

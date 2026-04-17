@@ -49,6 +49,8 @@ describe('runtime-path', () => {
     );
     expect(getGeeClawCommandSearchDirs()).toEqual([
       '/Users/test/.geeclaw/npm-global/bin',
+      '/opt/geeclaw/managed-bin',
+      '/opt/geeclaw/bin',
       '/usr/local/bin',
       '/usr/bin',
       '/bin',
@@ -63,7 +65,7 @@ describe('runtime-path', () => {
     process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming';
     process.env.USERPROFILE = 'C:\\Users\\test';
     process.env.PATH = 'C:\\Tools;C:\\Program Files\\GeeClaw\\Bin';
-    mockGetBundledPathEntries.mockReturnValueOnce([
+    mockGetBundledPathEntries.mockReturnValue([
       'C:\\Program Files\\GeeClaw\\Managed-Bin',
       'C:\\Program Files\\GeeClaw\\Bin',
     ]);
@@ -75,8 +77,9 @@ describe('runtime-path', () => {
     );
     expect(getGeeClawCommandSearchDirs()).toEqual([
       'C:\\Users\\test\\AppData\\Roaming\\GeeClaw\\npm-global',
-      'C:\\Tools',
+      'C:\\Program Files\\GeeClaw\\Managed-Bin',
       'C:\\Program Files\\GeeClaw\\Bin',
+      'C:\\Tools',
       'C:\\Users\\test\\AppData\\Roaming\\npm',
       'C:\\Users\\test\\AppData\\Roaming\\npm-cache',
     ]);
