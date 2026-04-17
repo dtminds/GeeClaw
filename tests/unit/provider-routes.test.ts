@@ -31,6 +31,7 @@ const providerServiceStub = {
   updateAccount: vi.fn(),
   deleteAccount: vi.fn(),
   deleteLegacyProviderApiKey: vi.fn(),
+  saveLegacyProvider: vi.fn(),
   listLegacyProvidersWithKeyInfo: vi.fn(),
   getDefaultLegacyProvider: vi.fn(),
   setDefaultLegacyProvider: vi.fn(),
@@ -337,6 +338,43 @@ describe('handleProviderRoutes', () => {
       undefined,
       gatewayManager,
     );
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, { success: true });
+  });
+
+  it('clears a stale legacy provider api key when saving with an empty apiKey string', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    const gatewayManager = { name: 'gateway-manager' };
+    parseJsonBodyMock.mockResolvedValueOnce({
+      config: {
+        id: 'openai',
+        type: 'openai',
+        name: 'OpenAI',
+        enabled: true,
+        createdAt: '2026-04-14T00:00:00.000Z',
+        updatedAt: '2026-04-14T00:00:00.000Z',
+      },
+      apiKey: '   ',
+    });
+
+    const handled = await handleProviderRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/providers'),
+      { gatewayManager } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(providerServiceStub.saveLegacyProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'openai', type: 'openai' }),
+    );
+    expect(providerServiceStub.deleteLegacyProviderApiKey).toHaveBeenCalledWith('openai');
+    expect(syncDeletedProviderApiKeyToRuntimeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'openai', type: 'openai' }),
+      'openai',
+      undefined,
+      gatewayManager,
+    );
+    expect(syncAllAgentConfigToOpenClawMock).toHaveBeenCalledTimes(1);
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, { success: true });
   });
 });

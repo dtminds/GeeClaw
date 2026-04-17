@@ -280,6 +280,9 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
                 const trimmedKey = apiKey.trim();
                 if (trimmedKey) {
                   await providerService.setLegacyProviderApiKey(config.id, trimmedKey);
+                } else {
+                  await providerService.deleteLegacyProviderApiKey(config.id);
+                  await syncDeletedProviderApiKeyToRuntime(config, config.id, undefined, gatewayManager);
                 }
               }
 
@@ -1687,6 +1690,13 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
             await syncProviderApiKeyToRuntime(config.type, config.id, trimmedKey, gatewayManager);
           } catch (err) {
             console.warn('Failed to save key to OpenClaw auth-profiles:', err);
+          }
+        } else {
+          await providerService.deleteLegacyProviderApiKey(config.id);
+          try {
+            await syncDeletedProviderApiKeyToRuntime(config, config.id, undefined, gatewayManager);
+          } catch (err) {
+            console.warn('Failed to remove key from OpenClaw auth-profiles:', err);
           }
         }
       }
