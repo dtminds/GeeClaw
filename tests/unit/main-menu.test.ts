@@ -23,6 +23,7 @@ describe('createMenu', () => {
     const template = vi.mocked(Menu.buildFromTemplate).mock.calls[0]?.[0];
     expect(template).toBeDefined();
     expect(template?.some((item) => item.label === '文件')).toBe(true);
+    expect(template?.some((item) => item.label === '编辑')).toBe(true);
     expect(template?.some((item) => item.label === '导航')).toBe(true);
     expect(template?.some((item) => item.role === 'help')).toBe(true);
   });

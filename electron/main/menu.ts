@@ -8,6 +8,7 @@ import { getSetting } from '../utils/store';
 type MenuTranslationKey =
   | 'preferences'
   | 'file'
+  | 'edit'
   | 'newChat'
   | 'view'
   | 'navigate'
@@ -25,6 +26,7 @@ const menuTranslations: Record<'en' | 'zh', Record<MenuTranslationKey, string>> 
   en: {
     preferences: 'Preferences...',
     file: 'File',
+    edit: 'Edit',
     newChat: 'New Chat',
     view: 'View',
     navigate: 'Navigate',
@@ -41,6 +43,7 @@ const menuTranslations: Record<'en' | 'zh', Record<MenuTranslationKey, string>> 
   zh: {
     preferences: '偏好设置...',
     file: '文件',
+    edit: '编辑',
     newChat: '新对话',
     view: '视图',
     navigate: '导航',
@@ -116,7 +119,7 @@ export async function createMenu(): Promise<void> {
     
     // Edit menu
     {
-      label: 'Edit',
+      label: translations.edit,
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
