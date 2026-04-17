@@ -33,7 +33,7 @@
         ],
         "description": "让任何网站或 Electron 应用成为你的 CLI",
         "homepage": "https://opencli.info/",
-        "docsUrl": "https://opencli.info/",
+        "docsUrl": "https://opencli.info/docs/zh/",
         "platforms": [
             "darwin",
             "win32"
@@ -56,7 +56,7 @@
         ],
         "description": "飞书/Lark 开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作飞书。覆盖消息、文档、多维表格、电子表格、日历、邮箱、任务、会议等核心业务域，提供 200+ 命令及 19 个 AI Agent Skills",
         "homepage": "https://github.com/larksuite/cli",
-        "docsUrl": "https://github.com/larksuite/cli",
+        "docsUrl": "https://github.com/larksuite/cli/blob/main/README.zh.md",
         "platforms": [
             "darwin",
             "win32"
@@ -104,30 +104,7 @@
         ],
         "description": "让你的 AGENT 能够使用即梦生成工具，把批量任务、定时任务交给自动化，把时间还给你自己",
         "homepage": "https://jimeng.jianying.com/cli",
-        "docsUrl": "https://jimeng.jianying.com/cli",
-        "platforms": [
-            "darwin",
-            "linux"
-        ]
-    },
-    {
-        "id": "md2wechat",
-        "title": "md2wechat",
-        "binNames": [
-            "md2wechat"
-        ],
-        "installMethods": [
-            {
-                "type": "managed-npm",
-                "packageName": "@geekjourneyx/md2wechat",
-                "postInstallSkills": [
-                    "geekjourneyx/md2wechat-skill"
-                ]
-            }
-        ],
-        "description": "一套面向 AI Agent 的微信公众号发布接口，用于把 Markdown 转成微信可用 HTML、创建图文消息草稿、创建小绿书草稿、批量上传素材",
-        "homepage": "https://www.md2wechat.com/zh",
-        "docsUrl": "https://www.md2wechat.com/zh",
+        "docsUrl": "https://bytedance.larkoffice.com/wiki/FVTwwm0bGiishxkKOoScdHR2nsg",
         "platforms": [
             "darwin",
             "win32"

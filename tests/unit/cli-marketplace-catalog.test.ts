@@ -11,7 +11,8 @@ describe('cli marketplace bundled catalog', () => {
       id: 'dreamina',
       title: '即梦 CLI',
       binNames: ['dreamina'],
-      docsUrl: 'https://jimeng.jianying.com/cli',
+      docsUrl: 'https://bytedance.larkoffice.com/wiki/FVTwwm0bGiishxkKOoScdHR2nsg',
+      platforms: ['darwin', 'win32'],
       installMethods: [
         expect.objectContaining({
           type: 'manual',
