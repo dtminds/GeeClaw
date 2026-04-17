@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { hostApiFetch } from '@/lib/host-api';
 import { toUserMessage } from '@/lib/api-client';
+import { validateEnvironmentEntries } from '@/lib/environment-entry-validation';
 
 interface ManagedAppEnvironmentEntry {
   key: string;
@@ -34,38 +35,13 @@ function buildValidationMessages(
   entries: EditableManagedAppEnvironmentEntry[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string[] {
-  const messages: string[] = [];
-  const seenKeys = new Set<string>();
-  const duplicateKeys = new Set<string>();
+  const { emptyRows, incompleteRows, duplicateKeys } = validateEnvironmentEntries(entries);
 
-  entries.forEach((entry, index) => {
-    const key = entry.key.trim();
-    const value = entry.value.trim();
-    const hasKey = key.length > 0;
-    const hasValue = value.length > 0;
-
-    if (hasKey !== hasValue) {
-      messages.push(t('environment.validation.incomplete', { row: index + 1 }));
-      return;
-    }
-
-    if (!hasKey) {
-      return;
-    }
-
-    if (seenKeys.has(key)) {
-      duplicateKeys.add(key);
-      return;
-    }
-
-    seenKeys.add(key);
-  });
-
-  duplicateKeys.forEach((key) => {
-    messages.push(t('environment.validation.duplicate', { key }));
-  });
-
-  return messages;
+  return [
+    ...emptyRows.map((row) => t('environment.validation.empty', { row })),
+    ...incompleteRows.map((row) => t('environment.validation.incomplete', { row })),
+    ...duplicateKeys.map((key) => t('environment.validation.duplicate', { key })),
+  ];
 }
 
 export function EnvironmentSettingsSection() {

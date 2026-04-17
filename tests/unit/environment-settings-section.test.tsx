@@ -20,6 +20,7 @@ const translations: Record<string, string> = {
   'environment.list.valuePlaceholder': '变量值',
   'environment.list.save': '保存环境变量',
   'environment.validation.title': '请先修正以下问题：',
+  'environment.validation.empty': '第 {{row}} 行为空，请填写变量名和值，或删除该行。',
   'environment.validation.incomplete': '第 {{row}} 行需要同时填写变量名和值。',
   'environment.validation.duplicate': '变量名 {{key}} 重复，请保留一项。',
   'environment.toast.loadFailed': '加载环境变量失败',
@@ -90,7 +91,6 @@ describe('EnvironmentSettingsSection', () => {
     const notionKeyInput = screen.getByDisplayValue('NOTION_API_KEY');
 
     fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
-    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
     const keyInputs = screen.getAllByPlaceholderText('变量名');
     const valueInputs = screen.getAllByPlaceholderText('变量值');
 
@@ -134,6 +134,25 @@ describe('EnvironmentSettingsSection', () => {
 
     expect(await screen.findByText('请先修正以下问题：')).toBeInTheDocument();
     expect(screen.getByText('第 1 行需要同时填写变量名和值。')).toBeInTheDocument();
+    expect(hostApiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks save when an added entry is left completely blank', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      entries: [],
+    });
+
+    render(<EnvironmentSettingsSection />);
+
+    expect(await screen.findByText('全局注入')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
+    expect(await screen.findByPlaceholderText('变量名')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
+
+    expect(await screen.findByText('请先修正以下问题：')).toBeInTheDocument();
+    expect(screen.getByText('第 1 行为空，请填写变量名和值，或删除该行。')).toBeInTheDocument();
     expect(hostApiFetchMock).toHaveBeenCalledTimes(1);
   });
 
