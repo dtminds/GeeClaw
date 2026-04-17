@@ -12,7 +12,7 @@ describe('createMenu', () => {
     vi.clearAllMocks();
   });
 
-  it('uses localized labels for custom menu items when language is zh', async () => {
+  it('omits the custom navigate menu when language is zh', async () => {
     getSettingMock.mockResolvedValue('zh');
 
     const { createMenu } = await import('@/../electron/main/menu');
@@ -24,7 +24,13 @@ describe('createMenu', () => {
     expect(template).toBeDefined();
     expect(template?.some((item) => item.label === '文件')).toBe(true);
     expect(template?.some((item) => item.label === '编辑')).toBe(true);
-    expect(template?.some((item) => item.label === '导航')).toBe(true);
-    expect(template?.some((item) => item.role === 'help')).toBe(true);
+    expect(template?.some((item) => item.label === '导航')).toBe(false);
+    const helpMenu = template?.find((item) => item.role === 'help');
+    expect(helpMenu).toBeDefined();
+    expect(helpMenu?.submenu).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({ label: '文档' }),
+      ]),
+    );
   });
 });

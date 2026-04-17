@@ -11,14 +11,7 @@ type MenuTranslationKey =
   | 'edit'
   | 'newChat'
   | 'view'
-  | 'navigate'
-  | 'dashboard'
-  | 'channels'
-  | 'skills'
-  | 'cronTasks'
-  | 'settings'
   | 'window'
-  | 'documentation'
   | 'reportIssue'
   | 'openClawDocumentation';
 
@@ -29,14 +22,7 @@ const menuTranslations: Record<'en' | 'zh', Record<MenuTranslationKey, string>> 
     edit: 'Edit',
     newChat: 'New Chat',
     view: 'View',
-    navigate: 'Navigate',
-    dashboard: 'Dashboard',
-    channels: 'Channels',
-    skills: 'Skills',
-    cronTasks: 'Cron Tasks',
-    settings: 'Settings',
     window: 'Window',
-    documentation: 'Documentation',
     reportIssue: 'Report Issue',
     openClawDocumentation: 'OpenClaw Documentation',
   },
@@ -46,14 +32,7 @@ const menuTranslations: Record<'en' | 'zh', Record<MenuTranslationKey, string>> 
     edit: '编辑',
     newChat: '新对话',
     view: '视图',
-    navigate: '导航',
-    dashboard: '广场',
-    channels: '聊天频道',
-    skills: '技能',
-    cronTasks: '自动化',
-    settings: '设置',
     window: '窗口',
-    documentation: '文档',
     reportIssue: '反馈问题',
     openClawDocumentation: 'OpenClaw 文档',
   },
@@ -157,53 +136,6 @@ export async function createMenu(): Promise<void> {
       ],
     },
     
-    // Navigate menu
-    {
-      label: translations.navigate,
-      submenu: [
-        {
-          label: translations.dashboard,
-          accelerator: 'CmdOrCtrl+1',
-          click: () => {
-            const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/dashboard');
-          },
-        },
-        {
-          label: translations.channels,
-          accelerator: 'CmdOrCtrl+3',
-          click: () => {
-            const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/channels');
-          },
-        },
-        {
-          label: translations.skills,
-          accelerator: 'CmdOrCtrl+4',
-          click: () => {
-            const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/skills');
-          },
-        },
-        {
-          label: translations.cronTasks,
-          accelerator: 'CmdOrCtrl+5',
-          click: () => {
-            const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/cron');
-          },
-        },
-        {
-          label: translations.settings,
-          accelerator: isMac ? 'Cmd+,' : 'Ctrl+,',
-          click: () => {
-            const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/settings/appearance');
-          },
-        },
-      ],
-    },
-    
     // Window menu
     {
       label: translations.window,
@@ -225,12 +157,6 @@ export async function createMenu(): Promise<void> {
     {
       role: 'help',
       submenu: [
-        {
-          label: translations.documentation,
-          click: async () => {
-            await shell.openExternal('https://www.iyouke.com');
-          },
-        },
         {
           label: translations.reportIssue,
           click: async () => {
