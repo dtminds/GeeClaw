@@ -552,6 +552,75 @@ describe('cli marketplace service', () => {
     expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
   });
 
+  it('reuses required command lookups across catalog entries during a single getCatalog call', async () => {
+    const findCommand = vi.fn(async (bin: string) => {
+      if (bin === 'brew') return '/opt/homebrew/bin/brew';
+      return null;
+    });
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+        {
+          id: 'bar',
+          title: 'Bar CLI',
+          binNames: ['bar'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install bar', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand,
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await service.getCatalog();
+
+    expect(findCommand.mock.calls.filter(([bin]) => bin === 'brew')).toHaveLength(1);
+  });
+
+  it('checks bundled npm availability once per getCatalog call', async () => {
+    const { getBundledNpmPath } = await import('@electron/utils/managed-bin');
+    const mockedGetBundledNpmPath = vi.mocked(getBundledNpmPath);
+    mockedGetBundledNpmPath.mockClear();
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/foo-cli' },
+          ],
+        },
+        {
+          id: 'bar',
+          title: 'Bar CLI',
+          binNames: ['bar'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/bar-cli' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await service.getCatalog();
+
+    expect(mockedGetBundledNpmPath).toHaveBeenCalledTimes(1);
+  });
+
   it('forces shell execution for absolute npm.cmd installs on Windows', async () => {
     setPlatform('win32');
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');

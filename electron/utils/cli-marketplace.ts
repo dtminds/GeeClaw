@@ -75,6 +75,10 @@ type CliMarketplaceJobOperation = 'install' | 'uninstall';
 type CliMarketplaceJobStatus = 'running' | 'succeeded' | 'failed';
 type CliMarketplaceSkillCommand = 'add' | 'remove';
 type CliMarketplaceLogAppender = (chunk: string) => void;
+type CliMarketplaceCatalogResolutionContext = {
+  bundledNpmAvailable: boolean;
+  commandPathCache: Map<string, Promise<string | null>>;
+};
 
 export type CliMarketplaceJobSnapshot = {
   id: string;
@@ -315,7 +319,8 @@ export class CliMarketplaceService {
 
   async getCatalog(): Promise<CliMarketplaceStatusItem[]> {
     const entries = await this.loadCatalogEntries();
-    const statuses = await Promise.all(entries.map((entry) => this.resolveEntryStatus(entry)));
+    const resolutionContext = this.createCatalogResolutionContext();
+    const statuses = await Promise.all(entries.map((entry) => this.resolveEntryStatus(entry, resolutionContext)));
     return statuses.filter((item): item is CliMarketplaceStatusItem => Boolean(item));
   }
 
@@ -393,7 +398,7 @@ export class CliMarketplaceService {
       appendLog?.(`[warn] Failed to update user PATH automatically: ${formatUnknownError(error)}\n`);
     }
 
-    const installedStatus = await this.resolveEntryStatus(entry);
+    const installedStatus = await this.resolveEntryStatus(entry, this.createCatalogResolutionContext());
     if (!installedStatus) {
       throw new Error(`Unable to resolve status for "${entry.id}" after install`);
     }
@@ -418,7 +423,7 @@ export class CliMarketplaceService {
       appendLog,
     });
 
-    const status = await this.resolveEntryStatus(entry);
+    const status = await this.resolveEntryStatus(entry, this.createCatalogResolutionContext());
     if (!status) {
       throw new Error(`Unable to resolve status for "${entry.id}" after uninstall`);
     }
@@ -519,13 +524,37 @@ export class CliMarketplaceService {
     return entry.platforms.includes(process.platform as 'darwin' | 'win32' | 'linux');
   }
 
-  private async resolveEntryStatus(entry: CliMarketplaceCatalogItem): Promise<CliMarketplaceStatusItem | null> {
+  private createCatalogResolutionContext(): CliMarketplaceCatalogResolutionContext {
+    return {
+      bundledNpmAvailable: Boolean(getBundledNpmPath()),
+      commandPathCache: new Map(),
+    };
+  }
+
+  private getCachedCommandPath(
+    command: string,
+    context: CliMarketplaceCatalogResolutionContext,
+  ): Promise<string | null> {
+    const cached = context.commandPathCache.get(command);
+    if (cached) {
+      return cached;
+    }
+
+    const lookupPromise = this.findCommand(command);
+    context.commandPathCache.set(command, lookupPromise);
+    return lookupPromise;
+  }
+
+  private async resolveEntryStatus(
+    entry: CliMarketplaceCatalogItem,
+    context: CliMarketplaceCatalogResolutionContext,
+  ): Promise<CliMarketplaceStatusItem | null> {
     if (!this.supportsPlatform(entry)) {
       return null;
     }
 
-    const { installed, source } = await this.detectEntrySource(entry);
-    const installMethods = await this.resolveInstallMethodStatuses(entry);
+    const { installed, source } = await this.detectEntrySource(entry, context);
+    const installMethods = await this.resolveInstallMethodStatuses(entry, context);
     const managedMethod = getManagedInstallMethod(entry);
     return {
       id: entry.id,
@@ -539,11 +568,14 @@ export class CliMarketplaceService {
     };
   }
 
-  private async resolveInstallMethodStatuses(entry: CliMarketplaceCatalogItem): Promise<CliMarketplaceInstallMethodStatus[]> {
+  private async resolveInstallMethodStatuses(
+    entry: CliMarketplaceCatalogItem,
+    context: CliMarketplaceCatalogResolutionContext,
+  ): Promise<CliMarketplaceInstallMethodStatus[]> {
     const installMethods = normalizeInstallMethods(entry);
     return Promise.all(installMethods.map(async (method) => {
       if (method.type === 'managed-npm') {
-        if (getBundledNpmPath()) {
+        if (context.bundledNpmAvailable) {
           return {
             type: 'managed-npm',
             label: 'managed-npm',
@@ -561,17 +593,17 @@ export class CliMarketplaceService {
       }
 
       const requiredCommands = [...new Set(method.requiresCommands ?? [])];
-      const missingCommands: string[] = [];
-      for (const command of requiredCommands) {
+      const commandResults = await Promise.all(requiredCommands.map(async (command) => {
         try {
-          const commandPath = await this.findCommand(command);
-          if (!commandPath) {
-            missingCommands.push(command);
-          }
+          const commandPath = await this.getCachedCommandPath(command, context);
+          return { command, found: Boolean(commandPath) };
         } catch {
-          missingCommands.push(command);
+          return { command, found: false };
         }
-      }
+      }));
+      const missingCommands = commandResults
+        .filter((result) => !result.found)
+        .map((result) => result.command);
 
       if (missingCommands.length > 0) {
         return {
@@ -595,11 +627,14 @@ export class CliMarketplaceService {
     }));
   }
 
-  private async detectEntrySource(entry: CliMarketplaceCatalogItem): Promise<{ installed: boolean; source: CliMarketplaceSource }> {
+  private async detectEntrySource(
+    entry: CliMarketplaceCatalogItem,
+    context: CliMarketplaceCatalogResolutionContext,
+  ): Promise<{ installed: boolean; source: CliMarketplaceSource }> {
     for (const binName of entry.binNames) {
       if (!binName) continue;
       try {
-        const commandPath = await this.findCommand(binName);
+        const commandPath = await this.getCachedCommandPath(binName, context);
         if (commandPath) {
           return { installed: true, source: 'system' };
         }
