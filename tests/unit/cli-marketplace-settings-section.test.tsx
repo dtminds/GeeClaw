@@ -420,7 +420,10 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    expect(await screen.findByText('System')).toBeInTheDocument();
+    const title = await screen.findByText('Foo CLI');
+    const headingRow = title.closest('div');
+    expect(headingRow).not.toBeNull();
+    expect(within(headingRow as HTMLElement).getByText('System')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');

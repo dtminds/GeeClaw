@@ -385,6 +385,11 @@ export function CliMarketplaceSettingsSection() {
                               installedLabel={t('cliMarketplace.installed')}
                               missingLabel={t('cliMarketplace.missing')}
                             />
+                            {sourceBadgeLabel && (
+                              <Badge className="rounded-full border border-black/8 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground dark:border-white/10">
+                                {sourceBadgeLabel}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm leading-6 text-muted-foreground">
                             {item.description || item.homepage || item.id}
@@ -430,12 +435,6 @@ export function CliMarketplaceSettingsSection() {
                             >
                               {t('cliMarketplace.showInstallCommand', { defaultValue: 'Show Install Command' })}
                             </Button>
-                          )}
-
-                          {!canInstallWithManagedMethod && !canInstallWithManualMethod && sourceBadgeLabel && (
-                            <Badge className="rounded-full border border-black/8 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground dark:border-white/10">
-                              {sourceBadgeLabel}
-                            </Badge>
                           )}
 
                           {showActionsMenu ? (
