@@ -173,7 +173,6 @@
     "missing": "Not installed",
     "install": "Install",
     "copyInstallCommand": "Copy Install Command",
-    "showInstallCommand": "Show Install Command",
     "copyInstallCommandCopied": "Install command copied",
     "copyInstallCommandFailed": "Failed to copy install command",
     "docs": "Docs",
@@ -190,7 +189,7 @@
       "needCurl": "Need curl",
       "needNpm": "Need npm",
       "unavailable": "Unavailable",
-      "copyMethod": "Copy install command"
+      "installMethod": "Install via {{method}}"
     },
     "manualDialog": {
       "title": "Install Command",

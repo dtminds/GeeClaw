@@ -433,7 +433,7 @@ export function CliMarketplaceSettingsSection() {
                               }}
                               disabled={isJobRunning}
                             >
-                              {t('cliMarketplace.showInstallCommand', { defaultValue: 'Show Install Command' })}
+                              {t('cliMarketplace.install')}
                             </Button>
                           )}
 
@@ -520,8 +520,9 @@ export function CliMarketplaceSettingsSection() {
                                     const isUnavailable = !method.available || !method.command;
                                     const label = isUnavailable
                                       ? unavailableReasonLabel
-                                      : t('cliMarketplace.manual.copyMethod', {
-                                        defaultValue: `Copy via ${getManualMethodDisplayName(method.label)}`,
+                                      : t('cliMarketplace.manual.installMethod', {
+                                        method: getManualMethodDisplayName(method.label),
+                                        defaultValue: `Install via ${getManualMethodDisplayName(method.label)}`,
                                       });
                                     const autoFocus = item.source !== 'geeclaw' && !showManagedRuntimeMissingAction && index === 0;
 

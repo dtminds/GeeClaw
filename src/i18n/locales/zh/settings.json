@@ -173,7 +173,6 @@
     "missing": "未安装",
     "install": "安装",
     "copyInstallCommand": "复制安装命令",
-    "showInstallCommand": "查看安装命令",
     "copyInstallCommandCopied": "安装命令已复制",
     "copyInstallCommandFailed": "复制安装命令失败",
     "docs": "文档",
@@ -190,7 +189,7 @@
       "needCurl": "需要 curl",
       "needNpm": "需要 npm",
       "unavailable": "不可用",
-      "copyMethod": "复制安装命令"
+      "installMethod": "通过 {{method}} 安装"
     },
     "manualDialog": {
       "title": "安装命令",

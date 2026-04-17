@@ -18,12 +18,12 @@ const translations: Record<string, string> = {
   'cliMarketplace.missing': '未安装',
   'cliMarketplace.install': '安装',
   'cliMarketplace.copyInstallCommand': '复制安装命令',
-  'cliMarketplace.showInstallCommand': '查看安装命令',
   'cliMarketplace.docs': '文档',
   'cliMarketplace.manualDialog.title': '安装命令',
   'cliMarketplace.manualDialog.description': '复制下面的命令，然后到终端里执行。',
   'cliMarketplace.manualDialog.copy': '复制命令',
   'cliMarketplace.manualDialog.close': '关闭',
+  'cliMarketplace.manual.installMethod': '通过 {{method}} 安装',
   'cliMarketplace.reinstall': '重新安装',
   'cliMarketplace.uninstall': '卸载',
   'cliMarketplace.moreActions': '更多操作',
@@ -39,6 +39,13 @@ const translations: Record<string, string> = {
 
 const translate = (key: string, options?: { defaultValue?: string } | string) => {
   if (translations[key]) {
+    if (options && typeof options === 'object') {
+      return Object.entries(options).reduce((result, [optionKey, optionValue]) => (
+        typeof optionValue === 'string'
+          ? result.replace(`{{${optionKey}}}`, optionValue)
+          : result
+      ), translations[key]);
+    }
     return translations[key];
   }
   if (typeof options === 'string') {
@@ -181,7 +188,7 @@ describe('CliMarketplaceSettingsSection', () => {
     });
   });
 
-  it('renders 复制安装命令 and copies the command for source=none manual-only brew', async () => {
+  it('renders 安装 for source=none manual-only brew and opens the install dialog', async () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
@@ -211,7 +218,7 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '查看安装命令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '安装' }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('复制下面的命令，然后到终端里执行。')).toBeInTheDocument();
@@ -302,9 +309,9 @@ describe('CliMarketplaceSettingsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');
-    const copyFallbackItem = within(menu).getByRole('menuitem', { name: /Copy via/i });
-    expect(copyFallbackItem).toBeEnabled();
-    fireEvent.click(copyFallbackItem);
+    const installFallbackItem = within(menu).getByRole('menuitem', { name: '通过 Homebrew 安装' });
+    expect(installFallbackItem).toBeEnabled();
+    fireEvent.click(installFallbackItem);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '复制命令' }));
 
@@ -381,7 +388,7 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '查看安装命令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '安装' }));
     fireEvent.click(await screen.findByRole('button', { name: '复制命令' }));
 
     await waitFor(() => {
