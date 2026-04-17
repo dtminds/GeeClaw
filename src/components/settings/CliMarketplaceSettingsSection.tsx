@@ -355,9 +355,7 @@ export function CliMarketplaceSettingsSection() {
                   const showActionsMenu = item.source === 'geeclaw'
                     || showManagedRuntimeMissingAction
                     || showManualInstallMethodsInMenu;
-                  const sourceBadgeLabel = item.source === 'geeclaw'
-                    ? t('cliMarketplace.source.geeclaw', { defaultValue: 'GeeClaw' })
-                    : item.source === 'system'
+                  const sourceBadgeLabel = item.source === 'system'
                       ? t('cliMarketplace.source.system', { defaultValue: 'System' })
                       : null;
 

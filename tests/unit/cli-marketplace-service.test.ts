@@ -101,6 +101,33 @@ describe('cli marketplace service', () => {
     ]);
   });
 
+  it('marks a CLI as geeclaw when the detected command path is inside the managed prefix', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+    const managedPrefixDir = join(process.cwd(), 'tmp', 'cli-marketplace-detect-managed-prefix');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        { id: 'opencli', title: 'OpenCLI', packageName: '@jackwener/opencli', binNames: ['opencli'] },
+      ],
+      managedPrefixDir,
+      findCommand: vi.fn(async (bin: string) => (
+        bin === 'opencli'
+          ? join(managedPrefixDir, 'bin', 'opencli')
+          : null
+      )),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'opencli',
+        installed: true,
+        actionLabel: 'reinstall',
+        source: 'geeclaw',
+      }),
+    ]);
+  });
+
   it('reports manual-only brew install method as available when brew exists on PATH', async () => {
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
 

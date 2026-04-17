@@ -545,6 +545,12 @@ export class CliMarketplaceService {
     return lookupPromise;
   }
 
+  private isManagedCommandPath(commandPath: string, binName: string): boolean {
+    return getPrefixCandidates(this.managedPrefixDir, binName).some((candidate) => (
+      pathsReferToSameLocation(candidate, commandPath)
+    ));
+  }
+
   private async resolveEntryStatus(
     entry: CliMarketplaceCatalogItem,
     context: CliMarketplaceCatalogResolutionContext,
@@ -636,6 +642,9 @@ export class CliMarketplaceService {
       try {
         const commandPath = await this.getCachedCommandPath(binName, context);
         if (commandPath) {
+          if (this.isManagedCommandPath(commandPath, binName)) {
+            return { installed: true, source: 'geeclaw' };
+          }
           return { installed: true, source: 'system' };
         }
       } catch {
@@ -759,6 +768,24 @@ function getPrefixCandidates(prefixDir: string, binName: string): string[] {
     candidates.push(join(prefixDir, binName));
   }
   return candidates;
+}
+
+function normalizePathForComparison(candidate: string): string {
+  let normalized = candidate;
+  try {
+    normalized = realpathSync(candidate);
+  } catch {
+    // keep raw path when the candidate is not yet materialized
+  }
+
+  const normalizedWithoutTrailingSeparator = normalized.replace(/[\\/]+$/, '');
+  return process.platform === 'win32'
+    ? normalizedWithoutTrailingSeparator.toLowerCase()
+    : normalizedWithoutTrailingSeparator;
+}
+
+function pathsReferToSameLocation(left: string, right: string): boolean {
+  return normalizePathForComparison(left) === normalizePathForComparison(right);
 }
 
 async function defaultCommandExistsInManagedPrefix(binName: string): Promise<boolean> {

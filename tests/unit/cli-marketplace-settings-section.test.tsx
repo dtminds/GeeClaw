@@ -366,6 +366,7 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
+    expect(await screen.findByText('System')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');
@@ -468,6 +469,8 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
+    await screen.findByText('Feishu CLI');
+    expect(screen.queryByText('GeeClaw')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');
