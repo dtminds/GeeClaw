@@ -353,23 +353,32 @@ export function CliMarketplaceSettingsSection() {
                   const managedInstallMethod = getManagedInstallMethod(item);
                   const manualInstallMethods = getManualInstallMethods(item);
                   const firstAvailableManualInstallMethod = getFirstAvailableManualInstallMethod(item);
+                  const docsUrl = item.docsUrl;
                   const canInstallWithManagedMethod = item.source === 'none' && managedInstallMethod?.available === true;
                   const canInstallWithManualMethod = item.source === 'none' && !canInstallWithManagedMethod && firstAvailableManualInstallMethod !== null;
                   const hasUnavailableManualMethod = manualInstallMethods.some((method) => !method.available);
                   const showManagedRuntimeMissingAction = item.source === 'none'
                     && managedInstallMethod?.available === false
                     && managedInstallMethod.unavailableReason === 'runtime-missing';
-                  const showManualInstallMethodsInMenu = manualInstallMethods.length > 0
+                  const primaryManualInstallMethod = canInstallWithManualMethod ? firstAvailableManualInstallMethod : null;
+                  const fallbackManualInstallMethods = manualInstallMethods.filter((method) => (
+                    !primaryManualInstallMethod
+                    || method.label !== primaryManualInstallMethod.label
+                    || method.command !== primaryManualInstallMethod.command
+                  ));
+                  const showManualInstallMethodsInMenu = fallbackManualInstallMethods.length > 0
                     && (
                       item.source !== 'none'
                       || canInstallWithManagedMethod
                       || hasUnavailableManualMethod
-                      || manualInstallMethods.length > 1
+                      || fallbackManualInstallMethods.length > 0
                     );
-                  const showActionsMenu = item.source === 'geeclaw'
+                  const showActionsMenu = Boolean(docsUrl)
+                    || canInstallWithManagedMethod
+                    || canInstallWithManualMethod
+                    || item.source === 'geeclaw'
                     || showManagedRuntimeMissingAction
                     || showManualInstallMethodsInMenu;
-                  const docsUrl = item.docsUrl;
                   const sourceBadgeLabel = item.source === 'system'
                       ? t('cliMarketplace.source.system', { defaultValue: 'System' })
                       : null;
@@ -397,46 +406,6 @@ export function CliMarketplaceSettingsSection() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {docsUrl && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="rounded-full"
-                              onClick={() => void openDocs(docsUrl)}
-                              disabled={isJobRunning}
-                            >
-                              {t('cliMarketplace.docs', { defaultValue: 'Docs' })}
-                            </Button>
-                          )}
-
-                          {canInstallWithManagedMethod && (
-                            <Button
-                              type="button"
-                              className="rounded-full"
-                              onClick={() => void startJob(item, 'install')}
-                              disabled={isJobRunning}
-                            >
-                              {t('cliMarketplace.install')}
-                            </Button>
-                          )}
-
-                          {canInstallWithManualMethod && firstAvailableManualInstallMethod && (
-                            <Button
-                              type="button"
-                              className="rounded-full"
-                              onClick={() => {
-                                setManualInstallDialogItem({
-                                  title: item.title,
-                                  methodLabel: firstAvailableManualInstallMethod.label,
-                                  command: firstAvailableManualInstallMethod.command,
-                                });
-                              }}
-                              disabled={isJobRunning}
-                            >
-                              {t('cliMarketplace.install')}
-                            </Button>
-                          )}
-
                           {showActionsMenu ? (
                             <div
                               ref={(node) => {
@@ -468,13 +437,62 @@ export function CliMarketplaceSettingsSection() {
                                   aria-label={t('cliMarketplace.moreActions')}
                                   className="absolute right-0 top-[calc(100%+0.5rem)] z-[140] min-w-[220px] rounded-2xl border border-black/8 bg-background/95 p-1.5 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.36)] backdrop-blur-xl dark:border-white/10"
                                 >
-                                  {item.source === 'geeclaw' && (
+                                  {docsUrl && (
                                     <Button
                                       type="button"
                                       variant="ghost"
                                       role="menuitem"
                                       className="w-full justify-start rounded-xl px-3 py-2 text-sm"
                                       autoFocus
+                                      onClick={() => {
+                                        setOpenActionsMenuId(null);
+                                        void openDocs(docsUrl);
+                                      }}
+                                    >
+                                      {t('cliMarketplace.docs', { defaultValue: 'Docs' })}
+                                    </Button>
+                                  )}
+                                  {canInstallWithManagedMethod && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      autoFocus={!docsUrl}
+                                      onClick={() => {
+                                        setOpenActionsMenuId(null);
+                                        void startJob(item, 'install');
+                                      }}
+                                    >
+                                      {t('cliMarketplace.install')}
+                                    </Button>
+                                  )}
+                                  {canInstallWithManualMethod && primaryManualInstallMethod && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      autoFocus={!docsUrl && !canInstallWithManagedMethod}
+                                      onClick={() => {
+                                        setOpenActionsMenuId(null);
+                                        setManualInstallDialogItem({
+                                          title: item.title,
+                                          methodLabel: primaryManualInstallMethod.label,
+                                          command: primaryManualInstallMethod.command,
+                                        });
+                                      }}
+                                    >
+                                      {t('cliMarketplace.install')}
+                                    </Button>
+                                  )}
+                                  {item.source === 'geeclaw' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      role="menuitem"
+                                      className="w-full justify-start rounded-xl px-3 py-2 text-sm"
+                                      autoFocus={!docsUrl && !canInstallWithManagedMethod && !canInstallWithManualMethod}
                                       onClick={() => {
                                         setOpenActionsMenuId(null);
                                         void startJob(item, 'install');
@@ -509,7 +527,7 @@ export function CliMarketplaceSettingsSection() {
                                       {t('cliMarketplace.managed.needRuntime', { defaultValue: 'Need managed runtime' })}
                                     </Button>
                                   )}
-                                  {manualInstallMethods.map((method, index) => {
+                                  {fallbackManualInstallMethods.map((method, index) => {
                                     const unavailableReasonLabel = method.label === 'brew'
                                       ? t('cliMarketplace.manual.needHomebrew', { defaultValue: 'Need Homebrew' })
                                       : method.label === 'curl'
@@ -524,7 +542,12 @@ export function CliMarketplaceSettingsSection() {
                                         method: getManualMethodDisplayName(method.label),
                                         defaultValue: `Install via ${getManualMethodDisplayName(method.label)}`,
                                       });
-                                    const autoFocus = item.source !== 'geeclaw' && !showManagedRuntimeMissingAction && index === 0;
+                                    const autoFocus = !docsUrl
+                                      && !canInstallWithManagedMethod
+                                      && !canInstallWithManualMethod
+                                      && item.source !== 'geeclaw'
+                                      && !showManagedRuntimeMissingAction
+                                      && index === 0;
 
                                     return (
                                       <Button

@@ -150,7 +150,7 @@ describe('CliMarketplaceSettingsSection', () => {
     });
   });
 
-  it('renders 安装 for source=none with available managed-npm method', async () => {
+  it('shows 安装 inside the actions menu for source=none with available managed-npm method', async () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
@@ -181,14 +181,16 @@ describe('CliMarketplaceSettingsSection', () => {
 
     expect(await screen.findByText('WeCom CLI')).toBeInTheDocument();
     expect(screen.getByText('未安装')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '安装' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: '安装' })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(hostApiFetchMock).toHaveBeenCalledWith('/api/cli-marketplace/catalog');
     });
   });
 
-  it('renders 安装 for source=none manual-only brew and opens the install dialog', async () => {
+  it('shows 安装 inside the actions menu for source=none manual-only brew and opens the install dialog', async () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
@@ -218,7 +220,9 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '安装' }));
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: '安装' }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('复制下面的命令，然后到终端里执行。')).toBeInTheDocument();
@@ -262,14 +266,16 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '文档' }));
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: '文档' }));
 
     await waitFor(() => {
       expect(invokeIpcMock).toHaveBeenCalledWith('shell:openExternal', 'https://example.com/foo-docs');
     });
   });
 
-  it('keeps managed install primary while exposing manual fallback in overflow menu', async () => {
+  it('shows managed install and manual fallback inside the overflow menu', async () => {
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/cli-marketplace/catalog') {
         return [
@@ -305,10 +311,10 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    expect(await screen.findByRole('button', { name: '安装' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
 
     const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: '安装' })).toBeInTheDocument();
     const installFallbackItem = within(menu).getByRole('menuitem', { name: '通过 Homebrew 安装' });
     expect(installFallbackItem).toBeEnabled();
     fireEvent.click(installFallbackItem);
@@ -388,7 +394,9 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '安装' }));
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: '安装' }));
     fireEvent.click(await screen.findByRole('button', { name: '复制命令' }));
 
     await waitFor(() => {
