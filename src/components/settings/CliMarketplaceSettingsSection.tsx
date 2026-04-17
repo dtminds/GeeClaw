@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { FeedbackState } from '@/components/common/FeedbackState';
 import { hostApiFetch } from '@/lib/host-api';
 import { toUserMessage } from '@/lib/api-client';
 
@@ -116,6 +117,7 @@ export function CliMarketplaceSettingsSection() {
   const { t } = useTranslation(['settings', 'common']);
   const [items, setItems] = useState<CliMarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeJob, setActiveJob] = useState<CliMarketplaceJob | null>(null);
   const [openActionsMenuId, setOpenActionsMenuId] = useState<string | null>(null);
@@ -126,13 +128,20 @@ export function CliMarketplaceSettingsSection() {
       setRefreshing(true);
     } else {
       setLoading(true);
+      setLoadError(null);
     }
 
     try {
       const response = await hostApiFetch<CliMarketplaceItem[]>('/api/cli-marketplace/catalog');
       setItems(response);
+      setLoadError(null);
     } catch (error) {
-      toast.error(`${t('cliMarketplace.loadFailed')}: ${toUserMessage(error)}`);
+      const message = toUserMessage(error);
+      if (background) {
+        toast.error(`${t('cliMarketplace.loadFailed')}: ${message}`);
+      } else {
+        setLoadError(message);
+      }
     } finally {
       if (background) {
         setRefreshing(false);
@@ -144,7 +153,7 @@ export function CliMarketplaceSettingsSection() {
 
   useEffect(() => {
     void loadCatalog();
-  }, [loadCatalog]);
+  }, []);
 
   const activeJobId = activeJob?.id ?? null;
   const activeJobStatus = activeJob?.status ?? null;
@@ -302,11 +311,27 @@ export function CliMarketplaceSettingsSection() {
           </Button>
         </div>
 
-        <section>
+        <section className={loading || loadError || items.length === 0 ? 'modal-section-surface rounded-3xl border p-5' : undefined}>
           {loading ? (
-            <div className="py-8 text-sm text-muted-foreground">{t('common:status.loading')}</div>
+            <FeedbackState state="loading" title={t('common:status.loading')} />
+          ) : loadError ? (
+            <FeedbackState
+              state="error"
+              title={t('cliMarketplace.loadFailed')}
+              description={loadError}
+              action={(
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => void loadCatalog()}
+                >
+                  {t('updates.action.retry')}
+                </Button>
+              )}
+            />
           ) : items.length === 0 ? (
-            <div className="py-8 text-sm text-muted-foreground">{t('cliMarketplace.empty')}</div>
+            <FeedbackState state="empty" title={t('cliMarketplace.empty')} />
           ) : (
             <div className="flex flex-col gap-4">
               {items.map((item) => (

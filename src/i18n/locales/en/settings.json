@@ -150,6 +150,12 @@
       "valuePlaceholder": "Variable Value",
       "save": "Save Environment Variables"
     },
+    "validation": {
+      "title": "Fix these issues before saving:",
+      "empty": "Row {{row}} is blank. Fill in both fields or remove it.",
+      "incomplete": "Row {{row}} must include both a variable name and a value.",
+      "duplicate": "Variable name {{key}} is duplicated. Keep only one entry."
+    },
     "toast": {
       "loadFailed": "Failed to load environment variables",
       "saved": "Environment variables saved",

@@ -42,6 +42,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
+import { validateEnvironmentEntries } from '@/lib/environment-entry-validation';
 import { toast } from 'sonner';
 import type { MarketplaceSkill, Skill, SkillHubStatus } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -217,6 +218,7 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
   const [isSaving, setIsSaving] = useState(false);
   const [isUninstalling, setIsUninstalling] = useState(false);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
+  const [validationMessages, setValidationMessages] = useState<string[]>([]);
   const issueLabels: SkillIssueLabels = {
     unavailable: t('detail.unavailable'),
     blockedByAllowlist: t('detail.blockedByAllowlist'),
@@ -251,12 +253,14 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
     } else {
       setEnvVars([]);
     }
+    setValidationMessages([]);
   }, [skill]);
 
   useEffect(() => {
     if (!isOpen) {
       setShowUninstallConfirm(false);
       setIsUninstalling(false);
+      setValidationMessages([]);
     }
   }, [isOpen]);
 
@@ -276,23 +280,42 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
   };
 
   const handleAddEnv = () => {
+    setValidationMessages([]);
     setEnvVars([...envVars, { key: '', value: '' }]);
   };
 
   const handleUpdateEnv = (index: number, field: 'key' | 'value', value: string) => {
+    setValidationMessages([]);
     const newVars = [...envVars];
     newVars[index] = { ...newVars[index], [field]: value };
     setEnvVars(newVars);
   };
 
   const handleRemoveEnv = (index: number) => {
+    setValidationMessages([]);
     const newVars = [...envVars];
     newVars.splice(index, 1);
     setEnvVars(newVars);
   };
 
+  const buildEnvValidationMessages = (): string[] => {
+    const { emptyRows, incompleteRows, duplicateKeys } = validateEnvironmentEntries(envVars);
+
+    return [
+      ...emptyRows.map((row) => t('detail.validation.empty', { row })),
+      ...incompleteRows.map((row) => t('detail.validation.incomplete', { row })),
+      ...duplicateKeys.map((key) => t('detail.validation.duplicate', { key })),
+    ];
+  };
+
   const handleSaveConfig = async () => {
     if (isSaving || !skill) return;
+    const nextValidationMessages = buildEnvValidationMessages();
+    if (nextValidationMessages.length > 0) {
+      setValidationMessages(nextValidationMessages);
+      return;
+    }
+
     setIsSaving(true);
     try {
       // Build env object, filtering out empty keys
@@ -322,6 +345,7 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
       // Refresh skills from gateway to get updated config
       await fetchSkills();
 
+      setValidationMessages([]);
       toast.success(t('detail.configSaved'));
     } catch (err) {
       toast.error(t('toast.failedSave') + ': ' + String(err));
@@ -520,6 +544,17 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
                     </div>
                   ))}
                 </div>
+
+                {validationMessages.length > 0 && (
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-950 dark:text-amber-100">
+                    <p className="font-medium">{t('detail.validation.title')}</p>
+                    <div className="mt-2 space-y-1">
+                      {validationMessages.map((message) => (
+                        <p key={message}>{message}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
