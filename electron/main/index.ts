@@ -277,7 +277,7 @@ async function initialize(): Promise<void> {
   }
 
   // Set application menu
-  createMenu();
+  await createMenu();
 
   // Create the main window
   mainWindow = createWindow();
