@@ -317,6 +317,23 @@ describe('provider runtime sync for browser OAuth', () => {
     expect(removeProviderFromOpenClaw).not.toHaveBeenCalled();
   });
 
+  it('restarts a running gateway when deleting an env-backed provider key directly', async () => {
+    const gatewayManager = {
+      getStatus: vi.fn(() => ({ state: 'running' })),
+      debouncedRestart: vi.fn(),
+    };
+
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      authMode: 'api_key',
+      isDefault: false,
+    }));
+
+    await syncDeletedProviderApiKeyToRuntime(makeProvider(), 'openai-account', undefined, gatewayManager as never);
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(gatewayManager.debouncedRestart).toHaveBeenCalledTimes(1);
+  });
+
   it('removes stale auth-profiles api_key entries when syncing an api_key provider key to runtime', async () => {
     await syncProviderApiKeyToRuntime('openai', 'openai-account', 'sk-new');
 

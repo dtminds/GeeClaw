@@ -686,6 +686,7 @@ export async function syncDeletedProviderApiKeyToRuntime(
   provider: ProviderConfig | null,
   providerId: string,
   runtimeProviderKey?: string,
+  gatewayManager?: GatewayManager,
 ): Promise<void> {
   if (!provider?.type && !runtimeProviderKey) {
     return;
@@ -693,6 +694,11 @@ export async function syncDeletedProviderApiKeyToRuntime(
 
   const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider!, id: providerId });
   await removeProviderKeyFromOpenClaw(ock);
+  scheduleGatewayRestart(
+    gatewayManager,
+    `Scheduling Gateway restart after deleting API key for provider "${providerId}"`,
+    { onlyIfRunning: true },
+  );
 }
 
 export async function syncDefaultProviderToRuntime(

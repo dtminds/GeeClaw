@@ -394,7 +394,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
                   await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey, gatewayManager);
                 } else {
                   await providerService.deleteLegacyProviderApiKey(providerId);
-                  await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck);
+                  await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck, gatewayManager);
                 }
               } catch (rollbackError) {
                 console.warn('Failed to rollback provider updateWithKey:', rollbackError);
@@ -415,7 +415,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
               const ock = getOpenClawProviderKey(providerType, providerId);
               try {
                 if (ock) {
-                  await syncDeletedProviderApiKeyToRuntime(provider, providerId, ock);
+                  await syncDeletedProviderApiKeyToRuntime(provider, providerId, ock, gatewayManager);
                 }
               } catch (err) {
                 console.warn('Failed to completely remove provider from OpenClaw:', err);
@@ -1804,7 +1804,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
             await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey, gatewayManager);
           } else {
             await providerService.deleteLegacyProviderApiKey(providerId);
-            await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck);
+            await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck, gatewayManager);
           }
         } catch (rollbackError) {
           console.warn('Failed to rollback provider updateWithKey:', rollbackError);
@@ -1826,7 +1826,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
       const providerType = provider?.type || providerId;
       const ock = getOpenClawProviderKey(providerType, providerId);
       try {
-        await syncDeletedProviderApiKeyToRuntime(provider, providerId, ock);
+        await syncDeletedProviderApiKeyToRuntime(provider, providerId, ock, gatewayManager);
       } catch (err) {
         console.warn('Failed to completely remove provider from OpenClaw:', err);
       }

@@ -173,6 +173,7 @@ export async function handleProviderRoutes(
           existing ? providerAccountToConfig(existing) : null,
           accountId,
           runtimeProviderKey,
+          ctx.gatewayManager,
         );
         sendJson(res, 200, { success: true });
         return true;
@@ -390,7 +391,7 @@ export async function handleProviderRoutes(
       const existing = await providerService.getLegacyProvider(providerId);
       if (url.searchParams.get('apiKeyOnly') === '1') {
         await providerService.deleteLegacyProviderApiKey(providerId);
-        await syncDeletedProviderApiKeyToRuntime(existing, providerId);
+        await syncDeletedProviderApiKeyToRuntime(existing, providerId, undefined, ctx.gatewayManager);
         sendJson(res, 200, { success: true });
         return true;
       }

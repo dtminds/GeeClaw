@@ -7,6 +7,7 @@ const {
   getDefaultAgentModelConfigMock,
   getOpenClawProviderKeyForTypeMock,
   getProviderServiceMock,
+  syncDeletedProviderApiKeyToRuntimeMock,
   syncAllAgentConfigToOpenClawMock,
   syncUpdatedProviderToRuntimeMock,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   getDefaultAgentModelConfigMock: vi.fn(),
   getOpenClawProviderKeyForTypeMock: vi.fn(),
   getProviderServiceMock: vi.fn(),
+  syncDeletedProviderApiKeyToRuntimeMock: vi.fn(),
   syncAllAgentConfigToOpenClawMock: vi.fn(),
   syncUpdatedProviderToRuntimeMock: vi.fn(),
 }));
@@ -46,7 +48,7 @@ vi.mock('@electron/services/providers/provider-service', () => ({
 
 vi.mock('@electron/services/providers/provider-runtime-sync', () => ({
   syncDefaultProviderToRuntime: vi.fn(),
-  syncDeletedProviderApiKeyToRuntime: vi.fn(),
+  syncDeletedProviderApiKeyToRuntime: (...args: unknown[]) => syncDeletedProviderApiKeyToRuntimeMock(...args),
   syncDeletedProviderToRuntime: vi.fn(),
   syncProviderApiKeyToRuntime: vi.fn(),
   syncSavedProviderToRuntime: vi.fn(),
@@ -80,6 +82,7 @@ describe('handleProviderRoutes', () => {
       mockFn.mockReset();
     });
     getProviderServiceMock.mockReturnValue(providerServiceStub);
+    syncDeletedProviderApiKeyToRuntimeMock.mockReset();
     syncAllAgentConfigToOpenClawMock.mockReset();
     syncUpdatedProviderToRuntimeMock.mockReset();
     getOpenClawProviderKeyForTypeMock.mockReturnValue('openai');
@@ -305,5 +308,35 @@ describe('handleProviderRoutes', () => {
     expect(handled).toBe(true);
     expect(syncUpdatedProviderToRuntimeMock).toHaveBeenCalledTimes(1);
     expect(syncAllAgentConfigToOpenClawMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes gatewayManager when deleting only a legacy provider api key', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    const gatewayManager = { name: 'gateway-manager' };
+    providerServiceStub.getLegacyProvider.mockResolvedValueOnce({
+      id: 'openai',
+      type: 'openai',
+      name: 'OpenAI',
+      enabled: true,
+      createdAt: '2026-04-14T00:00:00.000Z',
+      updatedAt: '2026-04-14T00:00:00.000Z',
+    });
+
+    const handled = await handleProviderRoutes(
+      { method: 'DELETE' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/providers/openai?apiKeyOnly=1'),
+      { gatewayManager } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(providerServiceStub.deleteLegacyProviderApiKey).toHaveBeenCalledWith('openai');
+    expect(syncDeletedProviderApiKeyToRuntimeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'openai', type: 'openai' }),
+      'openai',
+      undefined,
+      gatewayManager,
+    );
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, { success: true });
   });
 });
