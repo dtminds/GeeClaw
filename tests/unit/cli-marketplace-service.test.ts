@@ -101,6 +101,328 @@ describe('cli marketplace service', () => {
     ]);
   });
 
+  it('marks a CLI as geeclaw when the detected command path is inside the managed prefix', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+    const managedPrefixDir = join(process.cwd(), 'tmp', 'cli-marketplace-detect-managed-prefix');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        { id: 'opencli', title: 'OpenCLI', packageName: '@jackwener/opencli', binNames: ['opencli'] },
+      ],
+      managedPrefixDir,
+      findCommand: vi.fn(async (bin: string) => (
+        bin === 'opencli'
+          ? join(managedPrefixDir, 'bin', 'opencli')
+          : null
+      )),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'opencli',
+        installed: true,
+        actionLabel: 'reinstall',
+        source: 'geeclaw',
+      }),
+    ]);
+  });
+
+  it('reports manual-only brew install method as available when brew exists on PATH', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/opt/homebrew/bin/brew' : null)),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'foo',
+        source: 'none',
+        actionLabel: null,
+        installMethods: [
+          expect.objectContaining({
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install foo',
+            available: true,
+            managed: false,
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('preserves docsUrl metadata in catalog status items', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          docsUrl: 'https://example.com/foo-docs',
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/opt/homebrew/bin/brew' : null)),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'foo',
+        docsUrl: 'https://example.com/foo-docs',
+      }),
+    ]);
+  });
+
+  it('reports missing-command for manual-only brew install method when brew is absent', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          docsUrl: 'https://example.com/foo-docs',
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'foo',
+        source: 'none',
+        actionLabel: null,
+        installMethods: [
+          expect.objectContaining({
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install foo',
+            available: false,
+            unavailableReason: 'missing-command',
+            missingCommands: ['brew'],
+            managed: false,
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('returns mixed managed-npm and manual install methods for a catalog entry', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'bar',
+          title: 'Bar CLI',
+          binNames: ['bar'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/bar-cli',
+            },
+            {
+              type: 'manual',
+              label: 'brew',
+              command: 'brew install bar',
+              requiresCommands: ['brew'],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/usr/local/bin/brew' : null)),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'bar',
+        installMethods: [
+          expect.objectContaining({
+            type: 'managed-npm',
+            label: 'managed-npm',
+            available: true,
+            managed: true,
+          }),
+          expect.objectContaining({
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install bar',
+            available: true,
+            managed: false,
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('keeps system-installed CLIs non-uninstallable even when manual uninstall metadata exists', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'baz',
+          title: 'Baz CLI',
+          binNames: ['baz'],
+          installMethods: [
+            {
+              type: 'manual',
+              label: 'brew',
+              command: 'brew install baz',
+              requiresCommands: ['brew'],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async (bin: string) => (bin === 'baz' ? '/usr/local/bin/baz' : null)),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'baz',
+        installed: true,
+        source: 'system',
+        actionLabel: null,
+        installMethods: [
+          expect.objectContaining({
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install baz',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('rejects install for entries that only provide manual install methods', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+    });
+
+    await expect(service.install({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('rejects uninstall for entries that only provide manual install methods', async () => {
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.uninstall({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('rejects install job start for entries that only provide manual install methods', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+    });
+
+    await expect(service.startInstallJob({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('rejects uninstall job start for entries that only provide manual install methods', async () => {
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'manual-only',
+          title: 'Manual only CLI',
+          binNames: ['manual-only'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install manual-only', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.startUninstallJob({ id: 'manual-only' })).rejects.toThrow(
+      'Catalog entry "manual-only" does not support managed install',
+    );
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
+  });
+
   it('installs a curated package into the GeeClaw prefix', async () => {
     const installWithBundledNpm = vi.fn(async () => undefined);
     const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
@@ -202,6 +524,156 @@ describe('cli marketplace service', () => {
     });
 
     await expect(service.getCatalog()).rejects.toThrow('binNames');
+  });
+
+  it('throws when catalog entries define multiple managed-npm install methods', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'dup-managed',
+          title: 'Dup Managed CLI',
+          binNames: ['dup-managed'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/dup-managed-a' },
+            { type: 'managed-npm', packageName: '@geeclaw-test/dup-managed-b' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('multiple managed-npm');
+  });
+
+  it('throws when catalog entries mix legacy managed fields and explicit managed-npm methods', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'mixed-managed',
+          title: 'Mixed managed CLI',
+          packageName: '@geeclaw-test/mixed-managed-legacy',
+          binNames: ['mixed-managed'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/mixed-managed-explicit' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('must not mix legacy managed fields');
+  });
+
+  it('fails fast when bundled npm runtime is missing for managed mutation APIs', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const uninstallWithBundledNpm = vi.fn(async () => undefined);
+    const { getBundledNpmPath } = await import('@electron/utils/managed-bin');
+    const mockedGetBundledNpmPath = vi.mocked(getBundledNpmPath);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    mockedGetBundledNpmPath.mockReturnValueOnce(undefined);
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'managed-runtime-missing',
+          title: 'Managed runtime missing CLI',
+          binNames: ['managed-runtime-missing'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/managed-runtime-missing' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+      installWithBundledNpm,
+      uninstallWithBundledNpm,
+    });
+
+    await expect(service.install({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.uninstall({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.startInstallJob({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+    await expect(service.startUninstallJob({ id: 'managed-runtime-missing' })).rejects.toThrow('Bundled npm runtime is missing');
+
+    expect(installWithBundledNpm).not.toHaveBeenCalled();
+    expect(uninstallWithBundledNpm).not.toHaveBeenCalled();
+  });
+
+  it('reuses required command lookups across catalog entries during a single getCatalog call', async () => {
+    const findCommand = vi.fn(async (bin: string) => {
+      if (bin === 'brew') return '/opt/homebrew/bin/brew';
+      return null;
+    });
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+        {
+          id: 'bar',
+          title: 'Bar CLI',
+          binNames: ['bar'],
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install bar', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand,
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await service.getCatalog();
+
+    expect(findCommand.mock.calls.filter(([bin]) => bin === 'brew')).toHaveLength(1);
+  });
+
+  it('checks bundled npm availability once per getCatalog call', async () => {
+    const { getBundledNpmPath } = await import('@electron/utils/managed-bin');
+    const mockedGetBundledNpmPath = vi.mocked(getBundledNpmPath);
+    mockedGetBundledNpmPath.mockClear();
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/foo-cli' },
+          ],
+        },
+        {
+          id: 'bar',
+          title: 'Bar CLI',
+          binNames: ['bar'],
+          installMethods: [
+            { type: 'managed-npm', packageName: '@geeclaw-test/bar-cli' },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await service.getCatalog();
+
+    expect(mockedGetBundledNpmPath).toHaveBeenCalledTimes(1);
   });
 
   it('forces shell execution for absolute npm.cmd installs on Windows', async () => {

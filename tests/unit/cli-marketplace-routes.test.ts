@@ -15,7 +15,7 @@ describe('handleCliMarketplaceRoutes', () => {
   });
 
   it('returns CLI marketplace catalog for GET /api/cli-marketplace/catalog', async () => {
-    const getCatalog = vi.fn(async () => [
+    const catalogPayload = [
       {
         id: 'feishu',
         title: 'Feishu CLI',
@@ -23,8 +23,25 @@ describe('handleCliMarketplaceRoutes', () => {
         installed: true,
         actionLabel: 'reinstall',
         source: 'system',
+        installMethods: [
+          {
+            type: 'managed-npm',
+            label: 'GeeClaw managed npm',
+            packageName: '@geeclaw-test/feishu-cli',
+            status: 'available',
+          },
+          {
+            type: 'manual',
+            label: 'brew',
+            command: 'brew install feishu',
+            requiresCommands: ['brew'],
+            status: 'missing-command',
+            missingCommands: ['brew'],
+          },
+        ],
       },
-    ]);
+    ];
+    const getCatalog = vi.fn(async () => catalogPayload);
 
     const { handleCliMarketplaceRoutes } = await import('@electron/api/routes/cli-marketplace');
 
@@ -37,18 +54,7 @@ describe('handleCliMarketplaceRoutes', () => {
 
     expect(handled).toBe(true);
     expect(getCatalog).toHaveBeenCalledTimes(1);
-    expect(sendJsonMock).toHaveBeenCalledWith(
-      expect.anything(),
-      200,
-      [
-        expect.objectContaining({
-          id: 'feishu',
-          installed: true,
-          actionLabel: 'reinstall',
-          source: 'system',
-        }),
-      ],
-    );
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, catalogPayload);
   });
 
   it('starts a CLI install job for POST /api/cli-marketplace/install', async () => {

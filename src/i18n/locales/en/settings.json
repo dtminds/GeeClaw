@@ -172,6 +172,31 @@
     "installed": "Installed",
     "missing": "Not installed",
     "install": "Install",
+    "copyInstallCommand": "Copy Install Command",
+    "copyInstallCommandCopied": "Install command copied",
+    "copyInstallCommandFailed": "Failed to copy install command",
+    "docs": "Docs",
+    "docsOpenFailed": "Failed to open docs",
+    "source": {
+      "system": "System",
+      "geeclaw": "GeeClaw"
+    },
+    "managed": {
+      "needRuntime": "Need managed runtime"
+    },
+    "manual": {
+      "needHomebrew": "Need Homebrew",
+      "needCurl": "Need curl",
+      "needNpm": "Need npm",
+      "unavailable": "Unavailable",
+      "installMethod": "Install via {{method}}"
+    },
+    "manualDialog": {
+      "title": "Install Command",
+      "description": "Copy the command below, then run it in your terminal.",
+      "copy": "Copy Command",
+      "close": "Close"
+    },
     "reinstall": "Reinstall",
     "uninstall": "Uninstall",
     "moreActions": "More actions",
