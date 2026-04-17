@@ -23,6 +23,7 @@ const translations: Record<string, string> = {
   'cliMarketplace.job.failed': '失败',
   'cliMarketplace.job.close': '关闭',
   'common:status.loading': '加载中',
+  'updates.action.retry': '重试',
 };
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -52,6 +53,54 @@ vi.mock('sonner', () => ({
 describe('CliMarketplaceSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('shows inline loading feedback while the initial catalog request is pending', async () => {
+    hostApiFetchMock.mockReturnValue(new Promise(() => {}));
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    expect(screen.getByText('加载中')).toBeInTheDocument();
+  });
+
+  it('shows empty feedback when the catalog has no items', async () => {
+    hostApiFetchMock.mockResolvedValue([]);
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    expect(await screen.findByText('当前还没有可安装的 CLI')).toBeInTheDocument();
+  });
+
+  it('shows inline error feedback and retries the initial catalog request', async () => {
+    hostApiFetchMock
+      .mockRejectedValueOnce(new Error('catalog unavailable'))
+      .mockResolvedValueOnce([
+        {
+          id: 'wecom',
+          title: 'WeCom CLI',
+          description: 'Docs',
+          installed: false,
+          actionLabel: 'install',
+        },
+      ]);
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    expect(await screen.findByText('加载 CLI 市场失败')).toBeInTheDocument();
+    expect(screen.getByText('Error: catalog unavailable')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+
+    expect(await screen.findByText('WeCom CLI')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('renders installed items with a more-actions menu and missing items with an install button', async () => {

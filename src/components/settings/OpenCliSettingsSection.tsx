@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FeedbackState } from '@/components/common/FeedbackState';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc, toUserMessage } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -97,6 +98,7 @@ export function OpenCliSettingsSection() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<OpenCliStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadStatus = useCallback(async (background = false) => {
@@ -104,13 +106,20 @@ export function OpenCliSettingsSection() {
       setRefreshing(true);
     } else {
       setLoading(true);
+      setLoadError(null);
     }
 
     try {
       const response = await hostApiFetch<OpenCliStatus>('/api/opencli/status');
       setStatus(response);
+      setLoadError(null);
     } catch (error) {
-      toast.error(`${t('opencli.loadFailed')}: ${toUserMessage(error)}`);
+      const message = toUserMessage(error);
+      if (background) {
+        toast.error(`${t('opencli.loadFailed')}: ${message}`);
+      } else {
+        setLoadError(message);
+      }
     } finally {
       if (background) {
         setRefreshing(false);
@@ -122,7 +131,7 @@ export function OpenCliSettingsSection() {
 
   useEffect(() => {
     void loadStatus();
-  }, [loadStatus]);
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -149,79 +158,102 @@ export function OpenCliSettingsSection() {
       </div>
 
       <section className="modal-section-surface rounded-3xl border p-5">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{t('opencli.runtime.title')}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t('opencli.runtime.description')}</p>
-            </div>
-            <StatusBadge
-              status={loading ? null : status?.binaryExists ?? false}
-              trueLabel={t('opencli.runtime.present')}
-              falseLabel={t('opencli.runtime.missing')}
-              unknownLabel={t('opencli.status.checking')}
-            />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <MetricCard label={t('opencli.runtime.version')}>
-              <p className="text-sm font-medium text-foreground" title={loading ? t('common:status.loading') : (status?.binaryPath || t('opencli.runtime.emptyPath'))}>
-                {loading ? t('common:status.loading') : (status?.version || t('opencli.runtime.unknown'))}
-              </p>
-            </MetricCard>
-
-            <MetricCard label={t('opencli.doctor.daemon')}>
-              <StatusBadge
-                status={loading ? null : (status?.doctor?.daemonRunning ?? null)}
-                trueLabel={t('opencli.status.connected')}
-                falseLabel={t('opencli.status.missing')}
-                unknownLabel={loading ? t('opencli.status.checking') : t('opencli.status.unknown')}
-              />
-            </MetricCard>
-
-            <MetricCard label={t('opencli.doctor.extension')}>
-              <StatusBadge
-                status={loading ? null : (status?.doctor?.extensionConnected ?? null)}
-                trueLabel={t('opencli.status.connected')}
-                falseLabel={t('opencli.status.notConnected')}
-                unknownLabel={loading ? t('opencli.status.checking') : t('opencli.status.unknown')}
-              />
-            </MetricCard>
-          </div>
-
-          {status?.doctor?.error && (
-            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-              {status.doctor.error}
-            </div>
-          )}
-
-          {status?.doctor?.issues && status.doctor.issues.length > 0 && (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4">
-              <p className="text-sm font-semibold text-foreground">{t('opencli.doctor.issuesTitle')}</p>
-              <div className="mt-3 space-y-3">
-                {status.doctor.issues.map((issue) => (
-                  <div key={issue} className="text-sm leading-6 text-muted-foreground whitespace-pre-line">
-                    {issue}
-                  </div>
-                ))}
+        {loading && status === null ? (
+          <FeedbackState state="loading" title={t('common:status.loading')} />
+        ) : loadError && status === null ? (
+          <FeedbackState
+            state="error"
+            title={t('opencli.loadFailed')}
+            description={loadError}
+            action={(
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => void loadStatus()}
+              >
+                {t('updates.action.retry')}
+              </Button>
+            )}
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">{t('opencli.runtime.title')}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{t('opencli.runtime.description')}</p>
               </div>
+              <StatusBadge
+                status={status?.binaryExists ?? false}
+                trueLabel={t('opencli.runtime.present')}
+                falseLabel={t('opencli.runtime.missing')}
+                unknownLabel={t('opencli.status.checking')}
+              />
             </div>
-          )}
 
-          {status?.doctor?.output && (
-            <details className="rounded-2xl border border-black/8 bg-background/55 px-4 py-3 dark:border-white/10 dark:bg-black/10">
-              <summary className="cursor-pointer text-sm font-medium text-foreground">
-                {t('opencli.doctor.rawOutput')}
-              </summary>
-              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-6 text-muted-foreground">
-                {status.doctor.output}
-              </pre>
-            </details>
-          )}
-        </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <MetricCard label={t('opencli.runtime.version')}>
+                <p
+                  className="text-sm font-medium text-foreground"
+                  title={status?.binaryPath || t('opencli.runtime.emptyPath')}
+                >
+                  {status?.version || t('opencli.runtime.unknown')}
+                </p>
+              </MetricCard>
+
+              <MetricCard label={t('opencli.doctor.daemon')}>
+                <StatusBadge
+                  status={status?.doctor?.daemonRunning ?? null}
+                  trueLabel={t('opencli.status.connected')}
+                  falseLabel={t('opencli.status.missing')}
+                  unknownLabel={t('opencli.status.unknown')}
+                />
+              </MetricCard>
+
+              <MetricCard label={t('opencli.doctor.extension')}>
+                <StatusBadge
+                  status={status?.doctor?.extensionConnected ?? null}
+                  trueLabel={t('opencli.status.connected')}
+                  falseLabel={t('opencli.status.notConnected')}
+                  unknownLabel={t('opencli.status.unknown')}
+                />
+              </MetricCard>
+            </div>
+
+            {status?.doctor?.error && (
+              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+                {status.doctor.error}
+              </div>
+            )}
+
+            {status?.doctor?.issues && status.doctor.issues.length > 0 && (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4">
+                <p className="text-sm font-semibold text-foreground">{t('opencli.doctor.issuesTitle')}</p>
+                <div className="mt-3 space-y-3">
+                  {status.doctor.issues.map((issue) => (
+                    <div key={issue} className="text-sm leading-6 text-muted-foreground whitespace-pre-line">
+                      {issue}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {status?.doctor?.output && (
+              <details className="rounded-2xl border border-black/8 bg-background/55 px-4 py-3 dark:border-white/10 dark:bg-black/10">
+                <summary className="cursor-pointer text-sm font-medium text-foreground">
+                  {t('opencli.doctor.rawOutput')}
+                </summary>
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs leading-6 text-muted-foreground">
+                  {status.doctor.output}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
       </section>
 
-      {!loading && !status?.binaryExists && (
+      {!loading && status?.binaryExists === false && (
         <section className="modal-section-surface rounded-3xl border p-5">
           <div className="flex flex-col gap-4">
             <div>
