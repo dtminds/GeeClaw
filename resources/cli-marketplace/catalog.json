@@ -40,6 +40,31 @@
         ]
     },
     {
+        "id": "dreamina",
+        "title": "即梦 CLI",
+        "binNames": [
+            "dreamina"
+        ],
+        "installMethods": [
+            {
+                "type": "manual",
+                "label": "curl",
+                "command": "curl -s https://jimeng.jianying.com/cli | bash",
+                "requiresCommands": [
+                    "curl",
+                    "bash"
+                ]
+            }
+        ],
+        "description": "让你的 AGENT 能够使用即梦生成工具，把批量任务、定时任务交给自动化，把时间还给你自己",
+        "homepage": "https://jimeng.jianying.com/cli",
+        "docsUrl": "https://bytedance.larkoffice.com/wiki/FVTwwm0bGiishxkKOoScdHR2nsg",
+        "platforms": [
+            "darwin",
+            "win32"
+        ]
+    },
+    {
         "id": "feishu",
         "title": "飞书 CLI",
         "binNames": [
@@ -80,31 +105,6 @@
         "description": "企业微信开放企业微信消息、日程、文档、智能表格、会议、待办、通讯录等核心产品能力 — 让人类和 AI Agent 都能在终端中操作企业微信",
         "homepage": "https://github.com/WecomTeam/wecom-cli",
         "docsUrl": "https://github.com/WecomTeam/wecom-cli",
-        "platforms": [
-            "darwin",
-            "win32"
-        ]
-    },
-    {
-        "id": "dreamina",
-        "title": "即梦 CLI",
-        "binNames": [
-            "dreamina"
-        ],
-        "installMethods": [
-            {
-                "type": "manual",
-                "label": "curl",
-                "command": "curl -s https://jimeng.jianying.com/cli | bash",
-                "requiresCommands": [
-                    "curl",
-                    "bash"
-                ]
-            }
-        ],
-        "description": "让你的 AGENT 能够使用即梦生成工具，把批量任务、定时任务交给自动化，把时间还给你自己",
-        "homepage": "https://jimeng.jianying.com/cli",
-        "docsUrl": "https://bytedance.larkoffice.com/wiki/FVTwwm0bGiishxkKOoScdHR2nsg",
         "platforms": [
             "darwin",
             "win32"

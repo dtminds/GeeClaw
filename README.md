@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/electron-40+-47848F?logo=electron" alt="Electron" />
   <img src="https://img.shields.io/badge/react-19-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/github/downloads/dtminds/GeeClaw/total?color=%23027DEB" alt="Downloads" />
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
+  <img src="https://img.shields.io/badge/license-GPL%20v3-green" alt="License" />
 </p>
 
 <p align="center">
@@ -67,45 +67,32 @@ We are committed to maintaining strict alignment with the upstream OpenClaw proj
 Move from launch to your first AI interaction through a simplified sign-in-first flow. No terminal commands, no YAML files, no environment variable hunting.
 
 ### 💬 Intelligent Chat Interface
-Communicate with AI agents through a modern chat experience. The sidebar now follows OpenClaw's native session model by listing agents and entering each agent's canonical main chat (`agent:{agentId}:geeclaw_main`) directly, while each chat page includes a left-side session panel for that agent's main session and temporary chats, with temporary chats created inline from the panel. GeeClaw still keeps desktop-managed chat entries separate from the raw Gateway session registry and offers an additional read-only view for browsing all Gateway sessions and transcripts. Multi-agent setups are supported, and you can route the next message directly into another agent's main session with `@agent-id` from the main composer. The composer model switcher is now built from each provider's configured model catalog, while the agent primary model and fallback chain are managed separately in Settings. Codex-style `/` skill search with keyboard navigation, filtering, and inline skill tokens for enabled skills is also supported.
+Communicate with AI agents through a modern chat experience. Supports Codex-style `/` skill search with continuous filtering, keyboard navigation, and inline skill tokens for enabled skills inserted directly into the composer. This lets you invoke specific skills for specialized tasks without enabling a large number of skills that would dilute the agent's focus—studies show that enabling more than 20 skills noticeably degrades response quality.
 
 ### ✅ Global Approval Prompts
-When OpenClaw asks for exec or plugin approval, GeeClaw now shows a blocking in-app approval dialog above every page, including startup and settings overlays. Decisions are sent back through the existing Gateway RPC channel, and the dialog stays visible until Gateway emits the corresponding resolved event or the request expires.
+When OpenClaw requests exec or plugin approval, GeeClaw displays a blocking approval dialog above any page, including startup and settings screens.
 
 ### 🧠 Official Agent Marketplace
-Browse a curated set of official agents from the Plaza and install them on demand from packaged downloads instead of shipping every agent inside the desktop bundle. The current catalog is still bundled with the app, but each install/update fetches the agent package separately and applies only the managed `files` and `skills` content for that agent.
-Updating an installed marketplace agent now overwrites only its managed content after confirmation. GeeClaw does not reinitialize the workspace and does not touch existing chat history. After every successful install or update, GeeClaw shows a completion dialog and can prefill a plain-text follow-up message in the chat composer when the package provides one.
+Browse and install curated official agents from the Plaza on demand, instead of bundling every agent into the desktop package.
 
 ### 📡 Multi-Channel Management
-Configure and monitor multiple AI channels from the dedicated Channels workspace in the sidebar. Each channel can now host multiple accounts, and every account can be routed to a different agent with an explicit default account per channel type. The desktop app includes bundled plugin support for DingTalk, WeCom, Weixin, QQ Bot, and the official Feishu/Lark OpenClaw plugin.
-Custom channel account IDs now enforce a canonical OpenClaw-compatible format: lowercase letters, numbers, hyphens, and underscores only, starting with a letter or number, up to 64 characters.
+Built-in bundled plugin support for Feishu/Lark, DingTalk, WeCom, Weixin, and QQ Bot official OpenClaw plugins with one-click installation. WeCom and Weixin support instant QR-code scanning for configuration. Each IM account can be routed to a different agent independently—deploy one GeeClaw instance to run multiple online IM agents simultaneously.
 
 ### ⏰ Cron-Based Automation
-Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock without manual intervention.
-The Cron task form now supports choosing an external delivery channel, selecting the sending account for multi-account channels, and reusing known session targets as suggestions.
-It also offers three schedule editor modes: `Every`, `Fixed Time`, and `Cron`, with weekly schedules shown using weekday names in the task list for easier scanning.
+Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock. The cron task form supports choosing an external delivery channel and selecting the sending account for multi-account channels. A task run history view makes it easy to check execution status.
 
 ### 🧩 Extensible Skill System
 Extend your AI agents with pre-built skills. Browse, install, and manage skills through the integrated skill panel—no package managers required.
-On fresh installs, the marketplace can now detect whether the China-optimized `skillhub` CLI is available and offer a one-click guided install that uses GeeClaw's bundled `uv` + managed Python runtime. If `skillhub` is unavailable, GeeClaw automatically falls back to the bundled `clawhub` installer.
-Packaged preinstalled skills are now loaded directly from the app bundle via `skills.load.extraDirs`, so app updates can refresh those skills without copying managed duplicates into `~/.openclaw-geeclaw/skills`.
+The marketplace detects whether the China-optimized `skillhub` CLI is available and offers a one-click guided install; if `skillhub` is unavailable, GeeClaw falls back to the built-in `clawhub` installer automatically.
 
-Environment variables for bundled search skills:
-- `BRAVE_SEARCH_API_KEY` for `brave-web-search`
-- `TAVILY_API_KEY` for `tavily-search` (OAuth may also be supported by upstream skill runtime)
-- `BOCHA_API_KEY` for `bocha-skill`
-
-Global runtime environment variables can now be managed directly in **Settings → Environment**. GeeClaw injects them into its managed Gateway and Agent runtimes, uses them when checking preset install requirements such as `requires.env`, and restarts the Gateway automatically after you save changes.
-
-### 🔐 Secure Provider Integration
-Connect to multiple AI providers (OpenAI, Anthropic and more) with credentials stored securely in your system's native keychain. GeeClaw now separates provider setup from model assignment: configure accounts under **Settings → Model Providers**, then choose the default chat / image / video models under **Settings → Model Config**. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in. The built-in **GeeClaw** provider accepts only an API key and routes OpenClaw traffic through a local loopback proxy, so runtime config stores `http://127.0.0.1:<port>/proxy` plus an env-backed key reference instead of the real upstream endpoint.
+### ⚙️ Environment Variable Management
+Manage global environment variables for GeeClaw's managed runtime directly in **Settings → Environment**. GeeClaw injects these variables into the managed Gateway and Agent runtimes, considers them when checking preset `requires.env` dependencies, and automatically restarts the Gateway after saving.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. GeeClaw adapts to your preferences automatically.
 
 ### 📦 Bundled OpenClaw Runtime
-GeeClaw always launches its bundled OpenClaw runtime and keeps managed runtime state under `~/.openclaw-geeclaw`.
-The packaged runtime currently excludes the upstream Tlon skill binaries so macOS signing and notarization remain stable.
+GeeClaw always uses its bundled OpenClaw runtime, avoiding dependency on system PATH or conflicts with an existing system `openclaw` installation.
 
 ---
 
@@ -113,15 +100,13 @@ The packaged runtime currently excludes the upstream Tlon skill binaries so macO
 
 ### System Requirements
 
-- **Operating System**: macOS 11+, Windows 10+, or Linux (Ubuntu 20.04+)
+- **Operating System**: macOS 11+, Windows 10+
 - **Memory**: 4GB RAM minimum (8GB recommended)
-- **Storage**: 1GB available disk space
+- **Storage**: 2GB available disk space
 
 ### GPU Acceleration
 
-GeeClaw now enables Electron GPU acceleration by default so animated brand surfaces and other accelerated rendering paths work without extra flags.
-
-If you hit driver-specific rendering issues on a particular machine, launch the app with `--disable-gpu` to force software rendering again.
+GeeClaw now enables Electron GPU acceleration by default. If you hit driver-specific rendering issues on a particular machine, launch the app with `--disable-gpu` to force software rendering.
 
 ### Installation
 
@@ -144,25 +129,25 @@ pnpm dev
 ```
 ### First Launch
 
-When you launch GeeClaw for the first time, the **Setup Wizard** focuses on getting the managed runtime ready:
+When you launch GeeClaw for the first time, the app completes these steps through a streamlined flow:
 
-1. **Language & Region** – Configure your preferred locale
-2. **Runtime Preparation** – Verify the bundled OpenClaw runtime and supporting tools
-3. **Skill Bundles** – Install the default local skill/tool bundle
-4. **Enter the App** – Start using GeeClaw immediately after setup completes
+1. **Check Login Status** – Confirm whether you are already signed in
+2. **Runtime Preparation** – Automatically prepare the bundled OpenClaw runtime
+3. **Install Default Tools/Skills** – Complete the default local toolchain setup
+4. **Enter the App** – Launch directly into the main interface once ready
 
 Model setup is now handled inside the main app:
 
 - Open **Settings → Model Providers** to add providers and their model catalogs.
-- The built-in **GeeClaw** provider is fixed-config: you only enter its API key, while the real upstream base URL stays hidden behind GeeClaw's local transparent proxy.
-- Open **Settings → Model Config** to choose the default chat model and optional image/PDF/image-generation/video-generation model slots.
+- Open **Settings → Model Config** to choose the default chat model and optional image/video-generation model slots.
+
 - If no provider models exist, the chat composer stays disabled and links you to **Model Providers**.
 - If provider models exist but no default chat model is configured, the chat composer links you to **Model Config** instead.
 
-GeeClaw manages its own OpenClaw runtime and state directory. If you already have legacy OpenClaw data under `~/.openclaw`, keep it as-is for migration or manual import; GeeClaw does not switch over to your system `openclaw` command for normal runtime operation.
-
-> Note for Moonshot (Kimi): GeeClaw keeps Kimi web search enabled by default.  
+> Note for Moonshot (Kimi): GeeClaw keeps Kimi web search enabled by default.
 > When Moonshot is configured, GeeClaw also syncs Kimi web search to the China endpoint (`https://api.moonshot.cn/v1`) in OpenClaw config.
+
+GeeClaw manages its own OpenClaw runtime and state directory. You can also go to **Settings → Advanced** to copy a terminal command or install a user-level `geeclaw` command that runs the bundled OpenClaw under the `geeclaw` profile without registering `openclaw` to your global PATH.
 
 ### Proxy Settings
 
@@ -188,10 +173,6 @@ Notes:
 - If advanced proxy fields are left empty, GeeClaw falls back to `Proxy Server`.
 - Saving proxy settings reapplies Electron networking immediately and restarts the Gateway automatically.
 - GeeClaw also syncs the proxy to OpenClaw's Telegram channel config when Telegram is enabled.
-- On packaged Windows builds, the bundled `openclaw` CLI/TUI runs via the shipped `node.exe` entrypoint to keep terminal input behavior stable.
-- The managed `openclaw` wrappers also pin `OPENCLAW_STATE_DIR=~/.openclaw-geeclaw`, `OPENCLAW_CONFIG_PATH=~/.openclaw-geeclaw/openclaw.json`, and default to `--profile geeclaw` so terminal usage matches GeeClaw's managed runtime.
-- On packaged Windows builds, uninstalling GeeClaw can remove `%LOCALAPPDATA%\\geeclaw`, `%APPDATA%\\geeclaw`, and `~/.geeclaw` on request, but it preserves `~/.openclaw-geeclaw` so managed OpenClaw state survives reinstall unless you delete it manually.
-- In packaged builds, those wrappers prefer the hydrated OpenClaw sidecar under the app's user-data runtime directory and fall back to the legacy bundled `resources/openclaw` layout when the sidecar has not been materialized yet.
 
 ### OpenCLI Browser Bridge Check
 
@@ -199,7 +180,6 @@ Open **Settings → OpenCLI** to:
 
 - verify whether `opencli` is installed on your system PATH
 - inspect the detected OpenCLI version, daemon status, and Chrome Browser Bridge connectivity
-- let GeeClaw warm up `opencli doctor --no-live` in the background after Gateway startup so the daemon is ready before you open the page
 - jump to **Settings → CLI Market** when `opencli` is missing
 - download the Chrome extension package or jump to the upstream install guide when Chrome is not connected
 
@@ -209,31 +189,22 @@ Open **Settings → MCP** to review whether `mcporter` is installed on your syst
 
 ### Environment Variables
 
-Open **Settings → Environment** to manage app-level environment variables for GeeClaw's managed runtime.
-
-- These values are merged into the managed Gateway process and inherited by managed Agent runs.
-- Preset install checks now read both the app-managed variables and the current process environment for `requires.env`.
-- Saving changes restarts the Gateway automatically so the updated environment takes effect immediately.
+Open **Settings → Environment** to manage app-level environment variables for GeeClaw's managed runtime. These values are merged into the managed Gateway process, inherited by managed Agent runs, and considered when checking preset `requires.env` dependencies. Saving changes restarts the Gateway automatically.
 
 ### Memory Settings
 
-Open **Settings → Memory** to manage a small, beginner-friendly subset of OpenClaw memory features without editing `openclaw.json` directly.
+Open **Settings → Memory** to manage a beginner-friendly subset of OpenClaw memory features without editing `openclaw.json` directly.
 
-- The page currently exposes **Dreaming**, **Active Memory**, and **Lossless Claw** only.
-- Dreaming writes `plugins.entries["memory-core"].config.dreaming.enabled`.
-- Active Memory writes `plugins.entries["active-memory"].config.enabled`, optional `config.model`, and restores `config.agents = ["main"]` plus `config.modelFallbackPolicy = "default-remote"` when enabling.
-- Lossless Claw writes `plugins.entries["lossless-claw"].config.summaryModel` and toggles `plugins.slots.contextEngine` between `lossless-claw` and `legacy` while the plugin is installed.
-- GeeClaw checks `~/.openclaw-geeclaw/extensions/lossless-claw/package.json` before gateway startup and only installs or upgrades `lossless-claw` when the pinned version is missing or mismatched.
-- If `lossless-claw` installation fails during startup, GeeClaw blocks gateway launch, clears the managed `extensions/lossless-claw` directory to avoid partial installs, and leaves the feature unavailable until the next retry succeeds.
-- Saving Memory settings debounces a managed Gateway reload so the updated config takes effect immediately.
+- The page exposes **Dreaming**, **Active Memory**, and **Lossless Claw**.
+- Saving Memory settings triggers a managed Gateway hot-reload so the updated config takes effect immediately.
 
 ### Web Search Providers
 
 Open **Settings → Web Search** to manage OpenClaw `web_search` providers without editing `openclaw.json` by hand.
 
 - Shared tool settings such as enablement, provider selection, max results, timeout, and cache TTL are written under the canonical `tools.web.search` keys.
-- Provider-specific credentials and advanced fields are saved under `plugins.entries.<pluginId>.config.webSearch.*`, so GeeClaw no longer needs to rely on deprecated legacy paths.
-- The settings panel renders provider-specific fields dynamically from GeeClaw's normalized provider registry, and selecting Firecrawl also enables the bundled Firecrawl plugin entry automatically.
+- Provider-specific API keys are saved under `plugins.entries.<pluginId>.config.webSearch.*`.
+- The settings panel renders provider-specific fields dynamically and selecting Firecrawl also enables the bundled Firecrawl plugin entry automatically.
 
 ### CLI Market
 
@@ -257,7 +228,7 @@ Managed install locations:
 
 ## Architecture
 
-GeeClaw employs a **dual-process architecture** with a unified host API layer. The renderer talks to a single client abstraction, while Electron Main owns protocol selection and process lifecycle.
+GeeClaw employs a **dual-process + unified Host API architecture**. The renderer calls a single client abstraction; protocol selection and process lifecycle are managed by Electron Main.
 
 ### Design Principles
 
@@ -365,10 +336,9 @@ pnpm package:mac:dir:quick # Fast local macOS dir packaging; reuses existing bui
 
 ### Electron E2E Smoke Test
 
-GeeClaw now includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
+GeeClaw includes a Playwright-driven Electron smoke test for the desktop shell on macOS.
 
 - `pnpm run test:e2e` builds the app and launches the real Electron main process from `dist-electron/main/index.js`.
-- Before launching Electron, the E2E flow downloads the pinned prebuilt OpenClaw sidecar archive into `build/prebuilt-sidecar/`, hydrates it into `build/prebuilt-sidecar-runtime/`, and runs with `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1`.
 - The test uses isolated temporary `HOME` and Electron `userData` directories so it does not touch your normal GeeClaw profile.
 - In E2E mode, GeeClaw skips setup/login/provider gating only. It still starts the real managed OpenClaw/Gateway stack before entering the main UI.
 - The current smoke coverage verifies that the app can boot into the main shell and navigate between Dashboard, Skills, and Channels.
@@ -376,12 +346,6 @@ GeeClaw now includes a Playwright-driven Electron smoke test for the desktop she
 ### Release Notes For Auto-Update
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
-
-Packaging now uses the repo-local `openclaw-runtime/` install as the single source of truth for development and for any local packaging flow that does not explicitly opt into a prebuilt sidecar. This keeps OpenClaw's own install-time scripts intact and removes dependence on a duplicate root-level `node_modules/openclaw`.
-
-In packaged builds, GeeClaw no longer leaves the full OpenClaw runtime directly under `Contents/Resources/openclaw`. `after-pack` now archives that prepared runtime into `Contents/Resources/runtime/openclaw/payload.tar.gz`, removes the raw bundle before code signing, and the app hydrates it into the per-user runtime directory on first launch. This keeps the shipped runtime complete while avoiding macOS signing issues caused by deep-scanning OpenClaw's internal symlinks and binaries.
-
-For release CI, GeeClaw now requires a prebuilt OpenClaw sidecar from GitHub Releases instead of rebuilding the same runtime on every app release job. The exact pinned artifact lives in [`openclaw-runtime/version.json`](openclaw-runtime/version.json). The supported release targets are currently `darwin-arm64`, `darwin-x64`, and `win32-x64`; Windows on Arm uses the x64 GeeClaw package and follows the same x64 auto-update channel. If that tracked pin file is disabled, missing, or missing the current target asset, the release workflow fails fast instead of falling back to a local runtime rebuild.
 
 ### OpenClaw Runtime Workflow
 
@@ -395,39 +359,6 @@ pnpm dev
 
 - `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
 - Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
-- Treat sidecars as release artifacts, not as the default development input.
-
-To update the pinned sidecar version used by release CI:
-
-```bash
-gh release download openclaw-sidecar-v2026.4.10-r1 \
-  --pattern openclaw-sidecar-version.json \
-  --dir /tmp/openclaw-sidecar-v2026.4.10-r1
-cp /tmp/openclaw-sidecar-v2026.4.10-r1/openclaw-sidecar-version.json \
-  openclaw-runtime/version.json
-```
-
-- Replace the tag with the exact sidecar release tag you want to pin.
-- Commit the updated [`openclaw-runtime/version.json`](openclaw-runtime/version.json) alongside the release change that should consume it.
-
-To verify a sidecar release artifact locally before running the full release workflow:
-
-```bash
-pnpm run openclaw-sidecar:download -- --target darwin-arm64
-pnpm run build:vite
-pnpm run package:resources
-GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1 pnpm exec electron-builder --config scripts/electron-builder-config.mjs --mac --arm64 --dir --config.mac.identity=null
-```
-
-- Swap `darwin-arm64` for `darwin-x64` or `win32-x64` when validating another target.
-- The `package:release:*` flows expect the prebuilt sidecar archive under `build/prebuilt-sidecar/<target>/`.
-- In the packaged app, confirm `Contents/Resources/runtime/openclaw/payload.tar.gz` exists and that the log shows `Using prebuilt OpenClaw sidecar`.
-
-Unpublished OpenClaw plugins can be bundled from `plugins/openclaw/<plugin-id>/`
-without adding the plugin package to the app's top-level `node_modules/`. The
-directory must include `openclaw.plugin.json`; if the plugin has runtime
-dependencies, keep them available from that plugin directory, typically via its
-own `node_modules/`.
 
 ### Tech Stack
 
@@ -478,7 +409,7 @@ GeeClaw is built on the shoulders of excellent open-source projects:
 
 ## License
 
-GeeClaw is released under the [MIT License](LICENSE). You're free to use, modify, and distribute this software.
+GeeClaw is based on OpenClaw and ClawX, and is released under the GPL v3 License.
 
 ---
 
