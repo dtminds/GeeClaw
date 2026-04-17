@@ -5,7 +5,7 @@ import { mkdir, readFile } from 'fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { getAllSettings } from '../utils/store';
 import { resolveGeeClawAppEnvironment } from '../utils/app-env';
-import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
+import { getApiKey, getDefaultProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
 import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';

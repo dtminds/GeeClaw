@@ -330,7 +330,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
               const provider = await providerService.getLegacyProvider(providerId);
               const providerType = provider?.type || providerId;
               try {
-                await syncProviderApiKeyToRuntime(providerType, providerId, apiKey);
+                await syncProviderApiKeyToRuntime(providerType, providerId, apiKey, gatewayManager);
               } catch (err) {
                 console.warn('Failed to save key to OpenClaw auth-profiles:', err);
               }
@@ -372,7 +372,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
                 const trimmedKey = apiKey.trim();
                 if (trimmedKey) {
                   await providerService.setLegacyProviderApiKey(providerId, trimmedKey);
-                  await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey);
+                  await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, gatewayManager);
                 } else {
                   await providerService.deleteLegacyProviderApiKey(providerId);
                   await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock);
@@ -391,7 +391,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
                 await providerService.saveLegacyProvider(existing);
                 if (previousKey) {
                   await providerService.setLegacyProviderApiKey(providerId, previousKey);
-                  await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey);
+                  await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey, gatewayManager);
                 } else {
                   await providerService.deleteLegacyProviderApiKey(providerId);
                   await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck);
@@ -1684,7 +1684,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
 
           // Also write to OpenClaw auth-profiles.json so the gateway can use it
           try {
-            await syncProviderApiKeyToRuntime(config.type, config.id, trimmedKey);
+            await syncProviderApiKeyToRuntime(config.type, config.id, trimmedKey, gatewayManager);
           } catch (err) {
             console.warn('Failed to save key to OpenClaw auth-profiles:', err);
           }
@@ -1736,7 +1736,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
       const provider = await providerService.getLegacyProvider(providerId);
       const providerType = provider?.type || providerId;
       try {
-        await syncProviderApiKeyToRuntime(providerType, providerId, apiKey);
+        await syncProviderApiKeyToRuntime(providerType, providerId, apiKey, gatewayManager);
       } catch (err) {
         console.warn('Failed to save key to OpenClaw auth-profiles:', err);
       }
@@ -1780,7 +1780,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
           const trimmedKey = apiKey.trim();
           if (trimmedKey) {
             await providerService.setLegacyProviderApiKey(providerId, trimmedKey);
-            await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey);
+            await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, gatewayManager);
           } else {
             await providerService.deleteLegacyProviderApiKey(providerId);
             await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock);
@@ -1801,7 +1801,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
           await providerService.saveLegacyProvider(existing);
           if (previousKey) {
             await providerService.setLegacyProviderApiKey(providerId, previousKey);
-            await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey);
+            await syncProviderApiKeyToRuntime(existing.type, providerId, previousKey, gatewayManager);
           } else {
             await providerService.deleteLegacyProviderApiKey(providerId);
             await syncDeletedProviderApiKeyToRuntime(existing, providerId, previousOck);

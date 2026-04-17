@@ -323,7 +323,7 @@ export async function handleProviderRoutes(
         const trimmedKey = body.apiKey.trim();
         if (trimmedKey) {
           await providerService.setLegacyProviderApiKey(config.id, trimmedKey);
-          await syncProviderApiKeyToRuntime(config.type, config.id, trimmedKey);
+          await syncProviderApiKeyToRuntime(config.type, config.id, trimmedKey, ctx.gatewayManager);
         }
       }
       await syncSavedProviderToRuntime(config, body.apiKey, ctx.gatewayManager);
@@ -368,7 +368,7 @@ export async function handleProviderRoutes(
         const trimmedKey = body.apiKey.trim();
         if (trimmedKey) {
           await providerService.setLegacyProviderApiKey(providerId, trimmedKey);
-          await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey);
+          await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, ctx.gatewayManager);
         } else {
           await providerService.deleteLegacyProviderApiKey(providerId);
           await syncDeletedProviderApiKeyToRuntime(existing, providerId);

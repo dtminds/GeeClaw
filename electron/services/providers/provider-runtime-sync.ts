@@ -342,14 +342,20 @@ export async function syncProviderApiKeyToRuntime(
   providerType: string,
   providerId: string,
   apiKey: string,
+  gatewayManager?: GatewayManager,
 ): Promise<void> {
   const ock = getOpenClawProviderKey(providerType, providerId);
   if (shouldUseEnvBackedApiKeyAuth(providerType)) {
     await removeProviderKeyFromOpenClaw(ock);
-    return;
+  } else {
+    await saveProviderKeyToOpenClaw(ock, apiKey);
   }
 
-  await saveProviderKeyToOpenClaw(ock, apiKey);
+  scheduleGatewayRestart(
+    gatewayManager,
+    `Scheduling Gateway restart after updating API key for provider "${providerId}"`,
+    { onlyIfRunning: true },
+  );
 }
 
 export async function syncAllProviderAuthToRuntime(): Promise<void> {

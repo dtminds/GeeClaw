@@ -325,6 +325,18 @@ describe('provider runtime sync for browser OAuth', () => {
     expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
   });
 
+  it('restarts a running gateway when syncing an env-backed api_key provider key directly', async () => {
+    const gatewayManager = {
+      getStatus: vi.fn(() => ({ state: 'running' })),
+      debouncedRestart: vi.fn(),
+    };
+
+    await syncProviderApiKeyToRuntime('openai', 'openai-account', 'sk-new', gatewayManager as never);
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
+    expect(gatewayManager.debouncedRestart).toHaveBeenCalledTimes(1);
+  });
+
   it('removes stale auth-profiles api_key entries instead of writing them during provider auth sync', async () => {
     const { listProviderAccounts } = await import('@electron/services/providers/provider-store');
 
