@@ -5,6 +5,7 @@ const hostApiFetchMock = vi.fn();
 const clipboardWriteTextMock = vi.fn();
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
+const invokeIpcMock = vi.fn();
 
 const translations: Record<string, string> = {
   'cliMarketplace.title': 'CLI 市场',
@@ -17,6 +18,12 @@ const translations: Record<string, string> = {
   'cliMarketplace.missing': '未安装',
   'cliMarketplace.install': '安装',
   'cliMarketplace.copyInstallCommand': '复制安装命令',
+  'cliMarketplace.showInstallCommand': '查看安装命令',
+  'cliMarketplace.docs': '文档',
+  'cliMarketplace.manualDialog.title': '安装命令',
+  'cliMarketplace.manualDialog.description': '复制下面的命令，然后到终端里执行。',
+  'cliMarketplace.manualDialog.copy': '复制命令',
+  'cliMarketplace.manualDialog.close': '关闭',
   'cliMarketplace.reinstall': '重新安装',
   'cliMarketplace.uninstall': '卸载',
   'cliMarketplace.moreActions': '更多操作',
@@ -59,6 +66,7 @@ vi.mock('@/lib/host-api', () => ({
 
 vi.mock('@/lib/api-client', () => ({
   toUserMessage: (error: unknown) => String(error),
+  invokeIpc: (...args: unknown[]) => invokeIpcMock(...args),
 }));
 
 vi.mock('sonner', () => ({
@@ -203,12 +211,55 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '复制安装命令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '查看安装命令' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('复制下面的命令，然后到终端里执行。')).toBeInTheDocument();
+    expect(screen.getByText('brew install foo')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '复制命令' }));
 
     await waitFor(() => {
       expect(clipboardWriteTextMock).toHaveBeenCalledWith('brew install foo');
     });
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the CLI docs link when docsUrl is provided', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'foo',
+            title: 'Foo CLI',
+            description: 'Docs',
+            docsUrl: 'https://example.com/foo-docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'manual',
+                label: 'brew',
+                command: 'brew install foo',
+                available: true,
+                managed: false,
+              },
+            ],
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '文档' }));
+
+    await waitFor(() => {
+      expect(invokeIpcMock).toHaveBeenCalledWith('shell:openExternal', 'https://example.com/foo-docs');
+    });
   });
 
   it('keeps managed install primary while exposing manual fallback in overflow menu', async () => {
@@ -254,6 +305,8 @@ describe('CliMarketplaceSettingsSection', () => {
     const copyFallbackItem = within(menu).getByRole('menuitem', { name: /Copy via/i });
     expect(copyFallbackItem).toBeEnabled();
     fireEvent.click(copyFallbackItem);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '复制命令' }));
 
     await waitFor(() => {
       expect(clipboardWriteTextMock).toHaveBeenCalledWith('brew install bar');
@@ -328,7 +381,8 @@ describe('CliMarketplaceSettingsSection', () => {
 
     render(<CliMarketplaceSettingsSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '复制安装命令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '查看安装命令' }));
+    fireEvent.click(await screen.findByRole('button', { name: '复制命令' }));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining('Failed to copy install command'));

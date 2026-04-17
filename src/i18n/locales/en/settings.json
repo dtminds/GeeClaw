@@ -173,8 +173,11 @@
     "missing": "Not installed",
     "install": "Install",
     "copyInstallCommand": "Copy Install Command",
+    "showInstallCommand": "Show Install Command",
     "copyInstallCommandCopied": "Install command copied",
     "copyInstallCommandFailed": "Failed to copy install command",
+    "docs": "Docs",
+    "docsOpenFailed": "Failed to open docs",
     "source": {
       "system": "System",
       "geeclaw": "GeeClaw"
@@ -188,6 +191,12 @@
       "needNpm": "Need npm",
       "unavailable": "Unavailable",
       "copyMethod": "Copy install command"
+    },
+    "manualDialog": {
+      "title": "Install Command",
+      "description": "Copy the command below, then run it in your terminal.",
+      "copy": "Copy Command",
+      "close": "Close"
     },
     "reinstall": "Reinstall",
     "uninstall": "Uninstall",

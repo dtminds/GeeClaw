@@ -164,6 +164,33 @@ describe('cli marketplace service', () => {
     ]);
   });
 
+  it('preserves docsUrl metadata in catalog status items', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'foo',
+          title: 'Foo CLI',
+          binNames: ['foo'],
+          docsUrl: 'https://example.com/foo-docs',
+          installMethods: [
+            { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async (bin: string) => (bin === 'brew' ? '/opt/homebrew/bin/brew' : null)),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'foo',
+        docsUrl: 'https://example.com/foo-docs',
+      }),
+    ]);
+  });
+
   it('reports missing-command for manual-only brew install method when brew is absent', async () => {
     const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
 
@@ -173,6 +200,7 @@ describe('cli marketplace service', () => {
           id: 'foo',
           title: 'Foo CLI',
           binNames: ['foo'],
+          docsUrl: 'https://example.com/foo-docs',
           installMethods: [
             { type: 'manual', label: 'brew', command: 'brew install foo', requiresCommands: ['brew'] },
           ],

@@ -173,8 +173,11 @@
     "missing": "未安装",
     "install": "安装",
     "copyInstallCommand": "复制安装命令",
+    "showInstallCommand": "查看安装命令",
     "copyInstallCommandCopied": "安装命令已复制",
     "copyInstallCommandFailed": "复制安装命令失败",
+    "docs": "文档",
+    "docsOpenFailed": "打开文档失败",
     "source": {
       "system": "系统",
       "geeclaw": "GeeClaw"
@@ -188,6 +191,12 @@
       "needNpm": "需要 npm",
       "unavailable": "不可用",
       "copyMethod": "复制安装命令"
+    },
+    "manualDialog": {
+      "title": "安装命令",
+      "description": "复制下面的命令，然后到终端里执行。",
+      "copy": "复制命令",
+      "close": "关闭"
     },
     "reinstall": "重新安装",
     "uninstall": "卸载",

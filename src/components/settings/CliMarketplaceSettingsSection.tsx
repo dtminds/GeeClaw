@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { FeedbackState } from '@/components/common/FeedbackState';
 import { hostApiFetch } from '@/lib/host-api';
-import { toUserMessage } from '@/lib/api-client';
+import { invokeIpc, toUserMessage } from '@/lib/api-client';
 
 type CliMarketplaceJobOperation = 'install' | 'uninstall';
 type CliMarketplaceJobStatus = 'running' | 'succeeded' | 'failed';
@@ -35,6 +35,7 @@ interface CliMarketplaceItem {
   title: string;
   description: string;
   homepage?: string;
+  docsUrl?: string;
   installed: boolean;
   source: 'system' | 'geeclaw' | 'none';
   installMethods: CliMarketplaceInstallMethodStatus[];
@@ -121,6 +122,11 @@ export function CliMarketplaceSettingsSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeJob, setActiveJob] = useState<CliMarketplaceJob | null>(null);
   const [openActionsMenuId, setOpenActionsMenuId] = useState<string | null>(null);
+  const [manualInstallDialogItem, setManualInstallDialogItem] = useState<{
+    title: string;
+    methodLabel: CliMarketplaceManualMethodLabel;
+    command: string;
+  } | null>(null);
   const actionsMenuRootRef = useRef<HTMLDivElement | null>(null);
 
   const loadCatalog = useCallback(async (background = false) => {
@@ -268,6 +274,14 @@ export function CliMarketplaceSettingsSection() {
     }
   };
 
+  const openDocs = async (url: string) => {
+    try {
+      await invokeIpc('shell:openExternal', url);
+    } catch (error) {
+      toast.error(`${t('cliMarketplace.docsOpenFailed', { defaultValue: 'Failed to open docs' })}: ${toUserMessage(error)}`);
+    }
+  };
+
   const isJobRunning = activeJob?.status === 'running';
 
   const getJobTitle = (operation: CliMarketplaceJobOperation): string => (
@@ -355,6 +369,7 @@ export function CliMarketplaceSettingsSection() {
                   const showActionsMenu = item.source === 'geeclaw'
                     || showManagedRuntimeMissingAction
                     || showManualInstallMethodsInMenu;
+                  const docsUrl = item.docsUrl;
                   const sourceBadgeLabel = item.source === 'system'
                       ? t('cliMarketplace.source.system', { defaultValue: 'System' })
                       : null;
@@ -377,6 +392,18 @@ export function CliMarketplaceSettingsSection() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {docsUrl && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="rounded-full"
+                              onClick={() => void openDocs(docsUrl)}
+                              disabled={isJobRunning}
+                            >
+                              {t('cliMarketplace.docs', { defaultValue: 'Docs' })}
+                            </Button>
+                          )}
+
                           {canInstallWithManagedMethod && (
                             <Button
                               type="button"
@@ -393,11 +420,15 @@ export function CliMarketplaceSettingsSection() {
                               type="button"
                               className="rounded-full"
                               onClick={() => {
-                                void copyInstallCommand(firstAvailableManualInstallMethod.command);
+                                setManualInstallDialogItem({
+                                  title: item.title,
+                                  methodLabel: firstAvailableManualInstallMethod.label,
+                                  command: firstAvailableManualInstallMethod.command,
+                                });
                               }}
                               disabled={isJobRunning}
                             >
-                              {t('cliMarketplace.copyInstallCommand', { defaultValue: 'Copy Install Command' })}
+                              {t('cliMarketplace.showInstallCommand', { defaultValue: 'Show Install Command' })}
                             </Button>
                           )}
 
@@ -509,7 +540,11 @@ export function CliMarketplaceSettingsSection() {
                                             return;
                                           }
                                           setOpenActionsMenuId(null);
-                                          void copyInstallCommand(method.command);
+                                          setManualInstallDialogItem({
+                                            title: item.title,
+                                            methodLabel: method.label,
+                                            command: method.command,
+                                          });
                                         }}
                                       >
                                         {label}
@@ -530,6 +565,52 @@ export function CliMarketplaceSettingsSection() {
           )}
         </section>
       </div>
+
+      <Dialog open={manualInstallDialogItem !== null} onOpenChange={(open) => !open && setManualInstallDialogItem(null)}>
+        <DialogContent className="w-[min(560px,calc(100vw-2rem))] max-w-[560px] rounded-[20px] p-0">
+          {manualInstallDialogItem && (
+            <div className="modal-card-surface flex flex-col gap-6 p-6 sm:p-7">
+              <DialogHeader className="gap-2">
+                <DialogTitle className="modal-title">
+                  {t('cliMarketplace.manualDialog.title', { defaultValue: 'Install command' })}
+                </DialogTitle>
+                <DialogDescription className="modal-description">
+                  {t('cliMarketplace.manualDialog.description', {
+                    defaultValue: 'Copy the command below, then run it in your terminal.',
+                  })}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="modal-section-surface rounded-2xl border p-4">
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  {manualInstallDialogItem.title} · {getManualMethodDisplayName(manualInstallDialogItem.methodLabel)}
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all text-sm leading-6 text-foreground">
+                  <code>{manualInstallDialogItem.command}</code>
+                </pre>
+              </div>
+
+              <div className="modal-footer">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="modal-secondary-button"
+                  onClick={() => setManualInstallDialogItem(null)}
+                >
+                  {t('cliMarketplace.manualDialog.close', { defaultValue: 'Close' })}
+                </Button>
+                <Button
+                  type="button"
+                  className="modal-primary-button"
+                  onClick={() => void copyInstallCommand(manualInstallDialogItem.command)}
+                >
+                  {t('cliMarketplace.manualDialog.copy', { defaultValue: 'Copy command' })}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={activeJob !== null}

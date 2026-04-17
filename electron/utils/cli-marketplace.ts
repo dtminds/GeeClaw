@@ -38,6 +38,7 @@ export type CliMarketplaceCatalogItem = {
   binNames: string[];
   description?: string;
   homepage?: string;
+  docsUrl?: string;
   platforms?: Array<'darwin' | 'win32' | 'linux'>;
   installMethods?: CliMarketplaceInstallMethod[];
   // Legacy managed install shape kept for backward compatibility.
@@ -64,6 +65,7 @@ export type CliMarketplaceStatusItem = {
   title: string;
   description: string;
   homepage?: string;
+  docsUrl?: string;
   installed: boolean;
   actionLabel: CliMarketplaceActionLabel | null;
   source: 'system' | 'geeclaw' | 'none';
@@ -204,6 +206,9 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
     }
     if (!entry.title || typeof entry.title !== 'string') {
       throw new Error(`[cli-marketplace] Entry ${label} is missing required field "title"`);
+    }
+    if (entry.docsUrl !== undefined && typeof entry.docsUrl !== 'string') {
+      throw new Error(`[cli-marketplace] Entry ${label} has an invalid "docsUrl" field`);
     }
     if (!Array.isArray(entry.binNames) || entry.binNames.length === 0) {
       throw new Error(`[cli-marketplace] Entry ${label} must include a non-empty "binNames" array`);
@@ -567,6 +572,7 @@ export class CliMarketplaceService {
       title: entry.title,
       description: entry.description ?? '',
       homepage: entry.homepage,
+      docsUrl: entry.docsUrl,
       installed,
       actionLabel: managedMethod ? (installed ? 'reinstall' : 'install') : null,
       source,
