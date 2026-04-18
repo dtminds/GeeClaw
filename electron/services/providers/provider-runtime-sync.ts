@@ -805,7 +805,7 @@ export async function syncDefaultProviderToRuntime(
 
     const context = await resolveRuntimeSyncContext(provider);
     if (context) {
-      await syncAgentProviderModelCatalog(provider, ock, context, trimmedProviderKey || undefined);
+      await syncAgentProviderModelCatalog(provider, ock, context, trimmedProviderKey);
     }
   } else {
     if (browserOAuthRuntimeProvider) {

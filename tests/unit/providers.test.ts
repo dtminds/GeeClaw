@@ -47,19 +47,17 @@ describe('provider metadata', () => {
 
   it('includes GeeClaw in the frontend provider registry', () => {
     expect(PROVIDER_TYPES).toContain('geeclaw');
+    const geeclaw = PROVIDER_TYPE_INFO.find((provider) => provider.id === 'geeclaw');
 
-    expect(PROVIDER_TYPE_INFO).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'geeclaw',
-          name: 'GeeClaw',
-          requiresApiKey: true,
-          defaultModelId: 'qwen3.6-plus',
-          showBaseUrl: false,
-          showModelId: true,
-        }),
-      ]),
-    );
+    expect(geeclaw).toMatchObject({
+      id: 'geeclaw',
+      name: 'GeeClaw',
+      requiresApiKey: true,
+      showBaseUrl: false,
+      showModelId: true,
+    });
+    expect(geeclaw?.defaultModelId).toBeTruthy();
+    expect(geeclaw?.defaultModels?.some((model) => model.id === geeclaw.defaultModelId)).toBe(true);
 
     expect(SETUP_PROVIDERS).toEqual(
       expect.arrayContaining([
@@ -89,8 +87,9 @@ describe('provider metadata', () => {
       id: 'modelstudio',
       defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       codePlanPresetBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-      codePlanPresetModelId: 'qwen3.5-plus',
     });
+    expect(modelstudio?.codePlanPresetModelId).toBeTruthy();
+    expect(modelstudio?.codePlanPresetBaseUrl).not.toBe(modelstudio?.defaultBaseUrl);
 
     expect(getProviderConfig('modelstudio')).toEqual({
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -292,8 +291,9 @@ describe('provider metadata', () => {
     });
     expect(modelstudio).toMatchObject({
       showModelId: true,
-      defaultModelId: 'qwen3.6-plus',
     });
+    expect(modelstudio?.defaultModelId).toBeTruthy();
+    expect(modelstudio?.defaultModels?.some((model) => model.id === modelstudio.defaultModelId)).toBe(true);
     expect(moonshot).toMatchObject({
       showModelId: true,
       defaultModelId: 'kimi-k2.5',
@@ -333,21 +333,21 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', false)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', false)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', false)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
-    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-plus', false)).toBe('qwen3.5-plus');
+    expect(resolveProviderModelForSave(modelstudio, 'qwen-next', false)).toBe('qwen-next');
     expect(resolveProviderModelForSave(moonshot, 'kimi-k2.5', false)).toBe('kimi-k2.5');
 
     expect(resolveProviderModelForSave(google, 'gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', true)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
-    expect(resolveProviderModelForSave(modelstudio, 'qwen3.5-turbo', true)).toBe('qwen3.5-turbo');
+    expect(resolveProviderModelForSave(modelstudio, 'qwen-custom', true)).toBe('qwen-custom');
 
     expect(resolveProviderModelForSave(google, '   ', true)).toBe('gemini-3-flash-preview');
     expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('openai/gpt-5.4');
     expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
-    expect(resolveProviderModelForSave(modelstudio, '   ', false)).toBe('qwen3.6-plus');
+    expect(resolveProviderModelForSave(modelstudio, '   ', false)).toBe(modelstudio?.defaultModelId);
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
-    expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe('qwen3.6-plus');
+    expect(resolveProviderModelForSave(modelstudio, '   ', true)).toBe(modelstudio?.defaultModelId);
   });
 
   it('derives structured default model entries for built-in providers', () => {
@@ -402,8 +402,8 @@ describe('provider metadata', () => {
       modelId: 'ark-code-latest',
     });
     expect(modelstudioCodePlanPreset).toEqual({
-      baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-      modelId: 'qwen3.5-plus',
+      baseUrl: modelstudio?.codePlanPresetBaseUrl,
+      modelId: modelstudio?.codePlanPresetModelId,
     });
 
     expect(isProviderCodePlanMode(

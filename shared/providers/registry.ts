@@ -149,7 +149,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     apiKeyUrl: 'https://bailian.console.aliyun.com/',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope',
     codePlanPresetBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-    codePlanPresetModelId: 'qwen3.5-plus',
+    codePlanPresetModelId: 'qwen3.6-plus',
     codePlanDocsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan',
     category: 'official',
     envVar: 'MODELSTUDIO_API_KEY',
