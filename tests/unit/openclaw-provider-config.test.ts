@@ -354,6 +354,54 @@ describe('removeProviderFromOpenClaw', () => {
     ]);
   });
 
+  it('removes stale inline apiKey values from openclaw.json when the provider uses auth profiles instead', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          'custom-work': {
+            baseUrl: 'https://old.example.com/v1',
+            api: 'openai-completions',
+            apiKey: '${OLD_ENV_KEY}',
+          },
+        },
+      },
+    });
+
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('custom-work', [
+      {
+        id: 'gpt-4.1',
+        name: 'gpt-4.1',
+        reasoning: false,
+      },
+    ], {
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+    });
+
+    const config = await readOpenClawJson();
+    const providers = ((config.models as { providers?: Record<string, unknown> })?.providers ?? {}) as Record<string, {
+      baseUrl?: string;
+      api?: string;
+      apiKey?: string;
+      models?: Array<Record<string, unknown>>;
+    }>;
+
+    expect(providers['custom-work']).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      models: [
+        {
+          id: 'gpt-4.1',
+          name: 'gpt-4.1',
+          reasoning: false,
+        },
+      ],
+    });
+    expect(providers['custom-work']?.apiKey).toBeUndefined();
+  });
+
   it('does not mutate agent models.json for env-backed api_key providers', async () => {
     await writeAgentModels('main', {
       providers: {
