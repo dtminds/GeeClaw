@@ -1186,11 +1186,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             : [...currentMsgs].reverse().find(
                 (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
               );
-          const optimisticIndex = optimistic
-            ? (pendingOptimisticUserIndex ?? currentMsgs.indexOf(optimistic))
-            : -1;
-          const isConversationStart = optimisticIndex >= 0
-            && !currentMsgs.slice(0, optimisticIndex).some(
+          const optimisticCurrentIndex = optimistic ? currentMsgs.indexOf(optimistic) : -1;
+          const isConversationStart = optimisticCurrentIndex >= 0
+            && !currentMsgs.slice(0, optimisticCurrentIndex).some(
               (message) => message.role === 'user' || message.role === 'assistant',
             );
           if (optimistic && !hasPersistedOptimisticUserCopy(
@@ -1198,7 +1196,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             optimistic,
             pendingOptimisticUserAnchorAt,
             isConversationStart,
-            optimisticIndex >= 0 ? optimisticIndex : null,
+            pendingOptimisticUserIndex ?? (optimisticCurrentIndex >= 0 ? optimisticCurrentIndex : null),
           )) {
             finalMessages = [...enrichedMessages, optimistic];
           }
