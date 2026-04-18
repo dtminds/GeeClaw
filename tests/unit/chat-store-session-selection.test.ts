@@ -261,6 +261,62 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().loading).toBe(false);
   });
 
+  it('clears in-flight history loading when switching to a new draft chat', async () => {
+    const historyDeferred = createDeferred<{ messages: Array<{ id: string; role: 'assistant'; content: string; timestamp: number }> }>();
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession, mainSession],
+      currentDesktopSessionId: mainSession.id,
+      currentSessionKey: mainSession.gatewaySessionKey,
+      currentAgentId: 'main',
+      loading: false,
+      messages: [{ id: 'old', role: 'assistant', content: 'stale' }],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history') {
+          return historyDeferred.promise;
+        }
+        return {};
+      }),
+    });
+
+    const openPromise = useChatStore.getState().openAgentMainSession('writer');
+
+    expect(useChatStore.getState().loading).toBe(true);
+
+    await useChatStore.getState().newTemporarySession('writer');
+
+    expect(useChatStore.getState()).toMatchObject({
+      isDraftSession: true,
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+
+    historyDeferred.resolve({
+      messages: [{ id: 'writer-msg', role: 'assistant', content: 'writer session', timestamp: 1 }],
+    });
+    await openPromise;
+
+    expect(useChatStore.getState()).toMatchObject({
+      isDraftSession: true,
+      currentDesktopSessionId: '',
+      currentSessionKey: '',
+      currentAgentId: 'writer',
+      loading: false,
+      messages: [],
+    });
+  });
+
   it('retries history loading when gateway startup unavailability is surfaced via structured error metadata', async () => {
     vi.useFakeTimers();
 
@@ -980,6 +1036,73 @@ describe('chat store session selection', () => {
     const messages = useChatStore.getState().messages;
     expect(messages).toHaveLength(1);
     expect(messages[0]?.id).toBe('persisted-user');
+  });
+
+  it('does not append the optimistic user message when history contains its persisted copy at the send index with a skewed timestamp', async () => {
+    const previousReplyAtMs = 1_700_000_000_000;
+    const optimisticSentAtMs = previousReplyAtMs + 1_000;
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      desktopSessions: [writerSession],
+      currentDesktopSessionId: writerSession.id,
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      loading: false,
+      sending: true,
+      lastUserMessageAt: optimisticSentAtMs,
+      pendingOptimisticUserId: 'optimistic-user',
+      pendingOptimisticUserAnchorAt: previousReplyAtMs,
+      messages: [
+        {
+          id: 'previous-reply',
+          role: 'assistant',
+          content: 'previous reply',
+          timestamp: previousReplyAtMs / 1000,
+        },
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: '你好',
+          timestamp: optimisticSentAtMs / 1000,
+        },
+      ],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: vi.fn(async (method: string, params?: { sessionKey?: string }) => {
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        if (method === 'chat.history' && params?.sessionKey === writerSession.gatewaySessionKey) {
+          return {
+            messages: [
+              {
+                id: 'previous-reply',
+                role: 'assistant',
+                content: 'previous reply',
+                timestamp: previousReplyAtMs / 1000,
+              },
+              {
+                id: 'persisted-user',
+                role: 'user',
+                content: '你好',
+                timestamp: (optimisticSentAtMs - 10_000) / 1000,
+              },
+            ],
+          };
+        }
+        return {};
+      }),
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const messages = useChatStore.getState().messages;
+    expect(messages.map((message) => message.id)).toEqual([
+      'previous-reply',
+      'persisted-user',
+    ]);
   });
 
   it('ignores an older same-session history reload once a newer send has started', async () => {

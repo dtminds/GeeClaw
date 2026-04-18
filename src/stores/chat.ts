@@ -113,6 +113,7 @@ interface ChatState {
   lastUserMessageAt: number | null;
   pendingOptimisticUserId: string | null;
   pendingOptimisticUserAnchorAt: number | null;
+  pendingOptimisticUserIndex: number | null;
   historyRequestGeneration: number;
   /** Images collected from tool results, attached to the next assistant message */
   pendingToolImages: AttachedFileMeta[];
@@ -636,6 +637,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   lastUserMessageAt: null,
   pendingOptimisticUserId: null,
   pendingOptimisticUserAnchorAt: null,
+  pendingOptimisticUserIndex: null,
   historyRequestGeneration: 0,
   pendingToolImages: [],
   pendingToolHiddenCount: 0,
@@ -795,6 +797,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastUserMessageAt: null,
         pendingOptimisticUserId: null,
         pendingOptimisticUserAnchorAt: null,
+        pendingOptimisticUserIndex: null,
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
       });
@@ -827,6 +830,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastUserMessageAt: null,
         pendingOptimisticUserId: null,
         pendingOptimisticUserAnchorAt: null,
+        pendingOptimisticUserIndex: null,
         pendingToolImages: [],
         pendingToolHiddenCount: 0,
       }));
@@ -872,6 +876,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,
       pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
@@ -900,6 +905,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,
       pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
       thinkingLevel: null,
@@ -960,6 +966,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,
       pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
@@ -1005,18 +1012,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   newTemporarySession: async (agentId?: string) => {
     const nextAgentId = agentId || get().currentAgentId || 'main';
+    clearHistoryStartupRetry();
     logChatTrace('newTemporarySession:start', {
       requestedAgentId: agentId ?? '',
       resolvedAgentId: nextAgentId,
       ...summarizeChatSelection(get()),
     });
-    set({
+    set((state) => ({
       isDraftSession: true,
       currentDesktopSessionId: '',
       currentSessionKey: '',
       currentAgentId: nextAgentId,
       currentViewMode: 'session',
       selectedCronRun: null,
+      loading: false,
       messages: [],
       ...createEmptyToolRuntimeState(),
       activeRunId: null,
@@ -1025,9 +1034,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,
       pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
+      historyRequestGeneration: state.historyRequestGeneration + 1,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
-    });
+    }));
     logChatTrace('newTemporarySession:selected', summarizeChatSelection(get()));
   },
 
@@ -1164,13 +1175,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const userMsgAt = get().lastUserMessageAt;
         if (get().sending && userMsgAt) {
           const userMsMs = toMs(userMsgAt);
-          const { messages: currentMsgs, pendingOptimisticUserId, pendingOptimisticUserAnchorAt } = get();
+          const {
+            messages: currentMsgs,
+            pendingOptimisticUserId,
+            pendingOptimisticUserAnchorAt,
+            pendingOptimisticUserIndex,
+          } = get();
           const optimistic = pendingOptimisticUserId
             ? currentMsgs.find((message) => message.id === pendingOptimisticUserId)
             : [...currentMsgs].reverse().find(
                 (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
               );
-          const optimisticIndex = optimistic ? currentMsgs.indexOf(optimistic) : -1;
+          const optimisticIndex = optimistic
+            ? (pendingOptimisticUserIndex ?? currentMsgs.indexOf(optimistic))
+            : -1;
           const isConversationStart = optimisticIndex >= 0
             && !currentMsgs.slice(0, optimisticIndex).some(
               (message) => message.role === 'user' || message.role === 'assistant',
@@ -1180,6 +1198,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             optimistic,
             pendingOptimisticUserAnchorAt,
             isConversationStart,
+            optimisticIndex >= 0 ? optimisticIndex : null,
           )) {
             finalMessages = [...enrichedMessages, optimistic];
           }
@@ -1478,6 +1497,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           lastUserMessageAt: null,
           pendingOptimisticUserId: null,
           pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
@@ -1507,6 +1527,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           lastUserMessageAt: null,
           pendingOptimisticUserId: null,
           pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         }));
@@ -1572,6 +1593,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const previousMessage = s.messages[s.messages.length - 1];
         return typeof previousMessage?.timestamp === 'number' ? toMs(previousMessage.timestamp) : null;
       })(),
+      pendingOptimisticUserIndex: s.messages.length,
       historyRequestGeneration: s.historyRequestGeneration + 1,
     }));
 
@@ -1658,6 +1680,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastUserMessageAt: null,
         pendingOptimisticUserId: null,
         pendingOptimisticUserAnchorAt: null,
+        pendingOptimisticUserIndex: null,
       });
     };
     setTimeout(checkStuck, 30_000);
@@ -1766,6 +1789,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,
       pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
       pendingToolImages: [],
       pendingToolHiddenCount: 0,
     });
@@ -1997,6 +2021,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 pendingFinal: hasOutput ? false : true,
                 pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
                 pendingOptimisticUserAnchorAt: hasOutput ? null : s.pendingOptimisticUserAnchorAt,
+                pendingOptimisticUserIndex: hasOutput ? null : s.pendingOptimisticUserIndex,
                 ...clearPendingImages,
               };
             }
@@ -2008,6 +2033,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               pendingFinal: hasOutput ? false : true,
               pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
               pendingOptimisticUserAnchorAt: hasOutput ? null : s.pendingOptimisticUserAnchorAt,
+              pendingOptimisticUserIndex: hasOutput ? null : s.pendingOptimisticUserIndex,
               ...clearPendingImages,
             };
           });
@@ -2023,6 +2049,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             lastUserMessageAt: null,
             pendingOptimisticUserId: null,
             pendingOptimisticUserAnchorAt: null,
+            pendingOptimisticUserIndex: null,
             ...createEmptyToolRuntimeState(),
           });
           get().loadHistory();
@@ -2055,6 +2082,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           lastUserMessageAt: null,
           pendingOptimisticUserId: null,
           pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
@@ -2077,6 +2105,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 lastUserMessageAt: null,
                 pendingOptimisticUserId: null,
                 pendingOptimisticUserAnchorAt: null,
+                pendingOptimisticUserIndex: null,
               });
               state.loadHistory(true);
             }
@@ -2089,6 +2118,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             lastUserMessageAt: null,
             pendingOptimisticUserId: null,
             pendingOptimisticUserAnchorAt: null,
+            pendingOptimisticUserIndex: null,
           });
         }
         break;
@@ -2104,6 +2134,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           lastUserMessageAt: null,
           pendingOptimisticUserId: null,
           pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
