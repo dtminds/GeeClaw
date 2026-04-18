@@ -106,8 +106,8 @@ interface SkillsState {
   fetchSkills: (agentId?: string) => Promise<void>;
   fetchMarketplaceCatalog: (force?: boolean) => Promise<void>;
   fetchCategorySkills: (categoryId: string, page: number, keyword: string) => Promise<void>;
-  installSkill: (slug: string, version?: string) => Promise<void>;
-  uninstallSkill: (target: SkillUninstallTarget) => Promise<void>;
+  installSkill: (slug: string, version?: string, agentId?: string) => Promise<void>;
+  uninstallSkill: (target: SkillUninstallTarget, agentId?: string) => Promise<void>;
   enableSkill: (skillId: string) => Promise<void>;
   disableSkill: (skillId: string) => Promise<void>;
   setSkills: (skills: Skill[]) => void;
@@ -336,7 +336,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  installSkill: async (slug: string, version?: string) => {
+  installSkill: async (slug: string, version?: string, agentId?: string) => {
     set((state) => ({ installing: { ...state.installing, [slug]: true } }));
     try {
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/clawhub/install', {
@@ -351,7 +351,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         throw new Error(mapErrorCodeToSkillErrorKey(appError.code, 'install'));
       }
       // Refresh skills after install
-      await get().fetchSkills();
+      await get().fetchSkills(agentId);
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Install error:', error);
@@ -365,7 +365,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  uninstallSkill: async (target: SkillUninstallTarget) => {
+  uninstallSkill: async (target: SkillUninstallTarget, agentId?: string) => {
     const requestBody = typeof target === 'string'
       ? { slug: target }
       : target;
@@ -381,7 +381,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         throw new Error(result.error || 'Uninstall failed');
       }
       // Refresh skills after uninstall
-      await get().fetchSkills();
+      await get().fetchSkills(agentId);
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Uninstall error:', error);

@@ -1208,6 +1208,32 @@ describe('managed agent config domain', () => {
     expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'skills', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
   });
 
+  it('keeps manualSkills undefined for agents that have not been migrated to explicit membership yet', async () => {
+    const { agentConfig } = await setupManagedPresetFixture();
+
+    const snapshot = await agentConfig.listAgentsSnapshot();
+
+    expect(snapshot.agents.find((agent) => agent.id === 'main')).not.toHaveProperty('manualSkills');
+  });
+
+  it('preserves an explicitly empty manualSkills list after updating agent settings', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    const snapshot = await agentConfig.updateAgentSettings('research-helper', {
+      manualSkills: [],
+    });
+
+    expect(snapshot.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      manualSkills: [],
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([]);
+  });
+
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
     const { agentConfig } = await setupManagedPresetFixture();
     await agentConfig.installMarketplaceAgent('stockexpert');

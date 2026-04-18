@@ -954,7 +954,7 @@ export function Skills() {
 
     try {
       const baselineEnabledSkillIds = (
-        selectedAgent.manualSkills && selectedAgent.manualSkills.length > 0
+        selectedAgent.manualSkills !== undefined
           ? selectedAgent.manualSkills
           : safeSkills.filter((skill) => skill.enabled).map((skill) => skill.id)
       );
@@ -998,15 +998,13 @@ export function Skills() {
   // Handle install
   const handleInstall = useCallback(async (slug: string) => {
     try {
-      await installSkill(slug);
-      await fetchSkills(selectedAgentId);
+      await installSkill(slug, undefined, selectedAgentId);
       const installedSkill = useSkillsStore.getState().skills.find((skill) => skill.id === slug || skill.slug === slug);
       if (installedSkill?.eligible === false) {
         toast.success(t('toast.installedUnavailable'));
         return;
       }
       await updateSelectedAgentSkill(installedSkill?.id ?? slug, true, { notify: false });
-      await fetchSkills(selectedAgentId);
       toast.success(t('toast.installed'));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1018,7 +1016,7 @@ export function Skills() {
         toast.error(t('toast.failedInstall') + ': ' + errorMessage);
       }
     }
-  }, [installSkill, fetchSkills, selectedAgentId, t, skillsDirPath, updateSelectedAgentSkill]);
+  }, [installSkill, selectedAgentId, t, skillsDirPath, updateSelectedAgentSkill]);
 
   useEffect(() => {
     if (activeTab !== 'marketplace' || marketplaceCatalog || marketplaceLoading) {
@@ -1138,20 +1136,19 @@ export function Skills() {
   const handleUninstall = useCallback(async (target: string | Pick<Skill, 'id' | 'slug' | 'baseDir'>) => {
     try {
       if (typeof target === 'string') {
-        await uninstallSkill(target);
+        await uninstallSkill(target, selectedAgentId);
       } else {
         await uninstallSkill({
           slug: target.slug,
           skillKey: target.id,
           baseDir: target.baseDir,
-        });
+        }, selectedAgentId);
       }
-      await fetchSkills(selectedAgentId);
       toast.success(t('toast.uninstalled'));
     } catch (err) {
       toast.error(t('toast.failedUninstall') + ': ' + String(err));
     }
-  }, [uninstallSkill, fetchSkills, selectedAgentId, t]);
+  }, [uninstallSkill, selectedAgentId, t]);
 
   const handleOpenSkillFolder = useCallback(async (skill: Skill) => {
     try {
