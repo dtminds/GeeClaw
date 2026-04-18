@@ -10,7 +10,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { ChatInput, type FileAttachment } from './ChatInput';
 import { ChatToolbar } from './ChatToolbar';
 import { ChatSessionsPanel } from './ChatSessionsPanel';
@@ -178,7 +177,7 @@ export function Chat() {
   const hasValidPrimaryModel = Boolean(configuredPrimaryModel && availableModelRefs.has(configuredPrimaryModel));
   const requiresProviderSetup = defaultModelLoaded && !hasAvailableModels;
   const requiresModelConfig = defaultModelLoaded && hasAvailableModels && !hasValidPrimaryModel;
-  const isComposerDisabled = !isGatewayRunning || cronComposerUnavailable || requiresProviderSetup || requiresModelConfig;
+  const isComposerDisabled = loading || !isGatewayRunning || cronComposerUnavailable || requiresProviderSetup || requiresModelConfig;
   const disabledPlaceholder = cronComposerUnavailable
     ? t('composer.cronFallbackPlaceholder')
     : requiresProviderSetup
@@ -356,8 +355,15 @@ export function Chat() {
             >
               {loading && !isStreamingActive ? (
                 <div ref={innerRef} className="max-w-4xl mx-auto w-full px-4">
-                  <div className="flex h-[60vh] items-center justify-center">
-                    <LoadingSpinner size="lg" />
+                  <div
+                    role="status"
+                    aria-label={t('common:status.loading', 'Loading')}
+                    className="flex h-[60vh] flex-col items-center justify-center gap-3"
+                  >
+                    <BrandOrbLogo size={144} orbTheme="auto" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {t('loadingSessionInit')}
+                    </p>
                   </div>
                 </div>
               ) : isEmpty ? (

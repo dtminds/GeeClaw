@@ -71,7 +71,7 @@ vi.mock('@/lib/host-api', () => ({
 }));
 
 vi.mock('@/components/common/LoadingSpinner', () => ({
-  LoadingSpinner: () => <div>Loading</div>,
+  LoadingSpinner: () => <div data-testid="loading-spinner">Loading</div>,
 }));
 
 vi.mock('@/pages/Chat/ChatInput', () => ({
@@ -107,7 +107,7 @@ vi.mock('@/pages/Chat/build-chat-items', () => ({
 }));
 
 vi.mock('@/components/branding/BrandOrbLogo', () => ({
-  BrandOrbLogo: () => <div>BrandOrbLogo</div>,
+  BrandOrbLogo: () => <div data-testid="brand-orb-logo">BrandOrbLogo</div>,
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -124,6 +124,7 @@ describe('Chat model gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedChatInputProps.length = 0;
+    chatState.loading = false;
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/agents/default-model') {
         return {
@@ -200,5 +201,48 @@ describe('Chat model gating', () => {
         },
       });
     });
+  });
+
+  it('shows the brand orb and disables the composer while chat history is loading', async () => {
+    chatState.loading = true;
+    hostApiFetchMock.mockImplementationOnce(async (path: string) => {
+      if (path === '/api/agents/default-model') {
+        return {
+          model: { configured: true, primary: 'openai/gpt-5.4', fallbacks: [] },
+          imageModel: { configured: false, primary: null, fallbacks: [] },
+          pdfModel: { configured: false, primary: null, fallbacks: [] },
+          imageGenerationModel: { configured: false, primary: null, fallbacks: [] },
+          videoGenerationModel: { configured: false, primary: null, fallbacks: [] },
+          primary: 'openai/gpt-5.4',
+          fallbacks: [],
+          availableModels: [
+            {
+              providerId: 'openai',
+              providerName: 'OpenAI',
+              modelRefs: ['openai/gpt-5.4'],
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const { Chat } = await import('@/pages/Chat');
+    const { screen } = await import('@testing-library/react');
+
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Chat />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('brand-orb-logo')).toBeInTheDocument();
+      expect(screen.getByText('loadingSessionInit')).toBeInTheDocument();
+      expect(capturedChatInputProps.at(-1)).toMatchObject({
+        disabled: true,
+      });
+    });
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
   });
 });

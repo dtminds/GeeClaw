@@ -1,6 +1,7 @@
 {
     "gatewayNotRunning": "Gateway Not Running",
     "gatewayRequired": "The OpenClaw Gateway needs to be running to use chat. It will start automatically, or you can start it from Settings.",
+    "loadingSessionInit": "Initializing session, please wait.",
     "welcome": {
         "title": "GeeClaw Chat",
         "subtitle": "Your AI assistant is ready. Start a conversation below.",
