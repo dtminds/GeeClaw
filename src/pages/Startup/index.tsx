@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ArrowRight,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
