@@ -83,6 +83,7 @@ import {
   setOpenClawDefaultModel,
   setOpenClawDefaultModelWithOverride,
   syncProviderConfigToOpenClaw,
+  updateAgentModelProvider,
 } from '@electron/utils/openclaw-provider-config';
 import type { ProviderConfig } from '@electron/utils/secure-storage';
 import { getApiKey, getDefaultProvider, getProvider } from '@electron/utils/secure-storage';
@@ -352,6 +353,46 @@ describe('provider runtime sync for browser OAuth', () => {
 
     expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
     expect(gatewayManager.debouncedRestart).toHaveBeenCalledTimes(1);
+  });
+
+  it('syncs custom provider api key updates into agent models.json', async () => {
+    vi.mocked(getProvider).mockResolvedValue(makeProvider({
+      id: 'custom-work',
+      name: 'Custom Work',
+      type: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiProtocol: 'openai-completions',
+      models: ['gpt-4.1'],
+    }));
+
+    await syncProviderApiKeyToRuntime('custom', 'custom-work', 'sk-custom-live');
+
+    expect(saveProviderKeyToOpenClaw).toHaveBeenCalledWith('custom-work', 'sk-custom-live');
+    expect(updateAgentModelProvider).toHaveBeenCalledWith('custom-work', expect.objectContaining({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-custom-live',
+    }));
+  });
+
+  it('clears custom provider api keys from agent models.json when deleted', async () => {
+    const customProvider = makeProvider({
+      id: 'custom-work',
+      name: 'Custom Work',
+      type: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiProtocol: 'openai-completions',
+      models: ['gpt-4.1'],
+    });
+
+    await syncDeletedProviderApiKeyToRuntime(customProvider, 'custom-work');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('custom-work');
+    expect(updateAgentModelProvider).toHaveBeenCalledWith('custom-work', expect.objectContaining({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: '',
+    }));
   });
 
   it('removes stale auth-profiles api_key entries instead of writing them during provider auth sync', async () => {

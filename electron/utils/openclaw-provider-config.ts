@@ -595,7 +595,12 @@ export async function updateAgentModelProvider(
       }
     }
     if (entry.apiKey !== undefined) {
-      existing.apiKey = formatProviderApiKeyReference(providerType, entry.apiKey);
+      const normalizedApiKey = entry.apiKey.trim();
+      if (normalizedApiKey) {
+        existing.apiKey = formatProviderApiKeyReference(providerType, normalizedApiKey);
+      } else {
+        delete existing.apiKey;
+      }
     }
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
 

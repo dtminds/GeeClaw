@@ -351,6 +351,14 @@ export async function syncProviderApiKeyToRuntime(
     await saveProviderKeyToOpenClaw(ock, apiKey);
   }
 
+  const provider = await getProvider(providerId);
+  if (provider) {
+    const context = await resolveRuntimeSyncContext(provider);
+    if (context) {
+      await syncAgentProviderModelCatalog(provider, ock, context, apiKey);
+    }
+  }
+
   scheduleGatewayRestart(
     gatewayManager,
     `Scheduling Gateway restart after updating API key for provider "${providerId}"`,
@@ -537,8 +545,8 @@ async function syncAgentProviderModelCatalog(
   }
 
   if (isUnregisteredProviderType(config.type)) {
-    const resolvedKey = apiKey !== undefined ? (apiKey.trim() || null) : await getApiKey(config.id);
-    if (!resolvedKey) {
+    const resolvedKey = apiKey !== undefined ? apiKey.trim() : await getApiKey(config.id);
+    if (apiKey === undefined && !resolvedKey) {
       return;
     }
 
@@ -546,7 +554,7 @@ async function syncAgentProviderModelCatalog(
       baseUrl,
       api: config.apiProtocol || 'openai-completions',
       models,
-      apiKey: resolvedKey,
+      apiKey: resolvedKey ?? '',
     });
     return;
   }
@@ -694,6 +702,12 @@ export async function syncDeletedProviderApiKeyToRuntime(
 
   const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider!, id: providerId });
   await removeProviderKeyFromOpenClaw(ock);
+  if (provider) {
+    const context = await resolveRuntimeSyncContext(provider);
+    if (context) {
+      await syncAgentProviderModelCatalog(provider, ock, context, '');
+    }
+  }
   scheduleGatewayRestart(
     gatewayManager,
     `Scheduling Gateway restart after deleting API key for provider "${providerId}"`,

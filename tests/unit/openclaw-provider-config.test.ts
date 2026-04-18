@@ -424,6 +424,35 @@ describe('removeProviderFromOpenClaw', () => {
     expect(providers.geeclaw?.apiKey).toBe('${GEECLAW_API_KEY}');
   });
 
+  it('deletes apiKey from agent models.json when an empty key is provided', async () => {
+    await writeAgentModels('main', {
+      providers: {
+        customdemo: {
+          baseUrl: 'https://api.example.com/v1',
+          api: 'openai-completions',
+          apiKey: 'stale-key',
+        },
+      },
+    });
+
+    const { updateAgentModelProvider } = await import('@electron/utils/openclaw-provider-config');
+
+    await updateAgentModelProvider('customdemo', {
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: '',
+    });
+
+    const models = await readAgentModels('main');
+    const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
+
+    expect(providers.customdemo).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+    });
+    expect(providers.customdemo?.apiKey).toBeUndefined();
+  });
+
   it('syncs Moonshot Global provider baseUrl into the Kimi web search plugin config', async () => {
     await writeOpenClawJson({
       plugins: {
