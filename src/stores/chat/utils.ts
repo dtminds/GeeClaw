@@ -88,17 +88,28 @@ export function hasPersistedOptimisticUserCopy(
   candidate: RawMessage,
   anchorTimestampMs: number | null,
   isConversationStart = false,
+  expectedIndex: number | null = null,
 ): boolean {
   if (candidate.role !== 'user') return false;
 
   const candidateText = getMessageText(candidate.content).trim();
   const candidateAttachments = getMessageAttachmentFingerprint(candidate);
   const candidateTimestampMs = typeof candidate.timestamp === 'number' ? toMs(candidate.timestamp) : null;
+  const matchesCandidate = (message: RawMessage): boolean => (
+    message.role === 'user'
+    && getMessageText(message.content).trim() === candidateText
+    && getMessageAttachmentFingerprint(message) === candidateAttachments
+  );
+
+  if (expectedIndex != null && expectedIndex >= 0) {
+    const expectedMessage = messages[expectedIndex];
+    if (expectedMessage && matchesCandidate(expectedMessage)) {
+      return true;
+    }
+  }
 
   return messages.some((message) => {
-    if (message.role !== 'user') return false;
-    if (getMessageText(message.content).trim() !== candidateText) return false;
-    if (getMessageAttachmentFingerprint(message) !== candidateAttachments) return false;
+    if (!matchesCandidate(message)) return false;
 
     const messageTimestampMs = typeof message.timestamp === 'number' ? toMs(message.timestamp) : null;
     if (anchorTimestampMs != null && messageTimestampMs != null && messageTimestampMs <= anchorTimestampMs) {

@@ -53,3 +53,7 @@ Standard dev commands are in `package.json` scripts and `README.md`. Key ones:
   - `modal-secondary-button` for cancel/secondary actions
   - `modal-primary-button` for the main confirm/create/save action
 - **Visual direction**: Modal styling should stay neutral, light, and system-consistent rather than paper-like or tinted. Titles should be compact and strong; descriptions should be muted and readable; action buttons should use a consistent rounded-full hierarchy.
+
+### Copy conventions
+
+- **Chinese tip-style microcopy**: For short Chinese UI tips, hints, placeholders, helper text, loading tips, and other brief prompt-style copy, do not add trailing punctuation by default. Only keep trailing punctuation for longer paragraph-style explanations when it materially improves readability.
