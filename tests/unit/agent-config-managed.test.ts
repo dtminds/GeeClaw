@@ -576,6 +576,7 @@ describe('managed agent config domain', () => {
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: true,
       source: 'marketplace',
+      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       managedFiles: ['AGENTS.md', 'SOUL.md'],
       canUseDefaultSkillScope: false,
@@ -1199,6 +1200,7 @@ describe('managed agent config domain', () => {
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: false,
+      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       presetSkills: [],
       managedFiles: [],
       canUseDefaultSkillScope: true,

@@ -103,7 +103,7 @@ interface SkillsState {
   categorySkillsLoading: boolean;
 
   // Actions
-  fetchSkills: () => Promise<void>;
+  fetchSkills: (agentId?: string) => Promise<void>;
   fetchMarketplaceCatalog: (force?: boolean) => Promise<void>;
   fetchCategorySkills: (categoryId: string, page: number, keyword: string) => Promise<void>;
   installSkill: (slug: string, version?: string) => Promise<void>;
@@ -126,14 +126,16 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   categorySkillsTotal: 0,
   categorySkillsLoading: false,
 
-  fetchSkills: async () => {
+  fetchSkills: async (agentId = 'main') => {
     // Only show loading state if we have no skills yet (initial load)
     if (get().skills.length === 0) {
       set({ loading: true, error: null });
     }
     try {
+      const scopedAgentId = typeof agentId === 'string' && agentId.trim() ? agentId.trim() : 'main';
+
       // 1. Fetch from Gateway (running skills)
-      const gatewayData = await useGatewayStore.getState().rpc<GatewaySkillsStatusResult>('skills.status');
+      const gatewayData = await useGatewayStore.getState().rpc<GatewaySkillsStatusResult>('skills.status', { agentId: scopedAgentId });
 
       // Persist newly discovered skills as explicitly disabled in openclaw.json.
       // Explicit user toggles are persisted separately in the app settings
@@ -147,16 +149,20 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       if (discoveredSkills.length > 0) {
         await hostApiFetch<{ success: boolean; added: string[]; error?: string }>('/api/skills/ensure-entries', {
           method: 'POST',
-          body: JSON.stringify({ skills: discoveredSkills }),
+          body: JSON.stringify({ agentId: scopedAgentId, skills: discoveredSkills }),
         });
       }
 
       // 2. Fetch from ClawHub (installed on disk)
-      const clawhubResult = await hostApiFetch<{ success: boolean; results?: ClawHubListResult[]; error?: string }>('/api/clawhub/list');
+      const clawhubResult = await hostApiFetch<{ success: boolean; results?: ClawHubListResult[]; error?: string }>(
+        `/api/clawhub/list?agentId=${encodeURIComponent(scopedAgentId)}`,
+      );
 
       // 3. Fetch configurations directly from Electron (since Gateway doesn't return them)
-      const configResult = await hostApiFetch<Record<string, { apiKey?: string; env?: Record<string, string> }>>('/api/skills/configs');
-      const policyResult = await hostApiFetch<SkillPolicyResult>('/api/skills/policy');
+      const configResult = await hostApiFetch<Record<string, { apiKey?: string; env?: Record<string, string> }>>(
+        `/api/skills/configs?agentId=${encodeURIComponent(scopedAgentId)}`,
+      );
+      const policyResult = await hostApiFetch<SkillPolicyResult>(`/api/skills/policy?agentId=${encodeURIComponent(scopedAgentId)}`);
       const alwaysEnabledSkillSet = new Set((policyResult.alwaysEnabledSkillKeys || []).filter(Boolean));
       const hiddenSkillSet = new Set((policyResult.hiddenSkillKeys || []).filter(Boolean));
 

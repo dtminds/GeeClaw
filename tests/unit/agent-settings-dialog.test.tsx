@@ -46,6 +46,11 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.skillScope.maxReached': 'Skill limit reached',
   'agentSettingsDialog.skillScope.preset': 'Preset',
   'agentSettingsDialog.skillScope.save': 'Save Skills',
+  'agentSettingsDialog.skillsSummary.description': 'Manage this agent’s skills from the Installed Skills page.',
+  'agentSettingsDialog.skillsSummary.manage': 'Manage in Skills',
+  'agentSettingsDialog.skillsSummary.enabledTitle': 'Current enabled skills',
+  'agentSettingsDialog.skillsSummary.empty': 'No skills have been explicitly enabled for this agent yet.',
+  'agentSettingsDialog.skillsSummary.warning': 'Loading more than 20 skills can significantly degrade model focus and output quality.',
   'agentSettingsDialog.sections.identity.label': 'Identity',
   'agentSettingsDialog.sections.identity.title': 'Identity',
   'agentSettingsDialog.sections.identity.description': 'Identity settings',
@@ -86,7 +91,7 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string) => translations[key] || key,
+    t: (key: string, options?: { defaultValue?: string }) => translations[key] || options?.defaultValue || key,
   }),
 }));
 
@@ -538,61 +543,24 @@ describe('AgentSettingsDialog shell', () => {
     expect(soulInput).toHaveAttribute('readonly');
   });
 
-  it('saves specified skills after searching and selecting', async () => {
+  it('shows a skill summary and links to the installed skills page', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
-    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({
-      agents: [agentSummary],
+      agents: [{
+        ...agentSummary,
+        manualSkills: ['beta-skill'],
+      }],
       defaultAgentId: 'writer',
-      updateAgentSettings,
-    });
-
-    useSkillsStore.setState({
-      skills: [
-        {
-          id: 'alpha-skill',
-          slug: 'alpha',
-          name: 'Alpha Skill',
-          description: 'Handles alpha work',
-          enabled: true,
-        },
-        {
-          id: 'beta-skill',
-          slug: 'beta',
-          name: 'Beta Skill',
-          description: 'Specialized for reports',
-          enabled: true,
-        },
-      ],
-      fetchSkills: vi.fn().mockResolvedValue(undefined),
     });
 
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Specified' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
-
-    const popover = document.body.querySelector('[data-radix-popper-content-wrapper] > div');
-    expect(popover).toHaveClass('z-[130]');
-
-    const searchInput = await screen.findByPlaceholderText('Search by name, slug, or description');
-    fireEvent.change(searchInput, { target: { value: 'reports' } });
-
-    const betaOption = await screen.findByRole('button', { name: /Beta Skill/ });
-    fireEvent.click(betaOption);
-
-    expect(screen.getByRole('button', { name: /Beta Skill/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save Skills' }));
-
-    await waitFor(() => {
-      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        skillScope: { mode: 'specified', skills: ['beta-skill'] },
-      });
-    });
+    expect(screen.getByText('1 enabled skills')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '/skills?agentId=writer');
+    expect(screen.getByText('beta-skill')).toBeInTheDocument();
   });
 
   it('saves avatar changes from the general panel immediately', async () => {
@@ -686,12 +654,13 @@ describe('AgentSettingsDialog shell', () => {
     expect(screen.getByText('Enable Active Memory first in Settings -> Memory.')).toBeInTheDocument();
   });
 
-  it('locks preset skills and enforces the six-skill limit', async () => {
+  it('shows preset skills as locked in the summary panel', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
     const managedAgent = {
       ...agentSummary,
       managed: true,
+      manualSkills: ['core-skill', 'one', 'two', 'three', 'four', 'five', 'six'],
       presetSkills: ['core-skill'],
       skillScope: { mode: 'specified', skills: ['core-skill', 'one', 'two', 'three', 'four', 'five', 'six'] },
     };
@@ -701,73 +670,12 @@ describe('AgentSettingsDialog shell', () => {
       defaultAgentId: 'writer',
     });
 
-    useSkillsStore.setState({
-      skills: [
-        {
-          id: 'core-skill',
-          slug: 'core',
-          name: 'Core Skill',
-          description: 'Core capability',
-          enabled: true,
-        },
-        {
-          id: 'one',
-          name: 'Skill One',
-          description: 'One',
-          enabled: true,
-        },
-        {
-          id: 'two',
-          name: 'Skill Two',
-          description: 'Two',
-          enabled: true,
-        },
-        {
-          id: 'three',
-          name: 'Skill Three',
-          description: 'Three',
-          enabled: true,
-        },
-        {
-          id: 'four',
-          name: 'Skill Four',
-          description: 'Four',
-          enabled: true,
-        },
-        {
-          id: 'five',
-          name: 'Skill Five',
-          description: 'Five',
-          enabled: true,
-        },
-        {
-          id: 'six',
-          name: 'Skill Six',
-          description: 'Six',
-          enabled: true,
-        },
-        {
-          id: 'seven',
-          name: 'Skill Seven',
-          description: 'Seven',
-          enabled: true,
-        },
-      ],
-      fetchSkills: vi.fn().mockResolvedValue(undefined),
-    });
-
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
-
-    const presetChip = screen.getByRole('button', { name: /Core Skill/ });
-    expect(presetChip).toBeDisabled();
-
-    expect(screen.getByRole('button', { name: /Skill Six/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
-    const extraOption = await screen.findByRole('button', { name: /Skill Seven/ });
-    expect(extraOption).toBeInTheDocument();
+    expect(screen.getByText('1 preset-locked skills')).toBeInTheDocument();
+    expect(screen.getAllByText('core-skill').length).toBeGreaterThan(0);
+    expect(screen.getByText('7 enabled skills')).toBeInTheDocument();
   });
 });

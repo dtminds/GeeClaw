@@ -82,7 +82,7 @@ Built-in bundled plugin support for Feishu/Lark, DingTalk, WeCom, Weixin, and QQ
 Schedule AI tasks to run automatically. Define triggers, set intervals, and let your AI agents work around the clock. The cron task form supports choosing an external delivery channel and selecting the sending account for multi-account channels. A task run history view makes it easy to check execution status.
 
 ### 🧩 Extensible Skill System
-Extend your AI agents with pre-built skills. Browse, install, and manage skills through the integrated skill panel—no package managers required.
+Extend your AI agents with pre-built skills. Browse and install skills from the integrated skill panel, then manage enablement per agent with agent-aware discovery and filtering—no package managers required.
 The marketplace detects whether the China-optimized `skillhub` CLI is available and offers a one-click guided install; if `skillhub` is unavailable, GeeClaw falls back to the built-in `clawhub` installer automatically.
 
 ### ⚙️ Environment Variable Management

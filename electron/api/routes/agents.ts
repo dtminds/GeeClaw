@@ -212,6 +212,7 @@ export async function handleAgentRoutes(
           name?: string;
           avatarPresetId?: string;
           activeMemoryEnabled?: boolean;
+          manualSkills?: string[];
           skillScope?: { mode: 'default' | 'specified'; skills?: string[] };
         }>(req);
         const agentId = decodeURIComponent(parts[0]);
@@ -219,6 +220,7 @@ export async function handleAgentRoutes(
           name: body.name,
           avatarPresetId: body.avatarPresetId,
           activeMemoryEnabled: typeof body.activeMemoryEnabled === 'boolean' ? body.activeMemoryEnabled : undefined,
+          manualSkills: Array.isArray(body.manualSkills) ? body.manualSkills : undefined,
           skillScope: body.skillScope?.mode === 'specified'
             ? { mode: 'specified', skills: body.skillScope.skills ?? [] }
             : body.skillScope?.mode === 'default'

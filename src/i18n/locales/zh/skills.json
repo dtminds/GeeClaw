@@ -8,6 +8,10 @@
         "installed": "已安装",
         "marketplace": "市场"
     },
+    "agentScope": {
+        "label": "智能体",
+        "main": "主智能体"
+    },
     "filter": {
         "allSkills": "已安装",
         "all": "全部",

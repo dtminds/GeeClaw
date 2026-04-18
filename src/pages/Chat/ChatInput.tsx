@@ -38,6 +38,7 @@ import { findRecentAssistantMessageWithReliableUsage, formatTokenCount, getConte
 import { findSkillKeywordRecommendation } from './skill-recommendations';
 import {
   buildSlashPickerItems,
+  fetchAgentScopedSkills,
   fetchPresetAgentSkills,
   getSlashCommandDescription,
   getSlashCommandName,
@@ -623,6 +624,7 @@ export const ChatInput = memo(function ChatInput({
   const [editorFocused, setEditorFocused] = useState(false);
   const [editorText, setEditorText] = useState('');
   const [slashQuery, setSlashQuery] = useState<SlashSkillQuery | null>(null);
+  const [agentScopedSkills, setAgentScopedSkills] = useState<Skill[]>([]);
   const [presetAgentSkills, setPresetAgentSkills] = useState<Skill[]>([]);
   const [skillPickerDismissed, setSkillPickerDismissed] = useState(false);
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
@@ -825,11 +827,27 @@ export const ChatInput = memo(function ChatInput({
     [currentAgent],
   );
 
-  const resolvableSkills = useMemo(
+  const storeResolvableSkills = useMemo(
     () => [...skills]
       .filter((skill) => skill.eligible !== false)
       .sort((a, b) => a.name.localeCompare(b.name)),
     [skills],
+  );
+
+  const scopedResolvableSkills = useMemo(
+    () => [...agentScopedSkills]
+      .filter((skill) => skill.eligible !== false)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [agentScopedSkills],
+  );
+
+  const resolvableSkills = useMemo(
+    () => (
+      currentAgent && gatewayStatusState === 'running'
+        ? scopedResolvableSkills
+        : storeResolvableSkills
+    ),
+    [currentAgent, gatewayStatusState, scopedResolvableSkills, storeResolvableSkills],
   );
 
   const availableSkills = useMemo(
@@ -981,6 +999,40 @@ export const ChatInput = memo(function ChatInput({
   useEffect(() => {
     let cancelled = false;
 
+    if (!currentAgent) {
+      setAgentScopedSkills([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (gatewayStatusState !== 'running') {
+      setAgentScopedSkills([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchAgentScopedSkills(currentAgent.id, gatewayRpc)
+      .then((nextSkills) => {
+        if (!cancelled) {
+          setAgentScopedSkills(nextSkills.filter((skill) => skill.hidden !== true));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAgentScopedSkills([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAgent, gatewayRpc, gatewayStatusState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     if (!currentAgent || currentAgent.source !== 'preset') {
       setPresetAgentSkills([]);
       return () => {
@@ -1000,7 +1052,8 @@ export const ChatInput = memo(function ChatInput({
         if (cancelled) {
           return;
         }
-        setPresetAgentSkills(nextSkills.filter((skill) => skill.hidden !== true));
+        const visibleSkills = nextSkills.filter((skill) => skill.hidden !== true);
+        setPresetAgentSkills(visibleSkills.length > 0 ? visibleSkills : presetAgentFallbackSkills);
       })
       .catch(() => {
         if (!cancelled) {

@@ -12,6 +12,7 @@ import type { AgentSummary } from '@/types/agent';
 
 const {
   fetchPresetAgentSkillsMock,
+  fetchAgentScopedSkillsMock,
   hostApiFetchMock,
   buildSlashPickerItemsMock,
   isSlashCommandItemMock,
@@ -21,6 +22,7 @@ const {
   editorCommandsFocusMock,
 } = vi.hoisted(() => ({
   fetchPresetAgentSkillsMock: vi.fn(),
+  fetchAgentScopedSkillsMock: vi.fn(),
   hostApiFetchMock: vi.fn(),
   buildSlashPickerItemsMock: vi.fn(({ presetAgentSkills = [], globalSkills = [] }: { presetAgentSkills?: unknown[]; globalSkills?: unknown[] }) => (
     [...presetAgentSkills, ...globalSkills]
@@ -34,6 +36,7 @@ const {
 
 vi.mock('@/pages/Chat/slash-picker', () => ({
   buildSlashPickerItems: buildSlashPickerItemsMock,
+  fetchAgentScopedSkills: fetchAgentScopedSkillsMock,
   fetchPresetAgentSkills: fetchPresetAgentSkillsMock,
   getSlashCommandDescription: vi.fn(() => ''),
   getSlashCommandName: vi.fn(() => ''),
@@ -168,6 +171,8 @@ describe('ChatInput preset agent skills loading', () => {
 
     fetchPresetAgentSkillsMock.mockReset();
     fetchPresetAgentSkillsMock.mockResolvedValue([]);
+    fetchAgentScopedSkillsMock.mockReset();
+    fetchAgentScopedSkillsMock.mockResolvedValue([]);
     hostApiFetchMock.mockReset();
     buildSlashPickerItemsMock.mockClear();
     isSlashCommandItemMock.mockClear();
@@ -258,6 +263,72 @@ describe('ChatInput preset agent skills loading', () => {
       expect(fetchPresetAgentSkillsMock).toHaveBeenCalledTimes(1);
     });
     expect(fetchPresetAgentSkillsMock).toHaveBeenCalledWith('delivery-execution', expect.any(Function));
+  });
+
+  it('uses agent-scoped skills.status candidates instead of the global store snapshot for the toolbar menu', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([
+      {
+        id: 'agent-skill',
+        slug: 'agent-skill',
+        name: 'Agent Skill',
+        description: 'Scoped to the current agent',
+        enabled: true,
+        source: 'openclaw-managed',
+      },
+    ]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledWith('delivery-execution', expect.any(Function));
+    });
+
+    const skillsButton = screen.getByRole('button', { name: 'composer.skillsMenuLabel' });
+    fireEvent.pointerDown(skillsButton);
+
+    expect(await screen.findByText('Agent Skill')).toBeInTheDocument();
+    expect(screen.queryByText('Global Skill')).not.toBeInTheDocument();
+  });
+
+  it('falls back to preset skill slugs when scoped status data is empty for a preset agent', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([]);
+    fetchPresetAgentSkillsMock.mockResolvedValue([]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: false,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    const skillsButton = screen.getByRole('button', { name: 'composer.skillsMenuLabel' });
+    fireEvent.pointerDown(skillsButton);
+
+    expect(await screen.findByText('dummy-dataset')).toBeInTheDocument();
+    expect(screen.getByText('job-stories')).toBeInTheDocument();
   });
 
   it('opens the toolbar skill menu with descriptive skill items and inserts a skill token', async () => {

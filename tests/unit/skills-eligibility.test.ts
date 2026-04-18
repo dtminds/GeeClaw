@@ -64,6 +64,7 @@ describe('skills store eligibility mapping', () => {
     }));
     expect(hostApiFetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
       body: JSON.stringify({
+        agentId: 'main',
         skills: [
           {
             skillKey: 'blucli',
@@ -181,5 +182,61 @@ describe('skills store eligibility mapping', () => {
         hidden: false,
       }),
     ]);
+  });
+
+  it('fetches installed skills for the main agent by default', async () => {
+    rpcMock.mockResolvedValueOnce({ skills: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
+    hostApiFetchMock.mockResolvedValueOnce({});
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
+
+    const { useSkillsStore } = await import('@/stores/skills');
+    await useSkillsStore.getState().fetchSkills();
+
+    expect(rpcMock).toHaveBeenCalledWith('skills.status', { agentId: 'main' });
+    expect(hostApiFetchMock.mock.calls[0]).toEqual(['/api/clawhub/list?agentId=main']);
+    expect(hostApiFetchMock.mock.calls[1]).toEqual(['/api/skills/configs?agentId=main']);
+    expect(hostApiFetchMock.mock.calls[2]).toEqual(['/api/skills/policy?agentId=main']);
+  });
+
+  it('fetches installed skills for an explicit agent id', async () => {
+    rpcMock.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'writer-toolkit',
+        name: 'Writer Toolkit',
+        description: 'Agent-specific skill',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+        source: 'agents-skills-project',
+      }],
+    });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
+    hostApiFetchMock.mockResolvedValueOnce({});
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
+
+    const { useSkillsStore } = await import('@/stores/skills');
+    await useSkillsStore.getState().fetchSkills('writer');
+
+    expect(rpcMock).toHaveBeenCalledWith('skills.status', { agentId: 'writer' });
+    expect(hostApiFetchMock.mock.calls[0]).toEqual([
+      '/api/skills/ensure-entries',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'writer',
+          skills: [{
+            skillKey: 'writer-toolkit',
+            source: 'agents-skills-project',
+          }],
+        }),
+      }),
+    ]);
+    expect(hostApiFetchMock.mock.calls[1]).toEqual(['/api/clawhub/list?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[2]).toEqual(['/api/skills/configs?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[3]).toEqual(['/api/skills/policy?agentId=writer']);
   });
 });

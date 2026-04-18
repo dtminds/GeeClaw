@@ -3,6 +3,7 @@
  * Browse and manage AI skills
  */
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AiCloudIcon,
@@ -38,6 +39,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useSkillsStore } from '@/stores/skills';
 import { useGatewayStore } from '@/stores/gateway';
+import { useAgentsStore } from '@/stores/agents';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
@@ -54,6 +56,7 @@ import type { TFunction } from 'i18next';
 // Skill detail dialog component
 interface SkillDetailDialogProps {
   skill: Skill | null;
+  agentId: string;
   isOpen: boolean;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
@@ -210,7 +213,7 @@ function getSkillIssueMessages(skill: Skill, labels: SkillIssueLabels): string[]
   return issues;
 }
 
-export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
+export function SkillDetailDialog({ skill, agentId, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
   const { t } = useTranslation(['skills', 'common']);
   const { fetchSkills } = useSkillsStore();
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
@@ -343,7 +346,7 @@ export function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstal
       }
 
       // Refresh skills from gateway to get updated config
-      await fetchSkills();
+      await fetchSkills(agentId);
 
       setValidationMessages([]);
       toast.success(t('detail.configSaved'));
@@ -806,8 +809,6 @@ export function Skills() {
     loading,
     error,
     fetchSkills,
-    enableSkill,
-    disableSkill,
     marketplaceCatalog,
     marketplaceLoading,
     marketplaceError,
@@ -820,6 +821,9 @@ export function Skills() {
     uninstallSkill,
     installing
   } = useSkillsStore();
+  const agents = useAgentsStore((state) => state.agents);
+  const fetchAgents = useAgentsStore((state) => state.fetchAgents);
+  const updateAgentSettings = useAgentsStore((state) => state.updateAgentSettings);
   const { t } = useTranslation('skills');
   const issueLabels: SkillIssueLabels = {
     unavailable: t('detail.unavailable'),
@@ -837,6 +841,8 @@ export function Skills() {
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [selectedMarketplaceSkill, setSelectedMarketplaceSkill] = useState<MarketplaceSkill | null>(null);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchParams] = useSearchParams();
+  const [selectedAgentId, setSelectedAgentId] = useState(() => searchParams.get('agentId') || 'main');
   const [selectedSource, setSelectedSource] = useState<InstalledSkillFilter>('enabled');
   const [marketplaceSection, setMarketplaceSection] = useState('featured');
   const [marketplacePage, setMarketplacePage] = useState(1);
@@ -846,6 +852,15 @@ export function Skills() {
 
   const isGatewayRunning = gatewayStatus.state === 'running';
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
+  const mainAgent = agents.find((agent) => agent.id === 'main');
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const presetSkillSet = new Set(selectedAgent?.presetSkills ?? []);
+  const agentOptions = [
+    { id: 'main', name: mainAgent?.name || t('agentScope.main') },
+    ...agents
+      .filter((agent) => agent.id !== 'main')
+      .sort((left, right) => left.name.localeCompare(right.name)),
+  ];
 
   // Debounce the gateway warning to avoid flickering during brief restarts (like skill toggles)
   useEffect(() => {
@@ -864,12 +879,25 @@ export function Skills() {
     return () => clearTimeout(timer);
   }, [isGatewayRunning]);
 
+  useEffect(() => {
+    if (agents.length === 0) {
+      void fetchAgents();
+    }
+  }, [agents.length, fetchAgents]);
+
+  useEffect(() => {
+    const requestedAgentId = searchParams.get('agentId');
+    if (requestedAgentId && requestedAgentId !== selectedAgentId) {
+      setSelectedAgentId(requestedAgentId);
+    }
+  }, [searchParams, selectedAgentId]);
+
   // Fetch skills on mount
   useEffect(() => {
     if (isGatewayRunning) {
-      fetchSkills();
+      void fetchSkills(selectedAgentId);
     }
-  }, [fetchSkills, isGatewayRunning]);
+  }, [fetchSkills, isGatewayRunning, selectedAgentId]);
 
   // Filter skills
   const safeSkills = Array.isArray(skills) ? skills : [];
@@ -915,20 +943,48 @@ export function Skills() {
     { key: 'personal', label: t('filter.personal'), count: sourceStats.personal },
   ];
 
-  // Handle toggle
-  const handleToggle = useCallback(async (skillId: string, enable: boolean) => {
+  const updateSelectedAgentSkill = useCallback(async (skillId: string, enable: boolean, options?: { notify?: boolean }) => {
+    if (!selectedAgent) {
+      return;
+    }
+
+    if (!enable && presetSkillSet.has(skillId)) {
+      return;
+    }
+
     try {
+      const baselineEnabledSkillIds = (
+        selectedAgent.manualSkills && selectedAgent.manualSkills.length > 0
+          ? selectedAgent.manualSkills
+          : safeSkills.filter((skill) => skill.enabled).map((skill) => skill.id)
+      );
+      const nextSkills = new Set<string>([
+        ...baselineEnabledSkillIds,
+        ...(selectedAgent.presetSkills ?? []),
+      ]);
+
       if (enable) {
-        await enableSkill(skillId);
-        toast.success(t('toast.enabled'));
+        nextSkills.add(skillId);
       } else {
-        await disableSkill(skillId);
-        toast.success(t('toast.disabled'));
+        nextSkills.delete(skillId);
+      }
+
+      await updateAgentSettings(selectedAgent.id, {
+        manualSkills: [...nextSkills].sort((left, right) => left.localeCompare(right)),
+      });
+      await fetchSkills(selectedAgent.id);
+      if (options?.notify !== false) {
+        toast.success(enable ? t('toast.enabled') : t('toast.disabled'));
       }
     } catch (err) {
       toast.error(String(err));
     }
-  }, [enableSkill, disableSkill, t]);
+  }, [fetchSkills, presetSkillSet, safeSkills, selectedAgent, t, updateAgentSettings]);
+
+  // Handle toggle
+  const handleToggle = useCallback(async (skillId: string, enable: boolean) => {
+    await updateSelectedAgentSkill(skillId, enable);
+  }, [updateSelectedAgentSkill]);
 
   const [skillsDirPath, setSkillsDirPath] = useState('~/.openclaw/skills');
 
@@ -943,12 +999,14 @@ export function Skills() {
   const handleInstall = useCallback(async (slug: string) => {
     try {
       await installSkill(slug);
+      await fetchSkills(selectedAgentId);
       const installedSkill = useSkillsStore.getState().skills.find((skill) => skill.id === slug || skill.slug === slug);
       if (installedSkill?.eligible === false) {
         toast.success(t('toast.installedUnavailable'));
         return;
       }
-      await enableSkill(slug);
+      await updateSelectedAgentSkill(installedSkill?.id ?? slug, true, { notify: false });
+      await fetchSkills(selectedAgentId);
       toast.success(t('toast.installed'));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -960,7 +1018,7 @@ export function Skills() {
         toast.error(t('toast.failedInstall') + ': ' + errorMessage);
       }
     }
-  }, [installSkill, enableSkill, t, skillsDirPath]);
+  }, [installSkill, fetchSkills, selectedAgentId, t, skillsDirPath, updateSelectedAgentSkill]);
 
   useEffect(() => {
     if (activeTab !== 'marketplace' || marketplaceCatalog || marketplaceLoading) {
@@ -1088,11 +1146,12 @@ export function Skills() {
           baseDir: target.baseDir,
         });
       }
+      await fetchSkills(selectedAgentId);
       toast.success(t('toast.uninstalled'));
     } catch (err) {
       toast.error(t('toast.failedUninstall') + ': ' + String(err));
     }
-  }, [uninstallSkill, t]);
+  }, [uninstallSkill, fetchSkills, selectedAgentId, t]);
 
   const handleOpenSkillFolder = useCallback(async (skill: Skill) => {
     try {
@@ -1171,7 +1230,7 @@ export function Skills() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills()}
+              onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills(selectedAgentId)}
               disabled={activeTab === 'all' ? !isGatewayRunning : (marketplaceLoading || categorySkillsLoading)}
               className="surface-hover ml-1 h-8 w-8 rounded-md border-black/10 bg-transparent text-muted-foreground shadow-none dark:border-white/10"
               title="Refresh"
@@ -1225,9 +1284,29 @@ export function Skills() {
             </div>
 
             {/* Sub-tabs: underline style */}
-            <div className="flex items-center flex-wrap gap-6 border-b border-black/5 dark:border-white/5 px-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-black/5 px-4 dark:border-white/5">
               {activeTab === 'all' && (
                 <>
+                  <div className="flex items-center gap-3 pr-2">
+                    <span className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+                      {t('agentScope.label')}
+                    </span>
+                    <div className="relative min-w-[200px]">
+                      <select
+                        value={selectedAgentId}
+                        onChange={(event) => setSelectedAgentId(event.target.value)}
+                        className="field-focus-ring h-10 w-full appearance-none rounded-xl border border-black/10 bg-white/85 px-4 pr-10 text-sm text-foreground shadow-sm outline-none transition-all dark:border-white/10 dark:bg-background"
+                      >
+                        {agentOptions.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronRight className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-muted-foreground" />
+                    </div>
+                  </div>
+
                   {installedFilters.map((filter) => {
                     const active = selectedSource === filter.key;
                     return (
@@ -1353,7 +1432,7 @@ export function Skills() {
                         <Switch
                           checked={skill.enabled}
                           onCheckedChange={(checked) => handleToggle(skill.id, checked)}
-                          disabled={skill.isCore || isUnavailable}
+                          disabled={skill.isCore || isUnavailable || presetSkillSet.has(skill.id)}
                         />
                       </div>
                     </div>
@@ -1549,6 +1628,7 @@ export function Skills() {
       {/* Skill Detail Dialog */}
       <SkillDetailDialog
         skill={selectedSkill}
+        agentId={selectedAgentId}
         isOpen={!!selectedSkill}
         onClose={() => setSelectedSkill(null)}
         onToggle={(enabled) => {
