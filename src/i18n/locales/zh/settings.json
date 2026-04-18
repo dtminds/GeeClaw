@@ -36,9 +36,9 @@
       },
       "activeMemory": {
         "title": "Active Memory",
-        "description": "我会在生成回复前先读取相关的记忆，并主动注入到对话中",
+        "description": "我会在生成回复前先读取相关的记忆，并主动注入到对话中，由于多一步记忆召回，回复时长会增加",
         "modelTitle": "专用模型",
-        "modelDescription": "建议优先选择低成本、低延迟的小模型，用于记忆检索与整理"
+        "modelDescription": "强烈建议选择低成本、低延迟的小模型，用于记忆检索与整理"
       },
       "losslessClaw": {
         "title": "Lossless Claw",
