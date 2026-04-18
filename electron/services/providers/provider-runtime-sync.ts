@@ -345,10 +345,11 @@ export async function syncProviderApiKeyToRuntime(
   gatewayManager?: GatewayManager,
 ): Promise<void> {
   const ock = getOpenClawProviderKey(providerType, providerId);
-  if (shouldUseEnvBackedApiKeyAuth(providerType)) {
+  const trimmedKey = apiKey.trim();
+  if (shouldUseEnvBackedApiKeyAuth(providerType) || !trimmedKey) {
     await removeProviderKeyFromOpenClaw(ock);
   } else {
-    await saveProviderKeyToOpenClaw(ock, apiKey);
+    await saveProviderKeyToOpenClaw(ock, trimmedKey);
   }
 
   const provider = await getProvider(providerId);
@@ -393,11 +394,12 @@ export async function syncAllProviderAuthToRuntime(): Promise<void> {
     }
 
     if (secret.type === 'api_key') {
-      if (shouldUseEnvBackedApiKeyAuth(account.vendorId, account.authMode)) {
+      const trimmedKey = secret.apiKey.trim();
+      if (shouldUseEnvBackedApiKeyAuth(account.vendorId, account.authMode) || !trimmedKey) {
         await removeProviderKeyFromOpenClaw(runtimeProviderKey);
         continue;
       }
-      await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
+      await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
       continue;
     }
 
@@ -434,12 +436,19 @@ async function syncProviderSecretToRuntime(
     const trimmedKey = apiKey.trim();
     if (trimmedKey) {
       await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
+    } else {
+      await removeProviderKeyFromOpenClaw(runtimeProviderKey);
     }
     return;
   }
 
   if (secret?.type === 'api_key') {
-    await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
+    const trimmedKey = secret.apiKey.trim();
+    if (trimmedKey) {
+      await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
+    } else {
+      await removeProviderKeyFromOpenClaw(runtimeProviderKey);
+    }
     return;
   }
 
@@ -766,12 +775,13 @@ export async function syncDefaultProviderToRuntime(
 
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
+  const trimmedProviderKey = providerKey?.trim() ?? '';
   const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
   const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary);
   const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks);
   const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
-  const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
+  const isOAuthProvider = (oauthTypes.includes(provider.type) && !trimmedProviderKey) || Boolean(browserOAuthRuntimeProvider);
   const account = await getProviderAccount(provider.id);
   const useEnvBackedApiKeyAuth = shouldUseEnvBackedApiKeyAuth(provider.type, account?.authMode ?? null);
 
@@ -787,15 +797,15 @@ export async function syncDefaultProviderToRuntime(
       }
     }
 
-    if (useEnvBackedApiKeyAuth) {
+    if (useEnvBackedApiKeyAuth || !trimmedProviderKey) {
       await removeProviderKeyFromOpenClaw(ock);
-    } else if (providerKey) {
-      await saveProviderKeyToOpenClaw(ock, providerKey);
+    } else {
+      await saveProviderKeyToOpenClaw(ock, trimmedProviderKey);
     }
 
     const context = await resolveRuntimeSyncContext(provider);
     if (context) {
-      await syncAgentProviderModelCatalog(provider, ock, context, providerKey ?? undefined);
+      await syncAgentProviderModelCatalog(provider, ock, context, trimmedProviderKey || undefined);
     }
   } else {
     if (browserOAuthRuntimeProvider) {

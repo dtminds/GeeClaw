@@ -498,6 +498,10 @@ export async function getActiveOpenClawProviders(): Promise<Set<string>> {
   return activeProviders;
 }
 
+// Intentional no-op: GeeClaw no longer maintains per-agent models.json.
+// OpenClaw derives agent runtime model catalogs from openclaw.json instead.
+// Callers remain in place for now to avoid widening this refactor across the
+// runtime sync layer.
 export async function updateAgentModelProvider(
   providerType: string,
   entry: {

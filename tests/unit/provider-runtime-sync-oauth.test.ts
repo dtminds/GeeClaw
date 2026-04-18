@@ -375,6 +375,22 @@ describe('provider runtime sync for browser OAuth', () => {
     }));
   });
 
+  it('removes custom provider api keys from auth-profiles when the updated key is blank', async () => {
+    vi.mocked(getProvider).mockResolvedValue(makeProvider({
+      id: 'custom-work',
+      name: 'Custom Work',
+      type: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiProtocol: 'openai-completions',
+      models: ['gpt-4.1'],
+    }));
+
+    await syncProviderApiKeyToRuntime('custom', 'custom-work', '   ');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('custom-work');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+  });
+
   it('clears custom provider api keys from agent models.json when deleted', async () => {
     const customProvider = makeProvider({
       id: 'custom-work',
@@ -421,6 +437,30 @@ describe('provider runtime sync for browser OAuth', () => {
     expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
   });
 
+  it('removes stale auth-profiles api_key entries for non-env-backed providers when the stored key is blank', async () => {
+    const { listProviderAccounts } = await import('@electron/services/providers/provider-store');
+
+    vi.mocked(listProviderAccounts).mockResolvedValue([
+      makeAccount({
+        id: 'custom-work',
+        vendorId: 'custom',
+        label: 'Custom Work',
+        authMode: 'api_key',
+        isDefault: false,
+      }),
+    ]);
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'api_key',
+      accountId: 'custom-work',
+      apiKey: '   ',
+    });
+
+    await syncAllProviderAuthToRuntime();
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('custom-work');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+  });
+
   it('clears stale auth-profiles api_key entries when switching the default provider in api_key mode', async () => {
     vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
       authMode: 'api_key',
@@ -433,6 +473,75 @@ describe('provider runtime sync for browser OAuth', () => {
     expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('openai');
     expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
     expect(saveOAuthTokenToOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('removes stale auth-profiles api_key entries when switching to a non-env-backed default provider without a key', async () => {
+    vi.mocked(getProvider).mockResolvedValue(makeProvider({
+      id: 'custom-work',
+      name: 'Custom Work',
+      type: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiProtocol: 'openai-completions',
+      models: ['gpt-4.1'],
+    }));
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      id: 'custom-work',
+      vendorId: 'custom',
+      label: 'Custom Work',
+      authMode: 'api_key',
+      isDefault: true,
+    }));
+    vi.mocked(getApiKey).mockResolvedValue('   ');
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: null,
+      fallbacks: [],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
+
+    await syncDefaultProviderToRuntime('custom-work');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('custom-work');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('removes stale auth-profiles api_key entries when saving a non-env-backed provider with an explicit blank key', async () => {
+    const customProvider = makeProvider({
+      id: 'custom-work',
+      name: 'Custom Work',
+      type: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiProtocol: 'openai-completions',
+      models: ['gpt-4.1'],
+    });
+
+    await syncSavedProviderToRuntime(customProvider, '   ');
+
+    expect(removeProviderKeyFromOpenClaw).toHaveBeenCalledWith('custom-work');
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
   });
 
   it('syncs Ollama provider config to runtime with the openai-completions protocol', async () => {
