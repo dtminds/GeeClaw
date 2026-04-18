@@ -240,6 +240,10 @@ describe('removeProviderFromOpenClaw', () => {
 
     expect(models).toEqual({
       providers: {
+        'custom-abc12345': {
+          baseUrl: 'https://api.example.com/v1',
+          api: 'openai-completions',
+        },
         anthropic: {
           baseUrl: 'https://api.anthropic.com/v1',
           api: 'anthropic-messages',
@@ -350,7 +354,7 @@ describe('removeProviderFromOpenClaw', () => {
     ]);
   });
 
-  it('writes env-backed api_key providers as interpolated env var references in agent models.json', async () => {
+  it('does not mutate agent models.json for env-backed api_key providers', async () => {
     await writeAgentModels('main', {
       providers: {
         openrouter: {
@@ -372,7 +376,7 @@ describe('removeProviderFromOpenClaw', () => {
     const models = await readAgentModels('main');
     const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
 
-    expect(providers.openrouter?.apiKey).toBe('${OPENROUTER_API_KEY}');
+    expect(providers.openrouter?.apiKey).toBe('stale-key');
   });
 
   it('writes GeeClaw apiKey as an interpolated env var reference in openclaw.json', async () => {
@@ -399,7 +403,7 @@ describe('removeProviderFromOpenClaw', () => {
     expect(providers.geeclaw?.apiKey).toBe('${GEECLAW_API_KEY}');
   });
 
-  it('writes GeeClaw apiKey as an interpolated env var reference in agent models.json', async () => {
+  it('does not mutate agent models.json for GeeClaw provider updates', async () => {
     await writeAgentModels('main', {
       providers: {
         geeclaw: {
@@ -421,10 +425,10 @@ describe('removeProviderFromOpenClaw', () => {
     const models = await readAgentModels('main');
     const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
 
-    expect(providers.geeclaw?.apiKey).toBe('${GEECLAW_API_KEY}');
+    expect(providers.geeclaw?.apiKey).toBe('stale-key');
   });
 
-  it('deletes apiKey from agent models.json when an empty key is provided', async () => {
+  it('does not delete apiKey from agent models.json when an empty key is provided', async () => {
     await writeAgentModels('main', {
       providers: {
         customdemo: {
@@ -449,8 +453,8 @@ describe('removeProviderFromOpenClaw', () => {
     expect(providers.customdemo).toMatchObject({
       baseUrl: 'https://api.example.com/v1',
       api: 'openai-completions',
+      apiKey: 'stale-key',
     });
-    expect(providers.customdemo?.apiKey).toBeUndefined();
   });
 
   it('syncs Moonshot Global provider baseUrl into the Kimi web search plugin config', async () => {

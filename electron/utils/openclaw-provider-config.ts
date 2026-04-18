@@ -1,12 +1,8 @@
-import { access, readFile, writeFile } from 'fs/promises';
-import { constants } from 'fs';
-import { join } from 'path';
 import {
   getProviderEnvVar,
   getProviderDefaultModel,
   getProviderConfig,
 } from './provider-registry';
-import { getOpenClawConfigDir } from './paths';
 import {
   mutateOpenClawConfigDocument,
   readOpenClawConfigDocument,
@@ -17,7 +13,6 @@ import {
   isOpenClawOAuthPluginProviderKey,
 } from './provider-keys';
 import {
-  discoverOpenClawAgentIds,
   removeProviderProfilesFromOpenClaw,
 } from './openclaw-auth';
 import type { ProviderConfiguredModel } from '../shared/providers/types';
@@ -67,29 +62,6 @@ function ensureOAuthPluginEnabled(config: Record<string, unknown>, provider: str
   config.plugins = plugins;
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readJsonFile<T>(filePath: string): Promise<T | null> {
-  try {
-    if (!(await fileExists(filePath))) return null;
-    const raw = await readFile(filePath, 'utf-8');
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
-  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 async function readOpenClawJson(): Promise<Record<string, unknown>> {
   return await readOpenClawConfigDocument();
 }
@@ -106,28 +78,7 @@ export function buildProviderEnvVars(providers: Array<{ type: string; apiKey: st
 }
 
 export async function removeProviderFromOpenClaw(provider: string): Promise<void> {
-  const agentIds = await discoverOpenClawAgentIds();
-  if (agentIds.length === 0) agentIds.push('main');
-
   await removeProviderProfilesFromOpenClaw(provider);
-
-  for (const id of agentIds) {
-    const modelsPath = join(getOpenClawConfigDir(), 'agents', id, 'agent', 'models.json');
-    try {
-      if (await fileExists(modelsPath)) {
-        const raw = await readFile(modelsPath, 'utf-8');
-        const data = JSON.parse(raw) as Record<string, unknown>;
-        const providers = data.providers as Record<string, unknown> | undefined;
-        if (providers && providers[provider]) {
-          delete providers[provider];
-          await writeFile(modelsPath, JSON.stringify(data, null, 2), 'utf-8');
-          console.log(`Removed models.json entry for provider "${provider}" (agent "${id}")`);
-        }
-      }
-    } catch (err) {
-      console.warn(`Failed to remove provider ${provider} from models.json (agent "${id}"):`, err);
-    }
-  }
 
   try {
     await mutateOpenClawConfigDocument<void>((config) => {
@@ -557,63 +508,8 @@ export async function updateAgentModelProvider(
     authHeader?: boolean;
   }
 ): Promise<void> {
-  const agentIds = await discoverOpenClawAgentIds();
-  for (const agentId of agentIds) {
-    const modelsPath = join(getOpenClawConfigDir(), 'agents', agentId, 'agent', 'models.json');
-    let data: Record<string, unknown> = {};
-    try {
-      data = (await readJsonFile<Record<string, unknown>>(modelsPath)) ?? {};
-    } catch {
-      // corrupt / missing – start with an empty object
-    }
-
-    const providers = (
-      data.providers && typeof data.providers === 'object' ? data.providers : {}
-    ) as Record<string, Record<string, unknown>>;
-
-    const existing: Record<string, unknown> =
-      providers[providerType] && typeof providers[providerType] === 'object'
-        ? { ...providers[providerType] }
-        : {};
-
-    const existingModels = Array.isArray(existing.models)
-      ? (existing.models as Array<Record<string, unknown>>)
-      : [];
-
-    const mergedModels = normalizeRuntimeProviderModels(entry.models).map((m) => {
-      const prev = existingModels.find((e) => e.id === m.id);
-      return withDefaultModelFlags(prev ? { ...prev, ...m } : { ...m });
-    });
-
-    if (entry.baseUrl !== undefined) existing.baseUrl = entry.baseUrl;
-    if (entry.api !== undefined) existing.api = entry.api;
-    if (entry.models !== undefined) {
-      if (mergedModels.length > 0) {
-        existing.models = mergedModels;
-      } else {
-        delete existing.models;
-      }
-    }
-    if (entry.apiKey !== undefined) {
-      const normalizedApiKey = entry.apiKey.trim();
-      if (normalizedApiKey) {
-        existing.apiKey = formatProviderApiKeyReference(providerType, normalizedApiKey);
-      } else {
-        delete existing.apiKey;
-      }
-    }
-    if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
-
-    providers[providerType] = existing;
-    data.providers = providers;
-
-    try {
-      await writeJsonFile(modelsPath, data);
-      console.log(`Updated models.json for agent "${agentId}" provider "${providerType}"`);
-    } catch (err) {
-      console.warn(`Failed to update models.json for agent "${agentId}":`, err);
-    }
-  }
+  void providerType;
+  void entry;
 }
 
 export { getProviderEnvVar } from './provider-registry';
