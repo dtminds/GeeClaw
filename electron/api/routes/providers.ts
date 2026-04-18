@@ -375,7 +375,7 @@ export async function handleProviderRoutes(
           await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, ctx.gatewayManager);
         } else {
           await providerService.deleteLegacyProviderApiKey(providerId);
-          await syncDeletedProviderApiKeyToRuntime(existing, providerId);
+          await syncDeletedProviderApiKeyToRuntime(existing, providerId, undefined, ctx.gatewayManager);
         }
       }
       await syncUpdatedProviderToRuntime(nextConfig, body.apiKey, ctx.gatewayManager);

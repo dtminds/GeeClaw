@@ -378,7 +378,7 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
                   await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, gatewayManager);
                 } else {
                   await providerService.deleteLegacyProviderApiKey(providerId);
-                  await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock);
+                  await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock, gatewayManager);
                 }
               }
 
@@ -1793,7 +1793,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
             await syncProviderApiKeyToRuntime(nextConfig.type, providerId, trimmedKey, gatewayManager);
           } else {
             await providerService.deleteLegacyProviderApiKey(providerId);
-            await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock);
+            await syncDeletedProviderApiKeyToRuntime(nextConfig, providerId, ock, gatewayManager);
           }
         }
 
