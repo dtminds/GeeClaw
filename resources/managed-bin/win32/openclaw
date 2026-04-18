@@ -16,6 +16,7 @@ esac
 export OPENCLAW_EMBEDDED_IN="GeeClaw"
 export OPENCLAW_STATE_DIR="${USERPROFILE:-$HOME}/.openclaw-geeclaw"
 export OPENCLAW_CONFIG_PATH="${OPENCLAW_STATE_DIR}/openclaw.json"
+export PNPM_HOME="$SCRIPT_DIR"
 NODE_EXE="$INSTALL_DIR/resources/bin/node.exe"
 LEGACY_ENTRY="$INSTALL_DIR/resources/openclaw/openclaw.mjs"
 if [ -n "${GEECLAW_USER_DATA_DIR:-}" ]; then
