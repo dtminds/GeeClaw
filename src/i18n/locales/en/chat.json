@@ -138,7 +138,7 @@
             "skills": {
                 "label": "Skills",
                 "title": "Skills",
-                "description": "Skill scope and capabilities.",
+                "description": "",
                 "placeholder": ""
             },
             "identity": {

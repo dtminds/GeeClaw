@@ -138,7 +138,7 @@
             "skills": {
                 "label": "技能",
                 "title": "技能",
-                "description": "你可以设置Agent的技能范围，设置为指定后，Agent上下文中将只注入指定的技能摘要，提高指令遵循能力，节约token",
+                "description": "",
                 "placeholder": ""
             },
             "identity": {
