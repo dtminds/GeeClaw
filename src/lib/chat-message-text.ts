@@ -4,7 +4,7 @@ const RUNTIME_CHANNEL_TAG_RE = /<\/?(?:analysis|commentary|final)\b[^>]*>/gi;
 const OPENCLAW_INTERNAL_CONTEXT_BEGIN = '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>';
 const OPENCLAW_INTERNAL_CONTEXT_END = '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>';
 const OPENCLAW_INTERNAL_CONTEXT_TRUNCATED = '...(truncated)...';
-const OPENCLAW_SYSTEM_EVENT_LINE_RE = /^System(?: \(untrusted\))?: \[[^\]]+\] .*(?:\r?\n|$)/;
+const OPENCLAW_SYSTEM_EVENT_LINE_RE = /^System(?: \(untrusted\))?: \[[^\]]+\] .*/;
 const OPENCLAW_CURRENT_TIME_LINE_RE = /^Current time: .+ \/ .+ UTC$/;
 const OPENCLAW_CRON_HEADER_RE = /^\[cron:[a-f0-9-]{8,}\b[^\]]*\]\s*.+$/i;
 const OPENCLAW_EXEC_FOLLOWUP_PREFIX =
@@ -372,7 +372,7 @@ export function sanitizeMessagesForDisplay<T>(messages: T[]): T[] {
 }
 
 function normalizeText(text: string): string {
-  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  return text.replace(/\r\n?/g, '\n').trim();
 }
 
 function isOpenClawSystemEventLine(line: string): boolean {
@@ -453,9 +453,9 @@ function classifyOpenClawUserMessageForUi(input: string): UiMessageDecision {
   }
 
   const prelude = stripOpenClawSystemEventPrelude(text);
-  const withoutPrelude = normalizeText(prelude.text);
-  const textWithoutTrailingTime = normalizeText(stripTrailingCurrentTimeLine(text));
-  const withoutPreludeTrailingTime = normalizeText(stripTrailingCurrentTimeLine(withoutPrelude));
+  const withoutPrelude = prelude.text;
+  const textWithoutTrailingTime = stripTrailingCurrentTimeLine(text);
+  const withoutPreludeTrailingTime = stripTrailingCurrentTimeLine(withoutPrelude);
 
   if (isOpenClawCronSyntheticPrompt(text) || isOpenClawCronSyntheticPrompt(withoutPrelude)) {
     return { action: 'hide', reason: 'openclaw_synthetic_cron_prompt' };
