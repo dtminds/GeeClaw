@@ -11,9 +11,49 @@
                 "packageName": "mcporter"
             }
         ],
-        "description": "通过命令行调用 MCP 服务",
+        "description": "通过命令行调用 MCP 服务，必装",
         "homepage": "mcporter.dev",
         "docsUrl": "https://mcporter.dev",
+        "platforms": [
+            "darwin",
+            "win32"
+        ]
+    },
+    {
+        "id": "dokobot",
+        "title": "Dokobot",
+        "binNames": [
+            "dokobot"
+        ],
+        "installMethods": [
+            {
+                "type": "managed-npm",
+                "packageName": "@dokobot/cli",
+                "postInstallActions": [
+                    {
+                        "type": "run-installed-bin",
+                        "bin": "dokobot",
+                        "args": [
+                            "install-skill",
+                            "-o",
+                            "${openclawSkillsDir}"
+                        ]
+                    }
+                ],
+                "completion": {
+                    "kind": "skills-and-docs",
+                    "requiresSkillEnable": true,
+                    "extraSteps": [
+                        "安装浏览器扩展",
+                        "完成 bridge 配置",
+                        "在技能页开启 OpenCLI 技能"
+                    ]
+                }
+            }
+        ],
+        "description": "提取网页可读内容供 AI 处理，复用所有登录会话，当 Agent 需要读取网页内容而非操控浏览器时使用。GeeClaw 会自动安装 CLI 和技能，浏览器扩展、bridge 请查看安装文档",
+        "homepage": "https://dokobot.ai/zh-CN",
+        "docsUrl": "https://dokobot.ai/zh-CN/guide",
         "platforms": [
             "darwin",
             "win32"
@@ -29,14 +69,27 @@
             {
                 "type": "managed-npm",
                 "packageName": "@jackwener/opencli",
-                "postInstallSkills": [
-                    "jackwener/opencli"
-                ]
+                "postInstallActions": [
+                    {
+                        "type": "install-skills",
+                        "sources": [
+                            "jackwener/opencli"
+                        ]
+                    }
+                ],
+                "completion": {
+                    "kind": "skills-and-docs",
+                    "requiresSkillEnable": true,
+                    "extraSteps": [
+                        "安装浏览器扩展",
+                        "在技能页开启 opencli 技能"
+                    ]
+                }
             }
         ],
-        "description": "让任何网站或 Electron 应用成为你的 CLI",
+        "description": "让任何网站或 Electron 应用成为你的 CLI。GeeClaw 会自动安装 CLI 和技能，浏览器扩展请查看安装文档",
         "homepage": "https://opencli.info/",
-        "docsUrl": "https://opencli.info/docs/zh/",
+        "docsUrl": "https://opencli.info/docs/zh/guide/browser-bridge.html",
         "platforms": [
             "darwin",
             "win32"
@@ -77,9 +130,21 @@
             {
                 "type": "managed-npm",
                 "packageName": "@larksuite/cli",
-                "postInstallSkills": [
-                    "larksuite/cli"
-                ]
+                "postInstallActions": [
+                    {
+                        "type": "install-skills",
+                        "sources": [
+                            "larksuite/cli"
+                        ]
+                    }
+                ],
+                "completion": {
+                    "kind": "skills-only",
+                    "requiresSkillEnable": true,
+                    "extraSteps": [
+                        "在技能页开启飞书 CLI 技能"
+                    ]
+                }
             }
         ],
         "description": "飞书/Lark 开放平台命令行工具 — 让人类和 AI Agent 都能在终端中操作飞书。覆盖消息、文档、多维表格、电子表格、日历、邮箱、任务、会议等核心业务域，提供 200+ 命令及 19 个 AI Agent Skills",
@@ -100,9 +165,21 @@
             {
                 "type": "managed-npm",
                 "packageName": "@wecom/cli",
-                "postInstallSkills": [
-                    "WeComTeam/wecom-cli"
-                ]
+                "postInstallActions": [
+                    {
+                        "type": "install-skills",
+                        "sources": [
+                            "WeComTeam/wecom-cli"
+                        ]
+                    }
+                ],
+                "completion": {
+                    "kind": "skills-only",
+                    "requiresSkillEnable": true,
+                    "extraSteps": [
+                        "在技能页开启企业微信 CLI 技能"
+                    ]
+                }
             }
         ],
         "description": "企业微信开放企业微信消息、日程、文档、智能表格、会议、待办、通讯录等核心产品能力 — 让人类和 AI Agent 都能在终端中操作企业微信",

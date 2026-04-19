@@ -209,6 +209,18 @@
       "succeeded": "已完成",
       "failed": "失败",
       "close": "关闭"
+    },
+    "completion": {
+      "title": "安装完成",
+      "skillsOnly": "已安装 CLI 和技能，请前往技能页手动开启技能后使用",
+      "docsRequired": "已安装 CLI，但还需完成其他步骤",
+      "skillsAndDocs": "已安装 CLI 和技能，但还需完成其他步骤",
+      "nextSteps": "还需完成以下步骤",
+      "openSkills": "去开启技能",
+      "viewDocs": "查看文档完成安装",
+      "dismiss": "知道了",
+      "showLogs": "查看安装日志",
+      "hideLogs": "收起安装日志"
     }
   },
   "safety": {

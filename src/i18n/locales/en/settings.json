@@ -209,6 +209,18 @@
       "succeeded": "Completed",
       "failed": "Failed",
       "close": "Close"
+    },
+    "completion": {
+      "title": "Install complete",
+      "skillsOnly": "CLI and skills are installed. Enable the skills from the Skills page before use.",
+      "docsRequired": "CLI is installed, but you still need to finish other setup steps.",
+      "skillsAndDocs": "CLI and skills are installed, but you still need to finish other setup steps.",
+      "nextSteps": "Next steps",
+      "openSkills": "Open Skills",
+      "viewDocs": "View docs to finish setup",
+      "dismiss": "Dismiss",
+      "showLogs": "View install logs",
+      "hideLogs": "Hide install logs"
     }
   },
   "safety": {
