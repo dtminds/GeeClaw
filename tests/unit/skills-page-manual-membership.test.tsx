@@ -140,6 +140,72 @@ describe('skills page manual membership editing', () => {
     expect(selector.className).not.toContain('shadow');
   });
 
+  it('bottom-aligns the secondary filter row so the active underline sits on the tab baseline', async () => {
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [],
+      fetchSkills: vi.fn().mockResolvedValue(undefined),
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace',
+        agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        mainSessionKey: 'main',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'main',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=main']}>
+          <Skills />
+        </MemoryRouter>,
+      );
+    });
+
+    const subtabRow = screen.getByText('Agent').closest('div.border-b');
+    expect(subtabRow).not.toBeNull();
+    expect(subtabRow?.className).toContain('items-end');
+    expect(subtabRow?.className).not.toContain('items-center');
+  });
+
   it('does not fall back to legacy enabled skills when manualSkills is explicitly empty', async () => {
     const fetchSkills = vi.fn().mockResolvedValue(undefined);
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
