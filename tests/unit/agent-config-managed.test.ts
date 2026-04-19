@@ -1238,7 +1238,7 @@ describe('managed agent config domain', () => {
     const { agentConfig, configDir } = await setupManagedPresetFixture();
 
     const snapshot = await agentConfig.updateAgentSettings('main', {
-      manualSkills: ['pdf', 'xlsx'],
+      manualSkills: ['xlsx', 'pdf'],
     });
 
     expect(snapshot.agents.find((agent) => agent.id === 'main')).toMatchObject({

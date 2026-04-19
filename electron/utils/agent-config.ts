@@ -455,7 +455,7 @@ function normalizeManualSkillList(skills: unknown): string[] {
     throw new Error('Manual skills must not contain duplicate skills');
   }
 
-  return normalized;
+  return normalized.sort((left, right) => left.localeCompare(right));
 }
 
 export function validateManagedSkillScope(
