@@ -28,7 +28,10 @@
         "installMethods": [
             {
                 "type": "managed-npm",
-                "packageName": "@jackwener/opencli"
+                "packageName": "@jackwener/opencli",
+                "postInstallSkills": [
+                    "jackwener/opencli"
+                ]
             }
         ],
         "description": "让任何网站或 Electron 应用成为你的 CLI",

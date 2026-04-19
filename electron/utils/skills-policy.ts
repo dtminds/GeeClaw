@@ -9,12 +9,6 @@
  * Update this list when product policy changes.
  */
 export const ALWAYS_ENABLED_SKILL_KEYS = [
-  'pdf',
-  'xlsx',
-  'docx',
-  'pptx',
-  'xiaohongshu-cli',
-  'schedule-skill',
   'weather',
   'healthcheck',
   'mcporter',
