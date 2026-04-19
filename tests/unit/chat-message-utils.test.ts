@@ -34,4 +34,13 @@ describe('extractText', () => {
 
     expect(text).toBe('The MEDIA: tag must be on its own line.');
   });
+
+  it('strips gateway timestamps and media attachment markers from user text after classification', () => {
+    const text = extractText({
+      role: 'user',
+      content: '[Fri 2026-03-13 17:11 GMT+8] hello\n[media attached:/tmp/demo.png (image/png) | /tmp/demo.png]',
+    });
+
+    expect(text).toBe('hello');
+  });
 });

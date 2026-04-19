@@ -4,7 +4,12 @@
  * message content formats returned by the Gateway.
  */
 import type { RawMessage, ContentBlock } from '@/stores/chat';
-import { cleanUserMessageText, sanitizeMessageForDisplay } from '@/lib/chat-message-text';
+import {
+  cleanUserMessageTextFromDecision,
+  decideOpenClawUserMessageForUi,
+  sanitizeMessageForDisplay,
+  type UiMessageDecision,
+} from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import i18n from '@/i18n';
 import { formatRelativeTime } from '@/lib/utils';
@@ -44,15 +49,6 @@ function formatAbsoluteMessageTimestamp(date: Date, locale: string, now: Date): 
       });
 }
 
-/**
- * Clean Gateway metadata from user message text for display.
- * Strips: [media attached: ... | ...], [message_id: ...],
- * and the timestamp prefix [Day Date Time Timezone].
- */
-function cleanUserText(text: string): string {
-  return cleanUserMessageText(text);
-}
-
 function cleanAssistantText(text: string): string {
   return splitMediaFromOutput(text).text;
 }
@@ -65,6 +61,46 @@ export function shouldHideToolTrace(name: unknown): boolean {
   return normalizeToolName(name) === 'process';
 }
 
+function extractTextContentFromMessage(msg: Record<string, unknown>): string {
+  const content = msg.content;
+
+  if (typeof content === 'string') {
+    return content.trim().length > 0 ? content : '';
+  }
+
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const block of content as ContentBlock[]) {
+      if (block.type === 'text' && block.text && block.text.trim().length > 0) {
+        parts.push(block.text);
+      }
+    }
+    const combined = parts.join('\n\n');
+    return combined.trim().length > 0 ? combined : '';
+  }
+
+  if (typeof msg.text === 'string') {
+    return msg.text.trim().length > 0 ? msg.text : '';
+  }
+
+  return '';
+}
+
+export function extractUserDisplayDecision(message: RawMessage | unknown): UiMessageDecision | null {
+  if (!message || typeof message !== 'object') return null;
+  const msg = sanitizeMessageForDisplay(message as Record<string, unknown>) as Record<string, unknown>;
+  if (msg.role !== 'user') {
+    return null;
+  }
+
+  const text = extractTextContentFromMessage(msg);
+  if (!text) {
+    return null;
+  }
+
+  return decideOpenClawUserMessageForUi(text);
+}
+
 /**
  * Extract displayable text from a message's content field.
  * Handles both string content and array-of-blocks content.
@@ -73,32 +109,14 @@ export function shouldHideToolTrace(name: unknown): boolean {
 export function extractText(message: RawMessage | unknown): string {
   if (!message || typeof message !== 'object') return '';
   const msg = sanitizeMessageForDisplay(message as Record<string, unknown>) as Record<string, unknown>;
-  const content = msg.content;
   const isUser = msg.role === 'user';
 
-  let result = '';
-
-  if (typeof content === 'string') {
-    result = content.trim().length > 0 ? content : '';
-  } else if (Array.isArray(content)) {
-    const parts: string[] = [];
-    for (const block of content as ContentBlock[]) {
-      if (block.type === 'text' && block.text) {
-        if (block.text.trim().length > 0) {
-          parts.push(block.text);
-        }
-      }
-    }
-    const combined = parts.join('\n\n');
-    result = combined.trim().length > 0 ? combined : '';
-  } else if (typeof msg.text === 'string') {
-    // Fallback: try .text field
-    result = msg.text.trim().length > 0 ? msg.text : '';
-  }
+  let result = extractTextContentFromMessage(msg);
 
   // Strip Gateway metadata from user messages for clean display
   if (isUser && result) {
-    result = cleanUserText(result);
+    const decision = decideOpenClawUserMessageForUi(result);
+    result = cleanUserMessageTextFromDecision(decision);
   } else if (result) {
     result = cleanAssistantText(result);
   }
