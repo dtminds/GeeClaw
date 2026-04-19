@@ -546,17 +546,16 @@ export class CliMarketplaceService {
             appendLog,
           });
         }
-        continue;
+      } else if (action.type === 'run-installed-bin') {
+        await this.runInstalledBinCommand(
+          action.bin,
+          action.args?.map((arg) => resolveCliMarketplaceTemplate(arg)) ?? [],
+          {
+            prefixDir: this.managedPrefixDir,
+            appendLog,
+          },
+        );
       }
-
-      await this.runInstalledBinCommand(
-        action.bin,
-        action.args?.map((arg) => resolveCliMarketplaceTemplate(arg)) ?? [],
-        {
-          prefixDir: this.managedPrefixDir,
-          appendLog,
-        },
-      );
     }
 
     try {
