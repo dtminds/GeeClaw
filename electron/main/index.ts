@@ -28,7 +28,7 @@ import {
 import { createSignalQuitHandler } from './signal-quit';
 import {
   ensureBuiltinSkillsInstalled,
-  ensureSkillEntriesDefaultDisabled,
+  migrateLegacySkillMembershipFromRuntime,
 } from '../utils/skill-config';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
@@ -121,7 +121,7 @@ const cliMarketplaceService = new CliMarketplaceService();
 const hostEventBus = new HostEventBus();
 const appUpdater = getAppUpdater();
 let hostApiServer: Server | null = null;
-let hasReconciledSkillsAfterGatewayStartup = false;
+let hasMigratedLegacySkillsAfterGatewayStartup = false;
 let hasScheduledOpenCliWarmup = false;
 const quitLifecycleState = createQuitLifecycleState();
 
@@ -145,37 +145,38 @@ async function logGpuDiagnostics(): Promise<void> {
   }
 }
 
-async function persistDiscoveredSkillsAsDisabled(): Promise<boolean> {
+async function migrateLegacySkillMembershipAfterGatewayRunning(): Promise<boolean> {
   try {
-    const status = await gatewayManager.rpc<{ skills?: Array<{ skillKey?: string; source?: string }> }>('skills.status');
-    const result = await ensureSkillEntriesDefaultDisabled(status.skills || []);
+    const result = await migrateLegacySkillMembershipFromRuntime((agentId) => (
+      gatewayManager.rpc<{ skills?: Array<{ skillKey?: string; disabled?: boolean; hidden?: boolean }> }>(
+        'skills.status',
+        { agentId },
+      )
+    ));
     if (!result.success) {
       return false;
     }
 
-    if (result.added.length > 0) {
-      logger.info(`Persisted ${result.added.length} newly discovered skills as disabled in openclaw.json`);
-    }
-    if (result.added.length === 0) {
+    if (result.migratedAgentIds.length === 0 && result.cleanedSkillEntries.length === 0) {
       return false;
     }
 
     logger.info(
-      `Skill discovery updated openclaw.json (newly disabled skills: ${result.added.join(', ')}); changes apply on the next Gateway restart`,
+      `Migrated legacy skill membership for agents [${result.migratedAgentIds.join(', ')}] and cleaned legacy global toggles [${result.cleanedSkillEntries.join(', ')}]; changes apply on the next Gateway restart`,
     );
     return true;
   } catch (error) {
-    logger.warn('Failed to persist discovered skills into openclaw.json:', error);
+    logger.warn('Failed to migrate legacy skill membership into agents.list.skills:', error);
     return false;
   }
 }
 
 async function reconcileSkillsAfterGatewayRunning(): Promise<void> {
-  if (hasReconciledSkillsAfterGatewayStartup) {
+  if (hasMigratedLegacySkillsAfterGatewayStartup) {
     return;
   }
-  hasReconciledSkillsAfterGatewayStartup = true;
-  await persistDiscoveredSkillsAsDisabled();
+  hasMigratedLegacySkillsAfterGatewayStartup = true;
+  await migrateLegacySkillMembershipAfterGatewayRunning();
 }
 
 /**
@@ -277,7 +278,7 @@ async function initialize(): Promise<void> {
   }
 
   // Set application menu
-  createMenu();
+  await createMenu();
 
   // Create the main window
   mainWindow = createWindow();

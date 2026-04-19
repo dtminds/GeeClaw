@@ -330,4 +330,21 @@ describe('ProviderService.createAccount', () => {
       updatedAt: '2026-04-13T00:00:00.000Z',
     })).rejects.toThrow('Custom provider ID is reserved');
   });
+
+  it('rejects non-multi-instance built-in providers with custom account ids', async () => {
+    const { ProviderService } = await import('@electron/services/providers/provider-service');
+    const service = new ProviderService();
+
+    await expect(service.createAccount({
+      id: 'openrouter-work',
+      vendorId: 'openrouter',
+      label: 'OpenRouter Work',
+      authMode: 'api_key',
+      models: ['openai/gpt-5.4'],
+      enabled: true,
+      isDefault: false,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-13T00:00:00.000Z',
+    })).rejects.toThrow('Provider does not support multiple accounts');
+  });
 });

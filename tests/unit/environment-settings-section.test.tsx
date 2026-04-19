@@ -19,6 +19,10 @@ const translations: Record<string, string> = {
   'environment.list.keyPlaceholder': '变量名',
   'environment.list.valuePlaceholder': '变量值',
   'environment.list.save': '保存环境变量',
+  'environment.validation.title': '请先修正以下问题：',
+  'environment.validation.empty': '第 {{row}} 行为空，请填写变量名和值，或删除该行。',
+  'environment.validation.incomplete': '第 {{row}} 行需要同时填写变量名和值。',
+  'environment.validation.duplicate': '变量名 {{key}} 重复，请保留一项。',
   'environment.toast.loadFailed': '加载环境变量失败',
   'environment.toast.saved': '环境变量已保存',
   'environment.toast.saveFailed': '保存环境变量失败',
@@ -29,7 +33,17 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => translations[key] ?? key,
+      t: (key: string, options?: Record<string, string | number>) => {
+        const template = translations[key] ?? key;
+        if (!options) {
+          return template;
+        }
+
+        return Object.entries(options).reduce(
+          (message, [optionKey, optionValue]) => message.replace(`{{${optionKey}}}`, String(optionValue)),
+          template,
+        );
+      },
     }),
   };
 });
@@ -77,13 +91,11 @@ describe('EnvironmentSettingsSection', () => {
     const notionKeyInput = screen.getByDisplayValue('NOTION_API_KEY');
 
     fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
-    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
     const keyInputs = screen.getAllByPlaceholderText('变量名');
     const valueInputs = screen.getAllByPlaceholderText('变量值');
 
     fireEvent.change(keyInputs[1], { target: { value: 'TAVILY_API_KEY' } });
     fireEvent.change(valueInputs[1], { target: { value: 'secret-tavily' } });
-    fireEvent.change(keyInputs[2], { target: { value: 'EMPTY_VALUE_KEY' } });
     fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
 
     await waitFor(() => {
@@ -102,5 +114,71 @@ describe('EnvironmentSettingsSection', () => {
     });
     expect(screen.getByDisplayValue('NOTION_API_KEY')).toBe(notionKeyInput);
     expect(toastSuccessMock).toHaveBeenCalledWith('环境变量已保存');
+  });
+
+  it('blocks save when an entry is partially filled', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      entries: [],
+    });
+
+    render(<EnvironmentSettingsSection />);
+
+    expect(await screen.findByText('全局注入')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
+    expect(await screen.findByPlaceholderText('变量名')).toBeInTheDocument();
+
+    const keyInput = screen.getByPlaceholderText('变量名');
+    fireEvent.change(keyInput, { target: { value: 'OPENAI_API_KEY' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
+
+    expect(await screen.findByText('请先修正以下问题：')).toBeInTheDocument();
+    expect(screen.getByText('第 1 行需要同时填写变量名和值。')).toBeInTheDocument();
+    expect(hostApiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks save when an added entry is left completely blank', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      entries: [],
+    });
+
+    render(<EnvironmentSettingsSection />);
+
+    expect(await screen.findByText('全局注入')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
+    expect(await screen.findByPlaceholderText('变量名')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
+
+    expect(await screen.findByText('请先修正以下问题：')).toBeInTheDocument();
+    expect(screen.getByText('第 1 行为空，请填写变量名和值，或删除该行。')).toBeInTheDocument();
+    expect(hostApiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks save when duplicate keys are present', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      entries: [],
+    });
+
+    render(<EnvironmentSettingsSection />);
+
+    expect(await screen.findByText('全局注入')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加变量' }));
+
+    const keyInputs = screen.getAllByPlaceholderText('变量名');
+    const valueInputs = screen.getAllByPlaceholderText('变量值');
+
+    fireEvent.change(keyInputs[0], { target: { value: 'TAVILY_API_KEY' } });
+    fireEvent.change(valueInputs[0], { target: { value: 'secret-1' } });
+    fireEvent.change(keyInputs[1], { target: { value: 'TAVILY_API_KEY' } });
+    fireEvent.change(valueInputs[1], { target: { value: 'secret-2' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存环境变量' }));
+
+    expect(await screen.findByText('变量名 TAVILY_API_KEY 重复，请保留一项。')).toBeInTheDocument();
+    expect(hostApiFetchMock).toHaveBeenCalledTimes(1);
   });
 });

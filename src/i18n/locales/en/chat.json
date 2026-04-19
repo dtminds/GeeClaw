@@ -1,6 +1,7 @@
 {
     "gatewayNotRunning": "Gateway Not Running",
     "gatewayRequired": "The OpenClaw Gateway needs to be running to use chat. It will start automatically, or you can start it from Settings.",
+    "loadingSessionInit": "Initializing session, please wait.",
     "welcome": {
         "title": "GeeClaw Chat",
         "subtitle": "Your AI assistant is ready. Start a conversation below.",
@@ -118,6 +119,15 @@
             "preset": "Preset",
             "save": "Save Skills"
         },
+        "skillsSummary": {
+            "count": "{{count}} enabled skills",
+            "description": "Manage this agent's skills from the Installed Skills page.",
+            "manage": "Manage in Skills",
+            "warning": "Loading more than 20 skills can significantly degrade model focus and output quality.",
+            "lockedTitle": "{{count}} preset-locked skills",
+            "enabledTitle": "Current enabled skills",
+            "empty": "No skills have been explicitly enabled for this agent yet."
+        },
         "sections": {
             "general": {
                 "label": "General",
@@ -128,7 +138,7 @@
             "skills": {
                 "label": "Skills",
                 "title": "Skills",
-                "description": "Skill scope and capabilities.",
+                "description": "",
                 "placeholder": ""
             },
             "identity": {

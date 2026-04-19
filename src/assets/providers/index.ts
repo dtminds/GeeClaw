@@ -6,7 +6,7 @@ import ark from './ark.svg';
 import moonshot from './moonshot.svg';
 import siliconflow from './siliconflow.svg';
 import minimaxPortal from './minimax.svg';
-import qwenPortal from './qwen.svg';
+import qwen from './qwen.svg';
 import ollama from './ollama.svg';
 import geeclaw from './geeclaw.svg';
 import custom from './custom.svg';
@@ -23,8 +23,9 @@ export const providerIcons: Record<string, string> = {
   siliconflow,
   'minimax-portal': minimaxPortal,
   'minimax-portal-cn': minimaxPortal,
-  modelstudio: qwenPortal,
-  'qwen-portal': qwenPortal,
+  qwen,
+  modelstudio: qwen,
+  'qwen-portal': qwen,
   ollama,
   custom,
 };

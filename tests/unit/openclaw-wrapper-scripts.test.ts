@@ -9,6 +9,7 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('OPENCLAW_CONFIG_PATH="$CONFIG_PATH"');
     expect(script).toContain('--profile "$PROFILE_NAME"');
     expect(script).toContain('NODE_SHIM="$SCRIPT_DIR/node"');
+    expect(script).toContain('export PNPM_HOME="$SCRIPT_DIR"');
     expect(script).toContain('$PROJECT_ROOT/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
     expect(script).toContain('GEECLAW_USER_DATA_DIR');
     expect(script).toContain('runtime/openclaw-sidecar/openclaw.mjs');
@@ -28,6 +29,7 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('set "OPENCLAW_CONFIG_PATH=%CONFIG_PATH%"');
     expect(script).toContain('--profile "%PROFILE_NAME%"');
     expect(script).toContain('"%NODE_EXE%" "%OPENCLAW_ENTRY%"');
+    expect(script).toContain('set "PNPM_HOME=%~dp0"');
     expect(script).toContain('GEECLAW_USER_DATA_DIR');
     expect(script).toContain('runtime\\openclaw-sidecar\\openclaw.mjs');
     expect(script).toContain('set "OPENCLAW_ENTRY=%SIDECAR_ENTRY%"');
@@ -42,6 +44,7 @@ describe('managed openclaw wrapper scripts', () => {
     expect(script).toContain('export OPENCLAW_STATE_DIR=');
     expect(script).toContain('export OPENCLAW_CONFIG_PATH=');
     expect(script).toContain('--profile "$PROFILE_NAME"');
+    expect(script).toContain('export PNPM_HOME="$SCRIPT_DIR"');
     expect(script).toContain('exec "$NODE_EXE" "$OPENCLAW_ENTRY"');
     expect(script).toContain('GEECLAW_USER_DATA_DIR');
     expect(script).toContain('runtime/openclaw-sidecar/openclaw.mjs');

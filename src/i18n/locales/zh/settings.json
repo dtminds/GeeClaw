@@ -36,9 +36,9 @@
       },
       "activeMemory": {
         "title": "Active Memory",
-        "description": "我会在生成回复前先读取相关的记忆，并主动注入到对话中",
+        "description": "我会在生成回复前先读取相关的记忆，并主动注入到对话中，由于多一步记忆召回，回复时长会增加",
         "modelTitle": "专用模型",
-        "modelDescription": "建议优先选择低成本、低延迟的小模型，用于记忆检索与整理"
+        "modelDescription": "强烈建议选择低成本、低延迟的小模型，用于记忆检索与整理"
       },
       "losslessClaw": {
         "title": "Lossless Claw",
@@ -150,6 +150,12 @@
       "valuePlaceholder": "变量值",
       "save": "保存环境变量"
     },
+    "validation": {
+      "title": "请先修正以下问题：",
+      "empty": "第 {{row}} 行为空，请填写变量名和值，或删除该行。",
+      "incomplete": "第 {{row}} 行需要同时填写变量名和值。",
+      "duplicate": "变量名 {{key}} 重复，请保留一项。"
+    },
     "toast": {
       "loadFailed": "加载环境变量失败",
       "saved": "环境变量已保存",
@@ -166,6 +172,31 @@
     "installed": "已安装",
     "missing": "未安装",
     "install": "安装",
+    "copyInstallCommand": "复制安装命令",
+    "copyInstallCommandCopied": "安装命令已复制",
+    "copyInstallCommandFailed": "复制安装命令失败",
+    "docs": "文档",
+    "docsOpenFailed": "打开文档失败",
+    "source": {
+      "system": "系统",
+      "geeclaw": "GeeClaw"
+    },
+    "managed": {
+      "needRuntime": "需要托管运行时"
+    },
+    "manual": {
+      "needHomebrew": "需要 Homebrew",
+      "needCurl": "需要 curl",
+      "needNpm": "需要 npm",
+      "unavailable": "不可用",
+      "installMethod": "通过 {{method}} 安装"
+    },
+    "manualDialog": {
+      "title": "安装命令",
+      "description": "复制下面的命令，然后到终端里执行。",
+      "copy": "复制命令",
+      "close": "关闭"
+    },
     "reinstall": "重新安装",
     "uninstall": "卸载",
     "moreActions": "更多操作",
@@ -178,6 +209,18 @@
       "succeeded": "已完成",
       "failed": "失败",
       "close": "关闭"
+    },
+    "completion": {
+      "title": "安装完成",
+      "skillsOnly": "已安装 CLI 和技能，请前往技能页手动开启技能后使用",
+      "docsRequired": "已安装 CLI，但还需完成其他步骤",
+      "skillsAndDocs": "已安装 CLI 和技能，但还需完成其他步骤",
+      "nextSteps": "还需完成以下步骤",
+      "openSkills": "去开启技能",
+      "viewDocs": "查看文档完成安装",
+      "dismiss": "知道了",
+      "showLogs": "查看安装日志",
+      "hideLogs": "收起安装日志"
     }
   },
   "safety": {

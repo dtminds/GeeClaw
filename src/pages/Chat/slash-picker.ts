@@ -43,6 +43,8 @@ type GatewaySkillsStatusResult = {
 };
 
 const PRESET_AGENT_SKILLS_TTL_MS = 60 * 60 * 1000;
+const agentScopedSkillsCache = new Map<string, { expiresAt: number; skills: GatewaySkillStatus[] }>();
+const agentScopedSkillsInflight = new Map<string, Promise<GatewaySkillStatus[]>>();
 const presetAgentSkillsCache = new Map<string, { expiresAt: number; skills: Skill[] }>();
 const presetAgentSkillsInflight = new Map<string, Promise<Skill[]>>();
 
@@ -121,15 +123,112 @@ function mapGatewaySkillToPresetAgentSkill(skill: GatewaySkillStatus): Skill | n
   };
 }
 
+function mapGatewaySkillToAgentScopedSkill(skill: GatewaySkillStatus): Skill | null {
+  const skillKey = typeof skill.skillKey === 'string' && skill.skillKey.trim()
+    ? skill.skillKey.trim()
+    : typeof skill.slug === 'string' && skill.slug.trim()
+      ? skill.slug.trim()
+      : '';
+
+  if (!skillKey) {
+    return null;
+  }
+
+  const blockedByAllowlist = skill.blockedByAllowlist === true;
+  const missing = skill.missing;
+  const unavailableForEnable = hasMissingRequirements(missing)
+    || blockedByAllowlist
+    || (skill.eligible === false && !skill.disabled);
+  const eligible = !unavailableForEnable;
+
+  return {
+    id: skillKey,
+    slug: skill.slug || skillKey,
+    name: skill.name?.trim() || skill.slug?.trim() || skillKey,
+    description: skill.description?.trim() || '',
+    enabled: !skill.disabled && eligible,
+    configuredEnabled: !skill.disabled,
+    eligible,
+    blockedByAllowlist,
+    icon: skill.emoji || '📦',
+    version: skill.version,
+    author: skill.author,
+    config: skill.config || {},
+    isCore: Boolean(skill.bundled && skill.always),
+    isBundled: skill.bundled,
+    hidden: false,
+    source: skill.source || 'openclaw-managed',
+    baseDir: skill.baseDir,
+    filePath: skill.filePath,
+    missing,
+  };
+}
+
+async function fetchAgentSkillStatus(
+  agentId: string,
+  rpc: (method: string, params?: unknown, timeoutMs?: number) => Promise<GatewaySkillsStatusResult>,
+  now = Date.now,
+): Promise<GatewaySkillStatus[]> {
+  const cached = agentScopedSkillsCache.get(agentId);
+  const nowMs = now();
+  if (cached && cached.expiresAt > nowMs) {
+    return cached.skills.map((skill) => ({ ...skill, config: skill.config ? { ...skill.config } : skill.config }));
+  }
+
+  const existingInflight = agentScopedSkillsInflight.get(agentId);
+  if (existingInflight) {
+    const resolved = await existingInflight;
+    return resolved.map((skill) => ({ ...skill, config: skill.config ? { ...skill.config } : skill.config }));
+  }
+
+  const request = (async () => {
+    const result = await rpc('skills.status', { agentId });
+    const skills = Array.isArray(result.skills)
+      ? result.skills.map((skill) => ({ ...skill, config: skill.config ? { ...skill.config } : skill.config }))
+      : [];
+
+    agentScopedSkillsCache.set(agentId, {
+      expiresAt: nowMs + PRESET_AGENT_SKILLS_TTL_MS,
+      skills,
+    });
+
+    return skills;
+  })();
+
+  agentScopedSkillsInflight.set(agentId, request);
+
+  try {
+    return await request;
+  } finally {
+    agentScopedSkillsInflight.delete(agentId);
+  }
+}
+
 export function invalidatePresetAgentSkillsCache(agentId?: string): void {
   if (agentId) {
+    agentScopedSkillsCache.delete(agentId);
+    agentScopedSkillsInflight.delete(agentId);
     presetAgentSkillsCache.delete(agentId);
     presetAgentSkillsInflight.delete(agentId);
     return;
   }
 
+  agentScopedSkillsCache.clear();
+  agentScopedSkillsInflight.clear();
   presetAgentSkillsCache.clear();
   presetAgentSkillsInflight.clear();
+}
+
+export async function fetchAgentScopedSkills(
+  agentId: string,
+  rpc: (method: string, params?: unknown, timeoutMs?: number) => Promise<GatewaySkillsStatusResult>,
+  now = Date.now,
+): Promise<Skill[]> {
+  const statuses = await fetchAgentSkillStatus(agentId, rpc, now);
+  return statuses
+    .map(mapGatewaySkillToAgentScopedSkill)
+    .filter((skill): skill is Skill => Boolean(skill))
+    .map(cloneSkill);
 }
 
 export async function fetchPresetAgentSkills(
@@ -150,12 +249,10 @@ export async function fetchPresetAgentSkills(
   }
 
   const request = (async () => {
-    const result = await rpc('skills.status', { agentId });
-    const skills = Array.isArray(result.skills)
-      ? result.skills
-        .map(mapGatewaySkillToPresetAgentSkill)
-        .filter((skill): skill is Skill => Boolean(skill))
-      : [];
+    const statuses = await fetchAgentSkillStatus(agentId, rpc, now);
+    const skills = statuses
+      .map(mapGatewaySkillToPresetAgentSkill)
+      .filter((skill): skill is Skill => Boolean(skill));
 
     presetAgentSkillsCache.set(agentId, {
       expiresAt: nowMs + PRESET_AGENT_SKILLS_TTL_MS,

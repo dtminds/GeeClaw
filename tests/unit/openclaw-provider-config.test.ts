@@ -20,9 +20,30 @@ vi.mock('@electron/utils/agent-config', () => ({
 }));
 
 vi.mock('@electron/utils/provider-registry', () => ({
-  getProviderEnvVar: vi.fn(() => undefined),
+  getProviderEnvVar: vi.fn((provider: string) => {
+    if (provider === 'geeclaw') {
+      return 'GEECLAW_API_KEY';
+    }
+    if (provider === 'openrouter') {
+      return 'OPENROUTER_API_KEY';
+    }
+    if (provider === 'moonshot') {
+      return 'MOONSHOT_API_KEY';
+    }
+    if (provider === 'moonshot-global') {
+      return 'MOONSHOT_GLOBAL_API_KEY';
+    }
+    return undefined;
+  }),
   getProviderDefaultModel: vi.fn(() => undefined),
   getProviderConfig: vi.fn((provider: string) => {
+    if (provider === 'geeclaw') {
+      return {
+        baseUrl: 'https://geekai.co/api/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'GEECLAW_API_KEY',
+      };
+    }
     if (provider === 'moonshot') {
       return {
         baseUrl: 'https://api.moonshot.cn/v1',
@@ -219,6 +240,10 @@ describe('removeProviderFromOpenClaw', () => {
 
     expect(models).toEqual({
       providers: {
+        'custom-abc12345': {
+          baseUrl: 'https://api.example.com/v1',
+          api: 'openai-completions',
+        },
         anthropic: {
           baseUrl: 'https://api.anthropic.com/v1',
           api: 'anthropic-messages',
@@ -310,6 +335,7 @@ describe('removeProviderFromOpenClaw', () => {
     expect(providers.openrouter).toMatchObject({
       baseUrl: 'https://openrouter.ai/api/v1',
       api: 'openai-completions',
+      apiKey: '${OPENROUTER_API_KEY}',
     });
     expect(providers.openrouter?.models).toEqual([
       {
@@ -326,6 +352,157 @@ describe('removeProviderFromOpenClaw', () => {
         reasoning: false,
       },
     ]);
+  });
+
+  it('removes stale inline apiKey values from openclaw.json when the provider uses auth profiles instead', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          'custom-work': {
+            baseUrl: 'https://old.example.com/v1',
+            api: 'openai-completions',
+            apiKey: '${OLD_ENV_KEY}',
+          },
+        },
+      },
+    });
+
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('custom-work', [
+      {
+        id: 'gpt-4.1',
+        name: 'gpt-4.1',
+        reasoning: false,
+      },
+    ], {
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+    });
+
+    const config = await readOpenClawJson();
+    const providers = ((config.models as { providers?: Record<string, unknown> })?.providers ?? {}) as Record<string, {
+      baseUrl?: string;
+      api?: string;
+      apiKey?: string;
+      models?: Array<Record<string, unknown>>;
+    }>;
+
+    expect(providers['custom-work']).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      models: [
+        {
+          id: 'gpt-4.1',
+          name: 'gpt-4.1',
+          reasoning: false,
+        },
+      ],
+    });
+    expect(providers['custom-work']?.apiKey).toBeUndefined();
+  });
+
+  it('does not mutate agent models.json for env-backed api_key providers', async () => {
+    await writeAgentModels('main', {
+      providers: {
+        openrouter: {
+          baseUrl: 'https://openrouter.ai/api/v1',
+          api: 'openai-completions',
+          apiKey: 'stale-key',
+        },
+      },
+    });
+
+    const { updateAgentModelProvider } = await import('@electron/utils/openclaw-provider-config');
+
+    await updateAgentModelProvider('openrouter', {
+      baseUrl: 'https://openrouter.ai/api/v1',
+      api: 'openai-completions',
+      apiKey: 'OPENROUTER_API_KEY',
+    });
+
+    const models = await readAgentModels('main');
+    const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
+
+    expect(providers.openrouter?.apiKey).toBe('stale-key');
+  });
+
+  it('writes GeeClaw apiKey as an interpolated env var reference in openclaw.json', async () => {
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-provider-config');
+
+    await syncProviderConfigToOpenClaw('geeclaw', [
+      {
+        id: 'qwen3.6-plus',
+        name: 'qwen3.6-plus',
+        reasoning: false,
+        input: ['text', 'image'],
+      },
+    ], {
+      baseUrl: 'http://127.0.0.1:19100/proxy',
+      api: 'openai-completions',
+      apiKeyEnv: 'GEECLAW_API_KEY',
+    });
+
+    const config = await readOpenClawJson();
+    const providers = ((config.models as { providers?: Record<string, unknown> })?.providers ?? {}) as Record<string, {
+      apiKey?: string;
+    }>;
+
+    expect(providers.geeclaw?.apiKey).toBe('${GEECLAW_API_KEY}');
+  });
+
+  it('does not mutate agent models.json for GeeClaw provider updates', async () => {
+    await writeAgentModels('main', {
+      providers: {
+        geeclaw: {
+          baseUrl: 'http://127.0.0.1:19000/proxy',
+          api: 'openai-completions',
+          apiKey: 'stale-key',
+        },
+      },
+    });
+
+    const { updateAgentModelProvider } = await import('@electron/utils/openclaw-provider-config');
+
+    await updateAgentModelProvider('geeclaw', {
+      baseUrl: 'http://127.0.0.1:19100/proxy',
+      api: 'openai-completions',
+      apiKey: 'GEECLAW_API_KEY',
+    });
+
+    const models = await readAgentModels('main');
+    const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
+
+    expect(providers.geeclaw?.apiKey).toBe('stale-key');
+  });
+
+  it('does not delete apiKey from agent models.json when an empty key is provided', async () => {
+    await writeAgentModels('main', {
+      providers: {
+        customdemo: {
+          baseUrl: 'https://api.example.com/v1',
+          api: 'openai-completions',
+          apiKey: 'stale-key',
+        },
+      },
+    });
+
+    const { updateAgentModelProvider } = await import('@electron/utils/openclaw-provider-config');
+
+    await updateAgentModelProvider('customdemo', {
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: '',
+    });
+
+    const models = await readAgentModels('main');
+    const providers = (models.providers ?? {}) as Record<string, { apiKey?: string }>;
+
+    expect(providers.customdemo).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: 'stale-key',
+    });
   });
 
   it('syncs Moonshot Global provider baseUrl into the Kimi web search plugin config', async () => {
@@ -374,7 +551,7 @@ describe('removeProviderFromOpenClaw', () => {
     expect(providerEntry).toMatchObject({
       baseUrl: 'https://api.moonshot.ai/v1',
       api: 'openai-completions',
-      apiKey: 'MOONSHOT_GLOBAL_API_KEY',
+      apiKey: '${MOONSHOT_GLOBAL_API_KEY}',
     });
   });
 

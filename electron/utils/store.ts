@@ -179,6 +179,12 @@ export async function setExplicitSkillToggle(skillKey: string, enabled: boolean)
   store.set('disabledSkills', Array.from(currentDisabled));
 }
 
+export async function clearExplicitSkillToggles(): Promise<void> {
+  const store = await getSettingsStore();
+  store.set('enabledSkills', []);
+  store.set('disabledSkills', []);
+}
+
 /**
  * Get all settings
  */

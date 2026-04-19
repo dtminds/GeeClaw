@@ -39,6 +39,7 @@ const translations: Record<string, string> = {
   'opencli.status.unknown': '未知',
   'opencli.status.notConnected': '未连接',
   'common:status.loading': '加载中',
+  'updates.action.retry': '重试',
 };
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -110,6 +111,14 @@ describe('OpenCliSettingsSection', () => {
     });
   });
 
+  it('shows inline loading feedback while the initial status request is pending', () => {
+    hostApiFetchMock.mockReturnValue(new Promise(() => {}));
+
+    render(<OpenCliSettingsSection />);
+
+    expect(screen.getByText('加载中')).toBeInTheDocument();
+  });
+
   it('guides users to CLI Market when system opencli is missing', async () => {
     hostApiFetchMock.mockResolvedValue({
       binaryExists: false,
@@ -132,5 +141,31 @@ describe('OpenCliSettingsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '下载插件安装包' }));
     expect(invokeIpcMock).toHaveBeenCalledWith('shell:openExternal', 'https://example.com/opencli/releases');
+  });
+
+  it('shows inline error feedback and retries the initial status request', async () => {
+    hostApiFetchMock
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({
+        binaryExists: false,
+        binaryPath: null,
+        version: null,
+        command: null,
+        releasesUrl: 'https://example.com/opencli/releases',
+        readmeUrl: 'https://example.com/opencli/readme',
+        doctor: null,
+      });
+
+    render(<OpenCliSettingsSection />);
+
+    expect(await screen.findByText('加载 OpenCLI 状态失败')).toBeInTheDocument();
+    expect(screen.getByText('Error: network down')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+
+    expect(await screen.findByText('安装引导')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

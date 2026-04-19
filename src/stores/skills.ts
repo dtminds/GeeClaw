@@ -103,11 +103,11 @@ interface SkillsState {
   categorySkillsLoading: boolean;
 
   // Actions
-  fetchSkills: () => Promise<void>;
+  fetchSkills: (agentId?: string) => Promise<void>;
   fetchMarketplaceCatalog: (force?: boolean) => Promise<void>;
   fetchCategorySkills: (categoryId: string, page: number, keyword: string) => Promise<void>;
-  installSkill: (slug: string, version?: string) => Promise<void>;
-  uninstallSkill: (target: SkillUninstallTarget) => Promise<void>;
+  installSkill: (slug: string, version?: string, agentId?: string) => Promise<void>;
+  uninstallSkill: (target: SkillUninstallTarget, agentId?: string) => Promise<void>;
   enableSkill: (skillId: string) => Promise<void>;
   disableSkill: (skillId: string) => Promise<void>;
   setSkills: (skills: Skill[]) => void;
@@ -126,37 +126,27 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   categorySkillsTotal: 0,
   categorySkillsLoading: false,
 
-  fetchSkills: async () => {
+  fetchSkills: async (agentId = 'main') => {
     // Only show loading state if we have no skills yet (initial load)
     if (get().skills.length === 0) {
       set({ loading: true, error: null });
     }
     try {
-      // 1. Fetch from Gateway (running skills)
-      const gatewayData = await useGatewayStore.getState().rpc<GatewaySkillsStatusResult>('skills.status');
+      const scopedAgentId = typeof agentId === 'string' && agentId.trim() ? agentId.trim() : 'main';
 
-      // Persist newly discovered skills as explicitly disabled in openclaw.json.
-      // Explicit user toggles are persisted separately in the app settings
-      // store, so a manually enabled skill will not be reclassified as new.
-      const discoveredSkills = (gatewayData.skills || [])
-        .filter((skill): skill is GatewaySkillStatus & { skillKey: string } => typeof skill.skillKey === 'string' && skill.skillKey.trim().length > 0)
-        .map((skill) => ({
-          skillKey: skill.skillKey,
-          source: skill.source,
-        }));
-      if (discoveredSkills.length > 0) {
-        await hostApiFetch<{ success: boolean; added: string[]; error?: string }>('/api/skills/ensure-entries', {
-          method: 'POST',
-          body: JSON.stringify({ skills: discoveredSkills }),
-        });
-      }
+      // 1. Fetch from Gateway (running skills)
+      const gatewayData = await useGatewayStore.getState().rpc<GatewaySkillsStatusResult>('skills.status', { agentId: scopedAgentId });
 
       // 2. Fetch from ClawHub (installed on disk)
-      const clawhubResult = await hostApiFetch<{ success: boolean; results?: ClawHubListResult[]; error?: string }>('/api/clawhub/list');
+      const clawhubResult = await hostApiFetch<{ success: boolean; results?: ClawHubListResult[]; error?: string }>(
+        `/api/clawhub/list?agentId=${encodeURIComponent(scopedAgentId)}`,
+      );
 
       // 3. Fetch configurations directly from Electron (since Gateway doesn't return them)
-      const configResult = await hostApiFetch<Record<string, { apiKey?: string; env?: Record<string, string> }>>('/api/skills/configs');
-      const policyResult = await hostApiFetch<SkillPolicyResult>('/api/skills/policy');
+      const configResult = await hostApiFetch<Record<string, { apiKey?: string; env?: Record<string, string> }>>(
+        `/api/skills/configs?agentId=${encodeURIComponent(scopedAgentId)}`,
+      );
+      const policyResult = await hostApiFetch<SkillPolicyResult>(`/api/skills/policy?agentId=${encodeURIComponent(scopedAgentId)}`);
       const alwaysEnabledSkillSet = new Set((policyResult.alwaysEnabledSkillKeys || []).filter(Boolean));
       const hiddenSkillSet = new Set((policyResult.hiddenSkillKeys || []).filter(Boolean));
 
@@ -330,7 +320,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  installSkill: async (slug: string, version?: string) => {
+  installSkill: async (slug: string, version?: string, agentId?: string) => {
     set((state) => ({ installing: { ...state.installing, [slug]: true } }));
     try {
       const result = await hostApiFetch<{ success: boolean; error?: string }>('/api/clawhub/install', {
@@ -345,7 +335,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         throw new Error(mapErrorCodeToSkillErrorKey(appError.code, 'install'));
       }
       // Refresh skills after install
-      await get().fetchSkills();
+      await get().fetchSkills(agentId);
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Install error:', error);
@@ -359,7 +349,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  uninstallSkill: async (target: SkillUninstallTarget) => {
+  uninstallSkill: async (target: SkillUninstallTarget, agentId?: string) => {
     const requestBody = typeof target === 'string'
       ? { slug: target }
       : target;
@@ -375,7 +365,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         throw new Error(result.error || 'Uninstall failed');
       }
       // Refresh skills after uninstall
-      await get().fetchSkills();
+      await get().fetchSkills(agentId);
       invalidatePresetAgentSkillsCache();
     } catch (error) {
       console.error('Uninstall error:', error);

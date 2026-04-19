@@ -169,6 +169,7 @@ interface AgentPresetMissingRequirements {
 export interface AgentSettingsUpdate {
   name?: string;
   skillScope?: AgentSkillScope;
+  manualSkills?: string[];
   avatarPresetId?: AgentAvatarPresetId;
   activeMemoryEnabled?: boolean;
 }
@@ -193,6 +194,7 @@ export interface AgentSummary {
   canUnmanage: boolean;
   managedFiles: string[];
   skillScope: AgentSkillScope;
+  manualSkills?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
   avatarPresetId: AgentAvatarPresetId;
@@ -439,6 +441,23 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
   return { mode: 'specified', skills: normalized };
 }
 
+function normalizeManualSkillList(skills: unknown): string[] {
+  const list = Array.isArray(skills) ? skills : [];
+  if (list.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new Error('Manual skills must contain only non-empty skill ids');
+  }
+
+  const normalized = list
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('Manual skills must not contain duplicate skills');
+  }
+
+  return normalized.sort((left, right) => left.localeCompare(right));
+}
+
 export function validateManagedSkillScope(
   presetSkills: string[],
   nextScope: AgentSkillScope,
@@ -547,15 +566,31 @@ function readAgentSkillScope(entry: AgentListEntry): AgentSkillScope {
     : { mode: 'specified', skills };
 }
 
+function readAgentManualSkills(entry: AgentListEntry): string[] | undefined {
+  return Array.isArray(entry.skills)
+    ? entry.skills
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+    : undefined;
+}
+
 function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): AgentListEntry {
   const nextEntry = { ...entry };
   if (scope.mode === 'default') {
-    delete nextEntry.skills;
+    nextEntry.skills = [];
     return nextEntry;
   }
 
   nextEntry.skills = [...scope.skills];
   return nextEntry;
+}
+
+function applyAgentManualSkills(entry: AgentListEntry, manualSkills: string[]): AgentListEntry {
+  return {
+    ...entry,
+    skills: [...manualSkills],
+  };
 }
 
 function resolveDefaultAvatarPresetIdForAgent(
@@ -1452,6 +1487,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       })
       .sort((left, right) => left.channelType.localeCompare(right.channelType) || left.accountId.localeCompare(right.accountId));
     const avatar = resolveAgentAvatar(entry.id, avatarMap, managedMetadata);
+    const manualSkills = readAgentManualSkills(entry);
     return {
       id: entry.id,
       name: entry.name || (entry.id === MAIN_AGENT_ID ? MAIN_AGENT_NAME : entry.id),
@@ -1472,6 +1508,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       canUnmanage: managedMetadata?.managed ? managedMetadata.canUnmanage !== false : false,
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
       skillScope: readAgentSkillScope(entry),
+      ...(manualSkills !== undefined ? { manualSkills } : {}),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
       avatarPresetId: avatar.avatarPresetId,
@@ -2026,6 +2063,16 @@ export async function updateAgentSettings(
       avatarPresetId: normalizeAgentAvatarPresetId(updates.avatarPresetId),
       avatarSource: 'user',
     };
+  }
+  if (updates.manualSkills !== undefined) {
+    const nextManualSkills = normalizeManualSkillList(updates.manualSkills);
+    if (managed?.managed) {
+      validateManagedSkillScope(managed.presetSkills, {
+        mode: 'specified',
+        skills: nextManualSkills,
+      });
+    }
+    nextEntry = applyAgentManualSkills(nextEntry, nextManualSkills);
   }
   if (updates.skillScope) {
     const nextScope = normalizeSkillScope(updates.skillScope);

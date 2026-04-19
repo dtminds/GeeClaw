@@ -92,7 +92,7 @@ const {
   updateAgentName: vi.fn(),
   updateAgentPersona: vi.fn(),
   updateAgentSettings: vi.fn(async () => ({
-    agents: [{ id: 'stockexpert', managed: true }],
+    agents: [{ id: 'stockexpert', managed: true, manualSkills: ['stock-analyzer'] }],
     defaultAgentId: 'main',
     configuredChannelTypes: [],
     channelOwners: {},
@@ -367,6 +367,35 @@ describe('agent API routes', () => {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
       },
+    });
+  });
+
+  it('forwards explicit manualSkills payloads for agent-scoped skill membership updates', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+
+    parseJsonBody.mockResolvedValueOnce({
+      manualSkills: ['pdf', 'xlsx'],
+    });
+
+    const handled = await handleAgentRoutes(
+      { method: 'PUT' } as never,
+      {} as never,
+      new URL('http://127.0.0.1/api/agents/main'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running' }),
+          debouncedReload: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(updateAgentSettings).toHaveBeenCalledWith('main', {
+      name: undefined,
+      avatarPresetId: undefined,
+      activeMemoryEnabled: undefined,
+      manualSkills: ['pdf', 'xlsx'],
+      skillScope: undefined,
     });
   });
 

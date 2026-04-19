@@ -8,6 +8,10 @@
         "installed": "Installed",
         "marketplace": "Marketplace"
     },
+    "agentScope": {
+        "label": "Agent",
+        "main": "Main"
+    },
     "filter": {
         "allSkills": "Installed",
         "all": "All",
@@ -57,7 +61,12 @@
         "noEnvVars": "No environment variables configured.",
         "keyPlaceholder": "KEY (e.g. BASE_URL)",
         "valuePlaceholder": "VALUE",
-        "envNote": "Note: Rows with empty keys will be automatically removed during save.",
+        "validation": {
+            "title": "Fix these issues before saving:",
+            "empty": "Row {{row}} is blank. Fill in both fields or remove it.",
+            "incomplete": "Row {{row}} must include both a key and a value.",
+            "duplicate": "Environment variable {{key}} is duplicated. Keep only one entry."
+        },
         "saving": "Saving...",
         "saveConfig": "Save Configuration",
         "configSaved": "Configuration saved",

@@ -9,7 +9,7 @@ import { getProviderAccount, listProviderAccounts, providerAccountToConfig } fro
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
 import { getApiKey, getDefaultProvider, getProvider } from '../../utils/secure-storage';
-import { getProviderConfig, getProviderDefaultModel } from '../../utils/provider-registry';
+import { getProviderConfig, getProviderDefaultModel, getProviderEnvVar } from '../../utils/provider-registry';
 import {
   removeProviderKeyFromOpenClaw,
   saveOAuthTokenToOpenClaw,
@@ -37,6 +37,10 @@ function isUnregisteredProviderType(type: string): boolean {
   return isMultiInstanceProviderType(type);
 }
 
+function isSupportedRuntimeProviderType(type: string): boolean {
+  return Boolean(getProviderDefinition(type)) || isUnregisteredProviderType(type);
+}
+
 type RuntimeProviderSyncContext = {
   runtimeProviderKey: string;
   meta: ReturnType<typeof getProviderConfig>;
@@ -50,6 +54,27 @@ type ProviderRuntimeSyncResult = {
 
 function isGeeClawProvider(config: Pick<ProviderConfig, 'type'>): boolean {
   return config.type === GEECLAW_PROVIDER_TYPE;
+}
+
+function isEnvBackedApiKeyProviderType(type: string): boolean {
+  return Boolean(getProviderEnvVar(type));
+}
+
+function shouldUseEnvBackedApiKeyAuth(
+  providerType: string,
+  authMode?: 'api_key' | 'oauth_device' | 'oauth_browser' | 'local' | null,
+): boolean {
+  if (!isEnvBackedApiKeyProviderType(providerType)) {
+    return false;
+  }
+
+  if (authMode) {
+    return authMode === 'api_key';
+  }
+
+  // Legacy provider flows do not carry account authMode. For built-in env-backed
+  // providers, treat explicit API-key sync as env-backed auth.
+  return true;
 }
 
 function getGeeClawProxyBaseUrl(): string | undefined {
@@ -317,16 +342,36 @@ export async function syncProviderApiKeyToRuntime(
   providerType: string,
   providerId: string,
   apiKey: string,
+  gatewayManager?: GatewayManager,
 ): Promise<void> {
   const ock = getOpenClawProviderKey(providerType, providerId);
-  await saveProviderKeyToOpenClaw(ock, apiKey);
+  const trimmedKey = apiKey.trim();
+  if (shouldUseEnvBackedApiKeyAuth(providerType) || !trimmedKey) {
+    await removeProviderKeyFromOpenClaw(ock);
+  } else {
+    await saveProviderKeyToOpenClaw(ock, trimmedKey);
+  }
+
+  const provider = await getProvider(providerId);
+  if (provider) {
+    const context = await resolveRuntimeSyncContext(provider);
+    if (context) {
+      await syncAgentProviderModelCatalog(provider, ock, context, apiKey);
+    }
+  }
+
+  scheduleGatewayRestart(
+    gatewayManager,
+    `Scheduling Gateway restart after updating API key for provider "${providerId}"`,
+    { onlyIfRunning: true },
+  );
 }
 
 export async function syncAllProviderAuthToRuntime(): Promise<void> {
   const accounts = await listProviderAccounts();
 
   for (const account of accounts) {
-    if (account.vendorId === GEECLAW_PROVIDER_TYPE) {
+    if (account.vendorId === GEECLAW_PROVIDER_TYPE || !isSupportedRuntimeProviderType(account.vendorId)) {
       continue;
     }
 
@@ -349,7 +394,12 @@ export async function syncAllProviderAuthToRuntime(): Promise<void> {
     }
 
     if (secret.type === 'api_key') {
-      await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
+      const trimmedKey = secret.apiKey.trim();
+      if (shouldUseEnvBackedApiKeyAuth(account.vendorId, account.authMode) || !trimmedKey) {
+        await removeProviderKeyFromOpenClaw(runtimeProviderKey);
+        continue;
+      }
+      await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
       continue;
     }
 
@@ -375,7 +425,9 @@ async function syncProviderSecretToRuntime(
   runtimeProviderKey: string,
   apiKey: string | undefined,
 ): Promise<void> {
-  if (isGeeClawProvider(config)) {
+  const account = await getProviderAccount(config.id);
+  if (shouldUseEnvBackedApiKeyAuth(config.type, account?.authMode ?? null)) {
+    await removeProviderKeyFromOpenClaw(runtimeProviderKey);
     return;
   }
 
@@ -384,12 +436,19 @@ async function syncProviderSecretToRuntime(
     const trimmedKey = apiKey.trim();
     if (trimmedKey) {
       await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
+    } else {
+      await removeProviderKeyFromOpenClaw(runtimeProviderKey);
     }
     return;
   }
 
   if (secret?.type === 'api_key') {
-    await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
+    const trimmedKey = secret.apiKey.trim();
+    if (trimmedKey) {
+      await saveProviderKeyToOpenClaw(runtimeProviderKey, trimmedKey);
+    } else {
+      await removeProviderKeyFromOpenClaw(runtimeProviderKey);
+    }
     return;
   }
 
@@ -495,8 +554,8 @@ async function syncAgentProviderModelCatalog(
   }
 
   if (isUnregisteredProviderType(config.type)) {
-    const resolvedKey = apiKey !== undefined ? (apiKey.trim() || null) : await getApiKey(config.id);
-    if (!resolvedKey) {
+    const resolvedKey = apiKey !== undefined ? apiKey.trim() : await getApiKey(config.id);
+    if (apiKey === undefined && !resolvedKey) {
       return;
     }
 
@@ -504,7 +563,7 @@ async function syncAgentProviderModelCatalog(
       baseUrl,
       api: config.apiProtocol || 'openai-completions',
       models,
-      apiKey: resolvedKey,
+      apiKey: resolvedKey ?? '',
     });
     return;
   }
@@ -644,6 +703,7 @@ export async function syncDeletedProviderApiKeyToRuntime(
   provider: ProviderConfig | null,
   providerId: string,
   runtimeProviderKey?: string,
+  gatewayManager?: GatewayManager,
 ): Promise<void> {
   if (!provider?.type && !runtimeProviderKey) {
     return;
@@ -651,6 +711,17 @@ export async function syncDeletedProviderApiKeyToRuntime(
 
   const ock = runtimeProviderKey ?? await resolveRuntimeProviderKey({ ...provider!, id: providerId });
   await removeProviderKeyFromOpenClaw(ock);
+  if (provider) {
+    const context = await resolveRuntimeSyncContext(provider);
+    if (context) {
+      await syncAgentProviderModelCatalog(provider, ock, context, '');
+    }
+  }
+  scheduleGatewayRestart(
+    gatewayManager,
+    `Scheduling Gateway restart after deleting API key for provider "${providerId}"`,
+    { onlyIfRunning: true },
+  );
 }
 
 export async function syncDefaultProviderToRuntime(
@@ -704,12 +775,15 @@ export async function syncDefaultProviderToRuntime(
 
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
+  const trimmedProviderKey = providerKey?.trim() ?? '';
   const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
   const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary);
   const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks);
   const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
-  const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
+  const isOAuthProvider = (oauthTypes.includes(provider.type) && !trimmedProviderKey) || Boolean(browserOAuthRuntimeProvider);
+  const account = await getProviderAccount(provider.id);
+  const useEnvBackedApiKeyAuth = shouldUseEnvBackedApiKeyAuth(provider.type, account?.authMode ?? null);
 
   if (!isOAuthProvider) {
     if (runtimePrimaryModel) {
@@ -723,13 +797,15 @@ export async function syncDefaultProviderToRuntime(
       }
     }
 
-    if (providerKey) {
-      await saveProviderKeyToOpenClaw(ock, providerKey);
+    if (useEnvBackedApiKeyAuth || !trimmedProviderKey) {
+      await removeProviderKeyFromOpenClaw(ock);
+    } else {
+      await saveProviderKeyToOpenClaw(ock, trimmedProviderKey);
     }
 
     const context = await resolveRuntimeSyncContext(provider);
     if (context) {
-      await syncAgentProviderModelCatalog(provider, ock, context, providerKey ?? undefined);
+      await syncAgentProviderModelCatalog(provider, ock, context, trimmedProviderKey);
     }
   } else {
     if (browserOAuthRuntimeProvider) {

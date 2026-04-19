@@ -150,6 +150,12 @@
       "valuePlaceholder": "Variable Value",
       "save": "Save Environment Variables"
     },
+    "validation": {
+      "title": "Fix these issues before saving:",
+      "empty": "Row {{row}} is blank. Fill in both fields or remove it.",
+      "incomplete": "Row {{row}} must include both a variable name and a value.",
+      "duplicate": "Variable name {{key}} is duplicated. Keep only one entry."
+    },
     "toast": {
       "loadFailed": "Failed to load environment variables",
       "saved": "Environment variables saved",
@@ -166,6 +172,31 @@
     "installed": "Installed",
     "missing": "Not installed",
     "install": "Install",
+    "copyInstallCommand": "Copy Install Command",
+    "copyInstallCommandCopied": "Install command copied",
+    "copyInstallCommandFailed": "Failed to copy install command",
+    "docs": "Docs",
+    "docsOpenFailed": "Failed to open docs",
+    "source": {
+      "system": "System",
+      "geeclaw": "GeeClaw"
+    },
+    "managed": {
+      "needRuntime": "Need managed runtime"
+    },
+    "manual": {
+      "needHomebrew": "Need Homebrew",
+      "needCurl": "Need curl",
+      "needNpm": "Need npm",
+      "unavailable": "Unavailable",
+      "installMethod": "Install via {{method}}"
+    },
+    "manualDialog": {
+      "title": "Install Command",
+      "description": "Copy the command below, then run it in your terminal.",
+      "copy": "Copy Command",
+      "close": "Close"
+    },
     "reinstall": "Reinstall",
     "uninstall": "Uninstall",
     "moreActions": "More actions",
@@ -178,6 +209,18 @@
       "succeeded": "Completed",
       "failed": "Failed",
       "close": "Close"
+    },
+    "completion": {
+      "title": "Install complete",
+      "skillsOnly": "CLI and skills are installed. Enable the skills from the Skills page before use.",
+      "docsRequired": "CLI is installed, but you still need to finish other setup steps.",
+      "skillsAndDocs": "CLI and skills are installed, but you still need to finish other setup steps.",
+      "nextSteps": "Next steps",
+      "openSkills": "Open Skills",
+      "viewDocs": "View docs to finish setup",
+      "dismiss": "Dismiss",
+      "showLogs": "View install logs",
+      "hideLogs": "Hide install logs"
     }
   },
   "safety": {

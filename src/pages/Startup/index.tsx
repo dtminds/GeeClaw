@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ArrowRight,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 import { Button } from '@/components/ui/button';
@@ -142,9 +141,6 @@ export function Startup() {
             >
               <img src={geeclawIcon} alt="GeeClaw" className="h-24 w-24 drop-shadow-[0_16px_18px_rgba(255,125,90,0.16)]" />
             </motion.div>
-            <div className="modal-section-surface absolute -right-3 top-6 flex h-11 w-11 items-center justify-center rounded-full border shadow-[0_10px_30px_-18px_rgba(30,54,93,0.55)]">
-              <Sparkles className="h-5 w-5 text-amber-400" />
-            </div>
           </motion.div>
 
           <div className="w-full space-y-5">

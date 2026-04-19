@@ -49,6 +49,7 @@ interface AgentsState {
     updates: {
       name?: string;
       skillScope?: AgentSkillScope;
+      manualSkills?: string[];
       avatarPresetId?: AgentAvatarPresetId;
       activeMemoryEnabled?: boolean;
     },
@@ -278,6 +279,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     updates: {
       name?: string;
       skillScope?: AgentSkillScope;
+      manualSkills?: string[];
       avatarPresetId?: AgentAvatarPresetId;
       activeMemoryEnabled?: boolean;
     },

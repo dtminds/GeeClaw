@@ -39,6 +39,12 @@ vi.mock('@electron/utils/agent-config', () => ({
 }));
 
 vi.mock('@electron/utils/provider-registry', () => ({
+  getProviderEnvVar: vi.fn((type: string) => {
+    if (type === 'geeclaw') {
+      return 'GEECLAW_API_KEY';
+    }
+    return undefined;
+  }),
   getProviderConfig: vi.fn((type: string) => {
     if (type === 'geeclaw') {
       return {
@@ -60,9 +66,10 @@ vi.mock('@electron/utils/logger', () => ({
   },
 }));
 
-import { getProviderAccount } from '@electron/services/providers/provider-store';
+import { getProviderAccount, listProviderAccounts } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {
+  syncAllProviderAuthToRuntime,
   syncSavedProviderToRuntime,
   syncUpdatedProviderToRuntime,
   syncDefaultProviderToRuntime,
@@ -118,6 +125,7 @@ describe('GeeClaw provider runtime sync', () => {
     });
     vi.mocked(getApiKey).mockResolvedValue('user-secret');
     vi.mocked(getDefaultProvider).mockResolvedValue('geeclaw-account');
+    vi.mocked(listProviderAccounts).mockResolvedValue([]);
     vi.mocked(getDefaultAgentModelConfig).mockResolvedValue({
       model: {
         configured: true,
@@ -194,6 +202,25 @@ describe('GeeClaw provider runtime sync', () => {
       [],
     );
     expect(setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+  });
+
+  it('ignores legacy GeekAI accounts during auth sync after upgrade', async () => {
+    vi.mocked(listProviderAccounts).mockResolvedValue([
+      makeAccount({
+        id: 'legacy-geekai-account',
+        vendorId: 'geekai' as never,
+        label: 'GeekAI',
+      }),
+    ]);
+    vi.mocked(getProviderSecret).mockResolvedValue({
+      type: 'api_key',
+      accountId: 'legacy-geekai-account',
+      apiKey: 'legacy-secret',
+    });
+
+    await syncAllProviderAuthToRuntime();
+
     expect(saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
   });
 });
