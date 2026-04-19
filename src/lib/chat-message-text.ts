@@ -1,10 +1,23 @@
 const GATEWAY_TIMESTAMP_PREFIX_RE = /^\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[^\]]+\]\s*/i;
-const EMBEDDED_GATEWAY_TIMESTAMP_RE = /(?:^|\n+)\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[^\]]+\]\s*/gi;
 const SKILL_MARKER_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]/g;
 const RUNTIME_CHANNEL_TAG_RE = /<\/?(?:analysis|commentary|final)\b[^>]*>/gi;
 const OPENCLAW_INTERNAL_CONTEXT_BEGIN = '<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>';
 const OPENCLAW_INTERNAL_CONTEXT_END = '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>';
 const OPENCLAW_INTERNAL_CONTEXT_TRUNCATED = '...(truncated)...';
+const OPENCLAW_SYSTEM_EVENT_LINE_RE = /^System(?: \(untrusted\))?: \[[^\]]+\] .*(?:\r?\n|$)/;
+const OPENCLAW_CURRENT_TIME_LINE_RE = /^Current time: .+ \/ .+ UTC$/;
+const OPENCLAW_CRON_HEADER_RE = /^\[cron:[a-f0-9-]{8,}\b[^\]]*\]\s*.+$/i;
+const OPENCLAW_EXEC_FOLLOWUP_PREFIX =
+  'An async command you ran earlier has completed. The result is shown in the system messages above.';
+const OPENCLAW_EXEC_FOLLOWUP_SUFFIX =
+  'Handle the result internally. Do not relay it to the user unless explicitly requested.';
+const OPENCLAW_CRON_DELIVERY_SUFFIX =
+  'Return your response as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.';
+const OPENCLAW_NOTICE_PREFIXES = [
+  'A scheduled reminder has been triggered. The reminder content is:',
+  'A scheduled cron event was triggered, but no event content was found.',
+  'Read HEARTBEAT.md if it exists (workspace context).',
+] as const;
 const ENVELOPE_PREFIX_RE = /^\[([^\]]+)\]\s*/;
 const MESSAGE_ID_LINE_RE = /^\s*\[message_id:\s*[^\]]+\]\s*$/i;
 const INBOUND_META_SENTINELS = [
@@ -42,6 +55,13 @@ const INBOUND_SENTINEL_FAST_RE = new RegExp(
 export type SkillMarkerSegment =
   | { type: 'text'; text: string }
   | { type: 'skill'; slug: string; label: string };
+
+export type UiMessageDecision =
+  | { action: 'show_chat_user'; text: string }
+  | { action: 'show_system_notice'; text: string; reason: 'openclaw_synthetic_heartbeat' }
+  | { action: 'hide'; reason: 'openclaw_synthetic_exec_followup' | 'openclaw_synthetic_heartbeat' | 'openclaw_synthetic_cron_prompt' };
+
+export type LegacyUiSanitizeResult = { hidden: boolean; text: string };
 
 function looksLikeEnvelopeHeader(header: string): boolean {
   if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z\b/.test(header)) {
@@ -106,19 +126,6 @@ function shouldStripTrailingUntrustedContext(lines: string[], index: number): bo
   }
   const probe = lines.slice(index + 1, Math.min(lines.length, index + 8)).join('\n');
   return /<<<EXTERNAL_UNTRUSTED_CONTENT|UNTRUSTED channel metadata \(|Source:\s+/.test(probe);
-}
-
-function looksLikeInjectedPrefix(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  return (
-    /(?:^|\n)\s*(?:System|Assistant|Tool)\s*:/i.test(trimmed)
-    || /\bExec completed\b/i.test(trimmed)
-    || /\busage:\s+/i.test(trimmed)
-    || /\bcommand sh\b/i.test(trimmed)
-    || /\[(?:\d+)?(?:m|K)\b/.test(trimmed)
-  );
 }
 
 export function stripEnvelope(text: string): string {
@@ -364,23 +371,145 @@ export function sanitizeMessagesForDisplay<T>(messages: T[]): T[] {
   return changed ? next : messages;
 }
 
+function normalizeText(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+
+function isOpenClawSystemEventLine(line: string): boolean {
+  return OPENCLAW_SYSTEM_EVENT_LINE_RE.test(line);
+}
+
+function isOpenClawExecFollowupText(text: string): boolean {
+  const normalized = normalizeText(text).replace(/\s+/g, ' ');
+  return normalized === OPENCLAW_EXEC_FOLLOWUP_PREFIX
+    || normalized === `${OPENCLAW_EXEC_FOLLOWUP_PREFIX} ${OPENCLAW_EXEC_FOLLOWUP_SUFFIX}`;
+}
+
+function isOpenClawHeartbeatNoticeText(text: string): boolean {
+  const normalized = normalizeText(text).replace(/\s+/g, ' ');
+  return OPENCLAW_NOTICE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function isOpenClawCurrentTimeLine(line: string): boolean {
+  return OPENCLAW_CURRENT_TIME_LINE_RE.test(line.trim());
+}
+
+function isOpenClawCronSyntheticPrompt(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+
+  const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 3) {
+    return false;
+  }
+
+  return OPENCLAW_CRON_HEADER_RE.test(lines[0] ?? '')
+    && isOpenClawCurrentTimeLine(lines[1] ?? '')
+    && (lines[lines.length - 1] ?? '') === OPENCLAW_CRON_DELIVERY_SUFFIX;
+}
+
+function stripTrailingCurrentTimeLine(text: string): string {
+  const lines = text.split('\n');
+  while (lines.length > 0) {
+    const last = lines[lines.length - 1];
+    if (!last || !isOpenClawCurrentTimeLine(last)) {
+      break;
+    }
+    lines.pop();
+  }
+  return lines.join('\n').trim();
+}
+
+function stripOpenClawSystemEventPrelude(text: string): { hadPrelude: boolean; text: string } {
+  const lines = text.split('\n');
+  let index = 0;
+  let hadPrelude = false;
+
+  while (index < lines.length) {
+    const trimmed = lines[index]?.trim() ?? '';
+    if (trimmed === '') {
+      index += 1;
+      continue;
+    }
+    if (!isOpenClawSystemEventLine(trimmed)) {
+      break;
+    }
+    hadPrelude = true;
+    index += 1;
+  }
+
+  return {
+    hadPrelude,
+    text: lines.slice(index).join('\n').trim(),
+  };
+}
+
+function classifyOpenClawUserMessageForUi(input: string): UiMessageDecision {
+  const text = normalizeText(input);
+  if (!text) {
+    return { action: 'hide', reason: 'openclaw_synthetic_heartbeat' };
+  }
+
+  if (isOpenClawExecFollowupText(text)) {
+    return { action: 'hide', reason: 'openclaw_synthetic_exec_followup' };
+  }
+
+  if (isOpenClawCronSyntheticPrompt(text)) {
+    return { action: 'hide', reason: 'openclaw_synthetic_cron_prompt' };
+  }
+
+  const prelude = stripOpenClawSystemEventPrelude(text);
+  const remaining = prelude.hadPrelude
+    ? normalizeText(stripTrailingCurrentTimeLine(prelude.text))
+    : text;
+
+  if (isOpenClawExecFollowupText(remaining)) {
+    return { action: 'hide', reason: 'openclaw_synthetic_exec_followup' };
+  }
+
+  if (isOpenClawCronSyntheticPrompt(remaining)) {
+    return { action: 'hide', reason: 'openclaw_synthetic_cron_prompt' };
+  }
+
+  if (isOpenClawHeartbeatNoticeText(remaining)) {
+    return {
+      action: 'show_system_notice',
+      reason: 'openclaw_synthetic_heartbeat',
+      text: remaining,
+    };
+  }
+
+  if (prelude.hadPrelude) {
+    if (!remaining) {
+      return { action: 'hide', reason: 'openclaw_synthetic_heartbeat' };
+    }
+    return { action: 'show_chat_user', text: remaining };
+  }
+
+  return { action: 'show_chat_user', text };
+}
+
+export function decideOpenClawUserMessageForUi(input: string): UiMessageDecision {
+  return classifyOpenClawUserMessageForUi(input);
+}
+
+export function sanitizeOpenClawUserMessageForUi(input: string): LegacyUiSanitizeResult {
+  const decision = classifyOpenClawUserMessageForUi(input);
+  return decision.action === 'show_chat_user'
+    ? { hidden: false, text: decision.text }
+    : { hidden: true, text: '' };
+}
+
 export function cleanUserMessageText(text: string): string {
-  let cleaned = sanitizeMessageText(text, true)
+  const decision = decideOpenClawUserMessageForUi(sanitizeMessageText(text, true));
+  if (decision.action !== 'show_chat_user') {
+    return '';
+  }
+  let cleaned = decision.text
     // Remove [media attached: path (mime) | path] references from displayed text
     .replace(/\s*\[media attached:[^\]]*\]/g, '');
-
-  EMBEDDED_GATEWAY_TIMESTAMP_RE.lastIndex = 0;
-  const timestampMatches = [...cleaned.matchAll(EMBEDDED_GATEWAY_TIMESTAMP_RE)];
-  if (timestampMatches.length > 0) {
-    const lastMatch = timestampMatches[timestampMatches.length - 1];
-    const matchIndex = lastMatch.index ?? -1;
-    if (matchIndex >= 0) {
-      const prefix = cleaned.slice(0, matchIndex);
-      if (looksLikeInjectedPrefix(prefix)) {
-        cleaned = cleaned.slice(matchIndex).trimStart();
-      }
-    }
-  }
 
   return cleaned
     // Remove Gateway timestamp prefix like [Fri 2026-02-13 22:39 GMT+8]

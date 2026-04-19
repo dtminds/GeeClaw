@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cleanUserMessageText,
+  decideOpenClawUserMessageForUi,
   sanitizeMessageForDisplay,
   stripEnvelope,
   stripInboundMetadata,
@@ -73,16 +74,116 @@ describe('cleanUserMessageText', () => {
     expect(cleanUserMessageText(polluted)).toBe(polluted);
   });
 
-  it('keeps only the latest user turn when exec logs bleed into the message body', () => {
+  it('hides synthetic async completion prompts after stripping leading system-event lines', () => {
     const polluted = [
-      'System: [2026-03-13 17:08:53 GMT+8] Exec completed (plaid-sa, code 2) :: [0m [2K',
-      '[9/13] [2midna==3.11 [0m [2K[2minstalled [1m13 packages [0m [2min 36m',
-      's[0m[0m usage: douyin_extractor.py [-h] [-o OUTPUT] [-v] [--no-progress] command sh...',
-      '',
-      '[Fri 2026-03-13 17:11 GMT+8] 提取文案金句',
+      'System: [2026-04-19 14:13:38 GMT+8] Exec completed (job-1, code 0)',
+      'System (untrusted): [2026-04-19 14:13:39 GMT+8] Command output stored in transcript',
+      'An async command you ran earlier has completed. The result is shown in the system messages above.',
+      'Current time: 2026-04-19 14:13:39 GMT+8 / 2026-04-19 06:13:39 UTC',
     ].join('\n');
 
-    expect(cleanUserMessageText(polluted)).toBe('提取文案金句');
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_exec_followup',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
+  it('hides async completion prompts that append internal handling boilerplate', () => {
+    const polluted = [
+      'System (untrusted): [2026-04-19 14:13:38 GMT+8] Exec completed (marine-l, code 1) :: Navigated to: https://mp.weixin.qq.com/s/VMLyns66CAHjfe0_xKqK8g ✖ Error: Text not found: OpenClaw at check (<anonymous>:5:50)',
+      '',
+      'An async command you ran earlier has completed. The result is shown in the system messages above. Handle the result internally. Do not relay it to the user unless explicitly requested.',
+      'Current time: Sunday, April 19th, 2026 - 14:13 (Asia/Shanghai) / 2026-04-19 06:13 UTC',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_exec_followup',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
+  it('hides cron synthetic prompts that match the full OpenClaw cron structure', () => {
+    const polluted = [
+      '[cron:24102cae-8131-4468-b1e9-45f5ba567c22 打招呼] 当前天气',
+      'Current time: Sunday, April 19th, 2026 - 09:00 (Asia/Shanghai) / 2026-04-19 01:00 UTC',
+      '',
+      'Return your response as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_cron_prompt',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
+  it('classifies reminder followups as system notices instead of user chat', () => {
+    const polluted = [
+      'System: [2026-04-19 14:13:38 GMT+8] Reminder delivered',
+      '',
+      'A scheduled reminder has been triggered. The reminder content is:',
+      '检查线上报警并同步进展',
+      'Current time: 2026-04-19 14:13:39 GMT+8 / 2026-04-19 06:13:39 UTC',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'show_system_notice',
+      reason: 'openclaw_synthetic_heartbeat',
+      text: 'A scheduled reminder has been triggered. The reminder content is:\n检查线上报警并同步进展',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
+  it('shows real user text after a valid OpenClaw system-event prelude', () => {
+    const polluted = [
+      'System (untrusted): [2026-04-19 14:13:38 GMT+8] Some event',
+      '',
+      '用户真正想说的话',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'show_chat_user',
+      text: '用户真正想说的话',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('用户真正想说的话');
+  });
+
+  it('does not treat ordinary user prose with similar keywords as synthetic', () => {
+    const userText = [
+      '用户原文：System (untrusted): 只是举例，不要隐藏 completed 提示',
+      'Current time: 也是正文的一部分，不应被删除',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(userText)).toEqual({
+      action: 'show_chat_user',
+      text: userText,
+    });
+    expect(cleanUserMessageText(userText)).toBe(userText);
+  });
+
+  it('does not treat a fake cron marker without the full synthetic structure as internal prompt', () => {
+    const userText = [
+      '[cron:fake] 这是我自己写的标签',
+      'Current time: 这是普通文本，不是 UTC 时间行',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(userText)).toEqual({
+      action: 'show_chat_user',
+      text: userText,
+    });
+    expect(cleanUserMessageText(userText)).toBe(userText);
+  });
+
+  it('does not treat a user-typed System line without timestamp structure as an OpenClaw prelude', () => {
+    const userText = 'System (untrusted): hello';
+
+    expect(decideOpenClawUserMessageForUi(userText)).toEqual({
+      action: 'show_chat_user',
+      text: userText,
+    });
+    expect(cleanUserMessageText(userText)).toBe(userText);
   });
 
   it('strips structured inbound metadata blocks that OpenClaw injects for user messages', () => {
