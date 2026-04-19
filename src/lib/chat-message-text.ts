@@ -6,7 +6,7 @@ const OPENCLAW_INTERNAL_CONTEXT_END = '<<<END_OPENCLAW_INTERNAL_CONTEXT>>>';
 const OPENCLAW_INTERNAL_CONTEXT_TRUNCATED = '...(truncated)...';
 const OPENCLAW_SYSTEM_EVENT_LINE_RE = /^System(?: \(untrusted\))?: \[[^\]]+\] .*/;
 const OPENCLAW_CURRENT_TIME_LINE_RE = /^Current time: .+ \/ .+ UTC$/;
-const OPENCLAW_CRON_HEADER_RE = /^\[cron:[a-f0-9-]{8,}\b[^\]]*\]\s*.+$/i;
+const OPENCLAW_CRON_HEADER_RE = /^\[cron:[a-f0-9-]{8,}\b[^\]]*\]\s*.*$/i;
 const OPENCLAW_EXEC_FOLLOWUP_PREFIX =
   'An async command you ran earlier has completed. The result is shown in the system messages above.';
 const OPENCLAW_EXEC_FOLLOWUP_SUFFIX =
