@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUpRight, Lock, Package2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { fetchAgentScopedSkills } from '@/pages/Chat/slash-picker';
 import { useAgentsStore } from '@/stores/agents';
+import { useGatewayStore } from '@/stores/gateway';
 
 interface AgentSkillsPanelProps {
   agentId: string;
@@ -13,12 +15,49 @@ interface AgentSkillsPanelProps {
 export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPanelProps) {
   const { t } = useTranslation(['chat', 'skills']);
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
+  const gatewayState = useGatewayStore((state) => state.status.state);
+  const gatewayRpc = useGatewayStore((state) => state.rpc);
+  const [runtimeEnabledSkills, setRuntimeEnabledSkills] = useState<string[] | null>(null);
 
   const manualSkills = agent?.manualSkills
     ?? (agent?.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
   const presetSkills = agent?.presetSkills ?? [];
 
-  const enabledSkills = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
+
+    if (gatewayState !== 'running') {
+      setRuntimeEnabledSkills(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchAgentScopedSkills(agentId, gatewayRpc)
+      .then((skills) => {
+        if (cancelled) {
+          return;
+        }
+        const enabled = skills
+          .filter((skill) => skill.enabled)
+          .map((skill) => skill.id)
+          .sort((left, right) => left.localeCompare(right));
+        setRuntimeEnabledSkills(enabled);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.error('Failed to load agent-scoped skills for settings panel:', error);
+        setRuntimeEnabledSkills(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, gatewayRpc, gatewayState]);
+
+  const fallbackEnabledSkills = useMemo(() => {
     const result = new Set<string>();
     for (const skillId of manualSkills) {
       result.add(skillId);
@@ -28,6 +67,17 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     }
     return [...result].sort((left, right) => left.localeCompare(right));
   }, [manualSkills, presetSkills]);
+
+  const enabledSkills = useMemo(() => {
+    if (!runtimeEnabledSkills) {
+      return fallbackEnabledSkills;
+    }
+
+    return [...new Set([
+      ...runtimeEnabledSkills,
+      ...presetSkills,
+    ])].sort((left, right) => left.localeCompare(right));
+  }, [fallbackEnabledSkills, presetSkills, runtimeEnabledSkills]);
 
   const showWarning = enabledSkills.length > 20;
 
@@ -58,7 +108,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
             </div>
 
             <Button asChild type="button" variant="outline" className="h-9 rounded-full px-4 text-[13px]">
-              <a href={`/skills?agentId=${encodeURIComponent(agentId)}`}>
+              <a href={`#/skills?agentId=${encodeURIComponent(agentId)}`}>
                 {t('agentSettingsDialog.skillsSummary.manage', { defaultValue: 'Manage in Skills' })}
                 <ArrowUpRight className="ml-2 h-4 w-4" />
               </a>

@@ -2,11 +2,13 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useAgentsStore } from '@/stores/agents';
 import { useSkillsStore } from '@/stores/skills';
+import { useGatewayStore } from '@/stores/gateway';
 import { SOUL_TEMPLATES } from '@/pages/Chat/agent-settings/useAgentPersona';
 
 const mockHostApiFetch = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockGatewayRpc = vi.fn();
 
 const translations: Record<string, string> = {
   'agentSettingsDialog.title': 'Agent Settings',
@@ -48,6 +50,8 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.skillScope.save': 'Save Skills',
   'agentSettingsDialog.skillsSummary.description': 'Manage this agent’s skills from the Installed Skills page.',
   'agentSettingsDialog.skillsSummary.manage': 'Manage in Skills',
+  'agentSettingsDialog.skillsSummary.count': '{{count}} enabled skills',
+  'agentSettingsDialog.skillsSummary.lockedTitle': '{{count}} preset-locked skills',
   'agentSettingsDialog.skillsSummary.enabledTitle': 'Current enabled skills',
   'agentSettingsDialog.skillsSummary.empty': 'No skills have been explicitly enabled for this agent yet.',
   'agentSettingsDialog.skillsSummary.warning': 'Loading more than 20 skills can significantly degrade model focus and output quality.',
@@ -91,7 +95,13 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) => translations[key] || options?.defaultValue || key,
+    t: (key: string, options?: { defaultValue?: string; count?: number | string }) => {
+      const template = translations[key] || options?.defaultValue || key;
+      if (typeof options?.count === 'number' || typeof options?.count === 'string') {
+        return template.replace('{{count}}', String(options.count));
+      }
+      return template;
+    },
   }),
 }));
 
@@ -108,6 +118,7 @@ vi.mock('sonner', () => ({
 
 const initialAgentsState = useAgentsStore.getState();
 const initialSkillsState = useSkillsStore.getState();
+const initialGatewayState = useGatewayStore.getState();
 
 function buildMemorySnapshot(overrides?: {
   activeMemory?: Partial<{
@@ -148,14 +159,29 @@ describe('AgentSettingsDialog shell', () => {
     mockHostApiFetch.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
+    mockGatewayRpc.mockReset();
     useAgentsStore.setState(initialAgentsState, true);
     useSkillsStore.setState(initialSkillsState, true);
+    useGatewayStore.setState({
+      ...initialGatewayState,
+      status: {
+        ...initialGatewayState.status,
+        state: 'stopped',
+      },
+      rpc: mockGatewayRpc,
+    });
     mockHostApiFetch.mockImplementation((path: string) => {
       if (path === '/api/settings/memory') {
         return Promise.resolve(buildMemorySnapshot());
       }
       if (path === '/api/agents/writer/persona') {
         return Promise.resolve(personaSnapshot);
+      }
+      if (path === '/api/agents/main/persona') {
+        return Promise.resolve({
+          ...personaSnapshot,
+          agentId: 'main',
+        });
       }
       if (path === '/api/agents/helper/persona') {
         return Promise.resolve({
@@ -559,8 +585,66 @@ describe('AgentSettingsDialog shell', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
     expect(screen.getByText('1 enabled skills')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '/skills?agentId=writer');
+    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '#/skills?agentId=writer');
     expect(screen.getByText('beta-skill')).toBeInTheDocument();
+  });
+
+  it('shows current enabled skills for the main agent from the agent-scoped gateway view', async () => {
+    mockHostApiFetch.mockResolvedValueOnce({
+      ...personaSnapshot,
+      agentId: 'main',
+    });
+    mockGatewayRpc.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'pdf',
+        name: 'PDF',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }, {
+        skillKey: 'xlsx',
+        name: 'XLSX',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      status: {
+        ...useGatewayStore.getState().status,
+        state: 'running',
+      },
+      rpc: mockGatewayRpc,
+    });
+
+    useAgentsStore.setState({
+      agents: [{
+        ...agentSummary,
+        id: 'main',
+        name: 'Main',
+        workspace: '/tmp/main',
+        agentDir: '/tmp/main/agent',
+        mainSessionKey: 'agent:main:main',
+      }],
+      defaultAgentId: 'main',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="main" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('2 enabled skills')).toBeInTheDocument();
+    });
+    expect(mockGatewayRpc).toHaveBeenCalledWith('skills.status', { agentId: 'main' });
+    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '#/skills?agentId=main');
+    expect(screen.getByText('pdf')).toBeInTheDocument();
+    expect(screen.getByText('xlsx')).toBeInTheDocument();
   });
 
   it('saves avatar changes from the general panel immediately', async () => {

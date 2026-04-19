@@ -1292,7 +1292,7 @@ export function Skills() {
                       <select
                         value={selectedAgentId}
                         onChange={(event) => setSelectedAgentId(event.target.value)}
-                        className="field-focus-ring h-10 w-full appearance-none rounded-xl border border-black/10 bg-white/85 px-4 pr-10 text-sm text-foreground shadow-sm outline-none transition-all dark:border-white/10 dark:bg-background"
+                        className="h-9 w-full appearance-none border-0 bg-transparent px-0 pr-8 text-[14px] font-semibold text-foreground outline-none transition-colors focus:outline-none focus:ring-0"
                       >
                         {agentOptions.map((agent) => (
                           <option key={agent.id} value={agent.id}>

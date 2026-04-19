@@ -1234,6 +1234,23 @@ describe('managed agent config domain', () => {
     expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([]);
   });
 
+  it('persists main agent manualSkills into agents.list.skills when editing a synthetic main entry', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    const snapshot = await agentConfig.updateAgentSettings('main', {
+      manualSkills: ['pdf', 'xlsx'],
+    });
+
+    expect(snapshot.agents.find((agent) => agent.id === 'main')).toMatchObject({
+      manualSkills: ['pdf', 'xlsx'],
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'main')?.skills).toEqual(['pdf', 'xlsx']);
+  });
+
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
     const { agentConfig } = await setupManagedPresetFixture();
     await agentConfig.installMarketplaceAgent('stockexpert');
