@@ -40,7 +40,6 @@ describe('skills store eligibility mapping', () => {
         },
       }],
     });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
@@ -59,20 +58,7 @@ describe('skills store eligibility mapping', () => {
         }),
       }),
     ]);
-    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/skills/ensure-entries', expect.objectContaining({
-      method: 'POST',
-    }));
-    expect(hostApiFetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
-      body: JSON.stringify({
-        agentId: 'main',
-        skills: [
-          {
-            skillKey: 'blucli',
-            source: undefined,
-          },
-        ],
-      }),
-    }));
+    expect(hostApiFetchMock.mock.calls[0]).toEqual(['/api/clawhub/list?agentId=main']);
   });
 
   it('keeps manually-disabled skills available for manual re-enable', async () => {
@@ -94,7 +80,6 @@ describe('skills store eligibility mapping', () => {
         },
       }],
     });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'], hiddenSkillKeys: [] });
@@ -124,7 +109,6 @@ describe('skills store eligibility mapping', () => {
         blockedByAllowlist: false,
       }],
     });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: ['pdf'], hiddenSkillKeys: [] });
@@ -161,7 +145,6 @@ describe('skills store eligibility mapping', () => {
         source: 'openclaw-extra',
       }],
     });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({
@@ -186,7 +169,6 @@ describe('skills store eligibility mapping', () => {
 
   it('fetches installed skills for the main agent by default', async () => {
     rpcMock.mockResolvedValueOnce({ skills: [] });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
@@ -213,7 +195,6 @@ describe('skills store eligibility mapping', () => {
         source: 'agents-skills-project',
       }],
     });
-    hostApiFetchMock.mockResolvedValueOnce({ success: true, added: [] });
     hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
     hostApiFetchMock.mockResolvedValueOnce({});
     hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
@@ -222,21 +203,8 @@ describe('skills store eligibility mapping', () => {
     await useSkillsStore.getState().fetchSkills('writer');
 
     expect(rpcMock).toHaveBeenCalledWith('skills.status', { agentId: 'writer' });
-    expect(hostApiFetchMock.mock.calls[0]).toEqual([
-      '/api/skills/ensure-entries',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          agentId: 'writer',
-          skills: [{
-            skillKey: 'writer-toolkit',
-            source: 'agents-skills-project',
-          }],
-        }),
-      }),
-    ]);
-    expect(hostApiFetchMock.mock.calls[1]).toEqual(['/api/clawhub/list?agentId=writer']);
-    expect(hostApiFetchMock.mock.calls[2]).toEqual(['/api/skills/configs?agentId=writer']);
-    expect(hostApiFetchMock.mock.calls[3]).toEqual(['/api/skills/policy?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[0]).toEqual(['/api/clawhub/list?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[1]).toEqual(['/api/skills/configs?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[2]).toEqual(['/api/skills/policy?agentId=writer']);
   });
 });

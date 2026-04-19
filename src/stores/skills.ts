@@ -137,22 +137,6 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       // 1. Fetch from Gateway (running skills)
       const gatewayData = await useGatewayStore.getState().rpc<GatewaySkillsStatusResult>('skills.status', { agentId: scopedAgentId });
 
-      // Persist newly discovered skills as explicitly disabled in openclaw.json.
-      // Explicit user toggles are persisted separately in the app settings
-      // store, so a manually enabled skill will not be reclassified as new.
-      const discoveredSkills = (gatewayData.skills || [])
-        .filter((skill): skill is GatewaySkillStatus & { skillKey: string } => typeof skill.skillKey === 'string' && skill.skillKey.trim().length > 0)
-        .map((skill) => ({
-          skillKey: skill.skillKey,
-          source: skill.source,
-        }));
-      if (discoveredSkills.length > 0) {
-        await hostApiFetch<{ success: boolean; added: string[]; error?: string }>('/api/skills/ensure-entries', {
-          method: 'POST',
-          body: JSON.stringify({ agentId: scopedAgentId, skills: discoveredSkills }),
-        });
-      }
-
       // 2. Fetch from ClawHub (installed on disk)
       const clawhubResult = await hostApiFetch<{ success: boolean; results?: ClawHubListResult[]; error?: string }>(
         `/api/clawhub/list?agentId=${encodeURIComponent(scopedAgentId)}`,
