@@ -841,7 +841,7 @@ export function Skills() {
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [selectedMarketplaceSkill, setSelectedMarketplaceSkill] = useState<MarketplaceSkill | null>(null);
   const [activeTab, setActiveTab] = useState('all');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedAgentId, setSelectedAgentId] = useState(() => searchParams.get('agentId') || 'main');
   const [selectedSource, setSelectedSource] = useState<InstalledSkillFilter>('enabled');
   const [marketplaceSection, setMarketplaceSection] = useState('featured');
@@ -854,6 +854,10 @@ export function Skills() {
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
   const mainAgent = agents.find((agent) => agent.id === 'main');
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const safeSkills = useMemo(
+    () => (Array.isArray(skills) ? skills : []),
+    [skills],
+  );
   const selectedAgentPresetSkills = useMemo(
     () => selectedAgent?.presetSkills ?? [],
     [selectedAgent],
@@ -862,6 +866,21 @@ export function Skills() {
     () => new Set(selectedAgentPresetSkills),
     [selectedAgentPresetSkills],
   );
+  const selectedAgentLegacyEnabledSkillIds = useMemo(() => {
+    if (!selectedAgent || selectedAgent.manualSkills !== undefined || selectedAgent.skillScope.mode !== 'default') {
+      return [] as string[];
+    }
+
+    const result = new Set<string>();
+    for (const skill of safeSkills) {
+      if (skill.hidden === true || !skill.enabled || presetSkillSet.has(skill.id)) {
+        continue;
+      }
+      result.add(skill.id);
+    }
+
+    return [...result].sort((left, right) => left.localeCompare(right));
+  }, [presetSkillSet, safeSkills, selectedAgent]);
   const selectedAgentManualSkillIds = useMemo(() => {
     if (!selectedAgent) {
       return [] as string[];
@@ -873,8 +892,8 @@ export function Skills() {
 
     return selectedAgent.skillScope.mode === 'specified'
       ? selectedAgent.skillScope.skills
-      : [];
-  }, [selectedAgent]);
+      : selectedAgentLegacyEnabledSkillIds;
+  }, [selectedAgent, selectedAgentLegacyEnabledSkillIds]);
   const selectedAgentEnabledSkillSet = useMemo(() => new Set<string>([
     ...selectedAgentManualSkillIds,
     ...selectedAgentPresetSkills,
@@ -910,11 +929,9 @@ export function Skills() {
   }, [agents.length, fetchAgents]);
 
   useEffect(() => {
-    const requestedAgentId = searchParams.get('agentId');
-    if (requestedAgentId && requestedAgentId !== selectedAgentId) {
-      setSelectedAgentId(requestedAgentId);
-    }
-  }, [searchParams, selectedAgentId]);
+    const requestedAgentId = searchParams.get('agentId') || 'main';
+    setSelectedAgentId((current) => (current === requestedAgentId ? current : requestedAgentId));
+  }, [searchParams]);
 
   // Fetch skills on mount
   useEffect(() => {
@@ -924,10 +941,6 @@ export function Skills() {
   }, [fetchSkills, isGatewayRunning, selectedAgentId]);
 
   // Filter skills
-  const safeSkills = useMemo(
-    () => (Array.isArray(skills) ? skills : []),
-    [skills],
-  );
   const agentScopedSkills = useMemo(() => safeSkills.map((skill) => {
     const enabled = selectedAgentEnabledSkillSet.has(skill.id);
     if (skill.enabled === enabled) {
@@ -1329,7 +1342,13 @@ export function Skills() {
                     <div className="relative min-w-[100px]">
                       <select
                         value={selectedAgentId}
-                        onChange={(event) => setSelectedAgentId(event.target.value)}
+                        onChange={(event) => {
+                          const nextAgentId = event.target.value;
+                          setSelectedAgentId(nextAgentId);
+                          const nextSearchParams = new URLSearchParams(searchParams);
+                          nextSearchParams.set('agentId', nextAgentId);
+                          setSearchParams(nextSearchParams);
+                        }}
                         className="h-9 w-full appearance-none border-0 bg-transparent px-0 pr-8 text-[14px] font-semibold text-foreground outline-none transition-colors focus:outline-none focus:ring-0"
                       >
                         {agentOptions.map((agent) => (

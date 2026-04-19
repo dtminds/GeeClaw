@@ -19,10 +19,17 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
   const gatewayRpc = useGatewayStore((state) => state.rpc);
   const [runtimeEnabledSkills, setRuntimeEnabledSkills] = useState<{ agentId: string; skills: string[] } | null>(null);
 
-  const manualSkills = useMemo(() => (
-    agent?.manualSkills
-      ?? (agent?.skillScope.mode === 'specified' ? agent.skillScope.skills : [])
-  ), [agent]);
+  const manualSkills = useMemo(() => {
+    if (agent?.manualSkills !== undefined) {
+      return agent.manualSkills;
+    }
+
+    if (agent?.skillScope.mode === 'specified') {
+      return agent.skillScope.skills;
+    }
+
+    return undefined;
+  }, [agent]);
   const presetSkills = useMemo(() => agent?.presetSkills ?? [], [agent]);
 
   useEffect(() => {
@@ -58,9 +65,9 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     };
   }, [agentId, gatewayRpc, gatewayState]);
 
-  const fallbackEnabledSkills = useMemo(() => {
+  const configuredEnabledSkills = useMemo(() => {
     const result = new Set<string>();
-    for (const skillId of manualSkills) {
+    for (const skillId of manualSkills ?? []) {
       result.add(skillId);
     }
     for (const skillId of presetSkills) {
@@ -74,15 +81,19 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     : null;
 
   const enabledSkills = useMemo(() => {
+    if (manualSkills !== undefined) {
+      return configuredEnabledSkills;
+    }
+
     if (gatewayState !== 'running' || !runtimeSkillsForCurrentAgent) {
-      return fallbackEnabledSkills;
+      return configuredEnabledSkills;
     }
 
     return [...new Set([
       ...runtimeSkillsForCurrentAgent,
       ...presetSkills,
     ])].sort((left, right) => left.localeCompare(right));
-  }, [fallbackEnabledSkills, gatewayState, presetSkills, runtimeSkillsForCurrentAgent]);
+  }, [configuredEnabledSkills, gatewayState, manualSkills, presetSkills, runtimeSkillsForCurrentAgent]);
 
   const showWarning = enabledSkills.length > 20;
 

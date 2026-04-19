@@ -647,6 +647,48 @@ describe('AgentSettingsDialog shell', () => {
     expect(screen.getByText('xlsx')).toBeInTheDocument();
   });
 
+  it('prefers configured manual skills over stale gateway state in the skills summary', async () => {
+    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+    mockGatewayRpc.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'alpha-skill',
+        name: 'Alpha Skill',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      status: {
+        ...useGatewayStore.getState().status,
+        state: 'running',
+      },
+      rpc: mockGatewayRpc,
+    });
+
+    useAgentsStore.setState({
+      agents: [{
+        ...agentSummary,
+        manualSkills: ['alpha-skill', 'beta-skill'],
+      }],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('2 enabled skills')).toBeInTheDocument();
+    });
+    expect(screen.getByText('alpha-skill')).toBeInTheDocument();
+    expect(screen.getByText('beta-skill')).toBeInTheDocument();
+  });
+
   it('saves avatar changes from the general panel immediately', async () => {
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({

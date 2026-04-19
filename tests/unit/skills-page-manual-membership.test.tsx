@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { useSkillsStore } from '@/stores/skills';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
@@ -73,6 +73,11 @@ describe('skills page manual membership editing', () => {
     useAgentsStore.setState(initialAgentsState);
     useGatewayStore.setState(initialGatewayState);
   });
+
+  function LocationProbe() {
+    const location = useLocation();
+    return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
+  }
 
   it('renders the agent selector as a text-style dropdown without framed field chrome', async () => {
     useSkillsStore.setState({
@@ -424,5 +429,212 @@ describe('skills page manual membership editing', () => {
       });
     });
     expect(fetchSkills).toHaveBeenCalledWith('writer');
+  });
+
+  it('falls back to current gateway-enabled skills for agents that have not been migrated to explicit manualSkills yet', async () => {
+    const fetchSkills = vi.fn().mockResolvedValue(undefined);
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [
+        {
+          id: 'fresh-skill',
+          slug: 'fresh-skill',
+          name: 'Fresh Skill',
+          description: 'Fresh skill',
+          enabled: false,
+          configuredEnabled: false,
+          eligible: true,
+          blockedByAllowlist: false,
+          hidden: false,
+          icon: '🧩',
+          isBundled: false,
+          isCore: false,
+          source: 'agents-skills-personal',
+        },
+        {
+          id: 'legacy-skill',
+          slug: 'legacy-skill',
+          name: 'Legacy Skill',
+          description: 'Legacy skill',
+          enabled: true,
+          configuredEnabled: true,
+          eligible: true,
+          blockedByAllowlist: false,
+          hidden: false,
+          icon: '🧩',
+          isBundled: false,
+          isCore: false,
+          source: 'agents-skills-personal',
+        },
+      ],
+      fetchSkills,
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'writer',
+        name: 'Writer',
+        isDefault: false,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace-writer',
+        agentDir: '~/.openclaw-geeclaw/agents/writer/agent',
+        mainSessionKey: 'writer',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'writer',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+      updateAgentSettings,
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=writer']}>
+          <Skills />
+        </MemoryRouter>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('All').closest('button') as HTMLButtonElement);
+    });
+
+    const legacyRow = screen.getByText('Legacy Skill').closest('div.group');
+    expect(legacyRow).not.toBeNull();
+    expect(within(legacyRow as HTMLElement).getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('switch')[0]);
+    });
+
+    await waitFor(() => {
+      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
+        manualSkills: ['fresh-skill', 'legacy-skill'],
+      });
+    });
+  });
+
+  it('updates the agentId search param when switching the selected agent', async () => {
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [],
+      fetchSkills: vi.fn().mockResolvedValue(undefined),
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace',
+        agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        mainSessionKey: 'main',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }, {
+        id: 'writer',
+        name: 'Writer',
+        isDefault: false,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace-writer',
+        agentDir: '~/.openclaw-geeclaw/agents/writer/agent',
+        mainSessionKey: 'writer',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'main',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=main']}>
+          <Skills />
+          <LocationProbe />
+        </MemoryRouter>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'writer' } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('writer');
+    });
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/skills?agentId=writer');
   });
 });
