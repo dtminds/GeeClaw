@@ -2,7 +2,7 @@
  * Skills Page
  * Browse and manage AI skills
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -855,6 +855,23 @@ export function Skills() {
   const mainAgent = agents.find((agent) => agent.id === 'main');
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
   const presetSkillSet = new Set(selectedAgent?.presetSkills ?? []);
+  const selectedAgentManualSkillIds = useMemo(() => {
+    if (!selectedAgent) {
+      return [] as string[];
+    }
+
+    if (selectedAgent.manualSkills !== undefined) {
+      return selectedAgent.manualSkills;
+    }
+
+    return selectedAgent.skillScope.mode === 'specified'
+      ? selectedAgent.skillScope.skills
+      : [];
+  }, [selectedAgent]);
+  const selectedAgentEnabledSkillSet = useMemo(() => new Set<string>([
+    ...selectedAgentManualSkillIds,
+    ...(selectedAgent?.presetSkills ?? []),
+  ]), [selectedAgent?.presetSkills, selectedAgentManualSkillIds]);
   const agentOptions = [
     { id: 'main', name: mainAgent?.name || t('agentScope.main') },
     ...agents
@@ -901,7 +918,18 @@ export function Skills() {
 
   // Filter skills
   const safeSkills = Array.isArray(skills) ? skills : [];
-  const visibleSkills = safeSkills.filter((skill) => skill.hidden !== true);
+  const agentScopedSkills = useMemo(() => safeSkills.map((skill) => {
+    const enabled = selectedAgentEnabledSkillSet.has(skill.id);
+    if (skill.enabled === enabled) {
+      return skill;
+    }
+
+    return {
+      ...skill,
+      enabled,
+    };
+  }), [safeSkills, selectedAgentEnabledSkillSet]);
+  const visibleSkills = agentScopedSkills.filter((skill) => skill.hidden !== true);
   const filteredSkills = visibleSkills.filter((skill) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -953,11 +981,7 @@ export function Skills() {
     }
 
     try {
-      const baselineEnabledSkillIds = (
-        selectedAgent.manualSkills !== undefined
-          ? selectedAgent.manualSkills
-          : safeSkills.filter((skill) => skill.enabled).map((skill) => skill.id)
-      );
+      const baselineEnabledSkillIds = selectedAgentManualSkillIds;
       const nextSkills = new Set<string>([
         ...baselineEnabledSkillIds,
         ...(selectedAgent.presetSkills ?? []),
@@ -979,7 +1003,7 @@ export function Skills() {
     } catch (err) {
       toast.error(String(err));
     }
-  }, [fetchSkills, presetSkillSet, safeSkills, selectedAgent, t, updateAgentSettings]);
+  }, [fetchSkills, presetSkillSet, selectedAgent, selectedAgentManualSkillIds, t, updateAgentSettings]);
 
   // Handle toggle
   const handleToggle = useCallback(async (skillId: string, enable: boolean) => {
@@ -1167,6 +1191,10 @@ export function Skills() {
       toast.error(t('toast.failedOpenActualFolder') + ': ' + String(err));
     }
   }, [t]);
+
+  const resolvedSelectedSkill = selectedSkill
+    ? agentScopedSkills.find((skill) => skill.id === selectedSkill.id) ?? selectedSkill
+    : null;
 
   if (loading) {
     return (
@@ -1624,14 +1652,14 @@ export function Skills() {
 
       {/* Skill Detail Dialog */}
       <SkillDetailDialog
-        skill={selectedSkill}
+        skill={resolvedSelectedSkill}
         agentId={selectedAgentId}
-        isOpen={!!selectedSkill}
+        isOpen={!!resolvedSelectedSkill}
         onClose={() => setSelectedSkill(null)}
         onToggle={(enabled) => {
-          if (!selectedSkill) return;
-          handleToggle(selectedSkill.id, enabled);
-          setSelectedSkill({ ...selectedSkill, enabled });
+          if (!resolvedSelectedSkill) return;
+          handleToggle(resolvedSelectedSkill.id, enabled);
+          setSelectedSkill({ ...resolvedSelectedSkill, enabled });
         }}
         onUninstall={handleUninstall}
         onOpenFolder={handleOpenSkillFolder}

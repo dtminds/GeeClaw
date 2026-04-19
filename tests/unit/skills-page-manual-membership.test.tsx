@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useSkillsStore } from '@/stores/skills';
 import { useAgentsStore } from '@/stores/agents';
@@ -204,6 +204,114 @@ describe('skills page manual membership editing', () => {
     expect(subtabRow).not.toBeNull();
     expect(subtabRow?.className).toContain('items-end');
     expect(subtabRow?.className).not.toContain('items-center');
+  });
+
+  it('uses agent manual membership instead of gateway enabled state for installed switches', async () => {
+    const fetchSkills = vi.fn().mockResolvedValue(undefined);
+
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [
+        {
+          id: 'agent-member',
+          slug: 'agent-member',
+          name: 'Agent Member',
+          description: 'Pinned to this agent',
+          enabled: true,
+          configuredEnabled: true,
+          eligible: true,
+          blockedByAllowlist: false,
+          hidden: false,
+          icon: '🧩',
+          isBundled: false,
+          isCore: false,
+          source: 'agents-skills-personal',
+        },
+        {
+          id: 'gateway-enabled-only',
+          slug: 'gateway-enabled-only',
+          name: 'Gateway Enabled Only',
+          description: 'Enabled by runtime status, not by this agent',
+          enabled: true,
+          configuredEnabled: true,
+          eligible: true,
+          blockedByAllowlist: false,
+          hidden: false,
+          icon: '🧩',
+          isBundled: false,
+          isCore: false,
+          source: 'agents-skills-personal',
+        },
+      ],
+      fetchSkills,
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'writer',
+        name: 'Writer',
+        isDefault: false,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace-writer',
+        agentDir: '~/.openclaw-geeclaw/agents/writer/agent',
+        mainSessionKey: 'writer',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        manualSkills: ['agent-member'],
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'writer',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+      updateAgentSettings: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=writer']}>
+          <Skills />
+        </MemoryRouter>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('All').closest('button') as HTMLButtonElement);
+    });
+
+    const memberRow = screen.getByText('Agent Member').closest('div.group');
+    const runtimeOnlyRow = screen.getByText('Gateway Enabled Only').closest('div.group');
+    expect(memberRow).not.toBeNull();
+    expect(runtimeOnlyRow).not.toBeNull();
+    expect(within(memberRow as HTMLElement).getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    expect(within(runtimeOnlyRow as HTMLElement).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('does not fall back to legacy enabled skills when manualSkills is explicitly empty', async () => {
