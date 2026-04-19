@@ -121,7 +121,7 @@
         },
         "skillsSummary": {
             "count": "已启用 {{count}} 个技能",
-            "description": "前往已安装技能页管理当前智能体的技能",
+            "description": "前往技能管理页管理当前智能体的技能",
             "manage": "去技能页管理",
             "warning": "单个 Agent 加载超过 20 个技能时，模型注意力和输出质量会明显下降",
             "lockedTitle": "{{count}} 个预置锁定技能",

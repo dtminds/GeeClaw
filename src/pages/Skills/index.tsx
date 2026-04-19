@@ -1312,11 +1312,11 @@ export function Skills() {
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-black/5 px-4 dark:border-white/5">
               {activeTab === 'all' && (
                 <>
-                  <div className="flex items-center gap-3 pb-2 pr-2">
+                  <div className="flex items-center gap-3">
                     <span className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
                       {t('agentScope.label')}
                     </span>
-                    <div className="relative min-w-[200px]">
+                    <div className="relative min-w-[100px]">
                       <select
                         value={selectedAgentId}
                         onChange={(event) => setSelectedAgentId(event.target.value)}
