@@ -119,6 +119,36 @@ describe('cleanUserMessageText', () => {
     expect(cleanUserMessageText(polluted)).toBe('');
   });
 
+  it('hides cron synthetic prompts even when a system-event prelude is present', () => {
+    const polluted = [
+      'System: [2026-04-19 09:00:00 GMT+8] Cron triggered',
+      '',
+      '[cron:24102cae-8131-4468-b1e9-45f5ba567c22 打招呼] 当前天气',
+      'Current time: Sunday, April 19th, 2026 - 09:00 (Asia/Shanghai) / 2026-04-19 01:00 UTC',
+      '',
+      'Return your response as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_cron_prompt',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
+  it('hides exec synthetic followups without a prelude when a trailing current-time line is present', () => {
+    const polluted = [
+      'An async command you ran earlier has completed. The result is shown in the system messages above.',
+      'Current time: Sunday, April 19th, 2026 - 09:00 (Asia/Shanghai) / 2026-04-19 01:00 UTC',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_exec_followup',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
   it('classifies reminder followups as system notices instead of user chat', () => {
     const polluted = [
       'System: [2026-04-19 14:13:38 GMT+8] Reminder delivered',

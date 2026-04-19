@@ -29,7 +29,7 @@ import {
 import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { isInternalMessage } from '@/stores/chat';
-import { extractText, extractImages, extractToolUse, formatTimestamp, shouldHideToolTrace } from './message-utils';
+import { extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -607,6 +607,8 @@ export const ChatMessage = memo(function ChatMessage({
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   const isToolResult = role === 'toolresult' || role === 'tool_result';
   const shouldHideInternalMessage = useMemo(() => isInternalMessage(message), [message]);
+  const userDisplayDecision = useMemo(() => (isUser ? extractUserDisplayDecision(message) : null), [isUser, message]);
+  const isUserSystemNotice = userDisplayDecision?.action === 'show_system_notice';
   const assistantDisplay = useMemo(
     () => (!isUser ? extractAssistantDisplaySegments(message, { showThinking }) : null),
     [isUser, message, showThinking],
@@ -622,7 +624,10 @@ export const ChatMessage = memo(function ChatMessage({
     () => [...extractImages(message), ...markdownImages],
     [markdownImages, message],
   );
-  const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
+  const userText = useMemo(
+    () => (isUser && userDisplayDecision?.action === 'show_chat_user' ? userDisplayDecision.text : ''),
+    [isUser, userDisplayDecision],
+  );
   const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
   const assistantContentParts = useMemo(
     () => (isUser
@@ -636,6 +641,7 @@ export const ChatMessage = memo(function ChatMessage({
   );
   const text = isUser ? userText : assistantText;
   const hasText = text.length > 0;
+  const hasUserSystemNotice = isUserSystemNotice && Boolean(userDisplayDecision?.text);
   const hasAssistantText = assistantText.length > 0;
 
   const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
@@ -645,20 +651,20 @@ export const ChatMessage = memo(function ChatMessage({
   if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
   if (shouldHideInternalMessage) return null;
 
-  if (!hasText && assistantContentParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
+  if (!hasText && !hasUserSystemNotice && assistantContentParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
 
   return (
     <div
       className={cn(
         'flex gap-3 group',
-        isUser ? 'flex-row-reverse' : 'flex-row',
+        isUser && !isUserSystemNotice ? 'flex-row-reverse' : 'flex-row',
       )}
     >
       {/* Content */}
       <div
         className={cn(
           'flex flex-col w-full min-w-0 space-y-2',
-          isUser ? 'items-end max-w-[80%]' : 'max-w-[100%] items-start',
+          isUser && !isUserSystemNotice ? 'items-end max-w-[80%]' : 'max-w-[100%] items-start',
         )}
       >
         {/* Images — rendered ABOVE text bubble for user messages */}
@@ -723,6 +729,10 @@ export const ChatMessage = memo(function ChatMessage({
             isUser={isUser}
             isStreaming={isStreaming}
           />
+        )}
+
+        {hasUserSystemNotice && userDisplayDecision?.action === 'show_system_notice' && (
+          <SystemNotice text={userDisplayDecision.text} />
         )}
 
         {!isUser && assistantContentParts.map((part, index) => {
@@ -1192,6 +1202,21 @@ function MessageBubble({
         </div>
       )}
 
+    </div>
+  );
+}
+
+function SystemNotice({ text }: { text: string }) {
+  return (
+    <div
+      data-testid="chat-system-notice"
+      className="w-full rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 text-sm text-muted-foreground"
+    >
+      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
+        <HugeiconsIcon icon={AlertCircleIcon} className="h-3.5 w-3.5" />
+        <span>System Notice</span>
+      </div>
+      <div className="whitespace-pre-wrap break-words break-all">{text}</div>
     </div>
   );
 }

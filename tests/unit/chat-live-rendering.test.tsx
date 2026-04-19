@@ -515,4 +515,31 @@ describe('chat live rendering', () => {
     expect(screen.queryByText(/Cache read 22/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Cost 0.0123/i)).not.toBeInTheDocument();
   });
+
+  it('renders synthetic user notices outside the user bubble', () => {
+    const message: RawMessage = {
+      role: 'user',
+      id: 'user-reminder-notice',
+      timestamp: 1,
+      content: [
+        {
+          type: 'text',
+          text: 'System: [2026-04-19 14:13:38 GMT+8] Reminder delivered\n\nA scheduled reminder has been triggered. The reminder content is:\n检查线上报警并同步进展\nCurrent time: 2026-04-19 14:13:39 GMT+8 / 2026-04-19 06:13:39 UTC',
+        },
+      ],
+    };
+
+    const { container } = render(
+      <ChatMessage
+        message={message}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByTestId('chat-system-notice')).toBeInTheDocument();
+    expect(screen.getByText('System Notice')).toBeInTheDocument();
+    expect(container.textContent).toContain('A scheduled reminder has been triggered. The reminder content is:');
+    expect(container.textContent).toContain('检查线上报警并同步进展');
+  });
 });

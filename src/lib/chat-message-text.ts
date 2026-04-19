@@ -452,32 +452,31 @@ function classifyOpenClawUserMessageForUi(input: string): UiMessageDecision {
     return { action: 'hide', reason: 'openclaw_synthetic_heartbeat' };
   }
 
-  if (isOpenClawExecFollowupText(text)) {
-    return { action: 'hide', reason: 'openclaw_synthetic_exec_followup' };
-  }
-
-  if (isOpenClawCronSyntheticPrompt(text)) {
-    return { action: 'hide', reason: 'openclaw_synthetic_cron_prompt' };
-  }
-
   const prelude = stripOpenClawSystemEventPrelude(text);
-  const remaining = prelude.hadPrelude
-    ? normalizeText(stripTrailingCurrentTimeLine(prelude.text))
-    : text;
+  const withoutPrelude = normalizeText(prelude.text);
+  const textWithoutTrailingTime = normalizeText(stripTrailingCurrentTimeLine(text));
+  const withoutPreludeTrailingTime = normalizeText(stripTrailingCurrentTimeLine(withoutPrelude));
 
-  if (isOpenClawExecFollowupText(remaining)) {
-    return { action: 'hide', reason: 'openclaw_synthetic_exec_followup' };
-  }
-
-  if (isOpenClawCronSyntheticPrompt(remaining)) {
+  if (isOpenClawCronSyntheticPrompt(text) || isOpenClawCronSyntheticPrompt(withoutPrelude)) {
     return { action: 'hide', reason: 'openclaw_synthetic_cron_prompt' };
   }
 
-  if (isOpenClawHeartbeatNoticeText(remaining)) {
+  if (
+    isOpenClawExecFollowupText(text)
+    || isOpenClawExecFollowupText(textWithoutTrailingTime)
+    || isOpenClawExecFollowupText(withoutPreludeTrailingTime)
+  ) {
+    return { action: 'hide', reason: 'openclaw_synthetic_exec_followup' };
+  }
+
+  const remaining = prelude.hadPrelude ? withoutPreludeTrailingTime : text;
+
+  const systemNoticeText = prelude.hadPrelude ? withoutPreludeTrailingTime : textWithoutTrailingTime;
+  if (isOpenClawHeartbeatNoticeText(systemNoticeText)) {
     return {
       action: 'show_system_notice',
       reason: 'openclaw_synthetic_heartbeat',
-      text: remaining,
+      text: systemNoticeText,
     };
   }
 
