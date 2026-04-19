@@ -10,9 +10,9 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { getOpenClawDir, getOpenClawConfigDir, getResourcesDir } from './paths';
 import { logger } from './logger';
-import { getAlwaysEnabledSkillKeys, isAlwaysEnabledSkillKey } from './skills-policy';
+import { getAlwaysEnabledSkillKeys } from './skills-policy';
 import { mutateOpenClawConfigDocument, readOpenClawConfigDocument } from './openclaw-config-coordinator';
-import { getExplicitSkillToggles, setExplicitSkillToggle } from './store';
+import { clearExplicitSkillToggles, getExplicitSkillToggles, setExplicitSkillToggle } from './store';
 
 interface SkillEntry {
     enabled?: boolean;
@@ -20,17 +20,15 @@ interface SkillEntry {
     env?: Record<string, string>;
 }
 
-export interface DiscoveredSkillDescriptor {
-    skillKey?: string;
-    source?: string;
+interface OpenClawAgentListEntry {
+    id?: unknown;
+    skills?: unknown;
+    [key: string]: unknown;
 }
 
 interface OpenClawConfig {
     agents?: {
-        list?: Array<{
-            skills?: unknown;
-            [key: string]: unknown;
-        }>;
+        list?: OpenClawAgentListEntry[];
         [key: string]: unknown;
     };
     skills?: {
@@ -56,6 +54,12 @@ interface PreinstalledMarker {
     slug: string;
     version: string;
     installedAt: string;
+}
+
+export interface RuntimeSkillStatus {
+    skillKey?: string;
+    disabled?: boolean;
+    hidden?: boolean;
 }
 
 function dedupePaths(paths: string[]): string[] {
@@ -84,27 +88,53 @@ function getCurrentSkillExtraDirs(skills: Record<string, unknown>): string[] {
     return [];
 }
 
-function getAgentReferencedSkillKeys(config: OpenClawConfig): Set<string> {
-    const agentEntries = Array.isArray(config.agents?.list) ? config.agents.list : [];
-    const referenced = new Set<string>();
+function getLegacyAgentIdsNeedingSkillMigration(config: OpenClawConfig): string[] {
+    const entries = Array.isArray(config.agents?.list) ? config.agents.list : [];
+    const pending = new Set<string>();
+    let hasExplicitMainSkills = false;
 
-    for (const entry of agentEntries) {
-        if (!Array.isArray(entry?.skills)) {
+    for (const entry of entries) {
+        const agentId = typeof entry?.id === 'string' ? entry.id.trim() : '';
+        if (!agentId) {
             continue;
         }
 
-        for (const skill of entry.skills) {
-            if (typeof skill !== 'string') {
-                continue;
-            }
-            const normalized = skill.trim();
-            if (normalized) {
-                referenced.add(normalized);
-            }
+        if (agentId === 'main' && Array.isArray(entry.skills)) {
+            hasExplicitMainSkills = true;
+        }
+
+        if (!Array.isArray(entry.skills)) {
+            pending.add(agentId);
         }
     }
 
-    return referenced;
+    if (!hasExplicitMainSkills) {
+        pending.add('main');
+    }
+
+    return [...pending];
+}
+
+function removeLegacySkillEnabledFields(skillEntries: Record<string, SkillEntry>): string[] {
+    const cleaned: string[] = [];
+
+    for (const [skillKey, entry] of Object.entries(skillEntries)) {
+        if (!('enabled' in entry)) {
+            continue;
+        }
+
+        cleaned.push(skillKey);
+        const nextEntry = { ...entry };
+        delete nextEntry.enabled;
+
+        if (Object.keys(nextEntry).length === 0) {
+            delete skillEntries[skillKey];
+        } else {
+            skillEntries[skillKey] = nextEntry;
+        }
+    }
+
+    return cleaned;
 }
 
 function isManagedPreinstalledSkillExtraDir(pathEntry: string): boolean {
@@ -250,127 +280,114 @@ export async function getAllSkillConfigs(): Promise<Record<string, SkillEntry>> 
     return config.skills?.entries || {};
 }
 
-/**
- * Ensure discovered skills are explicitly represented in openclaw.json.
- *
- * Newly discovered keys are persisted with { enabled: false } so unexpected
- * auto-discovered skills from non-user-managed locations do not become
- * implicitly enabled in future sessions.
- */
-export async function ensureSkillEntriesDefaultDisabled(
-    discoveredSkills: Array<string | DiscoveredSkillDescriptor>,
-): Promise<{ success: boolean; added: string[]; normalizedAlwaysEnabled: string[]; error?: string }> {
-    try {
-        const ignoredSources = new Set(['openclaw-managed', 'openclaw-workspace']);
-        const preinstalledSkills = await readPreinstalledManifest();
-        // `autoEnable` only affects the first-discovery default-disable pass for
-        // preinstalled skills loaded from openclaw-extra. It must not override
-        // explicit user toggles restored from settings or policy-enforced skills.
-        const autoEnabledPreinstalledSkillKeys = new Set(
-            preinstalledSkills
-                .filter((skill) => skill.autoEnable === true && typeof skill.slug === 'string' && skill.slug.trim().length > 0)
-                .map((skill) => skill.slug.trim()),
-        );
-        const explicitToggles = await getExplicitSkillToggles();
-        const explicitEnabledSkillKeys = new Set(explicitToggles.enabledSkills);
-        const normalizedSkills = discoveredSkills
-            .map((skill) => {
-                if (typeof skill === 'string') {
-                    return {
-                        skillKey: skill.trim(),
-                        source: undefined,
-                    };
-                }
-                if (!skill || typeof skill.skillKey !== 'string') {
-                    return null;
-                }
-                const source = typeof skill.source === 'string' ? skill.source.trim() : undefined;
-                return {
-                    skillKey: skill.skillKey.trim(),
-                    source,
-                };
-            })
-            .filter((skill): skill is { skillKey: string; source?: string } => Boolean(skill?.skillKey));
+function normalizeRuntimeEnabledSkillKeys(skills?: RuntimeSkillStatus[]): string[] {
+    if (!Array.isArray(skills)) {
+        return [];
+    }
 
-        if (normalizedSkills.length === 0) {
-            return { success: true, added: [], normalizedAlwaysEnabled: [] };
+    const result = new Set<string>();
+    for (const skill of skills) {
+        const skillKey = typeof skill.skillKey === 'string' ? skill.skillKey.trim() : '';
+        if (!skillKey || skill.disabled === true || skill.hidden === true) {
+            continue;
+        }
+        result.add(skillKey);
+    }
+
+    return [...result].sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Migrate the old global skill-toggle model to per-agent `agents.list[].skills`.
+ *
+ * Agents without an explicit `skills` array are materialized from their current
+ * runtime-visible skill set. After all missing agent lists are written, legacy
+ * `skills.entries[*].enabled` fields and the old settings-store toggles are
+ * cleared so discovery no longer mutates global skill membership.
+ */
+export async function migrateLegacySkillMembershipFromRuntime(
+    resolveAgentSkills: (agentId: string) => Promise<{ skills?: RuntimeSkillStatus[] }>,
+): Promise<{
+    success: boolean;
+    migratedAgentIds: string[];
+    cleanedSkillEntries: string[];
+    clearedExplicitToggles: boolean;
+    error?: string;
+}> {
+    try {
+        const currentConfig = await readConfig();
+        const agentIds = getLegacyAgentIdsNeedingSkillMigration(currentConfig);
+        const runtimeSkillsByAgent = new Map<string, string[]>();
+
+        for (const agentId of agentIds) {
+            const status = await resolveAgentSkills(agentId);
+            runtimeSkillsByAgent.set(agentId, normalizeRuntimeEnabledSkillKeys(status.skills));
         }
 
-        const result = await mutateOpenClawConfigDocument<{ added: string[]; normalizedAlwaysEnabled: string[] }>((config) => {
+        const result = await mutateOpenClawConfigDocument<{
+            migratedAgentIds: string[];
+            cleanedSkillEntries: string[];
+        }>((config) => {
             const skillConfig = config as OpenClawConfig;
-            const agentReferencedSkillKeys = getAgentReferencedSkillKeys(skillConfig);
-            if (!skillConfig.skills) {
-                skillConfig.skills = {};
+            const migratedAgentIds: string[] = [];
+            const cleanedSkillEntries: string[] = [];
+
+            if (!skillConfig.agents || typeof skillConfig.agents !== 'object' || Array.isArray(skillConfig.agents)) {
+                skillConfig.agents = {};
             }
-            if (!skillConfig.skills.entries) {
-                skillConfig.skills.entries = {};
+            if (!Array.isArray(skillConfig.agents.list)) {
+                skillConfig.agents.list = [];
             }
 
-            const nextAdded: string[] = [];
-            const nextNormalizedAlwaysEnabled: string[] = [];
-            const seenSkillKeys = new Set<string>();
-            for (const { skillKey, source } of normalizedSkills) {
-                if (seenSkillKeys.has(skillKey)) {
-                    continue;
+            for (const agentId of agentIds) {
+                const runtimeSkills = runtimeSkillsByAgent.get(agentId) ?? [];
+                let entry = skillConfig.agents.list.find((candidate) => candidate.id === agentId);
+                if (!entry) {
+                    entry = { id: agentId };
+                    skillConfig.agents.list.push(entry);
                 }
-                seenSkillKeys.add(skillKey);
-
-                if (isAlwaysEnabledSkillKey(skillKey)) {
-                    continue;
-                }
-
-                if (source && ignoredSources.has(source)) {
-                    continue;
-                }
-
-                if (source === 'openclaw-extra' && autoEnabledPreinstalledSkillKeys.has(skillKey)) {
-                    continue;
-                }
-
-                if (explicitEnabledSkillKeys.has(skillKey)) {
-                    continue;
-                }
-
-                if (agentReferencedSkillKeys.has(skillKey)) {
-                    const currentEntry = skillConfig.skills.entries[skillKey];
-                    if (currentEntry && currentEntry.enabled === false) {
-                        if (Object.keys(currentEntry).length === 1) {
-                            delete skillConfig.skills.entries[skillKey];
-                        } else {
-                            const nextEntry = { ...currentEntry };
-                            delete nextEntry.enabled;
-                            skillConfig.skills.entries[skillKey] = nextEntry;
-                        }
-                    }
-                    continue;
-                }
-
-                if (!skillConfig.skills.entries[skillKey]) {
-                    skillConfig.skills.entries[skillKey] = { enabled: false };
-                    nextAdded.push(skillKey);
+                if (!Array.isArray(entry.skills)) {
+                    entry.skills = runtimeSkills;
+                    migratedAgentIds.push(agentId);
                 }
             }
 
-            if (Object.keys(skillConfig.skills.entries).length === 0) {
-                delete skillConfig.skills.entries;
+            if (skillConfig.skills?.entries) {
+                cleanedSkillEntries.push(...removeLegacySkillEnabledFields(skillConfig.skills.entries));
+                if (Object.keys(skillConfig.skills.entries).length === 0) {
+                    delete skillConfig.skills.entries;
+                }
             }
-            if (Object.keys(skillConfig.skills).length === 0) {
+            if (skillConfig.skills && Object.keys(skillConfig.skills).length === 0) {
                 delete skillConfig.skills;
             }
 
             return {
-                changed: nextAdded.length > 0 || nextNormalizedAlwaysEnabled.length > 0,
+                changed: migratedAgentIds.length > 0 || cleanedSkillEntries.length > 0,
                 result: {
-                    added: nextAdded,
-                    normalizedAlwaysEnabled: nextNormalizedAlwaysEnabled,
+                    migratedAgentIds,
+                    cleanedSkillEntries,
                 },
             };
         });
 
-        return { success: true, added: result.added, normalizedAlwaysEnabled: result.normalizedAlwaysEnabled };
+        await clearExplicitSkillToggles();
+
+        return {
+            success: true,
+            migratedAgentIds: result.migratedAgentIds,
+            cleanedSkillEntries: result.cleanedSkillEntries,
+            clearedExplicitToggles: true,
+        };
     } catch (err) {
-        console.error('Failed to ensure default-disabled skill entries:', err);
-        return { success: false, added: [], normalizedAlwaysEnabled: [], error: String(err) };
+        console.error('Failed to migrate legacy skill membership:', err);
+        return {
+            success: false,
+            migratedAgentIds: [],
+            cleanedSkillEntries: [],
+            clearedExplicitToggles: false,
+            error: String(err),
+        };
     }
 }
 
@@ -385,6 +402,30 @@ export async function syncExplicitSkillTogglesToOpenClaw(): Promise<{
     error?: string;
 }> {
     try {
+        const currentConfig = await readConfig();
+        if (getLegacyAgentIdsNeedingSkillMigration(currentConfig).length === 0) {
+            await mutateOpenClawConfigDocument<void>((config) => {
+                const skillConfig = config as OpenClawConfig;
+                const cleanedSkillEntries = skillConfig.skills?.entries
+                    ? removeLegacySkillEnabledFields(skillConfig.skills.entries)
+                    : [];
+
+                if (skillConfig.skills?.entries && Object.keys(skillConfig.skills.entries).length === 0) {
+                    delete skillConfig.skills.entries;
+                }
+                if (skillConfig.skills && Object.keys(skillConfig.skills).length === 0) {
+                    delete skillConfig.skills;
+                }
+
+                return {
+                    changed: cleanedSkillEntries.length > 0,
+                    result: undefined,
+                };
+            });
+            await clearExplicitSkillToggles();
+            return { success: true, enabled: [], disabled: [] };
+        }
+
         const { enabledSkills, disabledSkills } = await getExplicitSkillToggles();
         if (enabledSkills.length === 0 && disabledSkills.length === 0) {
             return { success: true, enabled: [], disabled: [] };

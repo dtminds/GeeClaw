@@ -2,11 +2,13 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useAgentsStore } from '@/stores/agents';
 import { useSkillsStore } from '@/stores/skills';
+import { useGatewayStore } from '@/stores/gateway';
 import { SOUL_TEMPLATES } from '@/pages/Chat/agent-settings/useAgentPersona';
 
 const mockHostApiFetch = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockGatewayRpc = vi.fn();
 
 const translations: Record<string, string> = {
   'agentSettingsDialog.title': 'Agent Settings',
@@ -46,6 +48,13 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.skillScope.maxReached': 'Skill limit reached',
   'agentSettingsDialog.skillScope.preset': 'Preset',
   'agentSettingsDialog.skillScope.save': 'Save Skills',
+  'agentSettingsDialog.skillsSummary.description': 'Manage this agent’s skills from the Installed Skills page.',
+  'agentSettingsDialog.skillsSummary.manage': 'Manage in Skills',
+  'agentSettingsDialog.skillsSummary.count': '{{count}} enabled skills',
+  'agentSettingsDialog.skillsSummary.lockedTitle': '{{count}} preset-locked skills',
+  'agentSettingsDialog.skillsSummary.enabledTitle': 'Current enabled skills',
+  'agentSettingsDialog.skillsSummary.empty': 'No skills have been explicitly enabled for this agent yet.',
+  'agentSettingsDialog.skillsSummary.warning': 'Loading more than 20 skills can significantly degrade model focus and output quality.',
   'agentSettingsDialog.sections.identity.label': 'Identity',
   'agentSettingsDialog.sections.identity.title': 'Identity',
   'agentSettingsDialog.sections.identity.description': 'Identity settings',
@@ -86,7 +95,13 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string) => translations[key] || key,
+    t: (key: string, options?: { defaultValue?: string; count?: number | string }) => {
+      const template = translations[key] || options?.defaultValue || key;
+      if (typeof options?.count === 'number' || typeof options?.count === 'string') {
+        return template.replace('{{count}}', String(options.count));
+      }
+      return template;
+    },
   }),
 }));
 
@@ -103,6 +118,7 @@ vi.mock('sonner', () => ({
 
 const initialAgentsState = useAgentsStore.getState();
 const initialSkillsState = useSkillsStore.getState();
+const initialGatewayState = useGatewayStore.getState();
 
 function buildMemorySnapshot(overrides?: {
   activeMemory?: Partial<{
@@ -143,14 +159,29 @@ describe('AgentSettingsDialog shell', () => {
     mockHostApiFetch.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
+    mockGatewayRpc.mockReset();
     useAgentsStore.setState(initialAgentsState, true);
     useSkillsStore.setState(initialSkillsState, true);
+    useGatewayStore.setState({
+      ...initialGatewayState,
+      status: {
+        ...initialGatewayState.status,
+        state: 'stopped',
+      },
+      rpc: mockGatewayRpc,
+    });
     mockHostApiFetch.mockImplementation((path: string) => {
       if (path === '/api/settings/memory') {
         return Promise.resolve(buildMemorySnapshot());
       }
       if (path === '/api/agents/writer/persona') {
         return Promise.resolve(personaSnapshot);
+      }
+      if (path === '/api/agents/main/persona') {
+        return Promise.resolve({
+          ...personaSnapshot,
+          agentId: 'main',
+        });
       }
       if (path === '/api/agents/helper/persona') {
         return Promise.resolve({
@@ -538,61 +569,124 @@ describe('AgentSettingsDialog shell', () => {
     expect(soulInput).toHaveAttribute('readonly');
   });
 
-  it('saves specified skills after searching and selecting', async () => {
+  it('shows a skill summary and links to the installed skills page', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
-    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({
-      agents: [agentSummary],
+      agents: [{
+        ...agentSummary,
+        manualSkills: ['beta-skill'],
+      }],
       defaultAgentId: 'writer',
-      updateAgentSettings,
-    });
-
-    useSkillsStore.setState({
-      skills: [
-        {
-          id: 'alpha-skill',
-          slug: 'alpha',
-          name: 'Alpha Skill',
-          description: 'Handles alpha work',
-          enabled: true,
-        },
-        {
-          id: 'beta-skill',
-          slug: 'beta',
-          name: 'Beta Skill',
-          description: 'Specialized for reports',
-          enabled: true,
-        },
-      ],
-      fetchSkills: vi.fn().mockResolvedValue(undefined),
     });
 
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Specified' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
+    expect(screen.getByText('1 enabled skills')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '#/skills?agentId=writer');
+    expect(screen.getByText('beta-skill')).toBeInTheDocument();
+  });
 
-    const popover = document.body.querySelector('[data-radix-popper-content-wrapper] > div');
-    expect(popover).toHaveClass('z-[130]');
+  it('shows current enabled skills for the main agent from the agent-scoped gateway view', async () => {
+    mockHostApiFetch.mockResolvedValueOnce({
+      ...personaSnapshot,
+      agentId: 'main',
+    });
+    mockGatewayRpc.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'pdf',
+        name: 'PDF',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }, {
+        skillKey: 'xlsx',
+        name: 'XLSX',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }],
+    });
 
-    const searchInput = await screen.findByPlaceholderText('Search by name, slug, or description');
-    fireEvent.change(searchInput, { target: { value: 'reports' } });
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      status: {
+        ...useGatewayStore.getState().status,
+        state: 'running',
+      },
+      rpc: mockGatewayRpc,
+    });
 
-    const betaOption = await screen.findByRole('button', { name: /Beta Skill/ });
-    fireEvent.click(betaOption);
+    useAgentsStore.setState({
+      agents: [{
+        ...agentSummary,
+        id: 'main',
+        name: 'Main',
+        workspace: '/tmp/main',
+        agentDir: '/tmp/main/agent',
+        mainSessionKey: 'agent:main:main',
+      }],
+      defaultAgentId: 'main',
+    });
 
-    expect(screen.getByRole('button', { name: /Beta Skill/ })).toBeInTheDocument();
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="main" onOpenChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
 
     await waitFor(() => {
-      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        skillScope: { mode: 'specified', skills: ['beta-skill'] },
-      });
+      expect(screen.getByText('2 enabled skills')).toBeInTheDocument();
     });
+    expect(mockGatewayRpc).toHaveBeenCalledWith('skills.status', { agentId: 'main' });
+    expect(screen.getByRole('link', { name: /Manage in Skills/ })).toHaveAttribute('href', '#/skills?agentId=main');
+    expect(screen.getByText('pdf')).toBeInTheDocument();
+    expect(screen.getByText('xlsx')).toBeInTheDocument();
+  });
+
+  it('prefers configured manual skills over stale gateway state in the skills summary', async () => {
+    mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
+    mockGatewayRpc.mockResolvedValueOnce({
+      skills: [{
+        skillKey: 'alpha-skill',
+        name: 'Alpha Skill',
+        eligible: true,
+        disabled: false,
+        bundled: false,
+        blockedByAllowlist: false,
+      }],
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      status: {
+        ...useGatewayStore.getState().status,
+        state: 'running',
+      },
+      rpc: mockGatewayRpc,
+    });
+
+    useAgentsStore.setState({
+      agents: [{
+        ...agentSummary,
+        manualSkills: ['alpha-skill', 'beta-skill'],
+      }],
+      defaultAgentId: 'writer',
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('2 enabled skills')).toBeInTheDocument();
+    });
+    expect(screen.getByText('alpha-skill')).toBeInTheDocument();
+    expect(screen.getByText('beta-skill')).toBeInTheDocument();
   });
 
   it('saves avatar changes from the general panel immediately', async () => {
@@ -686,12 +780,13 @@ describe('AgentSettingsDialog shell', () => {
     expect(screen.getByText('Enable Active Memory first in Settings -> Memory.')).toBeInTheDocument();
   });
 
-  it('locks preset skills and enforces the six-skill limit', async () => {
+  it('shows preset skills as locked in the summary panel', async () => {
     mockHostApiFetch.mockResolvedValueOnce(personaSnapshot);
 
     const managedAgent = {
       ...agentSummary,
       managed: true,
+      manualSkills: ['core-skill', 'one', 'two', 'three', 'four', 'five', 'six'],
       presetSkills: ['core-skill'],
       skillScope: { mode: 'specified', skills: ['core-skill', 'one', 'two', 'three', 'four', 'five', 'six'] },
     };
@@ -701,73 +796,12 @@ describe('AgentSettingsDialog shell', () => {
       defaultAgentId: 'writer',
     });
 
-    useSkillsStore.setState({
-      skills: [
-        {
-          id: 'core-skill',
-          slug: 'core',
-          name: 'Core Skill',
-          description: 'Core capability',
-          enabled: true,
-        },
-        {
-          id: 'one',
-          name: 'Skill One',
-          description: 'One',
-          enabled: true,
-        },
-        {
-          id: 'two',
-          name: 'Skill Two',
-          description: 'Two',
-          enabled: true,
-        },
-        {
-          id: 'three',
-          name: 'Skill Three',
-          description: 'Three',
-          enabled: true,
-        },
-        {
-          id: 'four',
-          name: 'Skill Four',
-          description: 'Four',
-          enabled: true,
-        },
-        {
-          id: 'five',
-          name: 'Skill Five',
-          description: 'Five',
-          enabled: true,
-        },
-        {
-          id: 'six',
-          name: 'Skill Six',
-          description: 'Six',
-          enabled: true,
-        },
-        {
-          id: 'seven',
-          name: 'Skill Seven',
-          description: 'Seven',
-          enabled: true,
-        },
-      ],
-      fetchSkills: vi.fn().mockResolvedValue(undefined),
-    });
-
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
-
-    const presetChip = screen.getByRole('button', { name: /Core Skill/ });
-    expect(presetChip).toBeDisabled();
-
-    expect(screen.getByRole('button', { name: /Skill Six/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
-    const extraOption = await screen.findByRole('button', { name: /Skill Seven/ });
-    expect(extraOption).toBeInTheDocument();
+    expect(screen.getByText('1 preset-locked skills')).toBeInTheDocument();
+    expect(screen.getAllByText('core-skill').length).toBeGreaterThan(0);
+    expect(screen.getByText('7 enabled skills')).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ import type { AgentSummary } from '@/types/agent';
 
 const {
   fetchPresetAgentSkillsMock,
+  fetchAgentScopedSkillsMock,
   hostApiFetchMock,
   buildSlashPickerItemsMock,
   isSlashCommandItemMock,
@@ -21,6 +22,7 @@ const {
   editorCommandsFocusMock,
 } = vi.hoisted(() => ({
   fetchPresetAgentSkillsMock: vi.fn(),
+  fetchAgentScopedSkillsMock: vi.fn(),
   hostApiFetchMock: vi.fn(),
   buildSlashPickerItemsMock: vi.fn(({ presetAgentSkills = [], globalSkills = [] }: { presetAgentSkills?: unknown[]; globalSkills?: unknown[] }) => (
     [...presetAgentSkills, ...globalSkills]
@@ -34,6 +36,7 @@ const {
 
 vi.mock('@/pages/Chat/slash-picker', () => ({
   buildSlashPickerItems: buildSlashPickerItemsMock,
+  fetchAgentScopedSkills: fetchAgentScopedSkillsMock,
   fetchPresetAgentSkills: fetchPresetAgentSkillsMock,
   getSlashCommandDescription: vi.fn(() => ''),
   getSlashCommandName: vi.fn(() => ''),
@@ -158,6 +161,23 @@ describe('ChatInput preset agent skills loading', () => {
     presetSkills: ['dummy-dataset', 'job-stories'],
     canUseDefaultSkillScope: false,
   };
+  const customAgent: AgentSummary = {
+    ...presetAgent,
+    id: 'workspace-custom',
+    name: 'Workspace Custom',
+    mainSessionKey: 'agent:workspace-custom:main',
+    workspace: '/Users/lsave/geeclaw/workspace-custom',
+    agentDir: '/Users/lsave/geeclaw/workspace-custom/.agent',
+    source: 'custom',
+    managed: false,
+    presetId: undefined,
+    lockedFields: [],
+    canUnmanage: false,
+    managedFiles: [],
+    skillScope: { mode: 'default' },
+    presetSkills: [],
+    canUseDefaultSkillScope: true,
+  };
 
   beforeEach(() => {
     agentsState = useAgentsStore.getState();
@@ -168,6 +188,8 @@ describe('ChatInput preset agent skills loading', () => {
 
     fetchPresetAgentSkillsMock.mockReset();
     fetchPresetAgentSkillsMock.mockResolvedValue([]);
+    fetchAgentScopedSkillsMock.mockReset();
+    fetchAgentScopedSkillsMock.mockResolvedValue([]);
     hostApiFetchMock.mockReset();
     buildSlashPickerItemsMock.mockClear();
     isSlashCommandItemMock.mockClear();
@@ -258,6 +280,177 @@ describe('ChatInput preset agent skills loading', () => {
       expect(fetchPresetAgentSkillsMock).toHaveBeenCalledTimes(1);
     });
     expect(fetchPresetAgentSkillsMock).toHaveBeenCalledWith('delivery-execution', expect.any(Function));
+  });
+
+  it('uses agent-scoped skills.status candidates instead of the global store snapshot for the toolbar menu', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([
+      {
+        id: 'agent-skill',
+        slug: 'agent-skill',
+        name: 'Agent Skill',
+        description: 'Scoped to the current agent',
+        enabled: true,
+        source: 'openclaw-managed',
+      },
+    ]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledWith('delivery-execution', expect.any(Function));
+    });
+
+    const skillsButton = screen.getByRole('button', { name: 'composer.skillsMenuLabel' });
+    fireEvent.pointerDown(skillsButton);
+
+    expect(await screen.findByText('Agent Skill')).toBeInTheDocument();
+    expect(screen.queryByText('Global Skill')).not.toBeInTheDocument();
+  });
+
+  it('refreshes agent-scoped skills when the skills store updates', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([
+      {
+        id: 'agent-skill',
+        slug: 'agent-skill',
+        name: 'Agent Skill',
+        description: 'Scoped to the current agent',
+        enabled: true,
+        source: 'openclaw-managed',
+      },
+    ]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useSkillsStore.setState((state) => ({
+        ...state,
+        skills: [
+          ...state.skills,
+          {
+            id: 'new-global-skill',
+            slug: 'new-global-skill',
+            name: 'New Global Skill',
+            description: 'Newly updated skill',
+            enabled: true,
+            source: 'openclaw-managed',
+          },
+        ],
+      }));
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('falls back to preset skill slugs when scoped status data is empty for a preset agent', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([]);
+    fetchPresetAgentSkillsMock.mockResolvedValue([]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: false,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    const skillsButton = screen.getByRole('button', { name: 'composer.skillsMenuLabel' });
+    fireEvent.pointerDown(skillsButton);
+
+    expect(await screen.findByText('dummy-dataset')).toBeInTheDocument();
+    expect(screen.getByText('job-stories')).toBeInTheDocument();
+  });
+
+  it('loads workspace skills for custom agents and passes them to the slash picker as priority items', async () => {
+    const workspaceSkill = {
+      id: 'workspace-skill',
+      slug: 'workspace-skill',
+      name: 'Workspace Skill',
+      description: 'Only visible in the current workspace',
+      enabled: true,
+      source: 'preset-agent-workspace',
+    };
+    const scopedSkill = {
+      id: 'scoped-skill',
+      slug: 'scoped-skill',
+      name: 'Scoped Skill',
+      description: 'Regular agent-scoped skill',
+      enabled: true,
+      source: 'openclaw-managed',
+    };
+
+    fetchPresetAgentSkillsMock.mockResolvedValue([workspaceSkill]);
+    fetchAgentScopedSkillsMock.mockResolvedValue([scopedSkill]);
+    useAgentsStore.setState((state) => ({
+      ...state,
+      agents: [customAgent],
+    }));
+    useChatStore.setState((state) => ({
+      ...state,
+      currentAgentId: customAgent.id,
+      currentSessionKey: customAgent.mainSessionKey,
+    }));
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchPresetAgentSkillsMock).toHaveBeenCalledWith(customAgent.id, expect.any(Function));
+    });
+
+    await waitFor(() => {
+      expect(buildSlashPickerItemsMock).toHaveBeenLastCalledWith(expect.objectContaining({
+        presetAgentSkills: [workspaceSkill],
+        globalSkills: [scopedSkill],
+      }));
+    });
   });
 
   it('opens the toolbar skill menu with descriptive skill items and inserts a skill token', async () => {

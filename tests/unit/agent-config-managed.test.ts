@@ -576,6 +576,7 @@ describe('managed agent config domain', () => {
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: true,
       source: 'marketplace',
+      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       managedFiles: ['AGENTS.md', 'SOUL.md'],
       canUseDefaultSkillScope: false,
@@ -1199,11 +1200,55 @@ describe('managed agent config domain', () => {
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: false,
+      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
       presetSkills: [],
       managedFiles: [],
       canUseDefaultSkillScope: true,
     });
     expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'skills', 'stock-analyzer', 'SKILL.md'), 'utf8')).toContain('Stock Analyzer');
+  });
+
+  it('keeps manualSkills undefined for agents that have not been migrated to explicit membership yet', async () => {
+    const { agentConfig } = await setupManagedPresetFixture();
+
+    const snapshot = await agentConfig.listAgentsSnapshot();
+
+    expect(snapshot.agents.find((agent) => agent.id === 'main')).not.toHaveProperty('manualSkills');
+  });
+
+  it('preserves an explicitly empty manualSkills list after updating agent settings', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    const snapshot = await agentConfig.updateAgentSettings('research-helper', {
+      manualSkills: [],
+    });
+
+    expect(snapshot.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      manualSkills: [],
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([]);
+  });
+
+  it('persists main agent manualSkills into agents.list.skills when editing a synthetic main entry', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    const snapshot = await agentConfig.updateAgentSettings('main', {
+      manualSkills: ['xlsx', 'pdf'],
+    });
+
+    expect(snapshot.agents.find((agent) => agent.id === 'main')).toMatchObject({
+      manualSkills: ['pdf', 'xlsx'],
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'main')?.skills).toEqual(['pdf', 'xlsx']);
   });
 
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {

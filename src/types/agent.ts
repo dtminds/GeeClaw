@@ -62,6 +62,7 @@ export interface AgentSummary {
   canUnmanage: boolean;
   managedFiles: string[];
   skillScope: AgentSkillScope;
+  manualSkills?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
   avatarPresetId: AgentAvatarPresetId;

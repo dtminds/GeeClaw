@@ -8,6 +8,10 @@
         "installed": "Installed",
         "marketplace": "Marketplace"
     },
+    "agentScope": {
+        "label": "Agent",
+        "main": "Main"
+    },
     "filter": {
         "allSkills": "Installed",
         "all": "All",

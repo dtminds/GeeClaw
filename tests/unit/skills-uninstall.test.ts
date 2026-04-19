@@ -44,4 +44,31 @@ describe('skills store uninstall', () => {
       }),
     });
   });
+
+  it('refreshes the requested agent scope after uninstalling a skill', async () => {
+    hostApiFetchMock.mockResolvedValueOnce({ success: true });
+    rpcMock.mockResolvedValueOnce({ skills: [] });
+    hostApiFetchMock.mockResolvedValueOnce({ success: true, results: [] });
+    hostApiFetchMock.mockResolvedValueOnce({});
+    hostApiFetchMock.mockResolvedValueOnce({ alwaysEnabledSkillKeys: [], hiddenSkillKeys: [] });
+
+    const { useSkillsStore } = await import('@/stores/skills');
+    await (useSkillsStore.getState().uninstallSkill as (
+      target: {
+        slug: string;
+        skillKey: string;
+        baseDir: string;
+      },
+      agentId?: string,
+    ) => Promise<void>)({
+      slug: 'friendly-skill',
+      skillKey: 'Friendly Skill',
+      baseDir: '/tmp/openclaw/skills/friendly-skill',
+    }, 'writer');
+
+    expect(rpcMock).toHaveBeenCalledWith('skills.status', { agentId: 'writer' });
+    expect(hostApiFetchMock.mock.calls[1]).toEqual(['/api/clawhub/list?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[2]).toEqual(['/api/skills/configs?agentId=writer']);
+    expect(hostApiFetchMock.mock.calls[3]).toEqual(['/api/skills/policy?agentId=writer']);
+  });
 });

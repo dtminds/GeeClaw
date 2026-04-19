@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import {
-  ensureSkillEntriesDefaultDisabled,
   getAllSkillConfigs,
   getHiddenPreinstalledSkillKeys,
   updateSkillConfig,
@@ -33,24 +32,6 @@ export async function handleSkillRoutes(
         env: body.env,
         enabled: body.enabled,
       }));
-    } catch (error) {
-      sendJson(res, 500, { success: false, error: String(error) });
-    }
-    return true;
-  }
-
-  if (url.pathname === '/api/skills/ensure-entries' && req.method === 'POST') {
-    try {
-      const body = await parseJsonBody<{
-        skillKeys?: string[];
-        skills?: Array<{ skillKey?: string; source?: string }>;
-      }>(req);
-      const discoveredSkills = Array.isArray(body.skills)
-        ? body.skills
-        : Array.isArray(body.skillKeys)
-          ? body.skillKeys
-          : [];
-      sendJson(res, 200, await ensureSkillEntriesDefaultDisabled(discoveredSkills));
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

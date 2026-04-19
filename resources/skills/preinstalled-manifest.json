@@ -155,30 +155,6 @@
       "autoEnable": true
     },
     {
-      "slug": "xiaohongshu-cli",
-      "repo": "jackwener/xiaohongshu-cli",
-      "repoPath": "./",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": true
-    },
-    {
-      "slug": "weibo-cli",
-      "repo": "jackwener/weibo-cli",
-      "repoPath": "./",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": false
-    },
-    {
-      "slug": "bilibili-cli",
-      "repo": "jackwener/bilibili-cli",
-      "repoPath": "./",
-      "ref": "main",
-      "version": "main",
-      "autoEnable": false
-    },
-    {
       "slug": "schedule-skill",
       "repo": "lsave/gc-bundle-skills",
       "repoPath": "schedule-skill",
