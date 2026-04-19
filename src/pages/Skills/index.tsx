@@ -854,7 +854,14 @@ export function Skills() {
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
   const mainAgent = agents.find((agent) => agent.id === 'main');
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
-  const presetSkillSet = new Set(selectedAgent?.presetSkills ?? []);
+  const selectedAgentPresetSkills = useMemo(
+    () => selectedAgent?.presetSkills ?? [],
+    [selectedAgent],
+  );
+  const presetSkillSet = useMemo(
+    () => new Set(selectedAgentPresetSkills),
+    [selectedAgentPresetSkills],
+  );
   const selectedAgentManualSkillIds = useMemo(() => {
     if (!selectedAgent) {
       return [] as string[];
@@ -870,8 +877,8 @@ export function Skills() {
   }, [selectedAgent]);
   const selectedAgentEnabledSkillSet = useMemo(() => new Set<string>([
     ...selectedAgentManualSkillIds,
-    ...(selectedAgent?.presetSkills ?? []),
-  ]), [selectedAgent?.presetSkills, selectedAgentManualSkillIds]);
+    ...selectedAgentPresetSkills,
+  ]), [selectedAgentManualSkillIds, selectedAgentPresetSkills]);
   const agentOptions = [
     { id: 'main', name: mainAgent?.name || t('agentScope.main') },
     ...agents
@@ -917,7 +924,10 @@ export function Skills() {
   }, [fetchSkills, isGatewayRunning, selectedAgentId]);
 
   // Filter skills
-  const safeSkills = Array.isArray(skills) ? skills : [];
+  const safeSkills = useMemo(
+    () => (Array.isArray(skills) ? skills : []),
+    [skills],
+  );
   const agentScopedSkills = useMemo(() => safeSkills.map((skill) => {
     const enabled = selectedAgentEnabledSkillSet.has(skill.id);
     if (skill.enabled === enabled) {

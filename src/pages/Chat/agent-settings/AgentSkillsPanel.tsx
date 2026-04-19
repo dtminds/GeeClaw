@@ -17,17 +17,18 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
   const gatewayState = useGatewayStore((state) => state.status.state);
   const gatewayRpc = useGatewayStore((state) => state.rpc);
-  const [runtimeEnabledSkills, setRuntimeEnabledSkills] = useState<string[] | null>(null);
+  const [runtimeEnabledSkills, setRuntimeEnabledSkills] = useState<{ agentId: string; skills: string[] } | null>(null);
 
-  const manualSkills = agent?.manualSkills
-    ?? (agent?.skillScope.mode === 'specified' ? agent.skillScope.skills : []);
-  const presetSkills = agent?.presetSkills ?? [];
+  const manualSkills = useMemo(() => (
+    agent?.manualSkills
+      ?? (agent?.skillScope.mode === 'specified' ? agent.skillScope.skills : [])
+  ), [agent]);
+  const presetSkills = useMemo(() => agent?.presetSkills ?? [], [agent]);
 
   useEffect(() => {
     let cancelled = false;
 
     if (gatewayState !== 'running') {
-      setRuntimeEnabledSkills(null);
       return () => {
         cancelled = true;
       };
@@ -42,7 +43,7 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
           .filter((skill) => skill.enabled)
           .map((skill) => skill.id)
           .sort((left, right) => left.localeCompare(right));
-        setRuntimeEnabledSkills(enabled);
+        setRuntimeEnabledSkills({ agentId, skills: enabled });
       })
       .catch((error) => {
         if (cancelled) {
@@ -68,16 +69,20 @@ export function AgentSkillsPanel({ agentId, title, description }: AgentSkillsPan
     return [...result].sort((left, right) => left.localeCompare(right));
   }, [manualSkills, presetSkills]);
 
+  const runtimeSkillsForCurrentAgent = runtimeEnabledSkills?.agentId === agentId
+    ? runtimeEnabledSkills.skills
+    : null;
+
   const enabledSkills = useMemo(() => {
-    if (!runtimeEnabledSkills) {
+    if (gatewayState !== 'running' || !runtimeSkillsForCurrentAgent) {
       return fallbackEnabledSkills;
     }
 
     return [...new Set([
-      ...runtimeEnabledSkills,
+      ...runtimeSkillsForCurrentAgent,
       ...presetSkills,
     ])].sort((left, right) => left.localeCompare(right));
-  }, [fallbackEnabledSkills, presetSkills, runtimeEnabledSkills]);
+  }, [fallbackEnabledSkills, gatewayState, presetSkills, runtimeSkillsForCurrentAgent]);
 
   const showWarning = enabledSkills.length > 20;
 
