@@ -678,6 +678,105 @@ describe('cli marketplace service', () => {
     await expect(service.getCatalog()).rejects.toThrow('must not mix legacy managed fields');
   });
 
+  it('throws when legacy postInstallSkills is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-post-install-skills',
+          title: 'Empty post install skills CLI',
+          packageName: '@geeclaw-test/empty-post-install-skills',
+          binNames: ['empty-post-install-skills'],
+          postInstallSkills: [],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('postInstallSkills');
+  });
+
+  it('throws when install-skills action sources is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-install-skills-action',
+          title: 'Empty install skills action CLI',
+          binNames: ['empty-install-skills-action'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/empty-install-skills-action',
+              postInstallActions: [
+                { type: 'install-skills', sources: [] },
+              ],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('install-skills sources');
+  });
+
+  it('throws when run-installed-bin action uses an unsupported template variable', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'bad-template-variable',
+          title: 'Bad template variable CLI',
+          binNames: ['bad-template-variable'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/bad-template-variable',
+              postInstallActions: [
+                { type: 'run-installed-bin', bin: 'bad-template-variable', args: ['install', '${unknownDir}'] },
+              ],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('unsupported template variable');
+  });
+
+  it('throws when postUninstallSkills is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-post-uninstall-skills',
+          title: 'Empty post uninstall skills CLI',
+          binNames: ['empty-post-uninstall-skills'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/empty-post-uninstall-skills',
+              postUninstallSkills: [],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('postUninstallSkills');
+  });
+
   it('fails fast when bundled npm runtime is missing for managed mutation APIs', async () => {
     const installWithBundledNpm = vi.fn(async () => undefined);
     const uninstallWithBundledNpm = vi.fn(async () => undefined);

@@ -165,17 +165,45 @@ function isNonEmptyStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => isNonEmptyString(item));
 }
 
+function isSpecifiedNonEmptyStringArray(value: unknown): value is string[] {
+  return isNonEmptyStringArray(value) && value.length > 0;
+}
+
 function isCliMarketplaceCompletionKind(value: unknown): value is CliMarketplaceInstallCompletion['kind'] {
   return value === 'skills-only' || value === 'docs-required' || value === 'skills-and-docs';
 }
 
-function validateOptionalStringArray(entry: CliMarketplaceCatalogItem, fieldName: 'installArgs' | 'postInstallSkills' | 'postUninstallSkills', label: string): void {
+function validateOptionalStringArray(entry: CliMarketplaceCatalogItem, fieldName: 'installArgs', label: string): void {
   const value = entry[fieldName];
   if (value === undefined) {
     return;
   }
   if (!isNonEmptyStringArray(value)) {
     throw new Error(`[cli-marketplace] Entry ${label} has an invalid "${fieldName}" array`);
+  }
+}
+
+function validateOptionalNonEmptyStringArray(
+  entry: CliMarketplaceCatalogItem,
+  fieldName: 'postInstallSkills' | 'postUninstallSkills',
+  label: string,
+): void {
+  const value = entry[fieldName];
+  if (value === undefined) {
+    return;
+  }
+  if (!isSpecifiedNonEmptyStringArray(value)) {
+    throw new Error(`[cli-marketplace] Entry ${label} has an invalid "${fieldName}" array`);
+  }
+}
+
+function validateTemplateVariablesInArgs(args: string[], label: string): void {
+  for (const arg of args) {
+    for (const [, varName] of arg.matchAll(/\${([^}]+)}/g)) {
+      if (!['openclawSkillsDir', 'openclawConfigDir', 'geeclawConfigDir'].includes(varName)) {
+        throw new Error(`[cli-marketplace] Entry ${label} has an unsupported template variable "${varName}"`);
+      }
+    }
   }
 }
 
@@ -290,8 +318,8 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
     }
 
     validateOptionalStringArray(entry, 'installArgs', label);
-    validateOptionalStringArray(entry, 'postInstallSkills', label);
-    validateOptionalStringArray(entry, 'postUninstallSkills', label);
+    validateOptionalNonEmptyStringArray(entry, 'postInstallSkills', label);
+    validateOptionalNonEmptyStringArray(entry, 'postUninstallSkills', label);
 
     if (entry.installMethods !== undefined) {
       if (!Array.isArray(entry.installMethods) || entry.installMethods.length === 0) {
@@ -310,7 +338,7 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
           if (method.installArgs !== undefined && !isNonEmptyStringArray(method.installArgs)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm installArgs array`);
           }
-          if (method.postInstallSkills !== undefined && !isNonEmptyStringArray(method.postInstallSkills)) {
+          if (method.postInstallSkills !== undefined && !isSpecifiedNonEmptyStringArray(method.postInstallSkills)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postInstallSkills array`);
           }
           if (method.postInstallActions !== undefined) {
@@ -322,7 +350,7 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
                 throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postInstallActions entry`);
               }
               if (action.type === 'install-skills') {
-                if (!isNonEmptyStringArray(action.sources)) {
+                if (!isSpecifiedNonEmptyStringArray(action.sources)) {
                   throw new Error(`[cli-marketplace] Entry ${label} has an invalid install-skills sources array`);
                 }
                 continue;
@@ -334,12 +362,15 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
                 if (action.args !== undefined && !isNonEmptyStringArray(action.args)) {
                   throw new Error(`[cli-marketplace] Entry ${label} has an invalid run-installed-bin args array`);
                 }
+                if (action.args !== undefined) {
+                  validateTemplateVariablesInArgs(action.args, label);
+                }
                 continue;
               }
               throw new Error(`[cli-marketplace] Entry ${label} has an unsupported postInstallActions type`);
             }
           }
-          if (method.postUninstallSkills !== undefined && !isNonEmptyStringArray(method.postUninstallSkills)) {
+          if (method.postUninstallSkills !== undefined && !isSpecifiedNonEmptyStringArray(method.postUninstallSkills)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postUninstallSkills array`);
           }
           if (method.completion !== undefined) {
