@@ -1033,7 +1033,7 @@ export const ChatInput = memo(function ChatInput({
   useEffect(() => {
     let cancelled = false;
 
-    if (!currentAgent || currentAgent.source !== 'preset') {
+    if (!currentAgent) {
       setPresetAgentSkills([]);
       return () => {
         cancelled = true;

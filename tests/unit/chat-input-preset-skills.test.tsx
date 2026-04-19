@@ -161,6 +161,23 @@ describe('ChatInput preset agent skills loading', () => {
     presetSkills: ['dummy-dataset', 'job-stories'],
     canUseDefaultSkillScope: false,
   };
+  const customAgent: AgentSummary = {
+    ...presetAgent,
+    id: 'workspace-custom',
+    name: 'Workspace Custom',
+    mainSessionKey: 'agent:workspace-custom:main',
+    workspace: '/Users/lsave/geeclaw/workspace-custom',
+    agentDir: '/Users/lsave/geeclaw/workspace-custom/.agent',
+    source: 'custom',
+    managed: false,
+    presetId: undefined,
+    lockedFields: [],
+    canUnmanage: false,
+    managedFiles: [],
+    skillScope: { mode: 'default' },
+    presetSkills: [],
+    canUseDefaultSkillScope: true,
+  };
 
   beforeEach(() => {
     agentsState = useAgentsStore.getState();
@@ -329,6 +346,60 @@ describe('ChatInput preset agent skills loading', () => {
 
     expect(await screen.findByText('dummy-dataset')).toBeInTheDocument();
     expect(screen.getByText('job-stories')).toBeInTheDocument();
+  });
+
+  it('loads workspace skills for custom agents and passes them to the slash picker as priority items', async () => {
+    const workspaceSkill = {
+      id: 'workspace-skill',
+      slug: 'workspace-skill',
+      name: 'Workspace Skill',
+      description: 'Only visible in the current workspace',
+      enabled: true,
+      source: 'preset-agent-workspace',
+    };
+    const scopedSkill = {
+      id: 'scoped-skill',
+      slug: 'scoped-skill',
+      name: 'Scoped Skill',
+      description: 'Regular agent-scoped skill',
+      enabled: true,
+      source: 'openclaw-managed',
+    };
+
+    fetchPresetAgentSkillsMock.mockResolvedValue([workspaceSkill]);
+    fetchAgentScopedSkillsMock.mockResolvedValue([scopedSkill]);
+    useAgentsStore.setState((state) => ({
+      ...state,
+      agents: [customAgent],
+    }));
+    useChatStore.setState((state) => ({
+      ...state,
+      currentAgentId: customAgent.id,
+      currentSessionKey: customAgent.mainSessionKey,
+    }));
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchPresetAgentSkillsMock).toHaveBeenCalledWith(customAgent.id, expect.any(Function));
+    });
+
+    await waitFor(() => {
+      expect(buildSlashPickerItemsMock).toHaveBeenLastCalledWith(expect.objectContaining({
+        presetAgentSkills: [workspaceSkill],
+        globalSkills: [scopedSkill],
+      }));
+    });
   });
 
   it('opens the toolbar skill menu with descriptive skill items and inserts a skill token', async () => {
