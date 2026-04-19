@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, MoreHorizontal, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2, MoreHorizontal, RefreshCw, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import { invokeIpc, toUserMessage } from '@/lib/api-client';
 
 type CliMarketplaceJobOperation = 'install' | 'uninstall';
 type CliMarketplaceJobStatus = 'running' | 'succeeded' | 'failed';
+type CliMarketplaceInstallCompletionKind = 'skills-only' | 'docs-required' | 'skills-and-docs';
 
 type CliMarketplaceManualMethodLabel = 'brew' | 'curl' | 'npm' | 'custom';
 
@@ -50,6 +51,12 @@ interface CliMarketplaceJob {
   logs: string;
   startedAt: string;
   finishedAt: string | null;
+  completion?: {
+    kind: CliMarketplaceInstallCompletionKind;
+    requiresSkillEnable?: boolean;
+    docsUrl?: string;
+    extraSteps?: string[];
+  };
   error?: string;
 }
 
@@ -114,6 +121,35 @@ function InstallStatusBadge({
   );
 }
 
+function getCompletionDescription(
+  completion: NonNullable<CliMarketplaceJob['completion']>,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  if (completion.kind === 'skills-only') {
+    return t('cliMarketplace.completion.skillsOnly', {
+      defaultValue: 'CLI and skills are installed. Enable the skills from the Skills page before use.',
+    });
+  }
+  if (completion.kind === 'docs-required') {
+    return t('cliMarketplace.completion.docsRequired', {
+      defaultValue: 'CLI is installed, but you still need to finish other setup steps.',
+    });
+  }
+  return t('cliMarketplace.completion.skillsAndDocs', {
+    defaultValue: 'CLI and skills are installed, but you still need to finish other setup steps.',
+  });
+}
+
+function getCompletionPrimaryAction(completion: NonNullable<CliMarketplaceJob['completion']>): 'docs' | 'skills' | null {
+  if (completion.docsUrl) {
+    return 'docs';
+  }
+  if (completion.requiresSkillEnable) {
+    return 'skills';
+  }
+  return null;
+}
+
 export function CliMarketplaceSettingsSection() {
   const { t } = useTranslation(['settings', 'common']);
   const [items, setItems] = useState<CliMarketplaceItem[]>([]);
@@ -127,6 +163,7 @@ export function CliMarketplaceSettingsSection() {
     methodLabel: CliMarketplaceManualMethodLabel;
     command: string;
   } | null>(null);
+  const [showJobLogs, setShowJobLogs] = useState(true);
   const actionsMenuRootRef = useRef<HTMLDivElement | null>(null);
 
   const loadCatalog = useCallback(async (background = false) => {
@@ -217,6 +254,16 @@ export function CliMarketplaceSettingsSection() {
   }, [activeJobId, activeJobStatus, loadCatalog]);
 
   useEffect(() => {
+    if (!activeJob) {
+      setShowJobLogs(true);
+      return;
+    }
+
+    const collapseLogsByDefault = activeJob.status === 'succeeded' && activeJob.operation === 'install' && Boolean(activeJob.completion);
+    setShowJobLogs(!collapseLogsByDefault);
+  }, [activeJob?.id, activeJob?.status, activeJob?.operation, activeJob?.completion]);
+
+  useEffect(() => {
     if (!openActionsMenuId) {
       return undefined;
     }
@@ -282,7 +329,16 @@ export function CliMarketplaceSettingsSection() {
     }
   };
 
+  const openSkillsPage = () => {
+    window.location.hash = '/skills';
+    setActiveJob(null);
+  };
+
   const isJobRunning = activeJob?.status === 'running';
+  const jobCompletion = activeJob?.status === 'succeeded' && activeJob.operation === 'install'
+    ? activeJob.completion
+    : undefined;
+  const jobCompletionPrimaryAction = jobCompletion ? getCompletionPrimaryAction(jobCompletion) : null;
 
   const getJobTitle = (operation: CliMarketplaceJobOperation): string => (
     operation === 'uninstall'
@@ -654,20 +710,64 @@ export function CliMarketplaceSettingsSection() {
                   {activeJob.status === 'running' ? (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   ) : null}
-                  <DialogTitle className="text-lg">{getJobTitle(activeJob.operation)}</DialogTitle>
+                  <DialogTitle className="text-lg">{getJobTitle(activeJob.operation)} - {activeJob.title}</DialogTitle>
                   <Badge className="rounded-full border-0 bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                     {getJobStatusLabel(activeJob.status)}
                   </Badge>
                 </div>
-                <DialogDescription>
-                  {activeJob.title}
-                </DialogDescription>
               </DialogHeader>
 
               <div className="px-6 py-5">
-                <pre className="max-h-[60vh] overflow-auto rounded-2xl border border-black/6 bg-slate-950 p-4 text-xs leading-6 text-slate-100 dark:border-white/10 whitespace-pre-wrap break-all">
-                  {activeJob.logs || '$ '}
-                </pre>
+                {jobCompletion && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mb-4 w-full justify-between rounded-2xl border border-black/8 px-4 py-3 text-sm dark:border-white/10"
+                    onClick={() => setShowJobLogs((current) => !current)}
+                  >
+                    {showJobLogs
+                      ? t('cliMarketplace.completion.hideLogs', { defaultValue: 'Hide install logs' })
+                      : t('cliMarketplace.completion.showLogs', { defaultValue: 'View install logs' })}
+                    {showJobLogs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                )}
+                {showJobLogs && (
+                  <pre className="max-h-[60vh] overflow-auto rounded-2xl border border-black/6 bg-slate-950 p-4 text-xs leading-6 text-slate-100 dark:border-white/10 whitespace-pre-wrap break-all">
+                    {activeJob.logs || '$ '}
+                  </pre>
+                )}
+                {jobCompletion && (
+                  <div className={`${showJobLogs ? 'mt-5' : ''} rounded-3xl border border-emerald-200/80 bg-emerald-50/80 p-5 shadow-[0_18px_50px_-34px_rgba(16,185,129,0.45)] dark:border-emerald-500/20 dark:bg-emerald-500/10`}>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-full bg-emerald-500/15 p-2 text-emerald-600 dark:text-emerald-300">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-semibold text-emerald-950 dark:text-emerald-100">
+                          {t('cliMarketplace.completion.title', { defaultValue: 'Install complete' })}
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-emerald-900/80 dark:text-emerald-100/80">
+                          {getCompletionDescription(jobCompletion, t)}
+                        </p>
+                        {jobCompletion.extraSteps && jobCompletion.extraSteps.length > 0 && (
+                          <div className="mt-4">
+                            <div className="text-sm font-medium text-emerald-950 dark:text-emerald-100">
+                              {t('cliMarketplace.completion.nextSteps', { defaultValue: 'Next steps' })}
+                            </div>
+                            <ul className="mt-2 space-y-2 text-sm leading-6 text-emerald-900/80 dark:text-emerald-100/80">
+                              {jobCompletion.extraSteps.map((step) => (
+                                <li key={step} className="flex gap-2">
+                                  <span className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600/70 dark:bg-emerald-300/70" />
+                                  <span>{step}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer border-t border-black/6 px-6 py-4 dark:border-white/10">
@@ -678,8 +778,28 @@ export function CliMarketplaceSettingsSection() {
                   onClick={() => setActiveJob(null)}
                   disabled={activeJob.status === 'running'}
                 >
-                  {t('cliMarketplace.job.close')}
+                  {jobCompletion
+                    ? t('cliMarketplace.completion.dismiss', { defaultValue: 'Dismiss' })
+                    : t('cliMarketplace.job.close')}
                 </Button>
+                {jobCompletionPrimaryAction === 'skills' && (
+                  <Button
+                    type="button"
+                    className="rounded-full modal-primary-button"
+                    onClick={openSkillsPage}
+                  >
+                    {t('cliMarketplace.completion.openSkills', { defaultValue: 'Open Skills' })}
+                  </Button>
+                )}
+                {jobCompletionPrimaryAction === 'docs' && jobCompletion?.docsUrl && (
+                  <Button
+                    type="button"
+                    className="rounded-full modal-primary-button"
+                    onClick={() => void openDocs(jobCompletion.docsUrl!)}
+                  >
+                    {t('cliMarketplace.completion.viewDocs', { defaultValue: 'View docs to finish setup' })}
+                  </Button>
+                )}
               </div>
             </div>
           )}

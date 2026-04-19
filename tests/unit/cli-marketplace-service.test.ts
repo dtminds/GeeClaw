@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -464,6 +465,113 @@ describe('cli marketplace service', () => {
     expect(ensureManagedPrefixOnUserPath).toHaveBeenCalledWith(managedPrefixDir);
   });
 
+  it('runs structured post-install actions and exposes install completion metadata on jobs', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
+    const runInstalledBinCommand = vi.fn(async () => undefined);
+    const ensureManagedPrefixOnUserPath = vi.fn(async () => 'updated');
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const managedPrefixDir = join(process.cwd(), 'tmp', 'cli-marketplace-prefix-dokobot');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'dokobot',
+          title: 'Dokobot',
+          binNames: ['dokobot'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@dokobot/cli',
+              postInstallActions: [
+                { type: 'install-skills', sources: ['dokobot/dokobot'] },
+                { type: 'run-installed-bin', bin: 'dokobot', args: ['install-skill', '-o', '${openclawSkillsDir}'] },
+              ],
+              completion: {
+                kind: 'skills-and-docs',
+                requiresSkillEnable: true,
+                docsUrl: 'https://dokobot.ai/zh-CN/guide',
+                extraSteps: ['安装浏览器扩展', '启动或配置 bridge', '在技能页开启 Dokobot 技能'],
+              },
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => true),
+      installWithBundledNpm,
+      runSkillCommandWithBundledNpx,
+      runInstalledBinCommand,
+      ensureManagedPrefixOnUserPath,
+      managedPrefixDir,
+    });
+
+    const startedJob = await service.startInstallJob({ id: 'dokobot' });
+    expect(startedJob.completion).toEqual({
+      kind: 'skills-and-docs',
+      requiresSkillEnable: true,
+      docsUrl: 'https://dokobot.ai/zh-CN/guide',
+      extraSteps: ['安装浏览器扩展', '启动或配置 bridge', '在技能页开启 Dokobot 技能'],
+    });
+
+    await vi.waitFor(() => {
+      expect(service.getJob(startedJob.id).status).toBe('succeeded');
+    });
+
+    expect(runSkillCommandWithBundledNpx).toHaveBeenCalledWith(
+      'add',
+      'dokobot/dokobot',
+      expect.objectContaining({ prefixDir: managedPrefixDir }),
+    );
+    expect(runInstalledBinCommand).toHaveBeenCalledWith(
+      'dokobot',
+      ['install-skill', '-o', join(homedir(), '.openclaw-geeclaw', 'skills')],
+      expect.objectContaining({ prefixDir: managedPrefixDir }),
+    );
+  });
+
+  it('does not inherit catalog docsUrl for skills-only completion actions', async () => {
+    const installWithBundledNpm = vi.fn(async () => undefined);
+    const ensureManagedPrefixOnUserPath = vi.fn(async () => 'updated');
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'wecom',
+          title: 'WeCom CLI',
+          binNames: ['wecom-cli'],
+          docsUrl: 'https://github.com/WeComTeam/wecom-cli',
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@wecom/cli',
+              completion: {
+                kind: 'skills-only',
+                requiresSkillEnable: true,
+                extraSteps: ['在技能页开启企业微信 CLI 技能'],
+              },
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => true),
+      installWithBundledNpm,
+      ensureManagedPrefixOnUserPath,
+      managedPrefixDir: join(process.cwd(), 'tmp', 'cli-marketplace-prefix-skills-only'),
+    });
+
+    const startedJob = await service.startInstallJob({ id: 'wecom' });
+
+    expect(startedJob.completion).toEqual({
+      kind: 'skills-only',
+      requiresSkillEnable: true,
+      extraSteps: ['在技能页开启企业微信 CLI 技能'],
+    });
+  });
+
   it('uninstalls managed CLI packages and their skills', async () => {
     const uninstallWithBundledNpm = vi.fn(async () => undefined);
     const runSkillCommandWithBundledNpx = vi.fn(async () => undefined);
@@ -568,6 +676,105 @@ describe('cli marketplace service', () => {
     });
 
     await expect(service.getCatalog()).rejects.toThrow('must not mix legacy managed fields');
+  });
+
+  it('throws when legacy postInstallSkills is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-post-install-skills',
+          title: 'Empty post install skills CLI',
+          packageName: '@geeclaw-test/empty-post-install-skills',
+          binNames: ['empty-post-install-skills'],
+          postInstallSkills: [],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('postInstallSkills');
+  });
+
+  it('throws when install-skills action sources is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-install-skills-action',
+          title: 'Empty install skills action CLI',
+          binNames: ['empty-install-skills-action'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/empty-install-skills-action',
+              postInstallActions: [
+                { type: 'install-skills', sources: [] },
+              ],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('install-skills sources');
+  });
+
+  it('throws when run-installed-bin action uses an unsupported template variable', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'bad-template-variable',
+          title: 'Bad template variable CLI',
+          binNames: ['bad-template-variable'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/bad-template-variable',
+              postInstallActions: [
+                { type: 'run-installed-bin', bin: 'bad-template-variable', args: ['install', '${unknownDir}'] },
+              ],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('unsupported template variable');
+  });
+
+  it('throws when postUninstallSkills is an empty array', async () => {
+    const { CliMarketplaceService } = await import('@electron/utils/cli-marketplace');
+
+    const service = new CliMarketplaceService({
+      catalogEntries: [
+        {
+          id: 'empty-post-uninstall-skills',
+          title: 'Empty post uninstall skills CLI',
+          binNames: ['empty-post-uninstall-skills'],
+          installMethods: [
+            {
+              type: 'managed-npm',
+              packageName: '@geeclaw-test/empty-post-uninstall-skills',
+              postUninstallSkills: [],
+            },
+          ],
+        },
+      ],
+      findCommand: vi.fn(async () => null),
+      commandExistsInManagedPrefix: vi.fn(async () => false),
+    });
+
+    await expect(service.getCatalog()).rejects.toThrow('postUninstallSkills');
   });
 
   it('fails fast when bundled npm runtime is missing for managed mutation APIs', async () => {

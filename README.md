@@ -216,8 +216,9 @@ Open **Settings → CLI Market** to review a curated set of CLIs that GeeClaw ca
 - Other entries can expose manual install commands such as `brew` or `curl`. GeeClaw only surfaces those commands when the required installer command is already available on the machine.
 - System-installed CLIs are treated as read-only detections in this view. GeeClaw will not try to uninstall them for you.
 - GeeClaw does not compare versions in this view yet. Reinstall always uses the latest package version available from npm at the time you click it.
-- Some managed npm entries can also declare follow-up Skills. GeeClaw automatically runs `npx skills add ... -y -g` after install and `npx skills remove ... -y -g` during uninstall.
-- Managed install and uninstall actions open a live log dialog so you can watch the full bundled `npm` and `npx skills` output in one place.
+- Managed npm entries can declare structured post-install actions. GeeClaw can auto-install related skills or run the freshly installed CLI against managed paths such as `~/.openclaw-geeclaw/skills` without relying on user-authored shell scripts.
+- After a managed install succeeds, GeeClaw shows a completion prompt with the next step: open the docs for browser extensions or bridge setup, or jump to the Skills page to enable newly installed skills.
+- Managed install and uninstall actions open a live log dialog so you can watch the full bundled `npm`, `npx skills`, and managed follow-up command output in one place.
 
 Managed install locations:
 

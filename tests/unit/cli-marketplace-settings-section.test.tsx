@@ -33,6 +33,16 @@ const translations: Record<string, string> = {
   'cliMarketplace.job.succeeded': '已完成',
   'cliMarketplace.job.failed': '失败',
   'cliMarketplace.job.close': '关闭',
+  'cliMarketplace.completion.title': '安装完成',
+  'cliMarketplace.completion.skillsOnly': '已安装 CLI 和技能，请前往技能页手动开启技能后使用',
+  'cliMarketplace.completion.docsRequired': '已安装 CLI，但还需完成其他步骤',
+  'cliMarketplace.completion.skillsAndDocs': '已安装 CLI 和技能，但还需完成其他步骤',
+  'cliMarketplace.completion.nextSteps': '还需完成以下步骤',
+  'cliMarketplace.completion.openSkills': '去开启技能',
+  'cliMarketplace.completion.viewDocs': '查看文档完成安装',
+  'cliMarketplace.completion.dismiss': '知道了',
+  'cliMarketplace.completion.showLogs': '查看安装日志',
+  'cliMarketplace.completion.hideLogs': '收起安装日志',
   'common:status.loading': '加载中',
   'updates.action.retry': '重试',
 };
@@ -559,6 +569,95 @@ describe('CliMarketplaceSettingsSection', () => {
           body: JSON.stringify({ id: 'feishu' }),
         }),
       );
+    });
+  });
+
+  it('shows install completion follow-up actions after a successful managed install', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/cli-marketplace/catalog') {
+        return [
+          {
+            id: 'dokobot',
+            title: 'Dokobot',
+            description: 'Docs',
+            installed: false,
+            source: 'none',
+            installMethods: [
+              {
+                type: 'managed-npm',
+                label: 'managed-npm',
+                available: true,
+                managed: true,
+              },
+            ],
+          },
+        ];
+      }
+
+      if (path === '/api/cli-marketplace/install') {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toBe(JSON.stringify({ id: 'dokobot' }));
+        return {
+          id: 'job-install-dokobot',
+          itemId: 'dokobot',
+          title: 'Dokobot',
+          operation: 'install',
+          status: 'running',
+          logs: '$ npm install --global @dokobot/cli\n',
+          startedAt: '2026-03-30T00:00:00.000Z',
+          finishedAt: null,
+          completion: {
+            kind: 'skills-and-docs',
+            requiresSkillEnable: true,
+            docsUrl: 'https://dokobot.ai/zh-CN/guide',
+            extraSteps: ['安装浏览器扩展', '启动或配置 bridge', '在技能页开启 Dokobot 技能'],
+          },
+        };
+      }
+
+      if (path === '/api/cli-marketplace/jobs/job-install-dokobot') {
+        return {
+          id: 'job-install-dokobot',
+          itemId: 'dokobot',
+          title: 'Dokobot',
+          operation: 'install',
+          status: 'succeeded',
+          logs: '$ npm install --global @dokobot/cli\n',
+          startedAt: '2026-03-30T00:00:00.000Z',
+          finishedAt: '2026-03-30T00:00:10.000Z',
+          completion: {
+            kind: 'skills-and-docs',
+            requiresSkillEnable: true,
+            docsUrl: 'https://dokobot.ai/zh-CN/guide',
+            extraSteps: ['安装浏览器扩展', '启动或配置 bridge', '在技能页开启 Dokobot 技能'],
+          },
+        };
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    const { CliMarketplaceSettingsSection } = await import('@/components/settings/CliMarketplaceSettingsSection');
+
+    render(<CliMarketplaceSettingsSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '更多操作' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: '安装' }));
+
+    expect(await screen.findByText('安装完成')).toBeInTheDocument();
+    expect(await screen.findByText('已安装 CLI 和技能，但还需完成其他步骤')).toBeInTheDocument();
+    expect(screen.getByText('还需完成以下步骤')).toBeInTheDocument();
+    expect(screen.getByText('安装浏览器扩展')).toBeInTheDocument();
+    expect(screen.getByText('启动或配置 bridge')).toBeInTheDocument();
+    expect(screen.getByText('在技能页开启 Dokobot 技能')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看安装日志' })).toBeInTheDocument();
+    expect(screen.queryByText('$ npm install --global @dokobot/cli')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '去开启技能' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看文档完成安装' }));
+
+    await waitFor(() => {
+      expect(invokeIpcMock).toHaveBeenCalledWith('shell:openExternal', 'https://dokobot.ai/zh-CN/guide');
     });
   });
 });

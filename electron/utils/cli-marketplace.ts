@@ -6,7 +6,13 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { sortCommandCandidatesForExecution } from './command-candidates';
-import { ensureDir, getGeeClawConfigDir, getResourcesDir } from './paths';
+import {
+  ensureDir,
+  getGeeClawConfigDir,
+  getOpenClawConfigDir,
+  getOpenClawSkillsDir,
+  getResourcesDir,
+} from './paths';
 import { getBundledNpmPath, getBundledNpxPath, getBundledPathEntries } from './managed-bin';
 import { prependPathEntries } from './env-path';
 import { prepareWinSpawn } from './win-shell';
@@ -22,7 +28,9 @@ export type CliMarketplaceInstallMethod =
       packageName: string;
       installArgs?: string[];
       postInstallSkills?: string[];
+      postInstallActions?: CliMarketplacePostInstallAction[];
       postUninstallSkills?: string[];
+      completion?: CliMarketplaceInstallCompletion;
     }
   | {
       type: 'manual';
@@ -46,6 +54,24 @@ export type CliMarketplaceCatalogItem = {
   installArgs?: string[];
   postInstallSkills?: string[];
   postUninstallSkills?: string[];
+};
+
+export type CliMarketplacePostInstallAction =
+  | {
+      type: 'install-skills';
+      sources: string[];
+    }
+  | {
+      type: 'run-installed-bin';
+      bin: string;
+      args?: string[];
+    };
+
+export type CliMarketplaceInstallCompletion = {
+  kind: 'skills-only' | 'docs-required' | 'skills-and-docs';
+  requiresSkillEnable?: boolean;
+  docsUrl?: string;
+  extraSteps?: string[];
 };
 
 export type CliMarketplaceInstallMethodStatus = {
@@ -91,6 +117,7 @@ export type CliMarketplaceJobSnapshot = {
   logs: string;
   startedAt: string;
   finishedAt: string | null;
+  completion?: CliMarketplaceInstallCompletion;
   error?: string;
 };
 
@@ -113,6 +140,11 @@ export interface CliMarketplaceServiceOptions {
     source: string,
     options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
   ) => Promise<void>;
+  runInstalledBinCommand?: (
+    bin: string,
+    args: string[],
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
   ensureManagedPrefixOnUserPath?: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   managedPrefixDir?: string;
 }
@@ -133,7 +165,15 @@ function isNonEmptyStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => isNonEmptyString(item));
 }
 
-function validateOptionalStringArray(entry: CliMarketplaceCatalogItem, fieldName: 'installArgs' | 'postInstallSkills' | 'postUninstallSkills', label: string): void {
+function isSpecifiedNonEmptyStringArray(value: unknown): value is string[] {
+  return isNonEmptyStringArray(value) && value.length > 0;
+}
+
+function isCliMarketplaceCompletionKind(value: unknown): value is CliMarketplaceInstallCompletion['kind'] {
+  return value === 'skills-only' || value === 'docs-required' || value === 'skills-and-docs';
+}
+
+function validateOptionalStringArray(entry: CliMarketplaceCatalogItem, fieldName: 'installArgs', label: string): void {
   const value = entry[fieldName];
   if (value === undefined) {
     return;
@@ -141,6 +181,64 @@ function validateOptionalStringArray(entry: CliMarketplaceCatalogItem, fieldName
   if (!isNonEmptyStringArray(value)) {
     throw new Error(`[cli-marketplace] Entry ${label} has an invalid "${fieldName}" array`);
   }
+}
+
+function validateOptionalNonEmptyStringArray(
+  entry: CliMarketplaceCatalogItem,
+  fieldName: 'postInstallSkills' | 'postUninstallSkills',
+  label: string,
+): void {
+  const value = entry[fieldName];
+  if (value === undefined) {
+    return;
+  }
+  if (!isSpecifiedNonEmptyStringArray(value)) {
+    throw new Error(`[cli-marketplace] Entry ${label} has an invalid "${fieldName}" array`);
+  }
+}
+
+function validateTemplateVariablesInArgs(args: string[], label: string): void {
+  for (const arg of args) {
+    for (const [, varName] of arg.matchAll(/\${([^}]+)}/g)) {
+      if (!['openclawSkillsDir', 'openclawConfigDir', 'geeclawConfigDir'].includes(varName)) {
+        throw new Error(`[cli-marketplace] Entry ${label} has an unsupported template variable "${varName}"`);
+      }
+    }
+  }
+}
+
+function normalizeManagedPostInstallActions(
+  method: Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }>,
+): CliMarketplacePostInstallAction[] {
+  const actions: CliMarketplacePostInstallAction[] = [];
+
+  if (method.postInstallSkills && method.postInstallSkills.length > 0) {
+    actions.push({
+      type: 'install-skills',
+      sources: [...method.postInstallSkills],
+    });
+  }
+
+  if (Array.isArray(method.postInstallActions) && method.postInstallActions.length > 0) {
+    actions.push(...method.postInstallActions);
+  }
+
+  return actions;
+}
+
+function resolveInstallCompletion(
+  entry: CliMarketplaceCatalogItem,
+  method: Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }>,
+): CliMarketplaceInstallCompletion | undefined {
+  if (!method.completion) {
+    return undefined;
+  }
+
+  const shouldInheritDocsUrl = method.completion.kind === 'docs-required' || method.completion.kind === 'skills-and-docs';
+  return {
+    ...method.completion,
+    docsUrl: method.completion.docsUrl ?? (shouldInheritDocsUrl ? entry.docsUrl : undefined),
+  };
 }
 
 function normalizeLegacyManagedInstallMethod(entry: CliMarketplaceCatalogItem): Extract<CliMarketplaceInstallMethod, { type: 'managed-npm' }> | null {
@@ -220,8 +318,8 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
     }
 
     validateOptionalStringArray(entry, 'installArgs', label);
-    validateOptionalStringArray(entry, 'postInstallSkills', label);
-    validateOptionalStringArray(entry, 'postUninstallSkills', label);
+    validateOptionalNonEmptyStringArray(entry, 'postInstallSkills', label);
+    validateOptionalNonEmptyStringArray(entry, 'postUninstallSkills', label);
 
     if (entry.installMethods !== undefined) {
       if (!Array.isArray(entry.installMethods) || entry.installMethods.length === 0) {
@@ -240,11 +338,57 @@ function validateCatalogEntries(entries: CliMarketplaceCatalogItem[]): void {
           if (method.installArgs !== undefined && !isNonEmptyStringArray(method.installArgs)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm installArgs array`);
           }
-          if (method.postInstallSkills !== undefined && !isNonEmptyStringArray(method.postInstallSkills)) {
+          if (method.postInstallSkills !== undefined && !isSpecifiedNonEmptyStringArray(method.postInstallSkills)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postInstallSkills array`);
           }
-          if (method.postUninstallSkills !== undefined && !isNonEmptyStringArray(method.postUninstallSkills)) {
+          if (method.postInstallActions !== undefined) {
+            if (!Array.isArray(method.postInstallActions)) {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postInstallActions array`);
+            }
+            for (const action of method.postInstallActions) {
+              if (!action || typeof action !== 'object') {
+                throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postInstallActions entry`);
+              }
+              if (action.type === 'install-skills') {
+                if (!isSpecifiedNonEmptyStringArray(action.sources)) {
+                  throw new Error(`[cli-marketplace] Entry ${label} has an invalid install-skills sources array`);
+                }
+                continue;
+              }
+              if (action.type === 'run-installed-bin') {
+                if (!isNonEmptyString(action.bin)) {
+                  throw new Error(`[cli-marketplace] Entry ${label} has an invalid run-installed-bin bin`);
+                }
+                if (action.args !== undefined && !isNonEmptyStringArray(action.args)) {
+                  throw new Error(`[cli-marketplace] Entry ${label} has an invalid run-installed-bin args array`);
+                }
+                if (action.args !== undefined) {
+                  validateTemplateVariablesInArgs(action.args, label);
+                }
+                continue;
+              }
+              throw new Error(`[cli-marketplace] Entry ${label} has an unsupported postInstallActions type`);
+            }
+          }
+          if (method.postUninstallSkills !== undefined && !isSpecifiedNonEmptyStringArray(method.postUninstallSkills)) {
             throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm postUninstallSkills array`);
+          }
+          if (method.completion !== undefined) {
+            if (!method.completion || typeof method.completion !== 'object') {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm completion object`);
+            }
+            if (!isCliMarketplaceCompletionKind(method.completion.kind)) {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm completion kind`);
+            }
+            if (method.completion.requiresSkillEnable !== undefined && typeof method.completion.requiresSkillEnable !== 'boolean') {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm completion requiresSkillEnable value`);
+            }
+            if (method.completion.docsUrl !== undefined && typeof method.completion.docsUrl !== 'string') {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm completion docsUrl`);
+            }
+            if (method.completion.extraSteps !== undefined && !isNonEmptyStringArray(method.completion.extraSteps)) {
+              throw new Error(`[cli-marketplace] Entry ${label} has an invalid managed npm completion extraSteps`);
+            }
           }
           continue;
         }
@@ -306,6 +450,11 @@ export class CliMarketplaceService {
     source: string,
     options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
   ) => Promise<void>;
+  private readonly runInstalledBinCommand: (
+    bin: string,
+    args: string[],
+    options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+  ) => Promise<void>;
   private readonly ensureManagedPrefixOnUserPath: (prefixDir: string) => Promise<UserPathUpdateStatus>;
   private readonly managedPrefixDir: string;
   private readonly jobs = new Map<string, CliMarketplaceJobSnapshot>();
@@ -318,6 +467,7 @@ export class CliMarketplaceService {
     this.installWithBundledNpm = options?.installWithBundledNpm ?? defaultInstallWithBundledNpm;
     this.uninstallWithBundledNpm = options?.uninstallWithBundledNpm ?? defaultUninstallWithBundledNpm;
     this.runSkillCommandWithBundledNpx = options?.runSkillCommandWithBundledNpx ?? defaultRunSkillCommandWithBundledNpx;
+    this.runInstalledBinCommand = options?.runInstalledBinCommand ?? defaultRunInstalledBinCommand;
     this.ensureManagedPrefixOnUserPath = options?.ensureManagedPrefixOnUserPath ?? ensureManagedNpmPrefixOnUserPath;
     this.managedPrefixDir = options?.managedPrefixDir ?? getDefaultManagedPrefixDir();
   }
@@ -347,7 +497,7 @@ export class CliMarketplaceService {
     const entry = await this.getEntryById(id);
     const managedMethod = requireManagedInstallMethod(entry);
     requireBundledNpmRuntime();
-    const job = this.createJob(entry, 'install');
+    const job = this.createJob(entry, 'install', resolveInstallCompletion(entry, managedMethod));
     void this.runJob(job, async () => {
       await this.installEntry(entry, managedMethod, this.appendJobLog(job));
     });
@@ -388,11 +538,24 @@ export class CliMarketplaceService {
       appendLog,
     });
 
-    for (const source of managedMethod.postInstallSkills ?? []) {
-      await this.runSkillCommandWithBundledNpx('add', source, {
-        prefixDir: this.managedPrefixDir,
-        appendLog,
-      });
+    for (const action of normalizeManagedPostInstallActions(managedMethod)) {
+      if (action.type === 'install-skills') {
+        for (const source of action.sources) {
+          await this.runSkillCommandWithBundledNpx('add', source, {
+            prefixDir: this.managedPrefixDir,
+            appendLog,
+          });
+        }
+      } else if (action.type === 'run-installed-bin') {
+        await this.runInstalledBinCommand(
+          action.bin,
+          action.args?.map((arg) => resolveCliMarketplaceTemplate(arg)) ?? [],
+          {
+            prefixDir: this.managedPrefixDir,
+            appendLog,
+          },
+        );
+      }
     }
 
     try {
@@ -439,6 +602,7 @@ export class CliMarketplaceService {
   private createJob(
     entry: CliMarketplaceCatalogItem,
     operation: CliMarketplaceJobOperation,
+    completion?: CliMarketplaceInstallCompletion,
   ): CliMarketplaceJobSnapshot {
     const job: CliMarketplaceJobSnapshot = {
       id: randomUUID(),
@@ -449,6 +613,7 @@ export class CliMarketplaceService {
       logs: '',
       startedAt: new Date().toISOString(),
       finishedAt: null,
+      completion,
     };
     this.jobs.set(job.id, job);
     return job;
@@ -681,6 +846,21 @@ function getDefaultManagedPrefixDir(): string {
   return join(getGeeClawConfigDir(), 'npm-global');
 }
 
+function resolveCliMarketplaceTemplate(value: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (_match, variableName: string) => {
+    if (variableName === 'openclawSkillsDir') {
+      return getOpenClawSkillsDir();
+    }
+    if (variableName === 'openclawConfigDir') {
+      return getOpenClawConfigDir();
+    }
+    if (variableName === 'geeclawConfigDir') {
+      return getGeeClawConfigDir();
+    }
+    throw new Error(`Unsupported cli marketplace template variable "${variableName}"`);
+  });
+}
+
 async function defaultFindCommand(binName: string): Promise<string | null> {
   const candidates = await listCommandCandidates(binName);
   return candidates[0] ?? null;
@@ -859,6 +1039,33 @@ async function defaultRunSkillCommandWithBundledNpx(
   });
 }
 
+async function defaultRunInstalledBinCommand(
+  bin: string,
+  args: string[],
+  options: { prefixDir: string; appendLog?: CliMarketplaceLogAppender },
+): Promise<void> {
+  const executablePath = getPrefixCandidates(options.prefixDir, bin).find((candidate) => existsSync(candidate));
+  if (!executablePath) {
+    throw new Error(`Installed CLI "${bin}" was not found in managed prefix`);
+  }
+
+  await runBundledCommand({
+    executablePath,
+    displayCommand: bin,
+    args,
+    prefixDir: options.prefixDir,
+    appendLog: options.appendLog,
+    failureMessage: `${bin} exited`,
+  });
+}
+
+function getManagedPrefixPathEntries(prefixDir: string): string[] {
+  if (process.platform === 'win32') {
+    return [prefixDir, join(prefixDir, 'bin')];
+  }
+  return [join(prefixDir, 'bin'), prefixDir];
+}
+
 async function runBundledCommand(options: {
   executablePath: string;
   displayCommand: string;
@@ -874,7 +1081,10 @@ async function runBundledCommand(options: {
     npm_config_fund: 'false',
     npm_config_audit: 'false',
   };
-  const bundledPath = prependPathEntries(env, getBundledPathEntries());
+  const bundledPath = prependPathEntries(env, [
+    ...getManagedPrefixPathEntries(options.prefixDir),
+    ...getBundledPathEntries(),
+  ]);
   const commandEnv = bundledPath.env;
 
   options.appendLog?.(`$ ${options.displayCommand} ${options.args.join(' ')}\n`);
