@@ -380,13 +380,13 @@ function isOpenClawSystemEventLine(line: string): boolean {
 }
 
 function isOpenClawExecFollowupText(text: string): boolean {
-  const normalized = normalizeText(text).replace(/\s+/g, ' ');
+  const normalized = text.trim().replace(/\s+/g, ' ');
   return normalized === OPENCLAW_EXEC_FOLLOWUP_PREFIX
     || normalized === `${OPENCLAW_EXEC_FOLLOWUP_PREFIX} ${OPENCLAW_EXEC_FOLLOWUP_SUFFIX}`;
 }
 
 function isOpenClawHeartbeatNoticeText(text: string): boolean {
-  const normalized = normalizeText(text).replace(/\s+/g, ' ');
+  const normalized = text.trim().replace(/\s+/g, ' ');
   return OPENCLAW_NOTICE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
@@ -501,19 +501,20 @@ export function sanitizeOpenClawUserMessageForUi(input: string): LegacyUiSanitiz
     : { hidden: true, text: '' };
 }
 
-export function cleanUserMessageText(text: string): string {
-  const decision = decideOpenClawUserMessageForUi(sanitizeMessageText(text, true));
+export function cleanUserMessageTextFromDecision(decision: UiMessageDecision): string {
   if (decision.action !== 'show_chat_user') {
     return '';
   }
-  let cleaned = decision.text
-    // Remove [media attached: path (mime) | path] references from displayed text
-    .replace(/\s*\[media attached:[^\]]*\]/g, '');
 
-  return cleaned
-    // Remove Gateway timestamp prefix like [Fri 2026-02-13 22:39 GMT+8]
+  return decision.text
+    .replace(/\s*\[media attached:[^\]]*\]/g, '')
     .replace(GATEWAY_TIMESTAMP_PREFIX_RE, '')
     .trim();
+}
+
+export function cleanUserMessageText(text: string): string {
+  const decision = decideOpenClawUserMessageForUi(sanitizeMessageText(text, true));
+  return cleanUserMessageTextFromDecision(decision);
 }
 
 export function stripRuntimeChannelTags(text: string): string {

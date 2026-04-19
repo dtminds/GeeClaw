@@ -542,4 +542,23 @@ describe('chat live rendering', () => {
     expect(container.textContent).toContain('A scheduled reminder has been triggered. The reminder content is:');
     expect(container.textContent).toContain('检查线上报警并同步进展');
   });
+
+  it('renders cleaned user bubble text instead of raw gateway metadata', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'user',
+          id: 'user-clean-text',
+          timestamp: 1,
+          content: '[Fri 2026-03-13 17:11 GMT+8] hello\n[media attached:/tmp/demo.png (image/png) | /tmp/demo.png]',
+        } as RawMessage}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('hello')).toBeInTheDocument();
+    expect(screen.queryByText(/\[Fri 2026-03-13 17:11 GMT\+8\]/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\[media attached:/)).not.toBeInTheDocument();
+  });
 });

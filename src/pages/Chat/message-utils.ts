@@ -5,7 +5,7 @@
  */
 import type { RawMessage, ContentBlock } from '@/stores/chat';
 import {
-  cleanUserMessageText,
+  cleanUserMessageTextFromDecision,
   decideOpenClawUserMessageForUi,
   sanitizeMessageForDisplay,
   type UiMessageDecision,
@@ -47,15 +47,6 @@ function formatAbsoluteMessageTimestamp(date: Date, locale: string, now: Date): 
         hour: '2-digit',
         minute: '2-digit',
       });
-}
-
-/**
- * Clean Gateway metadata from user message text for display.
- * Strips: [media attached: ... | ...], [message_id: ...],
- * and the timestamp prefix [Day Date Time Timezone].
- */
-function cleanUserText(text: string): string {
-  return cleanUserMessageText(text);
 }
 
 function cleanAssistantText(text: string): string {
@@ -125,7 +116,7 @@ export function extractText(message: RawMessage | unknown): string {
   // Strip Gateway metadata from user messages for clean display
   if (isUser && result) {
     const decision = decideOpenClawUserMessageForUi(result);
-    result = decision.action === 'show_chat_user' ? cleanUserText(result) : '';
+    result = cleanUserMessageTextFromDecision(decision);
   } else if (result) {
     result = cleanAssistantText(result);
   }

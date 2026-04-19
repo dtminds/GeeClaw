@@ -29,7 +29,7 @@ import {
 import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
 import { isInternalMessage } from '@/stores/chat';
-import { extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
+import { extractText, extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -624,10 +624,7 @@ export const ChatMessage = memo(function ChatMessage({
     () => [...extractImages(message), ...markdownImages],
     [markdownImages, message],
   );
-  const userText = useMemo(
-    () => (isUser && userDisplayDecision?.action === 'show_chat_user' ? userDisplayDecision.text : ''),
-    [isUser, userDisplayDecision],
-  );
+  const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
   const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
   const assistantContentParts = useMemo(
     () => (isUser
