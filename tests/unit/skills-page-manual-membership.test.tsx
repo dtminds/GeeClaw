@@ -5,6 +5,10 @@ import { useSkillsStore } from '@/stores/skills';
 import { useAgentsStore } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
 
+const { invalidatePresetAgentSkillsCacheMock } = vi.hoisted(() => ({
+  invalidatePresetAgentSkillsCacheMock: vi.fn(),
+}));
+
 const invokeIpcMock = vi.fn();
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -16,6 +20,14 @@ vi.mock('@/lib/api-client', () => ({
 vi.mock('@/lib/host-api', () => ({
   hostApiFetch: vi.fn(),
 }));
+
+vi.mock('@/pages/Chat/slash-picker', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/pages/Chat/slash-picker')>();
+  return {
+    ...actual,
+    invalidatePresetAgentSkillsCache: (...args: unknown[]) => invalidatePresetAgentSkillsCacheMock(...args),
+  };
+});
 
 vi.mock('sonner', () => ({
   toast: {
@@ -429,6 +441,7 @@ describe('skills page manual membership editing', () => {
       });
     });
     expect(fetchSkills).toHaveBeenCalledWith('writer');
+    expect(invalidatePresetAgentSkillsCacheMock).toHaveBeenCalledWith('writer');
   });
 
   it('falls back to current gateway-enabled skills for agents that have not been migrated to explicit manualSkills yet', async () => {

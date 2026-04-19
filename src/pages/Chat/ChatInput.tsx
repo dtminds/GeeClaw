@@ -1028,7 +1028,7 @@ export const ChatInput = memo(function ChatInput({
     return () => {
       cancelled = true;
     };
-  }, [currentAgent, gatewayRpc, gatewayStatusState]);
+  }, [currentAgent, gatewayRpc, gatewayStatusState, skills]);
 
   useEffect(() => {
     let cancelled = false;

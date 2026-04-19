@@ -40,6 +40,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { useSkillsStore } from '@/stores/skills';
 import { useGatewayStore } from '@/stores/gateway';
 import { useAgentsStore } from '@/stores/agents';
+import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
@@ -1019,6 +1020,7 @@ export function Skills() {
       await updateAgentSettings(selectedAgent.id, {
         manualSkills: [...nextSkills].sort((left, right) => left.localeCompare(right)),
       });
+      invalidatePresetAgentSkillsCache(selectedAgent.id);
       await fetchSkills(selectedAgent.id);
       if (options?.notify !== false) {
         toast.success(enable ? t('toast.enabled') : t('toast.disabled'));

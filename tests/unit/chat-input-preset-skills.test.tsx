@@ -318,6 +318,57 @@ describe('ChatInput preset agent skills loading', () => {
     expect(screen.queryByText('Global Skill')).not.toBeInTheDocument();
   });
 
+  it('refreshes agent-scoped skills when the skills store updates', async () => {
+    fetchAgentScopedSkillsMock.mockResolvedValue([
+      {
+        id: 'agent-skill',
+        slug: 'agent-skill',
+        name: 'Agent Skill',
+        description: 'Scoped to the current agent',
+        enabled: true,
+        source: 'openclaw-managed',
+      },
+    ]);
+
+    useGatewayStore.setState((state) => ({
+      ...state,
+      status: { ...state.status, state: 'running' },
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useSkillsStore.setState((state) => ({
+        ...state,
+        skills: [
+          ...state.skills,
+          {
+            id: 'new-global-skill',
+            slug: 'new-global-skill',
+            name: 'New Global Skill',
+            description: 'Newly updated skill',
+            enabled: true,
+            source: 'openclaw-managed',
+          },
+        ],
+      }));
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentScopedSkillsMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('falls back to preset skill slugs when scoped status data is empty for a preset agent', async () => {
     fetchAgentScopedSkillsMock.mockResolvedValue([]);
     fetchPresetAgentSkillsMock.mockResolvedValue([]);
