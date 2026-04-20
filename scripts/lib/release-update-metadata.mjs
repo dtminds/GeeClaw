@@ -93,11 +93,11 @@ export function rewriteMacUpdateMetadataToArchiveUrl({
     updateInfo.path = url;
   }
 
-  writeFileSync(metadataPath, `${yaml.dump(updateInfo, {
+  writeFileSync(metadataPath, yaml.dump(updateInfo, {
     lineWidth: -1,
     noRefs: true,
     sortKeys: false,
-  })}`, 'utf8');
+  }), 'utf8');
 
   return { url };
 }
