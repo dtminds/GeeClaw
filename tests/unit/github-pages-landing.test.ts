@@ -35,9 +35,6 @@ describe('GitHub Pages landing page', () => {
     const intelLink = document.querySelector('[data-download-target="mac-intel"]');
     const winLink = document.querySelector('[data-download-target="windows"]');
     const heroImage = document.querySelector<HTMLImageElement>('[data-hero-image]');
-    const firstFlowImage = document.querySelector<HTMLImageElement>('[data-flow-image="task"]');
-    const privacyLink = document.querySelector('[data-legal-link="privacy"]');
-    const termsLink = document.querySelector('[data-legal-link="terms"]');
 
     expect(macLink?.getAttribute('href')).toBe('#download-mac-apple-silicon');
     expect(intelLink?.getAttribute('href')).toBe('#download-mac-intel');
