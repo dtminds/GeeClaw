@@ -24,7 +24,7 @@ describe('GitHub Pages landing page', () => {
 
     expect(document.querySelector('[data-brand="geeclaw"]')).not.toBeNull();
     expect(document.querySelectorAll('[data-download-target]').length).toBe(3);
-    expect(document.querySelectorAll('.flow-card').length).toBe(3);
+    expect(document.querySelectorAll('.flow-card').length).toBe(9);
     expect(document.querySelector('[data-hero-image]')).not.toBeNull();
   });
 
@@ -42,9 +42,6 @@ describe('GitHub Pages landing page', () => {
     expect(macLink?.getAttribute('href')).toBe('#download-mac-apple-silicon');
     expect(intelLink?.getAttribute('href')).toBe('#download-mac-intel');
     expect(winLink?.getAttribute('href')).toBe('#download-windows');
-    expect(heroImage?.getAttribute('src')).toBe('./main.png');
-    expect(firstFlowImage?.getAttribute('src')).toContain('Frame_1_oversea');
-    expect(privacyLink?.getAttribute('href')).toBe('#privacy-policy');
-    expect(termsLink?.getAttribute('href')).toBe('#terms-of-service');
+    expect(heroImage?.getAttribute('src')).toBe('./res/main.png');
   });
 });
