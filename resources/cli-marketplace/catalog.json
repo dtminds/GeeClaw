@@ -51,7 +51,7 @@
                 }
             }
         ],
-        "description": "提取网页可读内容供 AI 处理，复用所有登录会话，当 Agent 需要读取网页内容而非操控浏览器时使用。GeeClaw 会自动安装 CLI 和技能，浏览器扩展、bridge 请查看安装文档",
+        "description": "提取网页可读内容供 AI 处理，复用所有登录会话，当 Agent 需要读取网页内容而非操控浏览器时使用",
         "homepage": "https://dokobot.ai/zh-CN",
         "docsUrl": "https://dokobot.ai/zh-CN/guide",
         "platforms": [
@@ -87,7 +87,7 @@
                 }
             }
         ],
-        "description": "让任何网站或 Electron 应用成为你的 CLI。GeeClaw 会自动安装 CLI 和技能，浏览器扩展请查看安装文档",
+        "description": "将任何网站或 Electron 应用转化为强大的命令行工具供 Agent 使用，复用 Chrome 登录状态",
         "homepage": "https://opencli.info/",
         "docsUrl": "https://opencli.info/docs/zh/guide/browser-bridge.html",
         "platforms": [

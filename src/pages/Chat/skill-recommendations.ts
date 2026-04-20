@@ -27,7 +27,7 @@ interface FindSkillKeywordRecommendationOptions {
 const SKILL_KEYWORD_RECOMMENDATION_RULES: SkillKeywordRecommendationRule[] = [
   {
     id: 'browser',
-    skillMatchers: ['agent-browser', 'browser', 'playwright-commander'],
+    skillMatchers: ['dokobot', 'agent-browser'],
     keywords: ['browser', 'playwright', '浏览器', '网页', '网站'],
   },
   {

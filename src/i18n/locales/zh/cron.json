@@ -48,7 +48,7 @@
         }
     },
     "dialog": {
-        "createTitle": "创建任务",
+        "createTitle": "创建自动化任务",
         "editTitle": "编辑任务",
         "description": "安排自动化的 AI 任务",
         "taskName": "任务名称",

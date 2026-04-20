@@ -49,6 +49,27 @@ img {
   padding: 32px 0 30px;
 }
 
+.page-shell::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 100vw;
+  height: clamp(420px, 58vw, 760px);
+  transform: translateX(-50%);
+  background-image:
+    linear-gradient(180deg, rgba(247, 244, 240, 0.12) 0%, rgba(247, 244, 240, 0.56) 60%, rgba(247, 244, 240, 0.98) 100%),
+    repeating-conic-gradient(at 1px 1px,
+      rgba(220, 210, 199, 0.54) 0deg 90deg,
+      transparent 90deg 180deg,
+      rgba(220, 210, 199, 0.54) 180deg 1turn);
+  background-size: auto, 48px 48px;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.8) 56%, transparent 100%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.8) 56%, transparent 100%);
+  z-index: 0;
+}
+
 .hero-glow {
   position: absolute;
   left: 50%;
@@ -94,20 +115,12 @@ img {
 }
 
 .brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 30% 30%, #ffad7c, #fc5d1e 58%, #cb4611 100%);
-  color: #fff;
-  font-family: "Outfit", "Manrope", sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin-top: -2px;
+  flex: none;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -143,6 +156,7 @@ img {
 .topbar-link {
   font-size: 14px;
   color: #57524c;
+  margin-right: 8px;
   transition: color 0.18s ease;
 }
 
@@ -151,10 +165,13 @@ img {
 }
 
 .hero {
+  position: relative;
   padding-top: 146px;
 }
 
 .hero-copy {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -229,6 +246,8 @@ img {
 }
 
 .workspace-shot {
+  position: relative;
+  z-index: 1;
   width: min(100%, 1136px);
   margin: 95px auto 0;
   overflow: hidden;
@@ -286,18 +305,18 @@ img {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 268px;
+  min-height: 238px;
   overflow: hidden;
   border-radius: 40px;
   background: var(--card);
-  border: 1px solid var(--card-border);
+  border: 8px solid var(--card-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
 
 .flow-preview-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .flow-card h3 {
@@ -308,7 +327,7 @@ img {
 }
 
 .flow-card p {
-  max-width: 250px;
+  max-width: 270px;
   margin: 12px 21px 0;
   font-size: 14px;
   line-height: 22px;
@@ -320,7 +339,7 @@ img {
   align-items: center;
   justify-content: center;
   gap: 28px;
-  margin: 30px auto 0;
+  margin: 60px auto 0;
   font-size: 16px;
   color: var(--text-mid);
 }
@@ -339,6 +358,11 @@ img {
 @media (max-width: 1120px) {
   .hero {
     padding-top: 92px;
+  }
+
+  .page-shell::before {
+    height: clamp(360px, 66vw, 620px);
+    background-size: auto, 42px 42px;
   }
 
   .workspace-shot {
@@ -364,6 +388,11 @@ img {
 
   .hero {
     padding-top: 76px;
+  }
+
+  .page-shell::before {
+    height: clamp(300px, 84vw, 460px);
+    background-size: auto, 36px 36px;
   }
 
   .hero-copy h1 {
@@ -460,6 +489,30 @@ img {
 
   .flow-card:nth-child(3) {
     animation-delay: 0.24s;
+  }
+
+  .flow-card:nth-child(4) {
+    animation-delay: 0.3s;
+  }
+
+  .flow-card:nth-child(5) {
+    animation-delay: 0.36s;
+  }
+
+  .flow-card:nth-child(6) {
+    animation-delay: 0.42s;
+  }
+
+  .flow-card:nth-child(7) {
+    animation-delay: 0.48s;
+  }
+
+  .flow-card:nth-child(8) {
+    animation-delay: 0.54s;
+  }
+
+  .flow-card:nth-child(9) {
+    animation-delay: 0.6s;
   }
 }
 
