@@ -1,9 +1,11 @@
 (function () {
   const landingConfig = {
+    releaseInfoUrl: 'https://geeclaw.dtminds.com/latest/release-info.json',
+    fallbackReleasesUrl: 'https://github.com/dtminds/GeeClaw/releases',
     downloads: {
-      macAppleSilicon: '#download-mac-apple-silicon',
-      macIntel: '#download-mac-intel',
-      windows: '#download-windows',
+      macAppleSilicon: 'https://github.com/dtminds/GeeClaw/releases',
+      macIntel: 'https://github.com/dtminds/GeeClaw/releases',
+      windows: 'https://github.com/dtminds/GeeClaw/releases',
     },
     assets: {
       hero: './res/main.png',
@@ -63,10 +65,53 @@
     }
   }
 
+  function applyDownloadLinks(downloads) {
+    setAttribute('[data-download-target="mac-apple-silicon"]', 'href', downloads.macAppleSilicon);
+    setAttribute('[data-download-target="mac-intel"]', 'href', downloads.macIntel);
+    setAttribute('[data-download-target="windows"]', 'href', downloads.windows);
+  }
+
+  function buildReleaseInfoUrl(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}ts=${Date.now()}`;
+  }
+
+  async function refreshDownloadLinks() {
+    try {
+      const response = await fetch(buildReleaseInfoUrl(landingConfig.releaseInfoUrl), {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load release metadata: ${response.status}`);
+      }
+
+      const releaseInfo = await response.json();
+      const macArm64 = releaseInfo?.downloads?.mac?.arm64;
+      const macX64 = releaseInfo?.downloads?.mac?.x64;
+      const winX64 = releaseInfo?.downloads?.win?.x64;
+
+      if (!macArm64 || !macX64 || !winX64) {
+        throw new Error('Release metadata is missing download links');
+      }
+
+      applyDownloadLinks({
+        macAppleSilicon: macArm64,
+        macIntel: macX64,
+        windows: winX64,
+      });
+    } catch (error) {
+      console.warn('[GeeClaw site] Failed to refresh download links from OSS release-info.json', error);
+      applyDownloadLinks({
+        macAppleSilicon: landingConfig.fallbackReleasesUrl,
+        macIntel: landingConfig.fallbackReleasesUrl,
+        windows: landingConfig.fallbackReleasesUrl,
+      });
+    }
+  }
+
   function applyLandingConfig() {
-    setAttribute('[data-download-target="mac-apple-silicon"]', 'href', landingConfig.downloads.macAppleSilicon);
-    setAttribute('[data-download-target="mac-intel"]', 'href', landingConfig.downloads.macIntel);
-    setAttribute('[data-download-target="windows"]', 'href', landingConfig.downloads.windows);
+    applyDownloadLinks(landingConfig.downloads);
 
     setAttribute('[data-hero-image]', 'src', landingConfig.assets.hero);
     setAttribute('[data-flow-image="task"]', 'src', landingConfig.assets.flowTask);
@@ -104,6 +149,8 @@
     setText('[data-copy="flow-card-8-description"]', landingConfig.copy.flowCard8Description);
     setText('[data-copy="flow-card-9-title"]', landingConfig.copy.flowCard9Title);
     setText('[data-copy="flow-card-9-description"]', landingConfig.copy.flowCard9Description);
+
+    void refreshDownloadLinks();
   }
 
   if (document.readyState === 'loading') {
