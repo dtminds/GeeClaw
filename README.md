@@ -361,6 +361,14 @@ pnpm dev
 - `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
 - Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
 
+### GitHub Pages Landing Page
+
+This repository also ships a static marketing landing page under [`site/`](site/).
+
+- Open [`site/index.html`](site/index.html) directly for local preview.
+- Publish the repository's `site/` directory with GitHub Pages to host it.
+- The page uses relative local asset paths plus config-driven external URLs so the same files work under both a GitHub Pages project URL and a custom domain such as `www.geeclaw.cn`.
+
 ### Tech Stack
 
 | Layer | Technology |

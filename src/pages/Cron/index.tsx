@@ -27,7 +27,7 @@ import {
   Task01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -371,7 +371,6 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
         <CardHeader className="flex flex-row items-start justify-between pb-2 shrink-0 px-6 pt-5">
           <div>
             <CardTitle className="modal-title">{job ? t('dialog.editTitle') : t('dialog.createTitle')}</CardTitle>
-            <CardDescription className="modal-description">{t('dialog.description')}</CardDescription>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="modal-close-button -mr-2 -mt-2">
             <X className="h-4 w-4" />
