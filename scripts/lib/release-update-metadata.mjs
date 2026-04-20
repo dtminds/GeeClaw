@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
 
 function normalizeBaseUrl(baseUrl) {
   return String(baseUrl || '').replace(/\/+$/, '');
@@ -33,30 +32,51 @@ function archiveUrlForZip({ baseUrl, tag, artifactDirectory, zipFilename }) {
   ].join('/');
 }
 
-function requireObject(value, metadataPath) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`Expected ${metadataPath} to contain a YAML object.`);
+function parseYamlValueLine(line) {
+  const match = line.match(/^(\s*(?:-\s*)?(?:url|path):\s*)(['"]?)([^'"\r\n]+)(\2)(\s*)$/);
+  if (!match) {
+    return null;
   }
-  return value;
+
+  return {
+    prefix: match[1],
+    quote: match[2],
+    value: match[3],
+    suffix: match[5],
+  };
 }
 
-function resolveZipFilename(updateInfo) {
-  const files = Array.isArray(updateInfo.files) ? updateInfo.files : [];
-  const zipFiles = files.filter((fileInfo) => fileInfo && isZipUrl(fileInfo.url));
+function resolveZipFilename(text, metadataPath) {
+  const zipBasenames = new Set();
 
-  if (zipFiles.length > 1) {
-    throw new Error(`Expected exactly one zip entry in files[], found ${zipFiles.length}.`);
+  for (const line of text.split('\n')) {
+    const parsed = parseYamlValueLine(line);
+    if (!parsed || !isZipUrl(parsed.value)) {
+      continue;
+    }
+
+    zipBasenames.add(basenameFromUrlLike(parsed.value));
   }
 
-  if (zipFiles.length === 1) {
-    return basenameFromUrlLike(zipFiles[0].url);
+  if (zipBasenames.size !== 1) {
+    throw new Error(`Expected ${metadataPath} to reference exactly one zip payload, found ${zipBasenames.size}.`);
   }
 
-  if (isZipUrl(updateInfo.path)) {
-    return basenameFromUrlLike(updateInfo.path);
-  }
+  return [...zipBasenames][0];
+}
 
-  throw new Error('Expected mac update metadata to reference exactly one zip payload.');
+function rewriteZipReferences(text, url) {
+  return text
+    .split('\n')
+    .map((line) => {
+      const parsed = parseYamlValueLine(line);
+      if (!parsed || !isZipUrl(parsed.value)) {
+        return line;
+      }
+
+      return `${parsed.prefix}${parsed.quote}${url}${parsed.quote}${parsed.suffix}`;
+    })
+    .join('\n');
 }
 
 export function rewriteMacUpdateMetadataToArchiveUrl({
@@ -65,39 +85,17 @@ export function rewriteMacUpdateMetadataToArchiveUrl({
   tag,
   artifactDirectory,
 }) {
-  const updateInfo = requireObject(
-    yaml.load(readFileSync(metadataPath, 'utf8')),
-    metadataPath,
-  );
-  const zipFilename = resolveZipFilename(updateInfo);
+  const metadataText = readFileSync(metadataPath, 'utf8');
+  const zipFilename = resolveZipFilename(metadataText, metadataPath);
   const url = archiveUrlForZip({
     baseUrl,
     tag,
     artifactDirectory,
     zipFilename,
   });
+  const rewrittenText = rewriteZipReferences(metadataText, url);
 
-  if (Array.isArray(updateInfo.files)) {
-    updateInfo.files = updateInfo.files.map((fileInfo) => {
-      if (!fileInfo || !isZipUrl(fileInfo.url)) {
-        return fileInfo;
-      }
-      return {
-        ...fileInfo,
-        url,
-      };
-    });
-  }
-
-  if (isZipUrl(updateInfo.path)) {
-    updateInfo.path = url;
-  }
-
-  writeFileSync(metadataPath, yaml.dump(updateInfo, {
-    lineWidth: -1,
-    noRefs: true,
-    sortKeys: false,
-  }), 'utf8');
+  writeFileSync(metadataPath, rewrittenText, 'utf8');
 
   return { url };
 }
