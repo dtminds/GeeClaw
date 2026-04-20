@@ -1,16 +1,16 @@
 :root {
   color-scheme: light;
-  --bg: #f7f4f0;
-  --text: #292929;
-  --text-mid: #6f6b68;
-  --text-soft: #9b958f;
-  --card-wrap: #e9e3de;
-  --card: rgba(253, 253, 252, 0.92);
-  --card-border: rgba(255, 255, 255, 0.8);
-  --button: #292929;
-  --button-hover: #171717;
-  --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.06);
-  --shadow-card: 0 8px 34px rgba(0, 0, 0, 0.08);
+  --bg: #eef3f8;
+  --text: #18212b;
+  --text-mid: #5f6c7c;
+  --text-soft: #8a96a8;
+  --card-wrap: #dbe4ef;
+  --card: rgba(250, 252, 255, 0.94);
+  --card-border: rgba(255, 255, 255, 0.92);
+  --button: #203042;
+  --button-hover: #162536;
+  --shadow-soft: 0 10px 24px rgba(28, 52, 84, 0.08);
+  --shadow-card: 0 10px 36px rgba(28, 52, 84, 0.1);
 }
 
 *,
@@ -58,15 +58,31 @@ img {
   height: clamp(420px, 58vw, 760px);
   transform: translateX(-50%);
   background-image:
-    linear-gradient(180deg, rgba(247, 244, 240, 0.12) 0%, rgba(247, 244, 240, 0.56) 60%, rgba(247, 244, 240, 0.98) 100%),
+    linear-gradient(180deg, rgba(238, 243, 248, 0.14) 0%, rgba(238, 243, 248, 0.62) 60%, rgba(238, 243, 248, 0.99) 100%),
     repeating-conic-gradient(at 1px 1px,
-      rgba(220, 210, 199, 0.54) 0deg 90deg,
+      rgba(171, 185, 203, 0.52) 0deg 90deg,
       transparent 90deg 180deg,
-      rgba(220, 210, 199, 0.54) 180deg 1turn);
+      rgba(171, 185, 203, 0.52) 180deg 1turn);
   background-size: auto, 48px 48px;
   pointer-events: none;
   -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.8) 56%, transparent 100%);
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.8) 56%, transparent 100%);
+  z-index: 0;
+}
+
+.page-shell::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -120px;
+  width: min(1320px, 100vw);
+  height: clamp(280px, 34vw, 460px);
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center top, rgba(207, 230, 255, 0.8) 0%, rgba(153, 199, 255, 0.28) 38%, rgba(153, 199, 255, 0) 74%);
+  filter: blur(38px);
+  pointer-events: none;
   z-index: 0;
 }
 
@@ -79,7 +95,7 @@ img {
   transform: translateX(-50%);
   border-radius: 999px;
   background:
-    radial-gradient(circle at center, rgba(252, 93, 30, 0.18), rgba(252, 93, 30, 0.08), rgba(252, 93, 30, 0) 72%);
+    radial-gradient(circle at center, rgba(82, 145, 255, 0.22), rgba(95, 177, 255, 0.1), rgba(95, 177, 255, 0) 72%);
   filter: blur(52px);
   pointer-events: none;
   z-index: 0;
@@ -101,9 +117,9 @@ img {
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.68);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(249, 252, 255, 0.82);
   backdrop-filter: blur(15px);
   box-shadow: var(--shadow-soft);
 }
@@ -138,7 +154,7 @@ img {
 .brand-divider {
   width: 1px;
   height: 12px;
-  background: #d6d0cb;
+  background: #c9d4df;
 }
 
 .brand-copy small {
@@ -155,7 +171,7 @@ img {
 
 .topbar-link {
   font-size: 14px;
-  color: #57524c;
+  color: #556375;
   margin-right: 8px;
   transition: color 0.18s ease;
 }
@@ -193,7 +209,7 @@ img {
   margin: 16px 0 0;
   font-size: 15px;
   line-height: 22px;
-  color: #4d4741;
+  color: #445265;
 }
 
 .hero-buttons {
@@ -229,7 +245,7 @@ img {
   font-size: 16px;
   line-height: 1.3;
   text-align: center;
-  box-shadow: 0 12px 26px rgba(41, 41, 41, 0.12);
+  box-shadow: 0 14px 28px rgba(22, 41, 69, 0.16);
   transition:
     transform 0.14s ease,
     background 0.14s ease,
@@ -251,9 +267,9 @@ img {
   width: min(100%, 1136px);
   margin: 95px auto 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.84);
   border-radius: 28px;
-  box-shadow: 0 8px 34px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 36px rgba(26, 46, 74, 0.12);
 }
 
 .workspace-shot img {
@@ -365,6 +381,12 @@ img {
     background-size: auto, 42px 42px;
   }
 
+  .page-shell::after {
+    top: -96px;
+    width: min(1180px, 100vw);
+    height: clamp(240px, 42vw, 360px);
+  }
+
   .workspace-shot {
     margin-top: 64px;
   }
@@ -393,6 +415,13 @@ img {
   .page-shell::before {
     height: clamp(300px, 84vw, 460px);
     background-size: auto, 36px 36px;
+  }
+
+  .page-shell::after {
+    top: -72px;
+    width: 100vw;
+    height: clamp(200px, 52vw, 280px);
+    filter: blur(28px);
   }
 
   .hero-copy h1 {
