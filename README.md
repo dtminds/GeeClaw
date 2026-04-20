@@ -348,6 +348,8 @@ GeeClaw includes a Playwright-driven Electron smoke test for the desktop shell o
 
 Before packaging a release, update [`resources/release-notes.md`](resources/release-notes.md). `electron-builder` embeds that Markdown into the auto-update metadata, and GeeClaw shows it in the startup update dialog when a newer version is available.
 
+Release CI publishes channel metadata and immutable payload archives separately on OSS. macOS channel feeds under `latest/darwin-*` or `beta/darwin-*` only contain `*-mac.yml`; the metadata is rewritten to point at the single archived zip in `releases/vX.Y.Z/release-mac-*` so OSS does not store duplicate macOS updater payloads per channel.
+
 ### OpenClaw Runtime Workflow
 
 For local development, initialize and refresh the runtime like this:
