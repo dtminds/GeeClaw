@@ -460,7 +460,6 @@ function buildAssistantContentParts(
         continue;
       }
       const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-      const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
       parts.push({
         type: 'tool',
         id: tool.id || tool.name,
@@ -468,7 +467,7 @@ function buildAssistantContentParts(
         input: tool.input,
         status: toolStatus?.status || 'running',
         durationMs: toolStatus?.durationMs,
-        result: formattedResult || toolStatus?.result,
+        result: toolStatus?.result,
       });
     }
     return parts;
@@ -512,7 +511,6 @@ function buildAssistantContentParts(
         continue;
       }
       const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
-      const formattedResult = formatToolResultText(toolStatus?.result, block.name);
       parts.push({
         type: 'tool',
         id: block.id || block.name,
@@ -520,7 +518,7 @@ function buildAssistantContentParts(
         input: block.input ?? block.arguments,
         status: toolStatus?.status || 'running',
         durationMs: toolStatus?.durationMs,
-        result: formattedResult || toolStatus?.result,
+        result: toolStatus?.result,
       });
       continue;
     }
@@ -532,10 +530,9 @@ function buildAssistantContentParts(
         if (part.type !== 'tool') continue;
         const isMatch = (block.id && (part.id === block.id)) || (block.name && part.name === block.name) || !block.id;
         if (!isMatch) continue;
-        const formattedResult = formatToolResultText(resultText || block.error?.trim() || '', part.name);
         parts[index] = mergeToolDisplayState(part, {
           status: getInlineToolResultStatus(block, resultText || block.error?.trim() || ''),
-          result: formattedResult || resultText || block.error?.trim() || undefined,
+          result: resultText || block.error?.trim() || undefined,
         });
         break;
       }
@@ -560,7 +557,6 @@ function buildAssistantContentParts(
     });
     if (alreadyRendered) continue;
     const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-    const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
     parts.push({
       type: 'tool',
       id: tool.id || tool.name,
@@ -568,7 +564,7 @@ function buildAssistantContentParts(
       input: tool.input,
       status: toolStatus?.status || 'running',
       durationMs: toolStatus?.durationMs,
-      result: formattedResult || toolStatus?.result,
+      result: toolStatus?.result,
     });
   }
 
