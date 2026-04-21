@@ -99,6 +99,7 @@ interface ParsedSkillReference {
 
 interface ComposerParseOptions {
   tokenizableSlashReferences?: string[];
+  tokenizableSlashSet?: ReadonlySet<string>;
 }
 
 interface SlashQueryState {
@@ -393,10 +394,7 @@ function createSkillTokenNodeFromReference(
   }
 
   const matchedSkill = findSkillByReference(normalizedSlug, skills);
-  const tokenizableSlashReferences = new Set(
-    (options.tokenizableSlashReferences || []).map((value) => normalizeSkillReference(value)),
-  );
-  const allowExplicitSlashReference = tokenizableSlashReferences.has(normalizeSkillReference(normalizedSlug));
+  const allowExplicitSlashReference = options.tokenizableSlashSet?.has(normalizeSkillReference(normalizedSlug));
 
   if (!matchedSkill && !reference.explicitMarker && !allowExplicitSlashReference) {
     return null;
@@ -479,11 +477,20 @@ function createComposerDocumentFromPlainText(
   skills: Skill[] = [],
   options: ComposerParseOptions = {},
 ): SerializedNode {
+  const normalizedOptions = options.tokenizableSlashSet
+    ? options
+    : {
+      ...options,
+      tokenizableSlashSet: new Set(
+        (options.tokenizableSlashReferences || []).map((value) => normalizeSkillReference(value)),
+      ),
+    };
+
   return {
     type: 'doc',
     content: text.split('\n').map((line) => ({
       type: 'paragraph',
-      content: parseLineIntoComposerNodes(line, skills, options),
+      content: parseLineIntoComposerNodes(line, skills, normalizedOptions),
     })),
   };
 }
