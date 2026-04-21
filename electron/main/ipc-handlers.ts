@@ -53,7 +53,6 @@ import { getRecentTokenUsageHistory } from '../utils/token-usage';
 import { getProviderService } from '../services/providers/provider-service';
 import {
   getOpenClawProviderKey,
-  syncDefaultProviderToRuntime,
   syncDeletedProviderApiKeyToRuntime,
   syncDeletedProviderToRuntime,
   syncProviderApiKeyToRuntime,
@@ -436,15 +435,6 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
 
             try {
               await providerService.setDefaultLegacyProvider(providerId);
-              const provider = await providerService.getLegacyProvider(providerId);
-              if (provider) {
-                try {
-                  await syncDefaultProviderToRuntime(providerId, gatewayManager);
-                } catch (err) {
-                  console.warn('Failed to set OpenClaw default model:', err);
-                }
-              }
-
               data = { success: true };
             } catch (error) {
               data = { success: false, error: String(error) };
@@ -1864,14 +1854,6 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
     logLegacyProviderChannel('provider:setDefault');
     try {
       await providerService.setDefaultLegacyProvider(providerId);
-
-      // Update OpenClaw config to use this provider's default model
-      try {
-        await syncDefaultProviderToRuntime(providerId, gatewayManager);
-      } catch (err) {
-        console.warn('Failed to set OpenClaw default model:', err);
-      }
-
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };

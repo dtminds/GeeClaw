@@ -7,6 +7,7 @@ const {
   getDefaultAgentModelConfigMock,
   getOpenClawProviderKeyForTypeMock,
   getProviderServiceMock,
+  syncDefaultProviderToRuntimeMock,
   syncDeletedProviderApiKeyToRuntimeMock,
   syncAllAgentConfigToOpenClawMock,
   syncUpdatedProviderToRuntimeMock,
@@ -16,6 +17,7 @@ const {
   getDefaultAgentModelConfigMock: vi.fn(),
   getOpenClawProviderKeyForTypeMock: vi.fn(),
   getProviderServiceMock: vi.fn(),
+  syncDefaultProviderToRuntimeMock: vi.fn(),
   syncDeletedProviderApiKeyToRuntimeMock: vi.fn(),
   syncAllAgentConfigToOpenClawMock: vi.fn(),
   syncUpdatedProviderToRuntimeMock: vi.fn(),
@@ -48,7 +50,7 @@ vi.mock('@electron/services/providers/provider-service', () => ({
 }));
 
 vi.mock('@electron/services/providers/provider-runtime-sync', () => ({
-  syncDefaultProviderToRuntime: vi.fn(),
+  syncDefaultProviderToRuntime: (...args: unknown[]) => syncDefaultProviderToRuntimeMock(...args),
   syncDeletedProviderApiKeyToRuntime: (...args: unknown[]) => syncDeletedProviderApiKeyToRuntimeMock(...args),
   syncDeletedProviderToRuntime: vi.fn(),
   syncProviderApiKeyToRuntime: vi.fn(),
@@ -83,6 +85,7 @@ describe('handleProviderRoutes', () => {
       mockFn.mockReset();
     });
     getProviderServiceMock.mockReturnValue(providerServiceStub);
+    syncDefaultProviderToRuntimeMock.mockReset();
     syncDeletedProviderApiKeyToRuntimeMock.mockReset();
     syncAllAgentConfigToOpenClawMock.mockReset();
     syncUpdatedProviderToRuntimeMock.mockReset();
@@ -175,6 +178,48 @@ describe('handleProviderRoutes', () => {
         blockingRefs: ['openai/gpt-4.1-mini', 'openai/sora-2'],
         error: 'BLOCKED_BY_FALLBACK:openai/gpt-4.1-mini,openai/sora-2',
       }),
+    );
+  });
+
+  it('treats default provider account updates as account preference only', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    parseJsonBodyMock.mockResolvedValueOnce({ accountId: 'openrouter-account' });
+
+    const handled = await handleProviderRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/provider-accounts/default'),
+      { gatewayManager: {} } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(providerServiceStub.setDefaultAccount).toHaveBeenCalledWith('openrouter-account');
+    expect(syncDefaultProviderToRuntimeMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      { success: true },
+    );
+  });
+
+  it('treats legacy default provider updates as account preference only', async () => {
+    const { handleProviderRoutes } = await import('@electron/api/routes/providers');
+    parseJsonBodyMock.mockResolvedValueOnce({ providerId: 'openrouter-account' });
+
+    const handled = await handleProviderRoutes(
+      { method: 'PUT' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1/api/providers/default'),
+      { gatewayManager: {} } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(providerServiceStub.setDefaultLegacyProvider).toHaveBeenCalledWith('openrouter-account');
+    expect(syncDefaultProviderToRuntimeMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      200,
+      { success: true },
     );
   });
 
