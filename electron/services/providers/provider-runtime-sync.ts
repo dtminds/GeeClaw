@@ -365,20 +365,9 @@ async function findProviderAccountOwningModelRef(
   }
 
   const accounts = (await listProviderAccounts()).filter((account) => account.enabled);
-  const matches = accounts.filter((account) => modelRefBelongsToProvider({
-    id: account.id,
-    name: account.label,
-    type: account.vendorId,
-    baseUrl: account.baseUrl,
-    apiProtocol: account.apiProtocol,
-    models: account.models,
-    model: account.model,
-    fallbackModels: account.fallbackModels,
-    metadata: account.metadata,
-    enabled: account.enabled,
-    createdAt: account.createdAt,
-    updatedAt: account.updatedAt,
-  }, trimmedModelRef));
+  const matches = accounts.filter((account) => (
+    modelRefBelongsToProvider(providerAccountToConfig(account), trimmedModelRef)
+  ));
   if (matches.length === 0) {
     return null;
   }

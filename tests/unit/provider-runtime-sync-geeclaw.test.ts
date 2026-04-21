@@ -66,7 +66,7 @@ vi.mock('@electron/utils/logger', () => ({
   },
 }));
 
-import { getProviderAccount, listProviderAccounts } from '@electron/services/providers/provider-store';
+import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {
   syncAllProviderAuthToRuntime,
@@ -112,12 +112,31 @@ function makeAccount(overrides: Partial<ProviderAccount> = {}): ProviderAccount 
   };
 }
 
+function providerAccountToConfigForTest(account: ProviderAccount): ProviderConfig {
+  return {
+    id: account.id,
+    name: account.label,
+    type: account.vendorId,
+    baseUrl: account.baseUrl,
+    apiProtocol: account.apiProtocol,
+    models: account.models,
+    model: account.model,
+    fallbackModels: account.fallbackModels,
+    fallbackProviderIds: account.fallbackAccountIds,
+    metadata: account.metadata,
+    enabled: account.enabled,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  };
+}
+
 describe('GeeClaw provider runtime sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     vi.mocked(getProvider).mockResolvedValue(makeProvider());
     vi.mocked(getProviderAccount).mockResolvedValue(makeAccount());
+    vi.mocked(providerAccountToConfig).mockImplementation(providerAccountToConfigForTest);
     vi.mocked(getProviderSecret).mockResolvedValue({
       type: 'api_key',
       accountId: 'geeclaw-account',

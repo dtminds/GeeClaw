@@ -63,7 +63,7 @@ vi.mock('@electron/utils/logger', () => ({
 }));
 
 import type { ProviderAccount } from '@electron/shared/providers/types';
-import { getProviderAccount, listProviderAccounts } from '@electron/services/providers/provider-store';
+import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {
   syncDefaultProviderToRuntime,
@@ -119,11 +119,30 @@ function makeAccount(overrides: Partial<ProviderAccount> = {}): ProviderAccount 
   };
 }
 
+function providerAccountToConfigForTest(account: ProviderAccount): ProviderConfig {
+  return {
+    id: account.id,
+    name: account.label,
+    type: account.vendorId,
+    baseUrl: account.baseUrl,
+    apiProtocol: account.apiProtocol,
+    models: account.models,
+    model: account.model,
+    fallbackModels: account.fallbackModels,
+    fallbackProviderIds: account.fallbackAccountIds,
+    metadata: account.metadata,
+    enabled: account.enabled,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  };
+}
+
 describe('provider runtime sync for browser OAuth', () => {
   beforeEach(() => {
     vi.mocked(getProvider).mockReset();
     vi.mocked(getProviderAccount).mockReset();
     vi.mocked(listProviderAccounts).mockReset();
+    vi.mocked(providerAccountToConfig).mockReset();
     vi.mocked(getApiKey).mockReset();
     vi.mocked(getProviderSecret).mockReset();
     vi.mocked(getDefaultAgentModelConfig).mockReset();
@@ -139,6 +158,7 @@ describe('provider runtime sync for browser OAuth', () => {
     vi.mocked(getProvider).mockResolvedValue(makeProvider());
     vi.mocked(getProviderAccount).mockResolvedValue(makeAccount());
     vi.mocked(listProviderAccounts).mockResolvedValue([]);
+    vi.mocked(providerAccountToConfig).mockImplementation(providerAccountToConfigForTest);
     vi.mocked(getApiKey).mockResolvedValue(null);
     vi.mocked(getProviderSecret).mockResolvedValue({
       type: 'oauth',
