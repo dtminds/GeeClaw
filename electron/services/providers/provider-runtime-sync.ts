@@ -5,6 +5,7 @@ import {
   resolveEffectiveProviderModelEntries,
 } from '../../shared/providers/config-models';
 import { getProviderDefinition } from '../../shared/providers/registry';
+import type { ProviderAccount } from '../../shared/providers/types';
 import { getProviderAccount, listProviderAccounts, providerAccountToConfig } from './provider-store';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
@@ -221,7 +222,7 @@ export function getProviderCatalogModelRefs(config: ProviderConfig): string[] {
 }
 
 export function getProviderCatalogModelIds(config: ProviderConfig): string[] {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
+  const providerKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
   return getProviderCatalogModelRefs(config)
     .map((modelRef) => (
       modelRef.startsWith(`${providerKey}/`)
@@ -231,7 +232,7 @@ export function getProviderCatalogModelIds(config: ProviderConfig): string[] {
 }
 
 export function getProviderCatalogModelEntries(config: ProviderConfig) {
-  const providerKey = getOpenClawProviderKey(config.type, config.id);
+  const providerKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
 
   return resolveEffectiveProviderModelEntries(config, getProviderDefinition(config.type)).map((model) => {
     const normalizedId = model.id.startsWith(`${providerKey}/`)
@@ -320,12 +321,96 @@ function mapModelRefToRuntimeProvider(
     return undefined;
   }
 
-  const configuredProviderKey = getOpenClawProviderKey(config.type, config.id);
+  const configuredProviderKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
   if (modelRef.startsWith(`${configuredProviderKey}/`)) {
     return `${runtimeProviderKey}/${modelRef.slice(configuredProviderKey.length + 1)}`;
   }
 
   return modelRef;
+}
+
+function modelRefBelongsToProvider(
+  config: ProviderConfig,
+  modelRef?: string | null,
+): boolean {
+  const trimmedModelRef = modelRef?.trim();
+  if (!trimmedModelRef) {
+    return false;
+  }
+
+  const configuredProviderKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
+  if (trimmedModelRef.includes('/')) {
+    return trimmedModelRef.startsWith(`${configuredProviderKey}/`);
+  }
+
+  const providerDefinition = getProviderDefinition(config.type);
+  const declaredModelIds = new Set(
+    resolveEffectiveProviderModelEntries(config, providerDefinition).map((model) => model.id),
+  );
+  const fallbackDefaultModel = getProviderDefaultModel(config.type);
+  if (fallbackDefaultModel) {
+    declaredModelIds.add(fallbackDefaultModel);
+  }
+
+  return declaredModelIds.has(trimmedModelRef);
+}
+
+async function findProviderAccountOwningModelRef(
+  modelRef: string | null,
+  options?: { preferredAccountId?: string },
+): Promise<ProviderAccount | null> {
+  const trimmedModelRef = modelRef?.trim();
+  if (!trimmedModelRef) {
+    return null;
+  }
+
+  const accounts = (await listProviderAccounts()).filter((account) => account.enabled);
+  const matches = accounts.filter((account) => modelRefBelongsToProvider({
+    id: account.id,
+    name: account.label,
+    type: account.vendorId,
+    baseUrl: account.baseUrl,
+    apiProtocol: account.apiProtocol,
+    models: account.models,
+    model: account.model,
+    fallbackModels: account.fallbackModels,
+    metadata: account.metadata,
+    enabled: account.enabled,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  }, trimmedModelRef));
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const preferredAccountId = options?.preferredAccountId?.trim();
+  if (preferredAccountId) {
+    const preferredMatch = matches.find((account) => account.id === preferredAccountId);
+    if (preferredMatch) {
+      return preferredMatch;
+    }
+  }
+
+  return matches[0] ?? null;
+}
+
+export async function syncExplicitDefaultModelToRuntime(
+  gatewayManager?: GatewayManager,
+): Promise<void> {
+  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
+  if (!modelSnapshot.primary) {
+    return;
+  }
+
+  const preferredAccountId = !modelSnapshot.primary.includes('/')
+    ? await getDefaultProvider()
+    : undefined;
+  const owner = await findProviderAccountOwningModelRef(modelSnapshot.primary, { preferredAccountId });
+  if (!owner) {
+    return;
+  }
+
+  await syncDefaultProviderToRuntime(owner.id, gatewayManager);
 }
 
 function mapFallbackRefsToRuntimeProvider(
@@ -649,30 +734,7 @@ export async function syncUpdatedProviderToRuntime(
   }
 
   const ock = result.context.runtimeProviderKey;
-  const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
-
-  const defaultProviderId = await getDefaultProvider();
-  if (defaultProviderId === config.id && modelSnapshot.primary) {
-    const modelOverride = mapModelRefToRuntimeProvider(config, ock, modelSnapshot.primary);
-    const fallbacks = mapFallbackRefsToRuntimeProvider(config, ock, modelSnapshot.fallbacks);
-    if (isGeeClawProvider(config)) {
-      const baseUrl = getGeeClawProxyBaseUrl();
-      if (baseUrl) {
-        await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-          baseUrl,
-          api: 'openai-completions',
-          apiKeyEnv: GEECLAW_ENV_VAR,
-        }, fallbacks);
-      }
-    } else if (!isUnregisteredProviderType(config.type)) {
-      await setOpenClawDefaultModel(ock, modelOverride, fallbacks);
-    } else {
-      await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, config.apiProtocol || 'openai-completions'),
-        api: config.apiProtocol || 'openai-completions',
-      }, fallbacks);
-    }
-  }
+  await syncExplicitDefaultModelToRuntime(undefined);
 
   scheduleGatewayRestart(
     gatewayManager,
@@ -737,8 +799,13 @@ export async function syncDefaultProviderToRuntime(
     const runtimeProviderKey = await resolveRuntimeProviderKey(provider);
     const providerKey = await resolveProviderApiKey(provider, undefined);
     const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
-    const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.primary);
-    const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.fallbacks);
+    const shouldSyncDefaultModel = modelRefBelongsToProvider(provider, modelSnapshot.primary);
+    const runtimePrimaryModel = shouldSyncDefaultModel
+      ? mapModelRefToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.primary)
+      : undefined;
+    const runtimeFallbacks = shouldSyncDefaultModel
+      ? mapFallbackRefsToRuntimeProvider(provider, runtimeProviderKey, modelSnapshot.fallbacks)
+      : modelSnapshot.fallbacks;
     const baseUrl = getGeeClawProxyBaseUrl();
 
     if (!provider.enabled || !providerKey || !baseUrl) {
@@ -777,8 +844,13 @@ export async function syncDefaultProviderToRuntime(
   const providerKey = await getApiKey(providerId);
   const trimmedProviderKey = providerKey?.trim() ?? '';
   const modelSnapshot = readDefaultChatModelSelection(await getDefaultAgentModelConfig());
-  const runtimePrimaryModel = mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary);
-  const runtimeFallbacks = mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks);
+  const shouldSyncDefaultModel = modelRefBelongsToProvider(provider, modelSnapshot.primary);
+  const runtimePrimaryModel = shouldSyncDefaultModel
+    ? mapModelRefToRuntimeProvider(provider, ock, modelSnapshot.primary)
+    : undefined;
+  const runtimeFallbacks = shouldSyncDefaultModel
+    ? mapFallbackRefsToRuntimeProvider(provider, ock, modelSnapshot.fallbacks)
+    : modelSnapshot.fallbacks;
   const oauthTypes = ['minimax-portal', 'minimax-portal-cn'];
   const browserOAuthRuntimeProvider = await getBrowserOAuthRuntimeProvider(provider);
   const isOAuthProvider = (oauthTypes.includes(provider.type) && !trimmedProviderKey) || Boolean(browserOAuthRuntimeProvider);
@@ -913,11 +985,8 @@ export async function syncAllProviderRuntimeConfigToOpenClaw(): Promise<void> {
   // 3. Sync the default provider's primary model (agents.defaults.model).
   //    Pass no gatewayManager so it writes without scheduling a restart.
   try {
-    const defaultProviderId = await getDefaultProvider();
-    if (defaultProviderId) {
-      await syncDefaultProviderToRuntime(defaultProviderId, undefined);
-    }
+    await syncExplicitDefaultModelToRuntime(undefined);
   } catch (err) {
-    logger.warn('[startup-sync] Failed to sync default provider model to openclaw.json:', err);
+    logger.warn('[startup-sync] Failed to sync explicit default model to openclaw.json:', err);
   }
 }

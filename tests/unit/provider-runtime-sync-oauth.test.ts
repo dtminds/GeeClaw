@@ -63,10 +63,11 @@ vi.mock('@electron/utils/logger', () => ({
 }));
 
 import type { ProviderAccount } from '@electron/shared/providers/types';
-import { getProviderAccount } from '@electron/services/providers/provider-store';
+import { getProviderAccount, listProviderAccounts } from '@electron/services/providers/provider-store';
 import { getProviderSecret } from '@electron/services/secrets/secret-store';
 import {
   syncDefaultProviderToRuntime,
+  syncExplicitDefaultModelToRuntime,
   syncProviderApiKeyToRuntime,
   syncSavedProviderToRuntime,
   syncAllProviderAuthToRuntime,
@@ -120,10 +121,24 @@ function makeAccount(overrides: Partial<ProviderAccount> = {}): ProviderAccount 
 
 describe('provider runtime sync for browser OAuth', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.mocked(getProvider).mockReset();
+    vi.mocked(getProviderAccount).mockReset();
+    vi.mocked(listProviderAccounts).mockReset();
+    vi.mocked(getApiKey).mockReset();
+    vi.mocked(getProviderSecret).mockReset();
+    vi.mocked(getDefaultAgentModelConfig).mockReset();
+    vi.mocked(removeProviderKeyFromOpenClaw).mockReset();
+    vi.mocked(saveOAuthTokenToOpenClaw).mockReset();
+    vi.mocked(saveProviderKeyToOpenClaw).mockReset();
+    vi.mocked(removeProviderFromOpenClaw).mockReset();
+    vi.mocked(setOpenClawDefaultModel).mockReset();
+    vi.mocked(setOpenClawDefaultModelWithOverride).mockReset();
+    vi.mocked(syncProviderConfigToOpenClaw).mockReset();
+    vi.mocked(updateAgentModelProvider).mockReset();
 
     vi.mocked(getProvider).mockResolvedValue(makeProvider());
     vi.mocked(getProviderAccount).mockResolvedValue(makeAccount());
+    vi.mocked(listProviderAccounts).mockResolvedValue([]);
     vi.mocked(getApiKey).mockResolvedValue(null);
     vi.mocked(getProviderSecret).mockResolvedValue({
       type: 'oauth',
@@ -585,7 +600,7 @@ describe('provider runtime sync for browser OAuth', () => {
       baseUrl: 'http://localhost:11434/v1',
     });
     vi.mocked(getProvider).mockResolvedValue(ollamaProvider);
-    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValue({
       model: {
         configured: true,
         primary: 'ollama-ollamafd/qwen3:30b',
@@ -628,25 +643,25 @@ describe('provider runtime sync for browser OAuth', () => {
     );
   });
 
-  it('keeps the explicit override path when updating the default Ollama provider', async () => {
-    const ollamaProvider = makeProvider({
-      id: 'ollamafd',
-      name: 'Ollama',
-      type: 'ollama',
-      model: 'qwen3:30b',
-      baseUrl: 'http://localhost:11434/v1',
-    });
-    vi.mocked(getDefaultProvider).mockResolvedValue('ollamafd');
-    vi.mocked(getProviderSecret).mockResolvedValue({
-      type: 'local',
-      accountId: 'ollamafd',
-      apiKey: 'ollama-local',
-    });
+  it('does not rebind a default model ref owned by another provider when syncing the default provider', async () => {
+    vi.mocked(getProvider).mockResolvedValue(makeProvider({
+      id: 'openrouter-account',
+      name: 'OpenRouter',
+      type: 'openrouter',
+    }));
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      id: 'openrouter-account',
+      vendorId: 'openrouter',
+      label: 'OpenRouter',
+      authMode: 'api_key',
+      isDefault: true,
+    }));
+    vi.mocked(getApiKey).mockResolvedValue('sk-openrouter');
     vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
       model: {
         configured: true,
-        primary: 'ollama-ollamafd/qwen3:30b',
-        fallbacks: ['anthropic/claude-sonnet-4-5'],
+        primary: 'nvidia-nim/minimaxai/minimax-m2.7',
+        fallbacks: ['openrouter/google/gemini-3-flash-preview'],
       },
       imageModel: {
         configured: false,
@@ -668,21 +683,171 @@ describe('provider runtime sync for browser OAuth', () => {
         primary: null,
         fallbacks: [],
       },
-      primary: 'ollama-ollamafd/qwen3:30b',
-      fallbacks: ['anthropic/claude-sonnet-4-5'],
+      primary: 'nvidia-nim/minimaxai/minimax-m2.7',
+      fallbacks: ['openrouter/google/gemini-3-flash-preview'],
     } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
 
-    await syncUpdatedProviderToRuntime(ollamaProvider, undefined);
+    await syncDefaultProviderToRuntime('openrouter-account');
 
-    expect(setOpenClawDefaultModelWithOverride).toHaveBeenCalledWith(
-      'ollama-ollamafd',
-      'ollama-ollamafd/qwen3:30b',
-      expect.objectContaining({
-        baseUrl: 'http://localhost:11434/v1',
-        api: 'openai-completions',
-      }),
-      ['anthropic/claude-sonnet-4-5'],
-    );
     expect(setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+  });
+
+  it('does not rebind a foreign default model ref when updating the default provider config', async () => {
+    const openrouterProvider = makeProvider({
+      id: 'openrouter-account',
+      name: 'OpenRouter',
+      type: 'openrouter',
+    });
+
+    vi.mocked(getDefaultProvider).mockResolvedValue('openrouter-account');
+    vi.mocked(getProviderAccount).mockResolvedValue(makeAccount({
+      id: 'openrouter-account',
+      vendorId: 'openrouter',
+      label: 'OpenRouter',
+      authMode: 'api_key',
+      isDefault: true,
+    }));
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValueOnce({
+      model: {
+        configured: true,
+        primary: 'nvidia-nim/minimaxai/minimax-m2.7',
+        fallbacks: ['openrouter/google/gemini-3-flash-preview'],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'nvidia-nim/minimaxai/minimax-m2.7',
+      fallbacks: ['openrouter/google/gemini-3-flash-preview'],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
+
+    await syncUpdatedProviderToRuntime(openrouterProvider, undefined);
+
+    expect(setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+  });
+
+  it('syncs the explicit default model owner instead of following the default account id', async () => {
+    const { listProviderAccounts } = await import('@electron/services/providers/provider-store');
+
+    vi.mocked(getDefaultProvider).mockResolvedValue('openrouter-account');
+    vi.mocked(listProviderAccounts).mockResolvedValue([
+      makeAccount({
+        id: 'openai-account',
+        vendorId: 'openai',
+        label: 'OpenAI',
+        authMode: 'oauth_browser',
+        isDefault: false,
+      }),
+      makeAccount({
+        id: 'openrouter-account',
+        vendorId: 'openrouter',
+        label: 'OpenRouter',
+        authMode: 'api_key',
+        isDefault: true,
+      }),
+    ]);
+    vi.mocked(getProvider).mockImplementation(async (providerId: string) => {
+      if (providerId === 'openai-account') {
+        return makeProvider({
+          id: 'openai-account',
+          name: 'OpenAI',
+          type: 'openai',
+        });
+      }
+      if (providerId === 'openrouter-account') {
+        return makeProvider({
+          id: 'openrouter-account',
+          name: 'OpenRouter',
+          type: 'openrouter',
+        });
+      }
+      return null;
+    });
+    vi.mocked(getProviderAccount).mockImplementation(async (accountId: string) => {
+      if (accountId === 'openai-account') {
+        return makeAccount({
+          id: 'openai-account',
+          vendorId: 'openai',
+          label: 'OpenAI',
+          authMode: 'oauth_browser',
+          isDefault: false,
+        });
+      }
+      if (accountId === 'openrouter-account') {
+        return makeAccount({
+          id: 'openrouter-account',
+          vendorId: 'openrouter',
+          label: 'OpenRouter',
+          authMode: 'api_key',
+          isDefault: true,
+        });
+      }
+      return null;
+    });
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValue({
+      model: {
+        configured: true,
+        primary: 'openai/gpt-5.4',
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'openai/gpt-5.4',
+      fallbacks: [],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
+
+    await syncExplicitDefaultModelToRuntime();
+
+    expect(getDefaultAgentModelConfig).toHaveBeenCalled();
+    expect(listProviderAccounts).toHaveBeenCalled();
+    expect(getProvider).toHaveBeenCalledWith('openai-account');
+    expect(getProviderAccount).toHaveBeenCalledWith('openai-account');
+    expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
+      'openai-codex',
+      'openai-codex/gpt-5.4',
+      [],
+    );
+    expect(setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+    expect(setOpenClawDefaultModel).not.toHaveBeenCalledWith(
+      'openrouter',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

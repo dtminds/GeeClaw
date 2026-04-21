@@ -1116,6 +1116,22 @@ function collectReferencedAgentModelRefs(config: AgentConfigDocument): string[] 
   );
 }
 
+function looksLikeNestedProviderModelRef(
+  modelId: string,
+  providerKey: string,
+  knownProviderKeys: Set<string>,
+): boolean {
+  for (const candidateProviderKey of knownProviderKeys) {
+    if (candidateProviderKey === providerKey) {
+      continue;
+    }
+    if (modelId.startsWith(`${candidateProviderKey}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function reconcileReferencedBuiltinModelRefs(
   config: AgentConfigDocument,
 ): Promise<void> {
@@ -1125,6 +1141,9 @@ async function reconcileReferencedBuiltinModelRefs(
   }
 
   const providers = await listProviderAccounts();
+  const knownProviderKeys = new Set(
+    providers.map((provider) => getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata)),
+  );
 
   await Promise.all(providers.map(async (provider) => {
     const providerKey = getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata);
@@ -1155,6 +1174,9 @@ async function reconcileReferencedBuiltinModelRefs(
 
     let changed = false;
     for (const modelId of referencedIds) {
+      if (looksLikeNestedProviderModelRef(modelId, providerKey, knownProviderKeys)) {
+        continue;
+      }
       if (effectiveIds.has(modelId) || builtinIds.has(modelId)) {
         continue;
       }

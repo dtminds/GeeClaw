@@ -10,7 +10,6 @@ import { browserOAuthManager, type BrowserOAuthProviderType } from '../../utils/
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 import {
-  syncDefaultProviderToRuntime,
   syncDeletedProviderApiKeyToRuntime,
   syncDeletedProviderToRuntime,
   syncProviderApiKeyToRuntime,
@@ -101,7 +100,6 @@ export async function handleProviderRoutes(
     try {
       const body = await parseJsonBody<{ accountId: string }>(req);
       await providerService.setDefaultAccount(body.accountId);
-      await syncDefaultProviderToRuntime(body.accountId, ctx.gatewayManager);
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
@@ -228,7 +226,6 @@ export async function handleProviderRoutes(
     try {
       const body = await parseJsonBody<{ providerId: string }>(req);
       await providerService.setDefaultLegacyProvider(body.providerId);
-      await syncDefaultProviderToRuntime(body.providerId, ctx.gatewayManager);
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });

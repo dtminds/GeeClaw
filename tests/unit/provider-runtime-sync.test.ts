@@ -88,5 +88,8 @@ describe('provider runtime model catalogs', () => {
     expect(getProviderCatalogModelRefs(config)).toEqual([
       'my-provider/gpt-4.1',
     ]);
+    expect(getProviderCatalogModelIds(config)).toEqual([
+      'gpt-4.1',
+    ]);
   });
 });

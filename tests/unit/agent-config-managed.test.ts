@@ -1192,6 +1192,73 @@ describe('managed agent config domain', () => {
     }
   });
 
+  it('does not persist nested foreign provider refs into another provider model catalog', async () => {
+    const { configDir, providerStoreState, agentConfig } = await setupManagedPresetFixture({
+      providerAccounts: {
+        'openrouter-account': {
+          id: 'openrouter-account',
+          vendorId: 'openrouter',
+          label: 'OpenRouter',
+          authMode: 'api_key',
+          models: ['google/gemini-3-flash-preview'],
+          enabled: true,
+          isDefault: true,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+        'custom-nvidia-account': {
+          id: 'custom-nvidia-account',
+          vendorId: 'custom',
+          label: 'NVIDIA NIM',
+          authMode: 'api_key',
+          models: ['minimaxai/minimax-m2.7'],
+          metadata: {
+            runtimeProviderKey: 'nvidia-nim',
+          },
+          enabled: true,
+          isDefault: false,
+          createdAt: '2026-04-13T00:00:00.000Z',
+          updatedAt: '2026-04-13T00:00:00.000Z',
+        },
+      },
+      defaultProviderAccountId: 'openrouter-account',
+    });
+
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      agents: {
+        defaults: {
+          workspace: '/managed/workspace',
+          model: {
+            primary: 'openrouter/nvidia-nim/minimaxai/minimax-m2.7',
+            fallbacks: [],
+          },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    await expect(agentConfig.getDefaultAgentModelConfig()).resolves.toMatchObject({
+      model: {
+        configured: true,
+        primary: 'openrouter/nvidia-nim/minimaxai/minimax-m2.7',
+        fallbacks: [],
+      },
+    });
+
+    expect(providerStoreState.providerAccounts).not.toMatchObject({
+      'openrouter-account': {
+        metadata: {
+          modelCatalog: {
+            customModels: expect.arrayContaining([
+              expect.objectContaining({
+                id: 'nvidia-nim/minimaxai/minimax-m2.7',
+              }),
+            ]),
+          },
+        },
+      },
+    });
+  });
+
   it('clears active managed restrictions after unmanage', async () => {
     const { agentConfig, homeDir } = await setupManagedPresetFixture();
     await agentConfig.installMarketplaceAgent('stockexpert');
