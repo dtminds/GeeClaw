@@ -26,8 +26,10 @@ import { useProviderStore } from '@/stores/providers';
 import { useSkillsStore } from '@/stores/skills';
 import {
   buildProviderModelRef,
+  findModelSelectionHint,
   getModelDisplayLabel,
   isModelMenuItemSelected,
+  normalizeModelValue,
   pendingModelSelectionMatchesSession,
 } from './model-selection';
 import type { ApprovalPolicy, ToolPermission } from '@/stores/settings';
@@ -659,6 +661,7 @@ export const ChatInput = memo(function ChatInput({
   const gatewayStatusState = useGatewayStore((s) => s.status.state);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
+  const messages = useChatStore((s) => s.messages);
   const pendingComposerSeed = useChatStore((s) => s.pendingComposerSeed);
   const consumePendingComposerSeed = useChatStore((s) => s.consumePendingComposerSeed);
   const currentToolPermission = safetySettings?.toolPermission ?? 'default';
@@ -956,7 +959,31 @@ export const ChatInput = memo(function ChatInput({
       return left.providerName.localeCompare(right.providerName);
     });
   }, [defaultProviderAccountId, providerListItems]);
-  const activeModelValue = pendingModelSelection ?? sessionModel;
+  const bareModelOptionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const group of providerModelGroups) {
+      for (const model of group.models) {
+        const normalizedModel = normalizeModelValue(model);
+        if (!normalizedModel) {
+          continue;
+        }
+
+        counts.set(normalizedModel, (counts.get(normalizedModel) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }, [providerModelGroups]);
+  const availableModelRefs = useMemo(
+    () => providerModelGroups.flatMap((group) => group.models.map((model) => buildProviderModelRef(group.runtimeProviderId, model))),
+    [providerModelGroups],
+  );
+  const historicalModelSelectionHint = useMemo(
+    () => findModelSelectionHint(messages, sessionModel, availableModelRefs),
+    [availableModelRefs, messages, sessionModel],
+  );
+  const activeModelValue = pendingModelSelection ?? historicalModelSelectionHint ?? sessionModel;
   const activeModelLabel = getModelDisplayLabel(activeModelValue);
 
   const hasInlineSkillToken = editorText.includes('[[use skill:');
@@ -1746,7 +1773,12 @@ export const ChatInput = memo(function ChatInput({
                             className="mx-1 flex cursor-default items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
                           >
                             <span className="truncate">{model}</span>
-                            {isModelMenuItemSelected(activeModelValue, group.runtimeProviderId, model) && (
+                            {isModelMenuItemSelected(
+                              activeModelValue,
+                              group.runtimeProviderId,
+                              model,
+                              bareModelOptionCounts.get(normalizeModelValue(model)) ?? 0,
+                            ) && (
                               <Check className="ml-3 h-3.5 w-3.5 shrink-0" />
                             )}
                           </DropdownMenu.Item>
