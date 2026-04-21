@@ -345,6 +345,56 @@ describe('chat live rendering', () => {
     expect(sendMessageMock).toHaveBeenCalledWith('拒绝 evo-2026-04-21-0003');
   });
 
+  it('sends English decision commands from evolution proposal cards outside Chinese locale', async () => {
+    mockLanguage = 'en-US';
+
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-approve-en',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-approve-en',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0004',
+                description: 'English approval path',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Policy',
+                    content: 'Approve should send the English command',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-approve-en',
+              toolCallId: 'tool-evolution-approve-en',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-21-0004","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Approve evolution'));
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith('approve evo-2026-04-21-0004');
+  });
+
   it('does not render evolution proposal cards when delivery mode is text and tool calls are hidden', () => {
     const { container } = render(
       <ChatMessage
