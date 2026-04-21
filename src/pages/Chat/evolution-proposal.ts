@@ -35,7 +35,18 @@ function parseJsonLikeValue(value: unknown): unknown {
     return value;
   }
 
+  const fencedBlockMatches = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/gi);
+  const fencedCandidates = fencedBlockMatches
+    ? fencedBlockMatches
+        .map((block) => {
+          const match = block.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+          return match?.[1]?.trim() || '';
+        })
+        .filter(Boolean)
+    : [];
+
   const candidates = [
+    ...fencedCandidates,
     trimmed,
     trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
   ];
