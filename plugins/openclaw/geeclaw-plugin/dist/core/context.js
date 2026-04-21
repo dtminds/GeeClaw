@@ -12,6 +12,12 @@ import { createLogger } from './logger.js';
 export function createGeeClawContext(options) {
     const { api, packageId, hookProxy, fetchChain, configCenter, gatewayRegistry, httpRouteRegistry, commandRegistry, reporter, getPackageApi, } = options;
     const logger = createLogger(packageId);
+    function getToolLogName(tool, toolOptions) {
+        if (typeof tool === 'function') {
+            return toolOptions?.name ?? tool.name ?? 'anonymous-tool';
+        }
+        return tool.name;
+    }
     const ctx = {
         logger,
         onHook(event, handler, hookOptions) {
@@ -35,10 +41,10 @@ export function createGeeClawContext(options) {
         registerTool(tool, toolOptions) {
             if (api.registerTool) {
                 api.registerTool(tool, toolOptions);
-                logger.info(`registered tool: ${tool.name}`);
+                logger.info(`registered tool: ${getToolLogName(tool, toolOptions)}`);
             }
             else {
-                logger.warn(`api.registerTool not available, skipping: ${tool.name}`);
+                logger.warn(`api.registerTool not available, skipping: ${getToolLogName(tool, toolOptions)}`);
             }
         },
         registerService(service) {

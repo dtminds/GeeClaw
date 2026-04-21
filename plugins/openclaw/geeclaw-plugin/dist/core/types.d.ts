@@ -185,10 +185,31 @@ export interface ToolDefinition {
     inputSchema: Record<string, unknown>;
     handler: (params: Record<string, unknown>) => Promise<unknown>;
 }
+/** OpenClaw 原生 Tool 工厂上下文（按需放宽，保持透传） */
+export interface NativeToolFactoryContext {
+    messageChannel?: string;
+    sessionKey?: string;
+    [key: string]: unknown;
+}
+/** OpenClaw 原生 Tool 定义（保持与运行时字段兼容） */
+export interface NativeToolDefinition {
+    name: string;
+    label?: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    execute: (toolCallId: string, params: Record<string, unknown>) => Promise<unknown>;
+}
+/** OpenClaw 原生 Tool 工厂（api.registerTool(factory, { name }) 形式） */
+export type NativeToolFactory = (context: NativeToolFactoryContext) => NativeToolDefinition;
+/** GeeClaw 支持注册的 Tool 形态：简单对象或原生 factory */
+export type RegisteredTool = ToolDefinition | NativeToolFactory;
 /** Tool 注册选项 */
 export interface ToolOptions {
     /** 是否在 agent 启动时自动注册 */
     autoRegister?: boolean;
+    /** 原生 factory 注册时的稳定名称 */
+    name?: string;
+    [key: string]: unknown;
 }
 /** Service 定义（OpenClaw Service 注册） */
 export interface ServiceDefinition {
@@ -233,8 +254,8 @@ export interface GeeClawContext {
     registerHttpRoute(route: HttpRouteConfig): void;
     /** 注册聊天命令 */
     registerCommand(command: CommandConfig): void;
-    /** 注册 OpenClaw Tool */
-    registerTool(tool: ToolDefinition, options?: ToolOptions): void;
+    /** 注册 OpenClaw Tool（支持 GeeClaw 简单对象和 OpenClaw 原生 factory） */
+    registerTool(tool: RegisteredTool, options?: ToolOptions): void;
     /** 注册 OpenClaw Service */
     registerService(service: ServiceDefinition): void;
     /** 获取本 package 的配置段 */
