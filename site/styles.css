@@ -249,6 +249,10 @@ img {
 }
 
 .hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 288px;
   min-height: 56px;
   border-radius: 18px;
@@ -270,6 +274,13 @@ img {
 .hero-cta:active {
   transform: scale(0.97);
   opacity: 0.92;
+}
+
+.hero-cta svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex: none;
 }
 
 .workspace-shot {
