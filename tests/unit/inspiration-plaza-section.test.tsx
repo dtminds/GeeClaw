@@ -26,7 +26,6 @@ vi.mock('react-i18next', () => ({
         'inspirationPlaza.requiredSkillsTitle': '所需技能',
         'inspirationPlaza.requiredSkillsChecking': '正在检查所需技能',
         'inspirationPlaza.requiredSkillsReady': '所需技能已就绪',
-        'inspirationPlaza.manageSkills': '去管理技能',
         'inspirationPlaza.useNow': '立即使用',
         'inspirationPlaza.close': '关闭',
       };
@@ -135,7 +134,8 @@ describe('InspirationPlazaSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /热点资讯自动汇总/i }));
 
     expect(await screen.findByText('缺少以下技能：news-summary。建议先安装或启用后再使用该模板')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '去管理技能' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '去管理技能' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '立即使用' })).toBeDisabled();
     expect(rpcMock).toHaveBeenCalledWith('skills.status', { agentId: 'main' });
   });
 
@@ -156,7 +156,7 @@ describe('InspirationPlazaSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /热点资讯自动汇总/i }));
 
     await waitFor(() => {
-      expect(screen.queryByText('去管理技能')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '立即使用' })).toBeEnabled();
     });
   });
 

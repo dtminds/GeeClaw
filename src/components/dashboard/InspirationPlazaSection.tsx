@@ -208,8 +208,14 @@ export function InspirationPlazaSection() {
     setRequiredSkillsLoading(false);
   };
 
+  const useNowDisabled = requiredSkillsLoading || missingRequiredSkills.length > 0;
+
   const handleUseNow = async () => {
     if (!selectedItem) {
+      return;
+    }
+
+    if (useNowDisabled) {
       return;
     }
 
@@ -240,12 +246,6 @@ export function InspirationPlazaSection() {
     queueComposerSeed(buildSeedPrompt(selectedItem.prompt, requiredSkills), tokenizableRequiredSkills);
     handleCloseItem();
     navigate('/chat');
-  };
-
-  const handleManageSkills = () => {
-    const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
-    handleCloseItem();
-    navigate(`/skills?agentId=${encodeURIComponent(resolvedDefaultAgentId)}`);
   };
 
   return (
@@ -391,7 +391,7 @@ export function InspirationPlazaSection() {
 
                 {missingRequiredSkills.length > 0 && !requiredSkillsLoading && (
                   <div className="border-t border-black/6 pt-4 dark:border-white/10">
-                    <div className="flex items-start gap-3 text-amber-700 dark:text-amber-200">
+                    <div className="flex items-center gap-3 text-amber-700 dark:text-amber-200">
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                       <p className="text-[13px] leading-6">
                         {t('inspirationPlaza.requiredSkillsMissing', {
@@ -405,19 +405,10 @@ export function InspirationPlazaSection() {
               </div>
 
               <div className="modal-footer mt-5 justify-center gap-3 pb-1 sm:mt-6">
-                {requiredSkills.length > 0 && missingRequiredSkills.length > 0 && !requiredSkillsLoading && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleManageSkills}
-                    className="modal-secondary-button min-w-[160px] px-8 text-[14px]"
-                  >
-                    {t('inspirationPlaza.manageSkills', { defaultValue: 'Manage Skills' })}
-                  </Button>
-                )}
                 <Button
                   type="button"
                   onClick={() => void handleUseNow()}
+                  disabled={useNowDisabled}
                   className="modal-primary-button min-w-[160px] px-8 text-[14px]"
                 >
                   {t('inspirationPlaza.useNow')}
