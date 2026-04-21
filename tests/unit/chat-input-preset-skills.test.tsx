@@ -222,7 +222,12 @@ describe('ChatInput preset agent skills loading', () => {
       currentAgentId: 'delivery-execution',
       currentSessionKey: 'agent:delivery-execution:main',
       pendingComposerSeed: null,
-      consumePendingComposerSeed: vi.fn(),
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((state) => ({
+          ...state,
+          pendingComposerSeed: null,
+        }));
+      }),
     });
     useGatewayStore.setState({
       ...gatewayState,
@@ -537,7 +542,12 @@ describe('ChatInput preset agent skills loading', () => {
         text: '/news-summary Summarize today',
         nonce: Date.now(),
       },
-      consumePendingComposerSeed: vi.fn(),
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
     }));
     useSkillsStore.setState((state) => ({
       ...state,
@@ -569,8 +579,7 @@ describe('ChatInput preset agent skills loading', () => {
                 skillPath: null,
               },
             },
-            { type: 'text', text: ' ' },
-            { type: 'text', text: 'Summarize today' },
+            { type: 'text', text: ' Summarize today' },
           ],
         }],
       });
@@ -584,7 +593,12 @@ describe('ChatInput preset agent skills loading', () => {
         text: '/文件整理 帮我整理桌面',
         nonce: Date.now(),
       },
-      consumePendingComposerSeed: vi.fn(),
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
     }));
     useSkillsStore.setState((state) => ({
       ...state,
@@ -616,8 +630,7 @@ describe('ChatInput preset agent skills loading', () => {
                 skillPath: null,
               },
             },
-            { type: 'text', text: ' ' },
-            { type: 'text', text: '帮我整理桌面' },
+            { type: 'text', text: ' 帮我整理桌面' },
           ],
         }],
       });

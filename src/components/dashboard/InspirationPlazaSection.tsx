@@ -151,15 +151,11 @@ export function InspirationPlazaSection() {
 
   useEffect(() => {
     if (!selectedItem || requiredSkills.length === 0) {
-      setEnabledSkillKeys([]);
-      setRequiredSkillsLoading(false);
       return;
     }
 
     let cancelled = false;
     const agentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
-
-    setRequiredSkillsLoading(true);
 
     useGatewayStore.getState().rpc<{ skills?: GatewaySkillStatus[] }>('skills.status', { agentId })
       .then((result) => {
@@ -195,6 +191,16 @@ export function InspirationPlazaSection() {
     return key ? t(`inspirationPlaza.categories.${key}`) : category;
   };
 
+  const handleSelectItem = (item: InspirationItem) => {
+    setSelectedItem(item);
+    setRequiredSkillsLoading(Boolean(item.required_skills?.length));
+  };
+
+  const handleCloseItem = () => {
+    setSelectedItem(null);
+    setRequiredSkillsLoading(false);
+  };
+
   const handleUseNow = async () => {
     if (!selectedItem) {
       return;
@@ -211,13 +217,13 @@ export function InspirationPlazaSection() {
     const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
     await openAgentMainSession(resolvedDefaultAgentId);
     queueComposerSeed(buildSeedPrompt(selectedItem.prompt, requiredSkills));
-    setSelectedItem(null);
+    handleCloseItem();
     navigate('/chat');
   };
 
   const handleManageSkills = () => {
     const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
-    setSelectedItem(null);
+    handleCloseItem();
     navigate(`/skills?agentId=${encodeURIComponent(resolvedDefaultAgentId)}`);
   };
 
@@ -263,7 +269,7 @@ export function InspirationPlazaSection() {
             <button
               key={`${item.category}-${item.order}-${item.title}`}
               type="button"
-              onClick={() => setSelectedItem(item)}
+              onClick={() => handleSelectItem(item)}
               className={cn(
                 'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
                 'bg-muted/20 p-5 shadow-none transition-all duration-200',
@@ -300,7 +306,7 @@ export function InspirationPlazaSection() {
         </div>
       </section>
 
-      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && handleCloseItem()}>
         <DialogContent
           hideCloseButton
           className="modal-card-surface w-[min(620px,calc(100vw-2rem))] max-w-[620px] overflow-hidden rounded-[28px] border bg-[var(--app-sidebar)] p-0 shadow-none"
@@ -309,7 +315,7 @@ export function InspirationPlazaSection() {
             <div className="relative px-6 py-6 sm:px-8 sm:py-8">
               <button
                 type="button"
-                onClick={() => setSelectedItem(null)}
+                onClick={handleCloseItem}
                 className="modal-close-button absolute right-6 top-6"
                 aria-label={t('inspirationPlaza.close')}
               >
