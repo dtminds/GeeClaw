@@ -1145,7 +1145,7 @@ async function reconcileReferencedBuiltinModelRefs(
     providers.map((provider) => getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata)),
   );
 
-  await Promise.all(providers.map(async (provider) => {
+  for (const provider of providers) {
     const providerKey = getOpenClawProviderKeyForType(provider.vendorId, provider.id, provider.metadata);
     const prefix = `${providerKey}/`;
     const referencedIds = normalizeProviderModelList(
@@ -1209,7 +1209,7 @@ async function reconcileReferencedBuiltinModelRefs(
         },
       },
     });
-  }));
+  }
 }
 
 export async function listAvailableProviderModelGroups(): Promise<AvailableProviderModelGroup[]> {
