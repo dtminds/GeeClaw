@@ -1,14 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatMessage } from '@/pages/Chat/ChatMessage';
 import { buildChatItems } from '@/pages/Chat/build-chat-items';
-import type { RawMessage } from '@/stores/chat';
+import { useChatStore, type RawMessage } from '@/stores/chat';
 
 const { invokeIpcMock } = vi.hoisted(() => ({
   invokeIpcMock: vi.fn(),
 }));
 
 let mockLanguage = 'zh-CN';
+let sendMessageMock = vi.fn(async () => undefined);
 
 vi.mock('@/lib/api-client', () => ({
   invokeIpc: invokeIpcMock,
@@ -31,6 +32,8 @@ vi.mock('react-i18next', async (importOriginal) => {
 describe('chat live rendering', () => {
   beforeEach(() => {
     invokeIpcMock.mockReset();
+    sendMessageMock = vi.fn(async () => undefined);
+    useChatStore.setState({ sending: false, sendMessage: sendMessageMock });
     mockLanguage = 'zh-CN';
   });
 
@@ -240,6 +243,151 @@ describe('chat live rendering', () => {
 
     expect(container.firstChild).toBeNull();
     expect(screen.queryByText('Heartbeat poll prompt')).not.toBeInTheDocument();
+  });
+
+  it('renders evolution proposal cards from tool input when delivery mode is card', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-card',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-card',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0001',
+                signature: 'web-research-fallback',
+                description: '基于工具调用失败的教训，固化一套资讯搜索回退策略',
+                draftPath: '/tmp/evolution-proposal.md',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Web Research / 资讯搜索策略',
+                    content: '核心原则\n\n1. 先直达媒体主题页\n2. 再抓取正文',
+                    targetFile: '/tmp/tool-policy.md',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-card',
+              toolCallId: 'tool-evolution-card',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-21-0001","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    expect(screen.getByText('Hermes 进化请求')).toBeInTheDocument();
+    expect(screen.getByText('基于工具调用失败的教训，固化一套资讯搜索回退策略')).toBeInTheDocument();
+    expect(screen.getByText('工具调用')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/tool-policy.md')).toBeInTheDocument();
+    expect(screen.getByText('确认进化')).toBeInTheDocument();
+    expect(screen.getByText('拒绝')).toBeInTheDocument();
+  });
+
+  it('sends rejection commands from evolution proposal cards', async () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-reject',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-reject',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0003',
+                description: '可拒绝的提案',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: '策略',
+                    content: '拒绝时应发回拒绝命令',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-reject',
+              toolCallId: 'tool-evolution-reject',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-21-0003","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('拒绝'));
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith('拒绝 evo-2026-04-21-0003');
+  });
+
+  it('does not render evolution proposal cards when delivery mode is text and tool calls are hidden', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-text',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-text',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0002',
+                description: '纯文本投递',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: '策略',
+                    content: '不会渲染桌面卡片',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-text',
+              toolCallId: 'tool-evolution-text',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-21-0002","deliveryMode":"text","channel":"feishu"}',
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText('Hermes 进化请求')).not.toBeInTheDocument();
   });
 
   it('does not render user bubbles that only contain OpenClaw internal context blocks', () => {
