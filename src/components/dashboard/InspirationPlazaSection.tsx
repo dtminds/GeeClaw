@@ -71,6 +71,13 @@ type GatewaySkillStatus = {
   };
 };
 
+function resolveKnownSkillKeys(skills: GatewaySkillStatus[] | undefined): string[] {
+  return (skills || [])
+    .flatMap((skill) => [skill.skillKey, skill.slug])
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim());
+}
+
 function hasMissingRequirements(skill: GatewaySkillStatus): boolean {
   const missing = skill.missing;
   if (!missing) return false;
@@ -215,8 +222,22 @@ export function InspirationPlazaSection() {
     }
 
     const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
+    let tokenizableRequiredSkills: string[] = [];
+
+    if (requiredSkills.length > 0) {
+      try {
+        const result = await useGatewayStore.getState().rpc<{ skills?: GatewaySkillStatus[] }>('skills.status', {
+          agentId: resolvedDefaultAgentId,
+        });
+        const knownSkillKeys = new Set(resolveKnownSkillKeys(result.skills));
+        tokenizableRequiredSkills = requiredSkills.filter((skillId) => knownSkillKeys.has(skillId));
+      } catch (error) {
+        console.warn('Failed to refresh skill status before seeding inspiration prompt:', error);
+      }
+    }
+
     await openAgentMainSession(resolvedDefaultAgentId);
-    queueComposerSeed(buildSeedPrompt(selectedItem.prompt, requiredSkills));
+    queueComposerSeed(buildSeedPrompt(selectedItem.prompt, requiredSkills), tokenizableRequiredSkills);
     handleCloseItem();
     navigate('/chat');
   };

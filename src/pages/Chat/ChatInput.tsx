@@ -98,7 +98,7 @@ interface ParsedSkillReference {
 }
 
 interface ComposerParseOptions {
-  allowUnresolvedSlashReferences?: boolean;
+  tokenizableSlashReferences?: string[];
 }
 
 interface SlashQueryState {
@@ -393,7 +393,12 @@ function createSkillTokenNodeFromReference(
   }
 
   const matchedSkill = findSkillByReference(normalizedSlug, skills);
-  if (!matchedSkill && !reference.explicitMarker && !options.allowUnresolvedSlashReferences) {
+  const tokenizableSlashReferences = new Set(
+    (options.tokenizableSlashReferences || []).map((value) => normalizeSkillReference(value)),
+  );
+  const allowExplicitSlashReference = tokenizableSlashReferences.has(normalizeSkillReference(normalizedSlug));
+
+  if (!matchedSkill && !reference.explicitMarker && !allowExplicitSlashReference) {
     return null;
   }
 
@@ -1574,7 +1579,7 @@ export const ChatInput = memo(function ChatInput({
     editor.commands.setContent(createComposerDocumentFromPlainText(
       pendingComposerSeed.text,
       resolvableSkills,
-      { allowUnresolvedSlashReferences: true },
+      { tokenizableSlashReferences: pendingComposerSeed.tokenizableSkillSlugs },
     ));
     setAttachments([]);
     setTargetAgentIdState(null);

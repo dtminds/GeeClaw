@@ -541,6 +541,7 @@ describe('ChatInput preset agent skills loading', () => {
       pendingComposerSeed: {
         text: '/news-summary Summarize today',
         nonce: Date.now(),
+        tokenizableSkillSlugs: ['news-summary'],
       },
       consumePendingComposerSeed: vi.fn(() => {
         useChatStore.setState((inner) => ({
@@ -592,6 +593,7 @@ describe('ChatInput preset agent skills loading', () => {
       pendingComposerSeed: {
         text: '/文件整理 帮我整理桌面',
         nonce: Date.now(),
+        tokenizableSkillSlugs: ['文件整理'],
       },
       consumePendingComposerSeed: vi.fn(() => {
         useChatStore.setState((inner) => ({
@@ -631,6 +633,49 @@ describe('ChatInput preset agent skills loading', () => {
               },
             },
             { type: 'text', text: ' 帮我整理桌面' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('keeps unknown slash skill refs as plain text when they are not explicitly tokenizable', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/habit-builder Build a routine',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '/habit-builder' },
+            { type: 'text', text: ' Build a routine' },
           ],
         }],
       });

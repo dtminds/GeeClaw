@@ -162,7 +162,13 @@ describe('InspirationPlazaSection', () => {
 
   it('prefixes required skills when queuing the inspiration prompt', async () => {
     rpcMock.mockResolvedValue({
-      skills: [],
+      skills: [
+        {
+          skillKey: 'news-summary',
+          eligible: true,
+          disabled: false,
+        },
+      ],
     });
 
     const { InspirationPlazaSection } = await import('@/components/dashboard/InspirationPlazaSection');
@@ -173,7 +179,7 @@ describe('InspirationPlazaSection', () => {
 
     await waitFor(() => {
       expect(openAgentMainSessionMock).toHaveBeenCalledWith('main');
-      expect(queueComposerSeedMock).toHaveBeenCalledWith('/news-summary 设置每日任务');
+      expect(queueComposerSeedMock).toHaveBeenCalledWith('/news-summary 设置每日任务', ['news-summary']);
       expect(navigateMock).toHaveBeenCalledWith('/chat');
     });
   });
