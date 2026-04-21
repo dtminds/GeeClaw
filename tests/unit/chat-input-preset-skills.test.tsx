@@ -20,6 +20,7 @@ const {
   editorChainFocusMock,
   editorRunMock,
   editorCommandsFocusMock,
+  editorCommandsSetContentMock,
 } = vi.hoisted(() => ({
   fetchPresetAgentSkillsMock: vi.fn(),
   fetchAgentScopedSkillsMock: vi.fn(),
@@ -32,6 +33,7 @@ const {
   editorChainFocusMock: vi.fn(),
   editorRunMock: vi.fn(),
   editorCommandsFocusMock: vi.fn(),
+  editorCommandsSetContentMock: vi.fn(),
 }));
 
 vi.mock('@/pages/Chat/slash-picker', () => ({
@@ -111,6 +113,7 @@ vi.mock('@tiptap/react', () => ({
       chain: () => chain,
       commands: {
         focus: editorCommandsFocusMock,
+        setContent: editorCommandsSetContentMock,
       },
       setEditable: vi.fn(),
       getJSON: () => ({ type: 'doc', content: [] }),
@@ -197,6 +200,7 @@ describe('ChatInput preset agent skills loading', () => {
     editorChainFocusMock.mockReset();
     editorRunMock.mockReset();
     editorCommandsFocusMock.mockReset();
+    editorCommandsSetContentMock.mockReset();
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/settings/safety') {
         return {
@@ -218,7 +222,12 @@ describe('ChatInput preset agent skills loading', () => {
       currentAgentId: 'delivery-execution',
       currentSessionKey: 'agent:delivery-execution:main',
       pendingComposerSeed: null,
-      consumePendingComposerSeed: vi.fn(),
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((state) => ({
+          ...state,
+          pendingComposerSeed: null,
+        }));
+      }),
     });
     useGatewayStore.setState({
       ...gatewayState,
@@ -524,5 +533,246 @@ describe('ChatInput preset agent skills loading', () => {
       'href',
       '/settings/model-providers',
     );
+  });
+
+  it('forces pending composer seed slash skill refs into skill tokens before skills finish loading', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/news-summary Summarize today',
+        nonce: Date.now(),
+        tokenizableSkillSlugs: ['news-summary'],
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: 'news-summary',
+                label: 'news-summary',
+                slug: 'news-summary',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' Summarize today' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('parses Chinese slash skill refs from pending composer seed into skill tokens', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/文件整理 帮我整理桌面',
+        nonce: Date.now(),
+        tokenizableSkillSlugs: ['文件整理'],
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: '文件整理',
+                label: '文件整理',
+                slug: '文件整理',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' 帮我整理桌面' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('keeps dotted slash skill refs tokenizable from pending composer seed', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/workspace.organizer Sort these files',
+        nonce: Date.now(),
+        tokenizableSkillSlugs: ['workspace.organizer'],
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: 'workspace.organizer',
+                label: 'workspace.organizer',
+                slug: 'workspace.organizer',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' Sort these files' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('keeps unknown slash skill refs as plain text when they are not explicitly tokenizable', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/habit-builder Build a routine',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '/habit-builder' },
+            { type: 'text', text: ' Build a routine' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('does not parse slash refs that start with opening brackets', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/(habit-builder) Build a routine',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '/(habit-builder) Build a routine' },
+          ],
+        }],
+      });
+    });
   });
 });

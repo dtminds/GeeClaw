@@ -97,6 +97,11 @@ interface ParsedSkillReference {
   explicitMarker: boolean;
 }
 
+interface ComposerParseOptions {
+  tokenizableSlashReferences?: string[];
+  tokenizableSlashSet?: ReadonlySet<string>;
+}
+
 interface SlashQueryState {
   selection: {
     empty: boolean;
@@ -359,7 +364,7 @@ function serializeComposerNode(node: SerializedNode | null | undefined): string 
   return children;
 }
 
-const INLINE_SKILL_REFERENCE_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]|(^|[\s([{"'“‘])\/([a-z0-9][a-z0-9._-]*)(?=$|[\s)\]},"'.!?;:，。！？；：、”’])/giu;
+const INLINE_SKILL_REFERENCE_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]|(^|[\s([{"'“‘])\/([^\s/()[\]{},"'!?;:，。！？；：、”’]+)(?=$|[\s)\]},"'.!?;:，。！？；：、”’])/giu;
 
 function normalizeSkillReference(value: string): string {
   return normalizeSkillSearch(value).replace(/^\/+/, '');
@@ -381,6 +386,7 @@ function findSkillByReference(reference: string, skills: Skill[]): Skill | null 
 function createSkillTokenNodeFromReference(
   reference: ParsedSkillReference,
   skills: Skill[],
+  options: ComposerParseOptions = {},
 ): SerializedNode | null {
   const normalizedSlug = reference.slug.trim();
   if (!normalizedSlug) {
@@ -388,7 +394,9 @@ function createSkillTokenNodeFromReference(
   }
 
   const matchedSkill = findSkillByReference(normalizedSlug, skills);
-  if (!matchedSkill && !reference.explicitMarker) {
+  const allowExplicitSlashReference = options.tokenizableSlashSet?.has(normalizeSkillReference(normalizedSlug));
+
+  if (!matchedSkill && !reference.explicitMarker && !allowExplicitSlashReference) {
     return null;
   }
 
@@ -403,7 +411,11 @@ function createSkillTokenNodeFromReference(
   };
 }
 
-function parseLineIntoComposerNodes(line: string, skills: Skill[]): SerializedNode[] {
+function parseLineIntoComposerNodes(
+  line: string,
+  skills: Skill[],
+  options: ComposerParseOptions = {},
+): SerializedNode[] {
   if (!line) {
     return [];
   }
@@ -425,7 +437,7 @@ function parseLineIntoComposerNodes(line: string, skills: Skill[]): SerializedNo
         slug: markerSlug.trim(),
         skillPath: markerPath?.trim() || null,
         explicitMarker: true,
-      }, skills);
+      }, skills, options);
 
       if (tokenNode) {
         nodes.push(tokenNode);
@@ -441,7 +453,7 @@ function parseLineIntoComposerNodes(line: string, skills: Skill[]): SerializedNo
         slug: slashSlug.trim(),
         skillPath: null,
         explicitMarker: false,
-      }, skills);
+      }, skills, options);
 
       if (tokenNode) {
         nodes.push(tokenNode);
@@ -460,12 +472,25 @@ function parseLineIntoComposerNodes(line: string, skills: Skill[]): SerializedNo
   return nodes;
 }
 
-function createComposerDocumentFromPlainText(text: string, skills: Skill[] = []): SerializedNode {
+function createComposerDocumentFromPlainText(
+  text: string,
+  skills: Skill[] = [],
+  options: ComposerParseOptions = {},
+): SerializedNode {
+  const normalizedOptions = options.tokenizableSlashSet
+    ? options
+    : {
+      ...options,
+      tokenizableSlashSet: new Set(
+        (options.tokenizableSlashReferences || []).map((value) => normalizeSkillReference(value)),
+      ),
+    };
+
   return {
     type: 'doc',
     content: text.split('\n').map((line) => ({
       type: 'paragraph',
-      content: parseLineIntoComposerNodes(line, skills),
+      content: parseLineIntoComposerNodes(line, skills, normalizedOptions),
     })),
   };
 }
@@ -1558,7 +1583,11 @@ export const ChatInput = memo(function ChatInput({
       return;
     }
 
-    editor.commands.setContent(createComposerDocumentFromPlainText(pendingComposerSeed.text, resolvableSkills));
+    editor.commands.setContent(createComposerDocumentFromPlainText(
+      pendingComposerSeed.text,
+      resolvableSkills,
+      { tokenizableSlashReferences: pendingComposerSeed.tokenizableSkillSlugs },
+    ));
     setAttachments([]);
     setTargetAgentIdState(null);
     setSkillPickerDismissedState(false);

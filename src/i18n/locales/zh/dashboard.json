@@ -57,6 +57,11 @@
         "all": "全部灵感",
         "sceneTitle": "适用场景",
         "promptTitle": "Prompt",
+        "requiredSkillsTitle": "所需技能",
+        "requiredSkillsChecking": "正在检查所需技能",
+        "requiredSkillsMissing": "缺少以下技能：{{skills}}。建议先安装或启用后再使用该模板",
+        "requiredSkillsReady": "所需技能已就绪",
+        "manageSkills": "去管理技能",
         "useNow": "立即使用",
         "close": "关闭",
         "categories": {

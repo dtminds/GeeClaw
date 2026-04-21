@@ -2,7 +2,7 @@
  * Dashboard settings section
  * Overview workspace embedded inside Settings.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Activity } from 'lucide-react';
 import {
@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGatewayStore } from '@/stores/gateway';
 import { useChannelsStore } from '@/stores/channels';
 import { useSkillsStore } from '@/stores/skills';
+import { useAgentsStore } from '@/stores/agents';
 // import { useSettingsStore } from '@/stores/settings';
 import { StatusBadge } from '@/components/common/StatusBadge';
 // import { hostApiFetch } from '@/lib/host-api';
@@ -33,6 +34,7 @@ export function DashboardSettingsSection({ className }: DashboardSettingsSection
   const gatewayStatus = useGatewayStore((state) => state.status);
   const { channels, fetchChannels } = useChannelsStore();
   const { skills, fetchSkills } = useSkillsStore();
+  const { agents, fetchAgents } = useAgentsStore();
   // const devModeUnlocked = useSettingsStore((state) => state.devModeUnlocked);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
@@ -52,9 +54,53 @@ export function DashboardSettingsSection({ className }: DashboardSettingsSection
     }
   }, [fetchChannels, fetchSkills, isGatewayRunning]);
 
+  useEffect(() => {
+    if (agents.length === 0) {
+      void fetchAgents();
+    }
+  }, [agents.length, fetchAgents]);
+
   // Calculate statistics safely
   const connectedChannels = Array.isArray(channels) ? channels.filter((c) => c.status === 'connected').length : 0;
-  const enabledSkills = Array.isArray(skills) ? skills.filter((s) => s.enabled).length : 0;
+  const mainAgent = useMemo(
+    () => agents.find((agent) => agent.id === 'main') ?? null,
+    [agents],
+  );
+  const mainPresetSkillSet = useMemo(
+    () => new Set(mainAgent?.presetSkills ?? []),
+    [mainAgent],
+  );
+  const mainLegacyEnabledSkillIds = useMemo(() => {
+    if (!mainAgent || mainAgent.manualSkills !== undefined || mainAgent.skillScope.mode !== 'default') {
+      return [] as string[];
+    }
+
+    const result = new Set<string>();
+    for (const skill of skills) {
+      if (skill.hidden === true || !skill.enabled || mainPresetSkillSet.has(skill.id)) {
+        continue;
+      }
+      result.add(skill.id);
+    }
+
+    return [...result].sort((left, right) => left.localeCompare(right));
+  }, [mainAgent, mainPresetSkillSet, skills]);
+  const enabledSkills = useMemo(() => {
+    if (!mainAgent) {
+      return 0;
+    }
+
+    const manualSkillIds = mainAgent.manualSkills !== undefined
+      ? mainAgent.manualSkills
+      : mainAgent.skillScope.mode === 'specified'
+        ? mainAgent.skillScope.skills
+        : mainLegacyEnabledSkillIds;
+
+    return new Set([
+      ...manualSkillIds,
+      ...(mainAgent.presetSkills ?? []),
+    ]).size;
+  }, [mainAgent, mainLegacyEnabledSkillIds]);
 
   // Update uptime periodically
   useEffect(() => {

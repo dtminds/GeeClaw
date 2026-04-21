@@ -9,7 +9,7 @@ import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { useGatewayStore } from './gateway';
 import type { CategoryInfo, MarketplaceCatalog, MarketplaceSkill, Skill, SkillMissingRequirements } from '../types/skill';
 
-type GatewaySkillStatus = {
+export type GatewaySkillStatus = {
   skillKey: string;
   slug?: string;
   source?: string;
@@ -58,7 +58,7 @@ function isHiddenSkill(skillKeys: Array<string | undefined>, hiddenSkillSet: Set
   });
 }
 
-function hasMissingRequirements(missing?: SkillMissingRequirements): boolean {
+export function hasMissingRequirements(missing?: SkillMissingRequirements): boolean {
   if (!missing) return false;
   return Boolean(
     (missing.bins && missing.bins.length > 0)

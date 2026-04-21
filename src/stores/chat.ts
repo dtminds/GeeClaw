@@ -85,6 +85,7 @@ export {
 interface PendingComposerSeed {
   text: string;
   nonce: number;
+  tokenizableSkillSlugs?: string[];
 }
 
 type ChatViewMode = 'session' | 'cron';
@@ -160,7 +161,7 @@ interface ChatState {
   toggleToolCalls: () => void;
   refresh: () => Promise<void>;
   clearError: () => void;
-  queueComposerSeed: (text: string) => void;
+  queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => void;
   consumePendingComposerSeed: () => void;
 }
 
@@ -2330,10 +2331,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  queueComposerSeed: (text: string) => set({
+  queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => set({
     pendingComposerSeed: {
       text,
       nonce: Date.now(),
+      tokenizableSkillSlugs,
     },
   }),
 

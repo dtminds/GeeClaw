@@ -61,6 +61,10 @@
             "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/book.svg",
             "prompt": "把桌面上「发票」文件夹里的发票都帮我整理成「报销明细」Excel表格。",
             "scene": "月末报销忙乱🧾：发票堆积杂乱难整理，一键自动归档成报销表格，省时省力；\n财务核对繁琐📊：需要清晰的发票明细，快速统计金额、分类单据，提升核对效率；\n办公整理需求🗂️：桌面文件杂乱，自动规整发票文件，让办公资料更有序。",
+            "required_skills": [
+              "文件整理",
+              "xlsx"
+            ],
             "is_recommend": false,
             "is_agent_recommend": false,
             "is_banner": false,
