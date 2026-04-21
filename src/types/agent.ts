@@ -63,6 +63,7 @@ export interface AgentSummary {
   managedFiles: string[];
   skillScope: AgentSkillScope;
   manualSkills?: string[];
+  activeEvolutionEnabled?: boolean;
   deniedTools?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;

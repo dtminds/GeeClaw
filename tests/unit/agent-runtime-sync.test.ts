@@ -172,6 +172,10 @@ describe('agent runtime sync', () => {
         installedAt: '2026-03-28T00:00:00.000Z',
       },
     });
+    agentStore.set('activeEvolution', {
+      helper: false,
+      stockexpert: true,
+    });
 
     channelStore.set('channels', {
       wecom: {
@@ -240,6 +244,15 @@ describe('agent runtime sync', () => {
     expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('avatarSource');
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('avatarPresetId');
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).not.toHaveProperty('avatarSource');
+    expect(config.agents?.list?.find((entry) => entry.id === 'helper')).not.toHaveProperty('skills');
+    expect(config.agents?.list?.find((entry) => entry.id === 'helper')).toMatchObject({
+      tools: {
+        deny: ['evolution_proposal'],
+      },
+    });
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')).toMatchObject({
+      skills: ['stock-analyzer', 'hermes-evolution'],
+    });
     expect(config.bindings).toEqual([
       {
         agentId: 'helper',

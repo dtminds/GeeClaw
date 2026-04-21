@@ -586,6 +586,7 @@ describe('managed agent config domain', () => {
       'stock-announcements',
       'stock-explorer',
       'web-search',
+      'hermes-evolution',
     ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('agentDir');
     expect(readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8')).toContain('stock expert');
@@ -753,7 +754,7 @@ describe('managed agent config domain', () => {
     };
     expect(updatedConfig.agents?.list?.find((entry) => entry.id === 'stockexpert')).toMatchObject({
       workspace: customWorkspaceDir,
-      skills: ['trend-scan', 'web-search'],
+      skills: ['trend-scan', 'web-search', 'hermes-evolution'],
     });
     expect(readFileSync(join(customWorkspaceDir, 'AGENTS.md'), 'utf8')).toContain('Updated instructions');
     expect(readFileSync(join(customWorkspaceDir, 'MEMORY.md'), 'utf8')).toBe('# official memory\n');
@@ -1364,7 +1365,7 @@ describe('managed agent config domain', () => {
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: false,
-      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search', 'hermes-evolution'],
       presetSkills: [],
       managedFiles: [],
       canUseDefaultSkillScope: true,
@@ -1395,7 +1396,7 @@ describe('managed agent config domain', () => {
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: { list?: Array<{ id?: string; skills?: string[] }> };
     };
-    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([]);
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual(['hermes-evolution']);
   });
 
   it('persists main agent manualSkills into agents.list.skills when editing a synthetic main entry', async () => {
@@ -1412,7 +1413,7 @@ describe('managed agent config domain', () => {
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: { list?: Array<{ id?: string; skills?: string[] }> };
     };
-    expect(config.agents?.list?.find((agent) => agent.id === 'main')?.skills).toEqual(['pdf', 'xlsx']);
+    expect(config.agents?.list?.find((agent) => agent.id === 'main')?.skills).toEqual(['pdf', 'xlsx', 'hermes-evolution']);
   });
 
   it('allows managed agents to edit user, memory, and soul files while keeping identity locked', async () => {
@@ -1670,8 +1671,8 @@ describe('managed agent config domain', () => {
     expect(config.plugins?.entries?.['active-memory']?.config?.agents).toEqual(['main']);
   });
 
-  it('syncs active evolution by updating the agent tool deny list without touching other tools', async () => {
-    const { agentConfig, configDir } = await setupManagedPresetFixture();
+  it('syncs active evolution by updating stored state and maintaining existing skill lists only', async () => {
+    const { agentConfig, configDir, storeState } = await setupManagedPresetFixture();
 
     await agentConfig.createAgent('Research Helper', 'research-helper');
     const initialConfig = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
@@ -1694,38 +1695,80 @@ describe('managed agent config domain', () => {
       activeEvolutionEnabled: true,
     });
     expect(enabled.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      activeEvolutionEnabled: true,
       deniedTools: ['web_search'],
+    });
+    expect(storeState.activeEvolution).toMatchObject({
+      'research-helper': true,
     });
 
     let config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: {
         list?: Array<{
           id?: string;
+          skills?: string[];
           tools?: { deny?: string[]; [key: string]: unknown };
         }>;
       };
     };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([
+      'alpha-skill',
+      'hermes-evolution',
+    ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.tools?.deny).toEqual(['web_search']);
 
     const disabled = await agentConfig.updateAgentSettings('research-helper', {
       activeEvolutionEnabled: false,
     });
     expect(disabled.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      activeEvolutionEnabled: false,
       deniedTools: ['evolution_proposal', 'web_search'],
+    });
+    expect(storeState.activeEvolution).toMatchObject({
+      'research-helper': false,
     });
 
     config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
       agents?: {
         list?: Array<{
           id?: string;
+          skills?: string[];
           tools?: { deny?: string[]; [key: string]: unknown };
         }>;
       };
     };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.skills).toEqual([
+      'alpha-skill',
+    ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.tools?.deny).toEqual([
       'evolution_proposal',
       'web_search',
     ]);
+  });
+
+  it('does not initialize agents.list.skills when active evolution changes before skill membership exists', async () => {
+    const { agentConfig, configDir, storeState } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    await agentConfig.updateAgentSettings('research-helper', {
+      activeEvolutionEnabled: false,
+    });
+
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        list?: Array<{
+          id?: string;
+          skills?: string[];
+          tools?: { deny?: string[] };
+        }>;
+      };
+    };
+    const researchHelper = config.agents?.list?.find((agent) => agent.id === 'research-helper');
+    expect(researchHelper).not.toHaveProperty('skills');
+    expect(researchHelper?.tools?.deny).toEqual(['evolution_proposal']);
+    expect(storeState.activeEvolution).toMatchObject({
+      'research-helper': false,
+    });
   });
 
   it('removes deleted agents from active-memory membership', async () => {

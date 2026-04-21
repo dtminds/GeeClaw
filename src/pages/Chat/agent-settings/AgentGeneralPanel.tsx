@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -12,9 +12,7 @@ import { toUserMessage } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
 import { cn } from '@/lib/utils';
 import type { AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
-import { fetchAgentScopedSkills } from '@/pages/Chat/slash-picker';
 import { useAgentsStore } from '@/stores/agents';
-import { useGatewayStore } from '@/stores/gateway';
 
 interface AgentGeneralPanelProps {
   agentId: string;
@@ -32,16 +30,12 @@ type AgentMemorySettingsSnapshot = {
 
 const inputClasses = 'modal-field-surface field-focus-ring h-[44px] rounded-xl font-mono text-[13px] shadow-sm transition-all text-foreground placeholder:text-foreground/40';
 const labelClasses = 'text-[13px] font-semibold text-foreground/70';
-const ACTIVE_EVOLUTION_SKILL_ID = 'hermes-evolution';
-const ACTIVE_EVOLUTION_TOOL_ID = 'evolution_proposal';
 
 export function AgentGeneralPanel({ agentId, title, description, onDeleted }: AgentGeneralPanelProps) {
   const { t } = useTranslation(['chat', 'common']);
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
   const updateAgentSettings = useAgentsStore((state) => state.updateAgentSettings);
   const deleteAgent = useAgentsStore((state) => state.deleteAgent);
-  const gatewayState = useGatewayStore((state) => state.status.state);
-  const gatewayRpc = useGatewayStore((state) => state.rpc);
   const [name, setName] = useState(agent?.name ?? '');
   const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId | null>(agent?.avatarPresetId ?? null);
   const [savingName, setSavingName] = useState(false);
@@ -50,8 +44,6 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   const [activeMemoryGloballyEnabled, setActiveMemoryGloballyEnabled] = useState(false);
   const [activeMemoryEnabledForAgent, setActiveMemoryEnabledForAgent] = useState(false);
   const [savingActiveMemory, setSavingActiveMemory] = useState(false);
-  const [runtimeEnabledSkills, setRuntimeEnabledSkills] = useState<{ agentId: string; skills: string[] } | null>(null);
-  const [loadingActiveEvolution, setLoadingActiveEvolution] = useState(false);
   const [savingActiveEvolution, setSavingActiveEvolution] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -90,47 +82,6 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     };
   }, [agentId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const needsRuntimeSkills = agent?.manualSkills === undefined && agent?.skillScope.mode === 'default';
-
-    if (!needsRuntimeSkills || gatewayState !== 'running') {
-      setLoadingActiveEvolution(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setLoadingActiveEvolution(true);
-    void fetchAgentScopedSkills(agentId, gatewayRpc)
-      .then((skills) => {
-        if (cancelled) {
-          return;
-        }
-        const enabled = skills
-          .filter((skill) => skill.enabled)
-          .map((skill) => skill.id)
-          .sort((left, right) => left.localeCompare(right));
-        setRuntimeEnabledSkills({ agentId, skills: enabled });
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        console.error('Failed to load agent-scoped skills for active evolution settings:', error);
-        setRuntimeEnabledSkills({ agentId, skills: [] });
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingActiveEvolution(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [agent?.manualSkills, agent?.skillScope.mode, agentId, gatewayRpc, gatewayState]);
-
   const canSaveName = Boolean(agent && name.trim() && name.trim() !== agent.name);
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));
   const deleteDisabled = !agent || deleting || isDeleteProtected;
@@ -139,38 +90,9 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     || loadingActiveMemory
     || savingActiveMemory
     || !activeMemoryGloballyEnabled;
-  const presetSkills = useMemo(() => agent?.presetSkills ?? [], [agent?.presetSkills]);
-  const configuredEnabledSkills = useMemo(() => {
-    if (!agent) {
-      return undefined;
-    }
-    if (agent.manualSkills !== undefined) {
-      return agent.manualSkills;
-    }
-    if (agent.skillScope.mode === 'specified') {
-      return agent.skillScope.skills;
-    }
-    return undefined;
-  }, [agent]);
-  const runtimeSkillsForCurrentAgent = runtimeEnabledSkills?.agentId === agentId
-    ? runtimeEnabledSkills.skills
-    : null;
-  const deniedTools = useMemo(() => new Set(agent?.deniedTools ?? []), [agent?.deniedTools]);
-  const activeEvolutionUsesRuntimeSkills = Boolean(
-    agent && agent.manualSkills === undefined && agent.skillScope.mode === 'default',
-  );
-  const activeEvolutionBaselineSkills = configuredEnabledSkills ?? runtimeSkillsForCurrentAgent;
-  const activeEvolutionEnabledForAgent = activeEvolutionBaselineSkills?.includes(ACTIVE_EVOLUTION_SKILL_ID) === true
-    && !deniedTools.has(ACTIVE_EVOLUTION_TOOL_ID);
-  const activeEvolutionToggleDisabled = !agent
-    || deleting
-    || savingActiveEvolution
-    || (activeEvolutionUsesRuntimeSkills && (gatewayState !== 'running' || loadingActiveEvolution || runtimeSkillsForCurrentAgent === null));
-  const activeEvolutionDescription = activeEvolutionUsesRuntimeSkills && gatewayState !== 'running'
-    ? t('agentSettingsDialog.general.activeEvolutionGatewayHint')
-    : activeEvolutionUsesRuntimeSkills && (loadingActiveEvolution || runtimeSkillsForCurrentAgent === null)
-      ? t('agentSettingsDialog.general.activeEvolutionLoadingHint')
-      : t('agentSettingsDialog.general.activeEvolutionDescription');
+  const activeEvolutionEnabledForAgent = agent?.activeEvolutionEnabled ?? true;
+  const activeEvolutionToggleDisabled = !agent || deleting || savingActiveEvolution;
+  const activeEvolutionDescription = t('agentSettingsDialog.general.activeEvolutionDescription');
 
   const handleSaveName = async () => {
     if (!agent || !canSaveName) return;
@@ -237,25 +159,13 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   };
 
   const handleActiveEvolutionToggle = async (nextEnabled: boolean) => {
-    if (!agent || activeEvolutionToggleDisabled || !activeEvolutionBaselineSkills) {
+    if (!agent || activeEvolutionToggleDisabled) {
       return;
-    }
-
-    const nextSkills = new Set<string>([
-      ...activeEvolutionBaselineSkills,
-      ...presetSkills,
-    ]);
-
-    if (nextEnabled) {
-      nextSkills.add(ACTIVE_EVOLUTION_SKILL_ID);
-    } else {
-      nextSkills.delete(ACTIVE_EVOLUTION_SKILL_ID);
     }
 
     setSavingActiveEvolution(true);
     try {
       await updateAgentSettings(agent.id, {
-        manualSkills: [...nextSkills].sort((left, right) => left.localeCompare(right)),
         activeEvolutionEnabled: nextEnabled,
       });
     } catch (error) {

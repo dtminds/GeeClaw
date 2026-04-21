@@ -1,6 +1,7 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { dirname, join, normalize } from 'path';
+import { isDeepStrictEqual } from 'node:util';
 import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
@@ -30,7 +31,11 @@ import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill
 import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig, saveProviderAccount } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
-import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
+import {
+  readStoredActiveEvolutionMap,
+  saveAgentRuntimeConfigToStore,
+  syncAllAgentConfigToOpenClaw,
+} from '../services/agents/agent-runtime-sync';
 import {
   formatPresetPlatforms,
   isPresetSupportedOnPlatform,
@@ -48,6 +53,8 @@ import * as logger from './logger';
 const MAIN_AGENT_ID = 'main';
 const MAIN_AGENT_NAME = 'Main';
 const DEFAULT_ACCOUNT_ID = 'default';
+const ACTIVE_EVOLUTION_SKILL_ID = 'hermes-evolution';
+const ACTIVE_EVOLUTION_TOOL_ID = 'evolution_proposal';
 const AGENT_BOOTSTRAP_FILES = [
   'AGENTS.md',
   'SOUL.md',
@@ -196,6 +203,7 @@ export interface AgentSummary {
   managedFiles: string[];
   skillScope: AgentSkillScope;
   manualSkills?: string[];
+  activeEvolutionEnabled?: boolean;
   deniedTools?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
@@ -652,14 +660,29 @@ function applyAgentDeniedTools(entry: AgentListEntry, deniedTools: string[]): Ag
 }
 
 function applyAgentActiveEvolutionEnabled(entry: AgentListEntry, enabled: boolean): AgentListEntry {
-  const deniedTools = new Set(readAgentDeniedTools(entry) ?? []);
-  if (enabled) {
-    deniedTools.delete('evolution_proposal');
-  } else {
-    deniedTools.add('evolution_proposal');
+  const nextEntry = { ...entry };
+  if (Array.isArray(nextEntry.skills)) {
+    const currentSkills = nextEntry.skills
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const nextSkills = enabled
+      ? (currentSkills.includes(ACTIVE_EVOLUTION_SKILL_ID) ? currentSkills : [...currentSkills, ACTIVE_EVOLUTION_SKILL_ID])
+      : currentSkills.filter((skill) => skill !== ACTIVE_EVOLUTION_SKILL_ID);
+
+    if (!isDeepStrictEqual(currentSkills, nextSkills)) {
+      nextEntry.skills = nextSkills;
+    }
   }
 
-  return applyAgentDeniedTools(entry, [...deniedTools]);
+  const deniedTools = new Set(readAgentDeniedTools(nextEntry) ?? []);
+  if (enabled) {
+    deniedTools.delete(ACTIVE_EVOLUTION_TOOL_ID);
+  } else {
+    deniedTools.add(ACTIVE_EVOLUTION_TOOL_ID);
+  }
+
+  return applyAgentDeniedTools(nextEntry, [...deniedTools]);
 }
 
 function resolveDefaultAvatarPresetIdForAgent(
@@ -1516,6 +1539,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
     readAgentManagementMap(),
     readAgentAvatarMap(),
   ]);
+  const activeEvolutionMap = await readStoredActiveEvolutionMap();
   const configuredChannels = await listConfiguredChannels();
   const { channelToAgent, accountToAgent } = getChannelBindingMap(config.bindings);
   const defaultAgentIdNorm = normalizeAgentIdForBinding(defaultAgentId);
@@ -1601,6 +1625,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
       skillScope: readAgentSkillScope(entry),
       ...(manualSkills !== undefined ? { manualSkills } : {}),
+      activeEvolutionEnabled: activeEvolutionMap[entry.id] ?? true,
       ...(deniedTools !== undefined ? { deniedTools } : {}),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
@@ -1674,10 +1699,14 @@ async function buildAgentPersonaSnapshot(
   };
 }
 
-async function persistAgentConfigAndPatchRuntime(config: AgentConfigDocument): Promise<void> {
+async function persistAgentConfigAndPatchRuntime(
+  config: AgentConfigDocument,
+  activeEvolution?: Record<string, boolean>,
+): Promise<void> {
   await saveAgentRuntimeConfigToStore({
     agents: config.agents,
     bindings: config.bindings,
+    activeEvolution,
   });
   await syncAllAgentConfigToOpenClaw();
 }
@@ -1971,6 +2000,11 @@ async function installMarketplaceAgentFromPreparedPackage(
 
     delete avatars[getAgentAvatarStoreKey(nextId)];
 
+    const activeEvolutionMap = await readStoredActiveEvolutionMap();
+    if (activeEvolutionMap[nextId] === undefined) {
+      activeEvolutionMap[nextId] = true;
+    }
+
     await provisionAgentFilesystem(config, newEntry);
     const workspace = expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
     await seedPresetFilesIntoWorkspace(
@@ -1979,7 +2013,7 @@ async function installMarketplaceAgentFromPreparedPackage(
       { overwriteExisting: true },
     );
     await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills);
-    await persistAgentConfigAndPatchRuntime(config);
+    await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
 
     const timestamp = new Date().toISOString();
     management[nextId] = {
@@ -2174,11 +2208,14 @@ export async function updateAgentSettings(
     }
     nextEntry = applyAgentSkillScope(nextEntry, nextScope);
   }
+  let activeEvolutionMap: Record<string, boolean> | undefined;
+  if (typeof updates.activeEvolutionEnabled === 'boolean') {
+    activeEvolutionMap = await readStoredActiveEvolutionMap();
+    activeEvolutionMap[agentId] = updates.activeEvolutionEnabled;
+    nextEntry = applyAgentActiveEvolutionEnabled(nextEntry, updates.activeEvolutionEnabled);
+  }
   if (typeof updates.activeMemoryEnabled === 'boolean') {
     updateActiveMemoryAgentMembership(config, agentId, updates.activeMemoryEnabled);
-  }
-  if (typeof updates.activeEvolutionEnabled === 'boolean') {
-    nextEntry = applyAgentActiveEvolutionEnabled(nextEntry, updates.activeEvolutionEnabled);
   }
 
   entries[index] = nextEntry;
@@ -2187,7 +2224,7 @@ export async function updateAgentSettings(
     list: entries,
   };
 
-  await persistAgentConfigAndPatchRuntime(config);
+  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
   if (typeof updates.activeMemoryEnabled === 'boolean') {
     await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
       const changed = updateActiveMemoryAgentMembership(
@@ -2274,8 +2311,13 @@ export async function createAgent(
     delete avatars[getAgentAvatarStoreKey(nextId)];
   }
 
+  const activeEvolutionMap = await readStoredActiveEvolutionMap();
+  if (activeEvolutionMap[nextId] === undefined) {
+    activeEvolutionMap[nextId] = true;
+  }
+
   await provisionAgentFilesystem(config, newAgent);
-  await persistAgentConfigAndPatchRuntime(config);
+  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
   await writeAgentAvatarMap(avatars);
   logger.info('Created agent config entry', { agentId: nextId });
   return buildSnapshotFromConfig(config);
@@ -2300,7 +2342,10 @@ export async function updateAgentName(agentId: string, name: string): Promise<Ag
     list: entries,
   };
 
-  await persistAgentConfigAndPatchRuntime(config);
+  const activeEvolutionMap = await readStoredActiveEvolutionMap();
+  delete activeEvolutionMap[agentId];
+
+  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
   logger.info('Updated agent name', { agentId, name: normalizedName });
   return buildSnapshotFromConfig(config);
 }

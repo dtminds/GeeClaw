@@ -97,8 +97,6 @@
             "activeMemoryDisabledHint": "Enable Active Memory first in Settings -> Memory.",
             "activeEvolutionLabel": "Active Evolution",
             "activeEvolutionDescription": "Allow this agent to propose evolution changes and use the evolution proposal tool.",
-            "activeEvolutionGatewayHint": "Start the OpenClaw Gateway before changing this setting for agents using the default skill scope.",
-            "activeEvolutionLoadingHint": "Loading the agent's current skill state...",
             "deleteLabel": "Delete Agent",
             "deleteTitle": "Delete Agent",
             "deleteMessage": "Delete this agent? Its workspace and runtime directories will be removed.",

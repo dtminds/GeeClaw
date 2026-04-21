@@ -29,8 +29,6 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.general.activeMemoryDisabledHint': 'Enable Active Memory first in Settings -> Memory.',
   'agentSettingsDialog.general.activeEvolutionLabel': 'Active Evolution',
   'agentSettingsDialog.general.activeEvolutionDescription': 'Allow this agent to propose evolution changes and use the evolution proposal tool.',
-  'agentSettingsDialog.general.activeEvolutionGatewayHint': 'Start the OpenClaw Gateway before changing this setting for agents using the default skill scope.',
-  'agentSettingsDialog.general.activeEvolutionLoadingHint': "Loading the agent's current skill state...",
   'agentSettingsDialog.general.deleteLabel': 'Delete Agent',
   'agentSettingsDialog.general.deleteTitle': 'Delete Agent',
   'agentSettingsDialog.general.deleteMessage': 'Delete this agent?',
@@ -230,6 +228,7 @@ describe('AgentSettingsDialog shell', () => {
     canUnmanage: false,
     managedFiles: [],
     skillScope: { mode: 'default' },
+    activeEvolutionEnabled: true,
     presetSkills: [],
     canUseDefaultSkillScope: true,
     avatarPresetId: 'gradient-sky',
@@ -788,34 +787,7 @@ describe('AgentSettingsDialog shell', () => {
     expect(screen.getByText('Enable Active Memory first in Settings -> Memory.')).toBeInTheDocument();
   });
 
-  it('uses the current runtime skill set when toggling active evolution for default-scope agents', async () => {
-    mockGatewayRpc.mockResolvedValueOnce({
-      skills: [{
-        skillKey: 'hermes-evolution',
-        name: 'Hermes Evolution',
-        eligible: true,
-        disabled: false,
-        bundled: false,
-        blockedByAllowlist: false,
-      }, {
-        skillKey: 'xlsx',
-        name: 'XLSX',
-        eligible: true,
-        disabled: false,
-        bundled: false,
-        blockedByAllowlist: false,
-      }],
-    });
-
-    useGatewayStore.setState({
-      ...useGatewayStore.getState(),
-      status: {
-        ...useGatewayStore.getState().status,
-        state: 'running',
-      },
-      rpc: mockGatewayRpc,
-    });
-
+  it('toggles active evolution directly from stored agent state', async () => {
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -827,21 +799,18 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     const activeEvolutionSwitch = await screen.findByRole('switch', { name: 'Active Evolution' });
-    await waitFor(() => {
-      expect(activeEvolutionSwitch).toHaveAttribute('aria-checked', 'true');
-    });
+    expect(activeEvolutionSwitch).toHaveAttribute('aria-checked', 'true');
 
     fireEvent.click(activeEvolutionSwitch);
 
     await waitFor(() => {
       expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        manualSkills: ['xlsx'],
         activeEvolutionEnabled: false,
       });
     });
   });
 
-  it('disables the active evolution toggle when gateway data is unavailable for default-scope agents', async () => {
+  it('keeps active evolution available even when gateway is stopped', async () => {
     const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
     useAgentsStore.setState({
       agents: [agentSummary],
@@ -853,8 +822,8 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     const activeEvolutionSwitch = await screen.findByRole('switch', { name: 'Active Evolution' });
-    expect(activeEvolutionSwitch).toBeDisabled();
-    expect(screen.getByText('Start the OpenClaw Gateway before changing this setting for agents using the default skill scope.')).toBeInTheDocument();
+    expect(activeEvolutionSwitch).not.toBeDisabled();
+    expect(screen.getByText('Allow this agent to propose evolution changes and use the evolution proposal tool.')).toBeInTheDocument();
   });
 
   it('shows preset skills as locked in the summary panel', async () => {

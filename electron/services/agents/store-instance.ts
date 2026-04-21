@@ -12,6 +12,7 @@ export async function getGeeClawAgentStore() {
         schemaVersion: 2,
         agents: {} as Record<string, unknown>,
         bindings: [] as Array<Record<string, unknown>>,
+        activeEvolution: {} as Record<string, unknown>,
         management: {} as Record<string, unknown>,
         agentAvatars: {} as Record<string, unknown>,
       },
