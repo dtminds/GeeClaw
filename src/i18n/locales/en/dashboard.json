@@ -57,6 +57,11 @@
         "all": "All Ideas",
         "sceneTitle": "Scenarios",
         "promptTitle": "Prompt",
+        "requiredSkillsTitle": "Required Skills",
+        "requiredSkillsChecking": "Checking required skills…",
+        "requiredSkillsMissing": "Missing skills: {{skills}}. Install or enable them before using this template for best results.",
+        "requiredSkillsReady": "All required skills are ready",
+        "manageSkills": "Manage Skills",
         "useNow": "Use Now",
         "close": "Close",
         "categories": {

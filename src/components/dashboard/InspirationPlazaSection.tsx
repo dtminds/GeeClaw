@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import inspirationJson from '@/assets/inspiration/inspiration.json';
 import { cn } from '@/lib/utils';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
+import { useGatewayStore } from '@/stores/gateway';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +24,7 @@ interface InspirationItem {
   emoji?: string;
   prompt: string;
   scene?: string;
+  required_skills?: string[];
   is_show: boolean;
 }
 
@@ -54,6 +56,60 @@ const inspirationCategories: string[] = Array.from(
   new Set(inspirationItems.map((item) => item.category)),
 );
 
+type GatewaySkillStatus = {
+  skillKey?: string;
+  slug?: string;
+  eligible?: boolean;
+  disabled?: boolean;
+  blockedByAllowlist?: boolean;
+  missing?: {
+    bins?: string[];
+    anyBins?: string[];
+    env?: string[];
+    config?: string[];
+    os?: string[];
+  };
+};
+
+function hasMissingRequirements(skill: GatewaySkillStatus): boolean {
+  const missing = skill.missing;
+  if (!missing) return false;
+
+  return Boolean(
+    (missing.bins && missing.bins.length > 0)
+    || (missing.anyBins && missing.anyBins.length > 0)
+    || (missing.env && missing.env.length > 0)
+    || (missing.config && missing.config.length > 0)
+    || (missing.os && missing.os.length > 0),
+  );
+}
+
+function resolveEnabledSkillKeys(skills: GatewaySkillStatus[] | undefined): string[] {
+  return (skills || [])
+    .filter((skill) => {
+      if (skill.disabled || skill.blockedByAllowlist) {
+        return false;
+      }
+
+      if (hasMissingRequirements(skill)) {
+        return false;
+      }
+
+      return skill.eligible !== false;
+    })
+    .map((skill) => skill.skillKey || skill.slug || '')
+    .filter(Boolean);
+}
+
+function buildSeedPrompt(prompt: string, requiredSkills: string[]): string {
+  const normalizedSkills = requiredSkills
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+    .map((skill) => (skill.startsWith('/') ? skill : `/${skill}`));
+
+  return [...normalizedSkills, prompt.trim()].filter(Boolean).join(' ');
+}
+
 export function InspirationPlazaSection() {
   const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
@@ -64,6 +120,8 @@ export function InspirationPlazaSection() {
   const queueComposerSeed = useChatStore((state) => state.queueComposerSeed);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [selectedItem, setSelectedItem] = useState<InspirationItem | null>(null);
+  const [enabledSkillKeys, setEnabledSkillKeys] = useState<string[]>([]);
+  const [requiredSkillsLoading, setRequiredSkillsLoading] = useState(false);
 
   const filteredItems = activeCategory === 'all'
     ? inspirationItems
@@ -76,6 +134,57 @@ export function InspirationPlazaSection() {
       .filter(Boolean) ?? [],
     [selectedItem],
   );
+
+  const requiredSkills = useMemo(
+    () => (selectedItem?.required_skills || []).filter(Boolean),
+    [selectedItem],
+  );
+
+  const missingRequiredSkills = useMemo(() => {
+    if (requiredSkills.length === 0) {
+      return [];
+    }
+
+    const enabledSet = new Set(enabledSkillKeys);
+    return requiredSkills.filter((skillId) => !enabledSet.has(skillId));
+  }, [enabledSkillKeys, requiredSkills]);
+
+  useEffect(() => {
+    if (!selectedItem || requiredSkills.length === 0) {
+      setEnabledSkillKeys([]);
+      setRequiredSkillsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const agentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
+
+    setRequiredSkillsLoading(true);
+
+    useGatewayStore.getState().rpc<{ skills?: GatewaySkillStatus[] }>('skills.status', { agentId })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setEnabledSkillKeys(resolveEnabledSkillKeys(result.skills));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.warn('Failed to load required skill status for inspiration item:', error);
+        setEnabledSkillKeys([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRequiredSkillsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultAgentId, requiredSkills, selectedItem]);
 
   const getCategoryLabel = (category: string) => {
     if (category === 'all') {
@@ -101,9 +210,15 @@ export function InspirationPlazaSection() {
 
     const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
     await openAgentMainSession(resolvedDefaultAgentId);
-    queueComposerSeed(selectedItem.prompt);
+    queueComposerSeed(buildSeedPrompt(selectedItem.prompt, requiredSkills));
     setSelectedItem(null);
     navigate('/chat');
+  };
+
+  const handleManageSkills = () => {
+    const resolvedDefaultAgentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
+    setSelectedItem(null);
+    navigate(`/skills?agentId=${encodeURIComponent(resolvedDefaultAgentId)}`);
   };
 
   return (
@@ -222,8 +337,8 @@ export function InspirationPlazaSection() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="mt-6 space-y-6 sm:mt-8">
-                <section className="border-t border-black/6 pt-6 dark:border-white/10">
+              <div className="mt-5 space-y-5 sm:mt-6">
+                <section className="border-t border-black/6 pt-5 dark:border-white/10">
                   <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
                     {t('inspirationPlaza.sceneTitle')}
                   </h3>
@@ -236,7 +351,7 @@ export function InspirationPlazaSection() {
                   </div>
                 </section>
 
-                <section className="border-t border-black/6 pt-6 dark:border-white/10">
+                <section className="border-t border-black/6 pt-5 dark:border-white/10">
                   <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
                     {t('inspirationPlaza.promptTitle')}
                   </h3>
@@ -246,9 +361,33 @@ export function InspirationPlazaSection() {
                     </p>
                   </div>
                 </section>
+
+                {missingRequiredSkills.length > 0 && !requiredSkillsLoading && (
+                  <div className="border-t border-black/6 pt-4 dark:border-white/10">
+                    <div className="flex items-start gap-3 text-amber-700 dark:text-amber-200">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p className="text-[13px] leading-6">
+                        {t('inspirationPlaza.requiredSkillsMissing', {
+                          defaultValue: 'Missing skills: {{skills}}. Install or enable them before using this prompt for best results.',
+                          skills: missingRequiredSkills.join(', '),
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="modal-footer mt-8 justify-center pb-1 sm:mt-10">
+              <div className="modal-footer mt-5 justify-center gap-3 pb-1 sm:mt-6">
+                {requiredSkills.length > 0 && missingRequiredSkills.length > 0 && !requiredSkillsLoading && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleManageSkills}
+                    className="modal-secondary-button min-w-[160px] px-8 text-[14px]"
+                  >
+                    {t('inspirationPlaza.manageSkills', { defaultValue: 'Manage Skills' })}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   onClick={() => void handleUseNow()}

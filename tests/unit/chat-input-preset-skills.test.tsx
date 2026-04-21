@@ -20,6 +20,7 @@ const {
   editorChainFocusMock,
   editorRunMock,
   editorCommandsFocusMock,
+  editorCommandsSetContentMock,
 } = vi.hoisted(() => ({
   fetchPresetAgentSkillsMock: vi.fn(),
   fetchAgentScopedSkillsMock: vi.fn(),
@@ -32,6 +33,7 @@ const {
   editorChainFocusMock: vi.fn(),
   editorRunMock: vi.fn(),
   editorCommandsFocusMock: vi.fn(),
+  editorCommandsSetContentMock: vi.fn(),
 }));
 
 vi.mock('@/pages/Chat/slash-picker', () => ({
@@ -111,6 +113,7 @@ vi.mock('@tiptap/react', () => ({
       chain: () => chain,
       commands: {
         focus: editorCommandsFocusMock,
+        setContent: editorCommandsSetContentMock,
       },
       setEditable: vi.fn(),
       getJSON: () => ({ type: 'doc', content: [] }),
@@ -197,6 +200,7 @@ describe('ChatInput preset agent skills loading', () => {
     editorChainFocusMock.mockReset();
     editorRunMock.mockReset();
     editorCommandsFocusMock.mockReset();
+    editorCommandsSetContentMock.mockReset();
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/settings/safety') {
         return {
@@ -524,5 +528,99 @@ describe('ChatInput preset agent skills loading', () => {
       'href',
       '/settings/model-providers',
     );
+  });
+
+  it('forces pending composer seed slash skill refs into skill tokens before skills finish loading', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/news-summary Summarize today',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: 'news-summary',
+                label: 'news-summary',
+                slug: 'news-summary',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' ' },
+            { type: 'text', text: 'Summarize today' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('parses Chinese slash skill refs from pending composer seed into skill tokens', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/文件整理 帮我整理桌面',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: '文件整理',
+                label: '文件整理',
+                slug: '文件整理',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' ' },
+            { type: 'text', text: '帮我整理桌面' },
+          ],
+        }],
+      });
+    });
   });
 });
