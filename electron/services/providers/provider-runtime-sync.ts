@@ -339,14 +339,11 @@ function modelRefBelongsToProvider(
   }
 
   const configuredProviderKey = getOpenClawProviderKey(config.type, config.id, config.metadata);
-  if (trimmedModelRef.includes('/')) {
-    return trimmedModelRef.startsWith(`${configuredProviderKey}/`);
+  if (trimmedModelRef.startsWith(`${configuredProviderKey}/`)) {
+    return true;
   }
 
-  const providerDefinition = getProviderDefinition(config.type);
-  const declaredModelIds = new Set(
-    resolveEffectiveProviderModelEntries(config, providerDefinition).map((model) => model.id),
-  );
+  const declaredModelIds = new Set(getProviderCatalogModelIds(config));
   const fallbackDefaultModel = getProviderDefaultModel(config.type);
   if (fallbackDefaultModel) {
     declaredModelIds.add(fallbackDefaultModel);

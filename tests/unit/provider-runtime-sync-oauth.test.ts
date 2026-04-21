@@ -870,4 +870,106 @@ describe('provider runtime sync for browser OAuth', () => {
       expect.anything(),
     );
   });
+
+  it('resolves slash-containing bare model ids against normalized provider catalog ids', async () => {
+    const { listProviderAccounts } = await import('@electron/services/providers/provider-store');
+
+    vi.mocked(getDefaultProvider).mockResolvedValue('openai-account');
+    vi.mocked(listProviderAccounts).mockResolvedValue([
+      makeAccount({
+        id: 'openrouter-account',
+        vendorId: 'openrouter',
+        label: 'OpenRouter',
+        authMode: 'api_key',
+        isDefault: false,
+        models: ['openrouter/google/gemini-3-flash-preview'],
+      }),
+      makeAccount({
+        id: 'openai-account',
+        vendorId: 'openai',
+        label: 'OpenAI',
+        authMode: 'oauth_browser',
+        isDefault: true,
+      }),
+    ]);
+    vi.mocked(getProvider).mockImplementation(async (providerId: string) => {
+      if (providerId === 'openrouter-account') {
+        return makeProvider({
+          id: 'openrouter-account',
+          name: 'OpenRouter',
+          type: 'openrouter',
+          models: ['openrouter/google/gemini-3-flash-preview'],
+        });
+      }
+      if (providerId === 'openai-account') {
+        return makeProvider({
+          id: 'openai-account',
+          name: 'OpenAI',
+          type: 'openai',
+        });
+      }
+      return null;
+    });
+    vi.mocked(getProviderAccount).mockImplementation(async (accountId: string) => {
+      if (accountId === 'openrouter-account') {
+        return makeAccount({
+          id: 'openrouter-account',
+          vendorId: 'openrouter',
+          label: 'OpenRouter',
+          authMode: 'api_key',
+          isDefault: false,
+          models: ['openrouter/google/gemini-3-flash-preview'],
+        });
+      }
+      if (accountId === 'openai-account') {
+        return makeAccount({
+          id: 'openai-account',
+          vendorId: 'openai',
+          label: 'OpenAI',
+          authMode: 'oauth_browser',
+          isDefault: true,
+        });
+      }
+      return null;
+    });
+    vi.mocked(getApiKey).mockResolvedValue('sk-openrouter');
+    vi.mocked(getDefaultAgentModelConfig).mockResolvedValue({
+      model: {
+        configured: true,
+        primary: 'google/gemini-3-flash-preview',
+        fallbacks: [],
+      },
+      imageModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      pdfModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      imageGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      videoGenerationModel: {
+        configured: false,
+        primary: null,
+        fallbacks: [],
+      },
+      primary: 'google/gemini-3-flash-preview',
+      fallbacks: [],
+    } as Awaited<ReturnType<typeof getDefaultAgentModelConfig>>);
+
+    await syncExplicitDefaultModelToRuntime();
+
+    expect(setOpenClawDefaultModel).toHaveBeenCalledWith(
+      'openrouter',
+      'google/gemini-3-flash-preview',
+      [],
+    );
+    expect(setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+  });
 });
