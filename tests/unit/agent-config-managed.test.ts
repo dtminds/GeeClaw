@@ -1670,6 +1670,64 @@ describe('managed agent config domain', () => {
     expect(config.plugins?.entries?.['active-memory']?.config?.agents).toEqual(['main']);
   });
 
+  it('syncs active evolution by updating the agent tool deny list without touching other tools', async () => {
+    const { agentConfig, configDir } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    const initialConfig = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        list?: Array<{
+          id?: string;
+          skills?: string[];
+          tools?: { deny?: string[]; [key: string]: unknown };
+        }>;
+      };
+    };
+    const researchHelper = initialConfig.agents?.list?.find((agent) => agent.id === 'research-helper');
+    if (researchHelper) {
+      researchHelper.skills = ['alpha-skill', 'hermes-evolution'];
+      researchHelper.tools = { deny: ['web_search'] };
+    }
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify(initialConfig, null, 2), 'utf8');
+
+    const enabled = await agentConfig.updateAgentSettings('research-helper', {
+      activeEvolutionEnabled: true,
+    });
+    expect(enabled.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      deniedTools: ['web_search'],
+    });
+
+    let config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        list?: Array<{
+          id?: string;
+          tools?: { deny?: string[]; [key: string]: unknown };
+        }>;
+      };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.tools?.deny).toEqual(['web_search']);
+
+    const disabled = await agentConfig.updateAgentSettings('research-helper', {
+      activeEvolutionEnabled: false,
+    });
+    expect(disabled.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      deniedTools: ['evolution_proposal', 'web_search'],
+    });
+
+    config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: {
+        list?: Array<{
+          id?: string;
+          tools?: { deny?: string[]; [key: string]: unknown };
+        }>;
+      };
+    };
+    expect(config.agents?.list?.find((agent) => agent.id === 'research-helper')?.tools?.deny).toEqual([
+      'evolution_proposal',
+      'web_search',
+    ]);
+  });
+
   it('removes deleted agents from active-memory membership', async () => {
     const { agentConfig, configDir, homeDir } = await setupManagedPresetFixture();
 

@@ -69,6 +69,7 @@ GeeClaw 始终运行应用内置的 OpenClaw，如果你的系统里已经安装
 ### 💬 智能聊天界面
 通过现代化的聊天体验与 AI 智能体交互。与此同时，也支持类似 Codex 的 `/` 技能搜索，可持续筛选、键盘导航，并以内嵌 skill token 的形式把已选中的启用技能直接插入到句子里。这意味着，你无需开启一堆skills来干扰上下文（实验证明，启用超过20个技能，Agent的回答质量会明显下降），而是通过指定技能来执行专业任务。
 当 Hermes 进化流程面向桌面端发出 `evolution_proposal` 工具调用时，对话区会直接渲染可 review 的原生提案卡片，支持 tab 切换和一键确认进化。
+每个 Agent 还会在 **Agent 设置 → 通用** 中提供一个 **主动进化** 开关。关闭后，GeeClaw 会把 `hermes-evolution` 从该 Agent 的显式技能列表里移除，并把 `evolution_proposal` 写入该 Agent 自身的 `tools.deny`。
 
 ### ✅ 全局审批弹窗
 当 OpenClaw 发起 exec 或 plugin 审批请求时，GeeClaw 现在会在应用任意页面之上显示阻塞式审批弹窗，包括启动页和设置层。

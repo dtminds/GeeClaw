@@ -172,6 +172,7 @@ export interface AgentSettingsUpdate {
   manualSkills?: string[];
   avatarPresetId?: AgentAvatarPresetId;
   activeMemoryEnabled?: boolean;
+  activeEvolutionEnabled?: boolean;
 }
 
 export interface AgentSummary {
@@ -195,6 +196,7 @@ export interface AgentSummary {
   managedFiles: string[];
   skillScope: AgentSkillScope;
   manualSkills?: string[];
+  deniedTools?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
   avatarPresetId: AgentAvatarPresetId;
@@ -458,6 +460,23 @@ function normalizeManualSkillList(skills: unknown): string[] {
   return normalized.sort((left, right) => left.localeCompare(right));
 }
 
+function normalizeToolDenyList(tools: unknown): string[] {
+  const list = Array.isArray(tools) ? tools : [];
+  if (list.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new Error('Denied tools must contain only non-empty tool ids');
+  }
+
+  const normalized = list
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('Denied tools must not contain duplicate tool ids');
+  }
+
+  return normalized.sort((left, right) => left.localeCompare(right));
+}
+
 export function validateManagedSkillScope(
   presetSkills: string[],
   nextScope: AgentSkillScope,
@@ -575,6 +594,22 @@ function readAgentManualSkills(entry: AgentListEntry): string[] | undefined {
     : undefined;
 }
 
+function readAgentDeniedTools(entry: AgentListEntry): string[] | undefined {
+  const tools = entry.tools;
+  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
+    return undefined;
+  }
+
+  const deny = (tools as { deny?: unknown }).deny;
+  return Array.isArray(deny)
+    ? deny
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right))
+    : undefined;
+}
+
 function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): AgentListEntry {
   const nextEntry = { ...entry };
   if (scope.mode === 'default') {
@@ -591,6 +626,40 @@ function applyAgentManualSkills(entry: AgentListEntry, manualSkills: string[]): 
     ...entry,
     skills: [...manualSkills],
   };
+}
+
+function applyAgentDeniedTools(entry: AgentListEntry, deniedTools: string[]): AgentListEntry {
+  const nextEntry = { ...entry };
+  const normalizedDeny = normalizeToolDenyList(deniedTools);
+  const currentTools = nextEntry.tools;
+  const nextTools = currentTools && typeof currentTools === 'object' && !Array.isArray(currentTools)
+    ? { ...(currentTools as Record<string, unknown>) }
+    : {};
+
+  if (normalizedDeny.length > 0) {
+    nextTools.deny = normalizedDeny;
+    nextEntry.tools = nextTools;
+    return nextEntry;
+  }
+
+  delete nextTools.deny;
+  if (Object.keys(nextTools).length === 0) {
+    delete nextEntry.tools;
+  } else {
+    nextEntry.tools = nextTools;
+  }
+  return nextEntry;
+}
+
+function applyAgentActiveEvolutionEnabled(entry: AgentListEntry, enabled: boolean): AgentListEntry {
+  const deniedTools = new Set(readAgentDeniedTools(entry) ?? []);
+  if (enabled) {
+    deniedTools.delete('evolution_proposal');
+  } else {
+    deniedTools.add('evolution_proposal');
+  }
+
+  return applyAgentDeniedTools(entry, [...deniedTools]);
 }
 
 function resolveDefaultAvatarPresetIdForAgent(
@@ -1510,6 +1579,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       .sort((left, right) => left.channelType.localeCompare(right.channelType) || left.accountId.localeCompare(right.accountId));
     const avatar = resolveAgentAvatar(entry.id, avatarMap, managedMetadata);
     const manualSkills = readAgentManualSkills(entry);
+    const deniedTools = readAgentDeniedTools(entry);
     return {
       id: entry.id,
       name: entry.name || (entry.id === MAIN_AGENT_ID ? MAIN_AGENT_NAME : entry.id),
@@ -1531,6 +1601,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
       skillScope: readAgentSkillScope(entry),
       ...(manualSkills !== undefined ? { manualSkills } : {}),
+      ...(deniedTools !== undefined ? { deniedTools } : {}),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
       avatarPresetId: avatar.avatarPresetId,
@@ -2105,6 +2176,9 @@ export async function updateAgentSettings(
   }
   if (typeof updates.activeMemoryEnabled === 'boolean') {
     updateActiveMemoryAgentMembership(config, agentId, updates.activeMemoryEnabled);
+  }
+  if (typeof updates.activeEvolutionEnabled === 'boolean') {
+    nextEntry = applyAgentActiveEvolutionEnabled(nextEntry, updates.activeEvolutionEnabled);
   }
 
   entries[index] = nextEntry;
