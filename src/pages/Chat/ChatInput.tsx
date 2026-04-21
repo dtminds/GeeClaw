@@ -363,7 +363,7 @@ function serializeComposerNode(node: SerializedNode | null | undefined): string 
   return children;
 }
 
-const INLINE_SKILL_REFERENCE_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]|(^|[\s([{"'“‘])\/([^\s/)\]},"'.!?;:，。！？；：、”’]+)(?=$|[\s)\]},"'.!?;:，。！？；：、”’])/giu;
+const INLINE_SKILL_REFERENCE_RE = /\[\[use skill:\s*([^(]+?)(?:\s*\(([^)]+)\))?\]\]|(^|[\s([{"'“‘])\/([^\s/()\[\]{},"'!?;:，。！？；：、”’]+)(?=$|[\s)\]},"'.!?;:，。！？；：、”’])/giu;
 
 function normalizeSkillReference(value: string): string {
   return normalizeSkillSearch(value).replace(/^\/+/, '');

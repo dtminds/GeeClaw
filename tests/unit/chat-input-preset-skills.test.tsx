@@ -639,6 +639,58 @@ describe('ChatInput preset agent skills loading', () => {
     });
   });
 
+  it('keeps dotted slash skill refs tokenizable from pending composer seed', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/workspace.organizer Sort these files',
+        nonce: Date.now(),
+        tokenizableSkillSlugs: ['workspace.organizer'],
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            {
+              type: 'skillToken',
+              attrs: {
+                id: 'workspace.organizer',
+                label: 'workspace.organizer',
+                slug: 'workspace.organizer',
+                skillPath: null,
+              },
+            },
+            { type: 'text', text: ' Sort these files' },
+          ],
+        }],
+      });
+    });
+  });
+
   it('keeps unknown slash skill refs as plain text when they are not explicitly tokenizable', async () => {
     useChatStore.setState((state) => ({
       ...state,
@@ -676,6 +728,48 @@ describe('ChatInput preset agent skills loading', () => {
           content: [
             { type: 'text', text: '/habit-builder' },
             { type: 'text', text: ' Build a routine' },
+          ],
+        }],
+      });
+    });
+  });
+
+  it('does not parse slash refs that start with opening brackets', async () => {
+    useChatStore.setState((state) => ({
+      ...state,
+      pendingComposerSeed: {
+        text: '/(habit-builder) Build a routine',
+        nonce: Date.now(),
+      },
+      consumePendingComposerSeed: vi.fn(() => {
+        useChatStore.setState((inner) => ({
+          ...inner,
+          pendingComposerSeed: null,
+        }));
+      }),
+    }));
+    useSkillsStore.setState((state) => ({
+      ...state,
+      skills: [],
+      loading: true,
+      fetchSkills: vi.fn(async () => {}),
+    }));
+
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(editorCommandsSetContentMock).toHaveBeenCalledWith({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '/(habit-builder) Build a routine' },
           ],
         }],
       });

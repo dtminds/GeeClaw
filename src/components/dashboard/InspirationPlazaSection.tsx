@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
+import { hasMissingRequirements, type GatewaySkillStatus } from '@/stores/skills';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -56,39 +57,11 @@ const inspirationCategories: string[] = Array.from(
   new Set(inspirationItems.map((item) => item.category)),
 );
 
-type GatewaySkillStatus = {
-  skillKey?: string;
-  slug?: string;
-  eligible?: boolean;
-  disabled?: boolean;
-  blockedByAllowlist?: boolean;
-  missing?: {
-    bins?: string[];
-    anyBins?: string[];
-    env?: string[];
-    config?: string[];
-    os?: string[];
-  };
-};
-
 function resolveKnownSkillKeys(skills: GatewaySkillStatus[] | undefined): string[] {
   return (skills || [])
     .flatMap((skill) => [skill.skillKey, skill.slug])
     .filter((value): value is string => Boolean(value?.trim()))
     .map((value) => value.trim());
-}
-
-function hasMissingRequirements(skill: GatewaySkillStatus): boolean {
-  const missing = skill.missing;
-  if (!missing) return false;
-
-  return Boolean(
-    (missing.bins && missing.bins.length > 0)
-    || (missing.anyBins && missing.anyBins.length > 0)
-    || (missing.env && missing.env.length > 0)
-    || (missing.config && missing.config.length > 0)
-    || (missing.os && missing.os.length > 0),
-  );
 }
 
 function resolveEnabledSkillKeys(skills: GatewaySkillStatus[] | undefined): string[] {
@@ -98,14 +71,15 @@ function resolveEnabledSkillKeys(skills: GatewaySkillStatus[] | undefined): stri
         return false;
       }
 
-      if (hasMissingRequirements(skill)) {
+      if (hasMissingRequirements(skill.missing)) {
         return false;
       }
 
       return skill.eligible !== false;
     })
-    .map((skill) => skill.skillKey || skill.slug || '')
-    .filter(Boolean);
+    .flatMap((skill) => [skill.skillKey, skill.slug])
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim());
 }
 
 function buildSeedPrompt(prompt: string, requiredSkills: string[]): string {
@@ -162,7 +136,7 @@ export function InspirationPlazaSection() {
     }
 
     let cancelled = false;
-    const agentId = useAgentsStore.getState().defaultAgentId || defaultAgentId || 'main';
+    const agentId = defaultAgentId || 'main';
 
     useGatewayStore.getState().rpc<{ skills?: GatewaySkillStatus[] }>('skills.status', { agentId })
       .then((result) => {
