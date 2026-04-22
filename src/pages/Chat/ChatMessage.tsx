@@ -656,7 +656,7 @@ export const ChatMessage = memo(function ChatMessage({
   const text = isUser ? userText : assistantText;
   const hasText = text.length > 0;
   const hasUserSystemNotice = isUserSystemNotice && Boolean(userDisplayDecision?.text);
-  const hasAssistantText = assistantText.length > 0;
+  // const hasAssistantText = assistantText.length > 0;
 
   const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
