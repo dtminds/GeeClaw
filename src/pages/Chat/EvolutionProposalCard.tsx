@@ -187,7 +187,7 @@ export function EvolutionProposalCard({
               >
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   {proposal.tabs.length === 1 ? (
-                    <span className="min-w-0 truncate text-[13px] font-medium text-[#7a6a64]">{tab.label} - {tab.targetFile}</span>
+                    <span className="min-w-0 truncate text-[13px] font-medium text-[#7a6a64]">{tab.label}</span>
                   ) : null}
                 </div>
 

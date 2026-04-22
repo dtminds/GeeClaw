@@ -656,7 +656,7 @@ export const ChatMessage = memo(function ChatMessage({
   const text = isUser ? userText : assistantText;
   const hasText = text.length > 0;
   const hasUserSystemNotice = isUserSystemNotice && Boolean(userDisplayDecision?.text);
-  const hasAssistantText = assistantText.length > 0;
+  // const hasAssistantText = assistantText.length > 0;
 
   const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
@@ -842,9 +842,9 @@ export const ChatMessage = memo(function ChatMessage({
         )}
 
         {/* Hover row for assistant messages — only when there is real text content */}
-        {!isUser && hasAssistantText && (
+        {/* {!isUser && hasAssistantText && (
           <AssistantHoverBar text={text} timestamp={message.timestamp} message={message} />
-        )}
+        )} */}
       </div>
 
       {/* Image lightbox portal */}
@@ -870,31 +870,31 @@ function formatDuration(durationMs?: number): string | null {
 
 // ── Assistant hover bar (timestamp + copy, shown on group hover) ─
 
-function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: number; message?: RawMessage }) {
-  const [copied, setCopied] = useState(false);
+// function AssistantHoverBar({ text, timestamp }: { text: string; timestamp?: number; message?: RawMessage }) {
+//   const [copied, setCopied] = useState(false);
 
-  const copyContent = useCallback(() => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [text]);
+//   const copyContent = useCallback(() => {
+//     navigator.clipboard.writeText(text);
+//     setCopied(true);
+//     setTimeout(() => setCopied(false), 2000);
+//   }, [text]);
 
-  return (
-    <div className="flex w-full flex-wrap items-center justify-start gap-x-4 gap-y-1.5 opacity-0 transition-opacity duration-200 select-none group-hover:opacity-100">
-      <span className="text-xs text-muted-foreground">
-        {timestamp ? formatTimestamp(timestamp) : ''}
-      </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        onClick={copyContent}
-      >
-        {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-      </Button>
-    </div>
-  );
-}
+//   return (
+//     <div className="flex w-full flex-wrap items-center justify-start gap-x-4 gap-y-1.5 opacity-0 transition-opacity duration-200 select-none group-hover:opacity-100">
+//       <span className="text-xs text-muted-foreground">
+//         {timestamp ? formatTimestamp(timestamp) : ''}
+//       </span>
+//       <Button
+//         variant="ghost"
+//         size="icon"
+//         className="h-6 w-6"
+//         onClick={copyContent}
+//       >
+//         {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+//       </Button>
+//     </div>
+//   );
+// }
 
 // ── Message Bubble ──────────────────────────────────────────────
 
@@ -1584,7 +1584,7 @@ function ToolCard({
       <div
         className={cn(
           'group/tool relative flex min-w-0 max-w-[30rem] flex-col overflow-hidden rounded-lg text-sm transition-colors mb-1',
-          !isRunning && !isError && 'text-muted-foreground',
+          !isRunning && !isError && 'text-muted-foreground/80',
           isError && 'text-destructive',
         )}
       >
@@ -1602,7 +1602,7 @@ function ToolCard({
               )}
             >
               {isRunning && <UnicodeSpinner className="w-4 text-[13px]" />}
-              {!isRunning && !isError && <HugeiconsIcon icon={toolIcon} className="h-4 w-4 shrink-0" />}
+              {!isRunning && !isError && <HugeiconsIcon icon={toolIcon} className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
               {isError && <HugeiconsIcon icon={AlertCircleIcon} className="h-4 w-4 shrink-0" />}
             </span>
             <span 

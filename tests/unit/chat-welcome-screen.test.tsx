@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ChatWelcomeScreen } from '@/pages/Chat';
 
 const translations: Record<string, string> = {
   'welcome.subtitle': 'Your AI assistant is ready. Start a conversation below.',
@@ -29,8 +30,7 @@ vi.mock('@/components/branding/BrandOrbLogo', () => ({
 }));
 
 describe('ChatWelcomeScreen', () => {
-  it('renders the orb-backed GeeClaw logo in the empty state', async () => {
-    const { ChatWelcomeScreen } = await import('@/pages/Chat');
+  it('renders the orb-backed GeeClaw logo in the empty state', () => {
     render(<ChatWelcomeScreen />);
 
     expect(screen.getByTestId('brand-orb-logo')).toBeInTheDocument();
