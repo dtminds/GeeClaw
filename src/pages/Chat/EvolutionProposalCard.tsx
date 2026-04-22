@@ -188,23 +188,12 @@ export function EvolutionProposalCard({
               >
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   {proposal.tabs.length === 1 ? (
-                    <span className="min-w-0 truncate text-[13px] font-medium text-[#7a6a64]">{tab.label}</span>
+                    <span className="min-w-0 truncate text-[13px] font-medium text-[#7a6a64]">{tab.label} - {tab.targetFile}</span>
                   ) : null}
                 </div>
 
                 <div className="space-y-3">
                   {renderMarkdown(tab.content)}
-
-                  {tab.targetFile ? (
-                    <div className="grid gap-3 border-t border-[#f0e4dd] pt-3.5 sm:grid-cols-3">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-[#9a8b84]">
-                          {targetFileLabel}
-                        </div>
-                        <div className="mt-0.5 break-all text-xs text-[#6a5f5a]">{tab.targetFile}</div>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </TabsContent>
