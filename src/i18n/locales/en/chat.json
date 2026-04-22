@@ -89,6 +89,7 @@
             "namePlaceholder": "Assistant",
             "avatarLabel": "Avatar",
             "avatarDescription": "Choose a preset avatar",
+            "identityDialogTitle": "Edit agent profile",
             "agentIdLabel": "Agent ID",
             "modelLabel": "Model",
             "inheritedSuffix": "(inherited)",

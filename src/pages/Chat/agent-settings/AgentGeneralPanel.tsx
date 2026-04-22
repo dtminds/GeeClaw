@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { AgentAvatar } from '@/components/agents/AgentAvatar';
 import { AgentAvatarPicker } from '@/components/agents/AgentAvatarPicker';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toUserMessage } from '@/lib/api-client';
 import { hostApiFetch } from '@/lib/host-api';
-import { cn } from '@/lib/utils';
-import type { AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
+import { DEFAULT_AGENT_AVATAR_PRESET_ID, type AgentAvatarPresetId } from '@/lib/agent-avatar-presets';
 import { useAgentsStore } from '@/stores/agents';
 
 interface AgentGeneralPanelProps {
@@ -36,10 +42,12 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   const agent = useAgentsStore((state) => state.agents.find((entry) => entry.id === agentId));
   const updateAgentSettings = useAgentsStore((state) => state.updateAgentSettings);
   const deleteAgent = useAgentsStore((state) => state.deleteAgent);
-  const [name, setName] = useState(agent?.name ?? '');
-  const [avatarPresetId, setAvatarPresetId] = useState<AgentAvatarPresetId | null>(agent?.avatarPresetId ?? null);
-  const [savingName, setSavingName] = useState(false);
-  const [savingAvatarPresetId, setSavingAvatarPresetId] = useState<AgentAvatarPresetId | null>(null);
+  const [identityDialogOpen, setIdentityDialogOpen] = useState(false);
+  const [draftName, setDraftName] = useState(agent?.name ?? '');
+  const [draftAvatarPresetId, setDraftAvatarPresetId] = useState<AgentAvatarPresetId>(
+    agent?.avatarPresetId ?? DEFAULT_AGENT_AVATAR_PRESET_ID,
+  );
+  const [savingIdentity, setSavingIdentity] = useState(false);
   const [loadingActiveMemory, setLoadingActiveMemory] = useState(true);
   const [activeMemoryGloballyEnabled, setActiveMemoryGloballyEnabled] = useState(false);
   const [activeMemoryEnabledForAgent, setActiveMemoryEnabledForAgent] = useState(false);
@@ -49,9 +57,13 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    setName(agent?.name ?? '');
-    setAvatarPresetId(agent?.avatarPresetId ?? null);
-  }, [agent?.avatarPresetId, agent?.name, agentId]);
+    if (identityDialogOpen) {
+      return;
+    }
+
+    setDraftName(agent?.name ?? '');
+    setDraftAvatarPresetId(agent?.avatarPresetId ?? DEFAULT_AGENT_AVATAR_PRESET_ID);
+  }, [agent?.avatarPresetId, agent?.name, agentId, identityDialogOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +94,9 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
     };
   }, [agentId]);
 
-  const canSaveName = Boolean(agent && name.trim() && name.trim() !== agent.name);
+  const canSaveIdentity = Boolean(agent
+    && draftName.trim()
+    && (draftName.trim() !== agent.name || draftAvatarPresetId !== agent.avatarPresetId));
   const isDeleteProtected = Boolean(agent && (agent.isDefault || agent.id === 'main'));
   const deleteDisabled = !agent || deleting || isDeleteProtected;
   const activeMemoryToggleDisabled = !agent
@@ -94,34 +108,30 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
   const activeEvolutionToggleDisabled = !agent || deleting || savingActiveEvolution;
   const activeEvolutionDescription = t('agentSettingsDialog.general.activeEvolutionDescription');
 
-  const handleSaveName = async () => {
-    if (!agent || !canSaveName) return;
-    setSavingName(true);
-    try {
-      await updateAgentSettings(agent.id, { name: name.trim() });
-      toast.success(t('agentSettingsDialog.general.toastSaved'));
-    } catch (error) {
-      toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
-    } finally {
-      setSavingName(false);
-    }
-  };
-
-  const handleAvatarChange = async (nextPresetId: AgentAvatarPresetId) => {
-    if (!agent || deleting || savingAvatarPresetId || nextPresetId === agent.avatarPresetId) {
+  const handleOpenIdentityDialog = () => {
+    if (!agent || deleting) {
       return;
     }
 
-    const previousPresetId = avatarPresetId ?? agent.avatarPresetId;
-    setAvatarPresetId(nextPresetId);
-    setSavingAvatarPresetId(nextPresetId);
+    setDraftName(agent.name);
+    setDraftAvatarPresetId(agent.avatarPresetId ?? DEFAULT_AGENT_AVATAR_PRESET_ID);
+    setIdentityDialogOpen(true);
+  };
+
+  const handleSaveIdentity = async () => {
+    if (!agent || !canSaveIdentity) return;
+    setSavingIdentity(true);
     try {
-      await updateAgentSettings(agent.id, { avatarPresetId: nextPresetId });
+      await updateAgentSettings(agent.id, {
+        name: draftName.trim(),
+        avatarPresetId: draftAvatarPresetId,
+      });
+      toast.success(t('agentSettingsDialog.general.toastSaved'));
+      setIdentityDialogOpen(false);
     } catch (error) {
-      setAvatarPresetId(previousPresetId);
       toast.error(t('agentSettingsDialog.general.toastSaveFailed', { error: toUserMessage(error) }));
     } finally {
-      setSavingAvatarPresetId(null);
+      setSavingIdentity(false);
     }
   };
 
@@ -184,48 +194,31 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
         ) : null}
       </header>
       <div className="mt-4 flex flex-col gap-5 pb-1">
-        <div className="space-y-2.5">
-          <Label htmlFor="agent-general-name" className={labelClasses}>
-            {t('agentSettingsDialog.general.nameLabel')} - {agent?.id ?? ''}
-          </Label>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              id="agent-general-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t('agentSettingsDialog.general.namePlaceholder')}
-              className={cn(inputClasses, 'flex-1')}
-              disabled={!agent || savingName || deleting}
+        <div className="modal-section-surface flex min-w-0 items-center justify-between gap-3 rounded-2xl p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <AgentAvatar
+              presetId={agent?.avatarPresetId}
+              label={agent?.name}
+              size="picker"
+              className="h-12 w-12 shrink-0"
             />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void handleSaveName()}
-              disabled={!canSaveName || savingName || deleting}
-              className="modal-field-surface surface-hover h-[44px] rounded-xl px-4 text-[13px] font-medium text-foreground/80 shadow-none"
-            >
-              {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common:actions.save')}
-            </Button>
-          </div>
-        </div>
-
-        {avatarPresetId ? (
-          <div className="space-y-2.5">
-            <div className="space-y-1">
-              <Label className={labelClasses}>
-                {t('agentSettingsDialog.general.avatarLabel', 'Avatar')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t('agentSettingsDialog.general.avatarDescription', 'Choose a preset avatar')}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {agent?.name || t('agentSettingsDialog.general.namePlaceholder')}
               </p>
             </div>
-            <AgentAvatarPicker
-              value={avatarPresetId}
-              onChange={(presetId) => void handleAvatarChange(presetId)}
-              disabled={!agent || Boolean(savingAvatarPresetId) || deleting}
-            />
           </div>
-        ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleOpenIdentityDialog}
+            disabled={!agent || deleting}
+            className="modal-secondary-button h-9 shrink-0 px-3"
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            {t('common:actions.edit')}
+          </Button>
+        </div>
 
         <div className="rounded-2xl border border-black/6 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.04]">
           <div className="flex items-center justify-between gap-4">
@@ -307,6 +300,81 @@ export function AgentGeneralPanel({ agentId, title, description, onDeleted }: Ag
           setConfirmDelete(false);
         }}
       />
+
+      <Dialog open={identityDialogOpen} onOpenChange={(open) => {
+        if (savingIdentity) return;
+        setIdentityDialogOpen(open);
+      }}>
+        <DialogContent
+          hideCloseButton
+          className="modal-card-surface w-[min(520px,calc(100vw-2rem))] max-w-[520px] overflow-hidden rounded-3xl border p-0"
+        >
+          <DialogHeader className="px-6 pb-0 pt-6">
+            <DialogTitle className="modal-title">
+              {t('agentSettingsDialog.general.identityDialogTitle')}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 p-6 pt-5">
+            <div className="space-y-2.5">
+              <Label htmlFor="agent-identity-name" className={labelClasses}>
+                {t('agentSettingsDialog.general.nameLabel')}
+              </Label>
+              <Input
+                id="agent-identity-name"
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                placeholder={t('agentSettingsDialog.general.namePlaceholder')}
+                className={inputClasses}
+                disabled={!agent || savingIdentity}
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="space-y-1">
+                <Label className={labelClasses}>
+                  {t('agentSettingsDialog.general.avatarLabel', 'Avatar')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('agentSettingsDialog.general.avatarDescription', 'Choose a preset avatar')}
+                </p>
+              </div>
+              <AgentAvatarPicker
+                value={draftAvatarPresetId}
+                onChange={setDraftAvatarPresetId}
+                disabled={!agent || savingIdentity}
+              />
+            </div>
+
+            <div className="modal-footer">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIdentityDialogOpen(false)}
+                disabled={savingIdentity}
+                className="modal-secondary-button"
+              >
+                {t('common:actions.cancel')}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleSaveIdentity()}
+                disabled={!canSaveIdentity || savingIdentity}
+                className="modal-primary-button"
+              >
+                {savingIdentity ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('common:status.saving')}
+                  </>
+                ) : (
+                  t('common:actions.save')
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
