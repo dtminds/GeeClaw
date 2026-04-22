@@ -198,6 +198,7 @@ Open **Settings → Environment** to manage app-level environment variables for 
 Open **Settings → Memory** to manage a beginner-friendly subset of OpenClaw memory features without editing `openclaw.json` directly.
 
 - The page exposes **Dreaming**, **Active Memory**, and **Lossless Claw**.
+- On startup, GeeClaw keeps **Dreaming** enabled by default, but initializes **Active Memory** as off unless `openclaw.json` explicitly enables it.
 - Saving Memory settings triggers a managed Gateway hot-reload so the updated config takes effect immediately.
 
 ### Web Search Providers

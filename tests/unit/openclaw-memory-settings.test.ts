@@ -407,7 +407,7 @@ describe('openclaw memory settings', () => {
     });
   });
 
-  it('initializes memory defaults on startup when the config is missing explicit disable flags', async () => {
+  it('initializes active memory as disabled on startup when the config is missing explicit flags', async () => {
     const {
       LOSSLESS_CLAW_REQUIRED_VERSION,
       initializeMemoryDefaultsOnStartup,
@@ -431,8 +431,7 @@ describe('openclaw memory settings', () => {
     expect(entries['active-memory']).toEqual({
       enabled: true,
       config: {
-        enabled: true,
-        agents: ['main'],
+        enabled: false,
       },
     });
     expect(entries['lossless-claw']).toEqual({
@@ -511,6 +510,40 @@ describe('openclaw memory settings', () => {
     });
     expect(plugins.slots).toEqual({
       contextEngine: 'legacy',
+    });
+  });
+
+  it('preserves explicit active-memory enablement without restoring main agent membership on startup', async () => {
+    const {
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
+    await writeOpenClawJson({
+      plugins: {
+        entries: {
+          'active-memory': {
+            enabled: true,
+            config: {
+              enabled: true,
+              agents: [],
+            },
+          },
+        },
+      },
+    });
+
+    const changed = await initializeMemoryDefaultsOnStartup();
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as Record<string, unknown>;
+    const entries = (plugins.entries ?? {}) as Record<string, unknown>;
+
+    expect(changed).toBe(true);
+    expect(entries['active-memory']).toEqual({
+      enabled: true,
+      config: {
+        enabled: true,
+        agents: [],
+      },
     });
   });
 });

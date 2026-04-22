@@ -138,7 +138,6 @@ Primary config lives under:
 - `plugins.entries["active-memory"].config.enabled`
 - `plugins.entries["active-memory"].config.agents`
 - `plugins.entries["active-memory"].config.model`
-- `plugins.entries["active-memory"].config.modelFallbackPolicy`
 
 Important note:
 
@@ -154,7 +153,6 @@ installation state.
   - ensure `plugins.entries["active-memory"].enabled = true`
   - ensure `plugins.entries["active-memory"].config.enabled = true`
   - ensure `plugins.entries["active-memory"].config.agents = ["main"]` in single-agent mode
-  - ensure `plugins.entries["active-memory"].config.modelFallbackPolicy = "default-remote"` if unset
 - Turn off:
   - keep `plugins.entries["active-memory"].enabled = true`
   - write `plugins.entries["active-memory"].config.enabled = false`
