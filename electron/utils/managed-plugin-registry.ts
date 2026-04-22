@@ -15,7 +15,7 @@ export const MANAGED_PLUGINS: ManagedPluginDefinition[] = [
   {
     pluginId: 'lossless-claw',
     packageName: '@martian-engineering/lossless-claw',
-    targetVersion: '0.9.1',
+    targetVersion: '0.9.2',
     displayName: 'lossless-claw',
     installMessage: '正在安装记忆增强插件',
     requiredForStartup: false,

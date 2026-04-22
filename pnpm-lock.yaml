@@ -77,8 +77,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@larksuite/openclaw-lark':
-        specifier: 2026.4.7
-        version: 2026.4.7(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))
+        specifier: 2026.4.8
+        version: 2026.4.8(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))
       '@playwright/test':
         specifier: ^1.59.0
         version: 1.59.1
@@ -128,8 +128,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@tencent-weixin/openclaw-weixin':
-        specifier: 2.1.8
-        version: 2.1.8
+        specifier: 2.1.9
+        version: 2.1.9
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -158,8 +158,8 @@ importers:
         specifier: ^5.1.4
         version: 5.1.4(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@wecom/wecom-openclaw-plugin':
-        specifier: 2026.4.8
-        version: 2026.4.8
+        specifier: 2026.4.22
+        version: 2026.4.22
       '@whiskeysockets/baileys':
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(jimp@1.6.1)(sharp@0.34.5)
@@ -1338,8 +1338,8 @@ packages:
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
 
-  '@larksuite/openclaw-lark@2026.4.7':
-    resolution: {integrity: sha512-oiS7hHwJpoOQCHjgAT2xPTO9zmmUKEje2kgsYC+Q8ZMu0gn/sI+FE2NYnQ3dVcgqw7z+2rdajgcTP6kkisFxNw==}
+  '@larksuite/openclaw-lark@2026.4.8':
+    resolution: {integrity: sha512-HHIwDBQPtEZSLHHCnV52ip5WL8mag/qBUucIyH+pbyMHAAXyKtPHTfXFGTm1/HVMC0ZH2km5f11QvNyy85SDGw==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -2726,8 +2726,8 @@ packages:
   '@telegraf/types@7.1.0':
     resolution: {integrity: sha512-kGevOIbpMcIlCDeorKGpwZmdH7kHbqlk/Yj6dEpJMKEQw5lk0KVQY0OLXaCswy8GqlIVLd5625OB+rAntP9xVw==}
 
-  '@tencent-weixin/openclaw-weixin@2.1.8':
-    resolution: {integrity: sha512-YM2fumDI+NvslhFH4gsek+scgCwTdyz7eMDyfNadCTXPjh9hoosn8tcMF0P90gQJEGEud7AJXiKKd8IKGNCfRA==}
+  '@tencent-weixin/openclaw-weixin@2.1.9':
+    resolution: {integrity: sha512-5dLvKCFebSMRNQ2l0Lqx78gyuL0Msdg1NVmcN6fuxtZiaQiOx4IkIl8+9WPN+e26jR8XM5qIfW2sgf7pe7M1ew==}
     engines: {node: '>=22'}
 
   '@testing-library/dom@10.4.1':
@@ -3297,8 +3297,8 @@ packages:
   '@wecom/aibot-node-sdk@1.0.6':
     resolution: {integrity: sha512-WZJN3Q+s+94Qjc0VW8d5W1cVkA3emYxiqf+mNRO9UEHoF40puHvizreNMtudjFhm7mmkYiK5ue/QzNiCk+xwLA==}
 
-  '@wecom/wecom-openclaw-plugin@2026.4.8':
-    resolution: {integrity: sha512-bGbS8493sHT34FAYaugep2OLjb4dvYfLXMSfZguK/4s8i5PM//2iy4XPUsniacl8LNSUxiF/FuQGM/LJxNwrFg==}
+  '@wecom/wecom-openclaw-plugin@2026.4.22':
+    resolution: {integrity: sha512-scrJJ6LEm+b68MO9E5TKvIF7jDB5CDpf0RWT5C5V0WcqX7ZNfGsc6om6D3DZknOs0iPylzCbHCGu8vwbeVXzjA==}
 
   '@whiskeysockets/baileys@7.0.0-rc.9':
     resolution: {integrity: sha512-YFm5gKXfDP9byCXCW3OPHKXLzrAKzolzgVUlRosHHgwbnf2YOO3XknkMm6J7+F0ns8OA0uuSBhgkRHTDtqkacw==}
@@ -3501,9 +3501,6 @@ packages:
   await-to-js@3.0.0:
     resolution: {integrity: sha512-zJAaP9zxTcvTHRlejau3ZOY4V7SRpiByf3/dxx2uyKxxor19tpmpV2QRsTKikckwhaPmr2dVpxxMr7jOCYVp5g==}
     engines: {node: '>=6.0.0'}
-
-  axios@1.13.5:
-    resolution: {integrity: sha512-cz4ur7Vb0xS4/KUN0tPWe44eqxrIu31me+fbang3ijiNscE129POzipJJA6zniq2C/Z6sJCjMimjS8Lc/GAs8Q==}
 
   axios@1.13.6:
     resolution: {integrity: sha512-ChTCHMouEe2kn713WHbQGcuYrr6fXTBiu460OTwWrWob16g1bXn4vtz07Ope7ewMozJAnEquLk5lWQWtBig9DQ==}
@@ -9297,7 +9294,7 @@ snapshots:
       '@lancedb/lancedb-win32-x64-msvc': 0.27.2
     optional: true
 
-  '@larksuite/openclaw-lark@2026.4.7(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))':
+  '@larksuite/openclaw-lark@2026.4.8(openclaw@2026.4.9(@napi-rs/canvas@0.1.97)(@types/express@5.0.6)(apache-arrow@18.1.0)(encoding@0.1.13)(typescript@5.9.3))':
     dependencies:
       '@larksuiteoapi/node-sdk': 1.60.0
       '@sinclair/typebox': 0.34.48
@@ -10862,7 +10859,7 @@ snapshots:
   '@telegraf/types@7.1.0':
     optional: true
 
-  '@tencent-weixin/openclaw-weixin@2.1.8':
+  '@tencent-weixin/openclaw-weixin@2.1.9':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6
@@ -11586,7 +11583,7 @@ snapshots:
 
   '@wecom/aibot-node-sdk@1.0.6':
     dependencies:
-      axios: 1.13.5
+      axios: 1.13.6(debug@4.4.3)
       eventemitter3: 5.0.4
       ws: 8.20.0
     transitivePeerDependencies:
@@ -11594,7 +11591,7 @@ snapshots:
       - debug
       - utf-8-validate
 
-  '@wecom/wecom-openclaw-plugin@2026.4.8':
+  '@wecom/wecom-openclaw-plugin@2026.4.22':
     dependencies:
       '@wecom/aibot-node-sdk': 1.0.6
       fast-xml-parser: 5.5.10
@@ -11837,14 +11834,6 @@ snapshots:
 
   await-to-js@3.0.0:
     optional: true
-
-  axios@1.13.5:
-    dependencies:
-      follow-redirects: 1.15.11(debug@4.4.3)
-      form-data: 4.0.5
-      proxy-from-env: 1.1.0
-    transitivePeerDependencies:
-      - debug
 
   axios@1.13.6(debug@4.4.3):
     dependencies:
