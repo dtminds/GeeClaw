@@ -339,8 +339,10 @@ describe('chat live rendering', () => {
 
     expect(screen.getByText('Agent 请求自我进化')).toBeInTheDocument();
     expect(screen.getByText('基于工具调用失败的教训，固化一套资讯搜索回退策略')).toBeInTheDocument();
-    expect(screen.getByText('Web Research / 资讯搜索策略')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/tool-policy.md')).toBeInTheDocument();
+    expect(screen.getByText(
+      /Web Research \/ 资讯搜索策略\s*-\s*\/tmp\/tool-policy\.md/,
+      { selector: 'span' },
+    )).toBeInTheDocument();
     expect(screen.queryByText('/tmp/evolution-proposal.md')).not.toBeInTheDocument();
     expect(screen.queryByText('打开草稿')).not.toBeInTheDocument();
     expect(screen.getByText('确认进化')).toBeInTheDocument();
