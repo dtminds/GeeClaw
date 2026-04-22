@@ -1771,6 +1771,25 @@ describe('managed agent config domain', () => {
     });
   });
 
+  it('preserves stored active evolution when renaming an agent', async () => {
+    const { agentConfig, storeState } = await setupManagedPresetFixture();
+
+    await agentConfig.createAgent('Research Helper', 'research-helper');
+    await agentConfig.updateAgentSettings('research-helper', {
+      activeEvolutionEnabled: false,
+    });
+
+    const renamed = await agentConfig.updateAgentName('research-helper', 'Research Copilot');
+
+    expect(renamed.agents.find((agent) => agent.id === 'research-helper')).toMatchObject({
+      name: 'Research Copilot',
+      activeEvolutionEnabled: false,
+    });
+    expect(storeState.activeEvolution).toMatchObject({
+      'research-helper': false,
+    });
+  });
+
   it('removes deleted agents from active-memory membership', async () => {
     const { agentConfig, configDir, homeDir } = await setupManagedPresetFixture();
 

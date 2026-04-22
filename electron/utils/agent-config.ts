@@ -2342,10 +2342,7 @@ export async function updateAgentName(agentId: string, name: string): Promise<Ag
     list: entries,
   };
 
-  const activeEvolutionMap = await readStoredActiveEvolutionMap();
-  delete activeEvolutionMap[agentId];
-
-  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
+  await persistAgentConfigAndPatchRuntime(config);
   logger.info('Updated agent name', { agentId, name: normalizedName });
   return buildSnapshotFromConfig(config);
 }
