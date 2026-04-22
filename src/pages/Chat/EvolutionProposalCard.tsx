@@ -64,7 +64,6 @@ export function EvolutionProposalCard({
   const title = preferZh ? 'Agent 请求自我进化' : 'Agent Self-Evolution Request';
   const approveLabel = preferZh ? '确认进化' : 'Approve evolution';
   const rejectLabel = preferZh ? '拒绝' : 'Reject';
-  const targetFileLabel = preferZh ? '目标文件' : 'Target file';
   const resolvedLabel = resolvedAction === 'approve'
     ? (preferZh ? '已进化' : 'Evolved')
     : resolvedAction === 'reject'
