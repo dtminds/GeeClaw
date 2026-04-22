@@ -254,17 +254,12 @@ function initializeActiveMemoryDefaults(entries: ConfigRecord): boolean {
     changed = true;
   }
 
-  if (activeMemoryConfig.enabled !== true) {
-    activeMemoryConfig.enabled = true;
-    changed = true;
+  if (activeMemoryConfig.enabled === true) {
+    return changed;
   }
 
-  const currentAgents = Array.isArray(activeMemoryConfig.agents)
-    ? activeMemoryConfig.agents.filter((entry): entry is string => typeof entry === 'string')
-    : [];
-  if (currentAgents.length !== ACTIVE_MEMORY_DEFAULT_AGENTS.length
-    || currentAgents.some((entry, index) => entry !== ACTIVE_MEMORY_DEFAULT_AGENTS[index])) {
-    activeMemoryConfig.agents = [...ACTIVE_MEMORY_DEFAULT_AGENTS];
+  if (activeMemoryConfig.enabled !== false) {
+    activeMemoryConfig.enabled = false;
     changed = true;
   }
 
