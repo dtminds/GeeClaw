@@ -153,40 +153,6 @@
             ]
           },
           {
-            "id": 25,
-            "category": "研究学习",
-            "category_icon": "?",
-            "order": 5,
-            "title": "拆解学习目标与督促打卡",
-            "subtitle": "单词背了就忘？每天帮你盯进度，到点就催你学",
-            "card_label": "学习打卡督促",
-            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/card.svg",
-            "prompt": "我的目标是「每天背诵30个日常英语单词」，请每天帮我找30个并在每日「20:00」督促我背诵。",
-            "hidden_prompt": "加载learning-tracker技能，",
-            "required_skills": [
-              "learning-tracker"
-            ],
-            "scene": "学习目标模糊🎯：不知道如何拆解大目标，细化每日小任务，逐步达成目标；\n自主学习散漫⏳：没有学习约束，实时盯紧学习进度，培养良好习惯。",
-            "is_recommend": true,
-            "is_agent_recommend": false,
-            "is_banner": false,
-            "is_show": true,
-            "default_conversation": [
-              {
-                "role": "user",
-                "content": "拆解学习目标与督促打卡能帮我做什么？"
-              },
-              {
-                "role": "assistant",
-                "content": "💼我能做什么？\n将学习大目标拆解为每日可执行小任务，定时督促完成打卡，实时盯紧学习进度，培养良好学习习惯。\n\n🧵我是怎么做？\n根据指定的学习目标和打卡时间，拆解每日小任务并准备对应学习内容，到点督促完成学习打卡，跟踪整体进度。\n\n适用场景：\n🎯 学习目标模糊：不会拆解大目标，帮你细化每日小任务逐步达成。\n⏳ 自主学习散漫：缺乏学习约束，实时盯紧进度督促打卡。"
-              }
-            ],
-            "preset_questions": [
-              "我的目标是「每天背诵30个日常英语单词」，请每天帮我找30个并在每日「20:00」督促我背诵。",
-              "帮我拆解背单词的目标并打卡。"
-            ]
-          },
-          {
             "id": 78,
             "category": "办公提效",
             "category_icon": "",
@@ -391,40 +357,6 @@
             "preset_questions": [
               "我给你一批资料链接，帮我：① 逐一读取每个链接的核心内容 ② 提取关键观点和数据 ③ 去掉重复信息 ④ 整理成一份结构清晰的「研究笔记」，用 Markdown 格式输出，带目录。",
               "帮我提取这些资料的核心内容并去重。"
-            ]
-          },
-          {
-            "id": 31,
-            "category": "娱乐游戏",
-            "category_icon": "?",
-            "order": 11,
-            "title": "定时任务：深夜情绪疏导与陪伴",
-            "subtitle": "深夜孤独感爆发，想说话却怕打扰人？我陪你聊到天亮",
-            "card_label": "深夜情绪陪伴",
-            "emoji": "https://webcdn.m.qq.com/qclaw/inspiration/moon.svg",
-            "prompt": "什么都不用做「21:00 」后，如果你还在线，虾哥会自动出现陪你聊天。\n「不想被打扰？」说\"虾哥别吵我\" → 当晚免打扰",
-            "hidden_prompt": "使用night-owl-shrimp技能，",
-            "required_skills": [
-              "night-owl-shrimp"
-            ],
-            "scene": "深夜独处孤独🌙：凌晨无眠想倾诉，有人陪伴聊天缓解孤独感；\n情绪低落烦闷😔：深夜心情不佳无人诉说，贴心疏导缓解负面情绪；\n睡前无聊解闷😴：晚上睡不着觉太无聊，轻松聊天打发时间，助眠放松。",
-            "is_recommend": false,
-            "is_agent_recommend": false,
-            "is_banner": false,
-            "is_show": true,
-            "default_conversation": [
-              {
-                "role": "user",
-                "content": "定时任务：深夜情绪疏导与陪伴能帮我做什么？"
-              },
-              {
-                "role": "assistant",
-                "content": "💼我能做什么？\n深夜时段自动提供情绪陪伴与倾听服务，支持倾诉和入睡模式，疏导负面情绪，缓解孤独感，助眠放松。\n\n🧵我是怎么做？\n21:00 后若你在线则自动触发服务，陪你聊天倾诉，可切换入睡模式，自动记忆你的聊天偏好，不想被打扰可一键开启免打扰。\n\n适用场景：\n🌙 深夜独处孤独：凌晨无眠想倾诉，陪伴聊天缓解孤独感。\n😔 情绪低落烦闷：深夜心情不佳无人诉说，贴心疏导负面情绪。\n😴 睡前无聊解闷：晚上睡不着觉，轻松聊天打发时间助眠放松。"
-              }
-            ],
-            "preset_questions": [
-              "什么都不用做「21:00 」后，如果你还在线，虾哥会自动出现陪你聊天。 「不想被打扰？」说\"虾哥别吵我\" → 当晚免打扰",
-              "帮我疏导一下深夜的负面情绪。"
             ]
           },
           {

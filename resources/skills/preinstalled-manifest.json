@@ -19,6 +19,238 @@
       "hidden": true
     },
     {
+      "slug": "hermes-evolution",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "hermes-evolution",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "ai-research-radar",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "ai-research-radar",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "arxiv-speed-reader",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "arxiv-speed-reader",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "bi-dashboard",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "bi-dashboard",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "cantian-bazi",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "cantian-bazi",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "citation-formatter",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "citation-formatter",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "content-creator",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "content-creator",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "daily-horoscope",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "daily-horoscope",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "deep-explainer",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "deep-explainer",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "doc-organizer",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "doc-organizer",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "file-diff-checker",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "file-diff-checker",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "fitness-adjuster",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "fitness-adjuster",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "fitness-planner",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "fitness-planner",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "goal-decomposer",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "goal-decomposer",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "habit-builder",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "habit-builder",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "knowledge-framework",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "knowledge-framework",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "macro-economy-brief",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "macro-economy-brief",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "market-pain-finder",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "market-pain-finder",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "mbti-matcher",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "mbti-matcher",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "movie-recommender",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "movie-recommender",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "niuamaxia-scheduler",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "niuamaxia-scheduler",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "nutritionist",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "nutritionist",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "quant-backtester",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "quant-backtester",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "startup-validator",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "startup-validator",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "study-planner",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "study-planner",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "tarot",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "tarot",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "video-script-gen",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "video-script-gen",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "news-summary",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "news-summary",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "weather-outfit-advisor",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "weather-outfit-advisor",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
       "slug": "content-factory",
       "repo": "lsave/gc-bundle-skills",
       "repoPath": "content-factory",
@@ -40,7 +272,7 @@
       "repoPath": "file-skill",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "goal-tracker",
@@ -64,7 +296,7 @@
       "repoPath": "idea-validator",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "market-researcher",
@@ -72,7 +304,7 @@
       "repoPath": "market-researcher",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "movie-advisor",
@@ -144,15 +376,7 @@
       "repoPath": "skills/find-skills",
       "ref": "main",
       "version": "main",
-      "autoEnable": true
-    },
-    {
-      "slug": "self-improving-agent",
-      "repo": "peterskoett/self-improving-agent",
-      "repoPath": ".",
-      "ref": "master",
-      "version": "main",
-      "autoEnable": true
+      "autoEnable": false
     },
     {
       "slug": "schedule-skill",
