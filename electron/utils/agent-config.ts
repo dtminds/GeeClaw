@@ -1,6 +1,7 @@
 import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { dirname, join, normalize } from 'path';
+import { isDeepStrictEqual } from 'node:util';
 import { app } from 'electron';
 import { listConfiguredChannels, readOpenClawConfig } from './channel-config';
 import { expandPath, getOpenClawConfigDir } from './paths';
@@ -30,7 +31,11 @@ import { normalizeSpecifiedSkillList, type AgentSkillScope } from './agent-skill
 import { mapWithConcurrency } from './promise-pool';
 import { listProviderAccounts, providerAccountToConfig, saveProviderAccount } from '../services/providers/provider-store';
 import { getGeeClawAgentStore } from '../services/agents/store-instance';
-import { saveAgentRuntimeConfigToStore, syncAllAgentConfigToOpenClaw } from '../services/agents/agent-runtime-sync';
+import {
+  readStoredActiveEvolutionMap,
+  saveAgentRuntimeConfigToStore,
+  syncAllAgentConfigToOpenClaw,
+} from '../services/agents/agent-runtime-sync';
 import {
   formatPresetPlatforms,
   isPresetSupportedOnPlatform,
@@ -48,6 +53,8 @@ import * as logger from './logger';
 const MAIN_AGENT_ID = 'main';
 const MAIN_AGENT_NAME = 'Main';
 const DEFAULT_ACCOUNT_ID = 'default';
+const ACTIVE_EVOLUTION_SKILL_ID = 'hermes-evolution';
+const ACTIVE_EVOLUTION_TOOL_ID = 'evolution_proposal';
 const AGENT_BOOTSTRAP_FILES = [
   'AGENTS.md',
   'SOUL.md',
@@ -172,6 +179,7 @@ export interface AgentSettingsUpdate {
   manualSkills?: string[];
   avatarPresetId?: AgentAvatarPresetId;
   activeMemoryEnabled?: boolean;
+  activeEvolutionEnabled?: boolean;
 }
 
 export interface AgentSummary {
@@ -195,6 +203,8 @@ export interface AgentSummary {
   managedFiles: string[];
   skillScope: AgentSkillScope;
   manualSkills?: string[];
+  activeEvolutionEnabled?: boolean;
+  deniedTools?: string[];
   presetSkills: string[];
   canUseDefaultSkillScope: boolean;
   avatarPresetId: AgentAvatarPresetId;
@@ -458,6 +468,23 @@ function normalizeManualSkillList(skills: unknown): string[] {
   return normalized.sort((left, right) => left.localeCompare(right));
 }
 
+function normalizeToolDenyList(tools: unknown): string[] {
+  const list = Array.isArray(tools) ? tools : [];
+  if (list.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new Error('Denied tools must contain only non-empty tool ids');
+  }
+
+  const normalized = list
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('Denied tools must not contain duplicate tool ids');
+  }
+
+  return normalized.sort((left, right) => left.localeCompare(right));
+}
+
 export function validateManagedSkillScope(
   presetSkills: string[],
   nextScope: AgentSkillScope,
@@ -575,6 +602,22 @@ function readAgentManualSkills(entry: AgentListEntry): string[] | undefined {
     : undefined;
 }
 
+function readAgentDeniedTools(entry: AgentListEntry): string[] | undefined {
+  const tools = entry.tools;
+  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
+    return undefined;
+  }
+
+  const deny = (tools as { deny?: unknown }).deny;
+  return Array.isArray(deny)
+    ? deny
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right))
+    : undefined;
+}
+
 function applyAgentSkillScope(entry: AgentListEntry, scope: AgentSkillScope): AgentListEntry {
   const nextEntry = { ...entry };
   if (scope.mode === 'default') {
@@ -591,6 +634,55 @@ function applyAgentManualSkills(entry: AgentListEntry, manualSkills: string[]): 
     ...entry,
     skills: [...manualSkills],
   };
+}
+
+function applyAgentDeniedTools(entry: AgentListEntry, deniedTools: string[]): AgentListEntry {
+  const nextEntry = { ...entry };
+  const normalizedDeny = normalizeToolDenyList(deniedTools);
+  const currentTools = nextEntry.tools;
+  const nextTools = currentTools && typeof currentTools === 'object' && !Array.isArray(currentTools)
+    ? { ...(currentTools as Record<string, unknown>) }
+    : {};
+
+  if (normalizedDeny.length > 0) {
+    nextTools.deny = normalizedDeny;
+    nextEntry.tools = nextTools;
+    return nextEntry;
+  }
+
+  delete nextTools.deny;
+  if (Object.keys(nextTools).length === 0) {
+    delete nextEntry.tools;
+  } else {
+    nextEntry.tools = nextTools;
+  }
+  return nextEntry;
+}
+
+function applyAgentActiveEvolutionEnabled(entry: AgentListEntry, enabled: boolean): AgentListEntry {
+  const nextEntry = { ...entry };
+  if (Array.isArray(nextEntry.skills)) {
+    const currentSkills = nextEntry.skills
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const nextSkills = enabled
+      ? (currentSkills.includes(ACTIVE_EVOLUTION_SKILL_ID) ? currentSkills : [...currentSkills, ACTIVE_EVOLUTION_SKILL_ID])
+      : currentSkills.filter((skill) => skill !== ACTIVE_EVOLUTION_SKILL_ID);
+
+    if (!isDeepStrictEqual(currentSkills, nextSkills)) {
+      nextEntry.skills = nextSkills;
+    }
+  }
+
+  const deniedTools = new Set(readAgentDeniedTools(nextEntry) ?? []);
+  if (enabled) {
+    deniedTools.delete(ACTIVE_EVOLUTION_TOOL_ID);
+  } else {
+    deniedTools.add(ACTIVE_EVOLUTION_TOOL_ID);
+  }
+
+  return applyAgentDeniedTools(nextEntry, [...deniedTools]);
 }
 
 function resolveDefaultAvatarPresetIdForAgent(
@@ -1447,6 +1539,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
     readAgentManagementMap(),
     readAgentAvatarMap(),
   ]);
+  const activeEvolutionMap = await readStoredActiveEvolutionMap();
   const configuredChannels = await listConfiguredChannels();
   const { channelToAgent, accountToAgent } = getChannelBindingMap(config.bindings);
   const defaultAgentIdNorm = normalizeAgentIdForBinding(defaultAgentId);
@@ -1510,6 +1603,7 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       .sort((left, right) => left.channelType.localeCompare(right.channelType) || left.accountId.localeCompare(right.accountId));
     const avatar = resolveAgentAvatar(entry.id, avatarMap, managedMetadata);
     const manualSkills = readAgentManualSkills(entry);
+    const deniedTools = readAgentDeniedTools(entry);
     return {
       id: entry.id,
       name: entry.name || (entry.id === MAIN_AGENT_ID ? MAIN_AGENT_NAME : entry.id),
@@ -1531,6 +1625,8 @@ async function buildSnapshotFromConfig(config: AgentConfigDocument): Promise<Age
       managedFiles: managedMetadata?.managed ? [...managedMetadata.managedFiles] : [],
       skillScope: readAgentSkillScope(entry),
       ...(manualSkills !== undefined ? { manualSkills } : {}),
+      activeEvolutionEnabled: activeEvolutionMap[entry.id] ?? true,
+      ...(deniedTools !== undefined ? { deniedTools } : {}),
       presetSkills: managedMetadata?.managed ? [...managedMetadata.presetSkills] : [],
       canUseDefaultSkillScope: !(managedMetadata?.managed) || managedMetadata.presetSkills.length === 0,
       avatarPresetId: avatar.avatarPresetId,
@@ -1603,10 +1699,14 @@ async function buildAgentPersonaSnapshot(
   };
 }
 
-async function persistAgentConfigAndPatchRuntime(config: AgentConfigDocument): Promise<void> {
+async function persistAgentConfigAndPatchRuntime(
+  config: AgentConfigDocument,
+  activeEvolution?: Record<string, boolean>,
+): Promise<void> {
   await saveAgentRuntimeConfigToStore({
     agents: config.agents,
     bindings: config.bindings,
+    activeEvolution,
   });
   await syncAllAgentConfigToOpenClaw();
 }
@@ -1900,6 +2000,11 @@ async function installMarketplaceAgentFromPreparedPackage(
 
     delete avatars[getAgentAvatarStoreKey(nextId)];
 
+    const activeEvolutionMap = await readStoredActiveEvolutionMap();
+    if (activeEvolutionMap[nextId] === undefined) {
+      activeEvolutionMap[nextId] = true;
+    }
+
     await provisionAgentFilesystem(config, newEntry);
     const workspace = expandPath(newEntry.workspace || getDefaultWorkspacePathForAgent(nextId));
     await seedPresetFilesIntoWorkspace(
@@ -1908,7 +2013,7 @@ async function installMarketplaceAgentFromPreparedPackage(
       { overwriteExisting: true },
     );
     await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills);
-    await persistAgentConfigAndPatchRuntime(config);
+    await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
 
     const timestamp = new Date().toISOString();
     management[nextId] = {
@@ -2103,6 +2208,12 @@ export async function updateAgentSettings(
     }
     nextEntry = applyAgentSkillScope(nextEntry, nextScope);
   }
+  let activeEvolutionMap: Record<string, boolean> | undefined;
+  if (typeof updates.activeEvolutionEnabled === 'boolean') {
+    activeEvolutionMap = await readStoredActiveEvolutionMap();
+    activeEvolutionMap[agentId] = updates.activeEvolutionEnabled;
+    nextEntry = applyAgentActiveEvolutionEnabled(nextEntry, updates.activeEvolutionEnabled);
+  }
   if (typeof updates.activeMemoryEnabled === 'boolean') {
     updateActiveMemoryAgentMembership(config, agentId, updates.activeMemoryEnabled);
   }
@@ -2113,7 +2224,7 @@ export async function updateAgentSettings(
     list: entries,
   };
 
-  await persistAgentConfigAndPatchRuntime(config);
+  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
   if (typeof updates.activeMemoryEnabled === 'boolean') {
     await mutateOpenClawConfigDocument<boolean>((currentConfig) => {
       const changed = updateActiveMemoryAgentMembership(
@@ -2200,8 +2311,13 @@ export async function createAgent(
     delete avatars[getAgentAvatarStoreKey(nextId)];
   }
 
+  const activeEvolutionMap = await readStoredActiveEvolutionMap();
+  if (activeEvolutionMap[nextId] === undefined) {
+    activeEvolutionMap[nextId] = true;
+  }
+
   await provisionAgentFilesystem(config, newAgent);
-  await persistAgentConfigAndPatchRuntime(config);
+  await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
   await writeAgentAvatarMap(avatars);
   logger.info('Created agent config entry', { agentId: nextId });
   return buildSnapshotFromConfig(config);

@@ -340,6 +340,7 @@ describe('agent API routes', () => {
       name: '股票助手 Pro',
       avatarPresetId: 'gradient-sunset',
       activeMemoryEnabled: true,
+      activeEvolutionEnabled: true,
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -363,6 +364,7 @@ describe('agent API routes', () => {
       name: '股票助手 Pro',
       avatarPresetId: 'gradient-sunset',
       activeMemoryEnabled: true,
+      activeEvolutionEnabled: true,
       skillScope: {
         mode: 'specified',
         skills: ['stock-analyzer', 'web-search'],
@@ -394,6 +396,7 @@ describe('agent API routes', () => {
       name: undefined,
       avatarPresetId: undefined,
       activeMemoryEnabled: undefined,
+      activeEvolutionEnabled: undefined,
       manualSkills: ['pdf', 'xlsx'],
       skillScope: undefined,
     });

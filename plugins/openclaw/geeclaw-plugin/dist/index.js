@@ -8,6 +8,7 @@
  * - error-response-handler
  * - cron-delivery-guard
  * - tool-sandbox
+ * - evolution-proposal
  * - qmemory
  */
 import { HookProxy } from './core/hook-proxy.js';
@@ -23,6 +24,7 @@ import cronDeliveryGuard from './packages/cron-delivery-guard/index.js';
 import toolSandbox from './packages/tool-sandbox/index.js';
 import qmemoryPkg from './packages/qmemory/index.js';
 import errorResponseHandler from './packages/error-response-handler/index.js';
+import evolutionProposal from './packages/evolution-proposal/index.js';
 const LOG_TAG = '[geeclaw-plugin]';
 /**
  * 所有功能 package 列表（顺序即初始化顺序）
@@ -32,12 +34,14 @@ const LOG_TAG = '[geeclaw-plugin]';
  *   - error-response-handler（HTTP 错误码 → SSE 友好响应）
  *   - cron-delivery-guard
  *   - tool-sandbox
+ *   - evolution-proposal
  *   - qmemory
  */
 const PACKAGES = [
     errorResponseHandler,
     cronDeliveryGuard,
     toolSandbox,
+    evolutionProposal,
     qmemoryPkg,
 ];
 /** 已初始化的 package 实例（用于 getPublicApi 跨 package 通讯） */

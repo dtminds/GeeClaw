@@ -52,6 +52,7 @@ interface AgentsState {
       manualSkills?: string[];
       avatarPresetId?: AgentAvatarPresetId;
       activeMemoryEnabled?: boolean;
+      activeEvolutionEnabled?: boolean;
     },
   ) => Promise<void>;
   deleteAgent: (agentId: string) => Promise<void>;
@@ -282,6 +283,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       manualSkills?: string[];
       avatarPresetId?: AgentAvatarPresetId;
       activeMemoryEnabled?: boolean;
+      activeEvolutionEnabled?: boolean;
     },
   ) => {
     set({ error: null });

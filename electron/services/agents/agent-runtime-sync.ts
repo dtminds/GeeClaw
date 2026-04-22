@@ -13,10 +13,13 @@ import { getProviderDefinition } from '../../shared/providers/registry';
 interface StoredAgentRuntimeConfig {
   agents?: Record<string, unknown>;
   bindings?: Array<Record<string, unknown>>;
+  activeEvolution?: Record<string, boolean>;
 }
 
 const MAIN_AGENT_ID = 'main';
 const MAIN_AGENT_NAME = 'Main';
+const ACTIVE_EVOLUTION_SKILL_ID = 'hermes-evolution';
+const ACTIVE_EVOLUTION_TOOL_ID = 'evolution_proposal';
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -78,6 +81,23 @@ function sanitizeStoredAgentsConfig(agents: Record<string, unknown>): Record<str
       .map((entry) => sanitizeAgentListEntry(entry));
   }
   return nextAgents;
+}
+
+function sanitizeStoredActiveEvolutionConfig(activeEvolution: unknown): Record<string, boolean> | undefined {
+  if (!activeEvolution || typeof activeEvolution !== 'object' || Array.isArray(activeEvolution)) {
+    return undefined;
+  }
+
+  const next: Record<string, boolean> = {};
+  for (const [agentId, enabled] of Object.entries(activeEvolution as Record<string, unknown>)) {
+    const normalizedAgentId = typeof agentId === 'string' ? agentId.trim() : '';
+    if (!normalizedAgentId || typeof enabled !== 'boolean') {
+      continue;
+    }
+    next[normalizedAgentId] = enabled;
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 async function buildDerivedDefaultModelsMap(): Promise<Record<string, Record<string, never>> | undefined> {
@@ -154,16 +174,19 @@ export async function readStoredAgentRuntimeConfig(): Promise<StoredAgentRuntime
   const store = await getGeeClawAgentStore();
   const agents = store.get('agents') as Record<string, unknown> | undefined;
   const bindings = store.get('bindings') as Array<Record<string, unknown>> | undefined;
+  const activeEvolution = sanitizeStoredActiveEvolutionConfig(store.get('activeEvolution'));
 
   return {
     agents: agents ? sanitizeStoredAgentsConfig(agents) : undefined,
     bindings: bindings ? cloneValue(bindings) : undefined,
+    activeEvolution,
   };
 }
 
 export async function saveAgentRuntimeConfigToStore(config: {
   agents?: unknown;
   bindings?: unknown;
+  activeEvolution?: unknown;
 }): Promise<void> {
   const store = await getGeeClawAgentStore();
 
@@ -178,6 +201,20 @@ export async function saveAgentRuntimeConfigToStore(config: {
   } else {
     store.delete('bindings');
   }
+
+  if (config.activeEvolution !== undefined) {
+    const nextActiveEvolution = sanitizeStoredActiveEvolutionConfig(config.activeEvolution);
+    if (nextActiveEvolution) {
+      store.set('activeEvolution', cloneValue(nextActiveEvolution));
+    } else {
+      store.delete('activeEvolution');
+    }
+  }
+}
+
+export async function readStoredActiveEvolutionMap(): Promise<Record<string, boolean>> {
+  const store = await getGeeClawAgentStore();
+  return sanitizeStoredActiveEvolutionConfig(store.get('activeEvolution')) ?? {};
 }
 
 function applyStoredAgentRuntimeConfig(
@@ -185,7 +222,11 @@ function applyStoredAgentRuntimeConfig(
   storedConfig: StoredAgentRuntimeConfig,
   derivedDefaultModels: Record<string, Record<string, never>> | undefined,
 ): boolean {
-  const { agents: storedAgents, bindings: storedBindings } = storedConfig;
+  const {
+    agents: storedAgents,
+    bindings: storedBindings,
+    activeEvolution: storedActiveEvolution = {},
+  } = storedConfig;
   let modified = false;
 
   if (storedAgents && Object.keys(storedAgents).length > 0) {
@@ -252,11 +293,72 @@ function applyStoredAgentRuntimeConfig(
     modified = true;
   }
 
+  const agentEntries = Array.isArray(config.agents?.list)
+    ? config.agents.list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    : [];
+
+  for (const entry of agentEntries) {
+    const agentId = typeof entry.id === 'string' ? entry.id.trim() : '';
+    if (!agentId) {
+      continue;
+    }
+
+    const activeEvolutionEnabled = storedActiveEvolution[agentId] ?? true;
+
+    if (Array.isArray(entry.skills)) {
+      const currentSkills = entry.skills
+        .filter((skill): skill is string => typeof skill === 'string')
+        .map((skill) => skill.trim())
+        .filter(Boolean);
+      const nextSkills = activeEvolutionEnabled
+        ? (currentSkills.includes(ACTIVE_EVOLUTION_SKILL_ID) ? currentSkills : [...currentSkills, ACTIVE_EVOLUTION_SKILL_ID])
+        : currentSkills.filter((skill) => skill !== ACTIVE_EVOLUTION_SKILL_ID);
+
+      if (!isDeepStrictEqual(currentSkills, nextSkills)) {
+        entry.skills = nextSkills;
+        modified = true;
+      }
+    }
+
+    const tools = entry.tools && typeof entry.tools === 'object' && !Array.isArray(entry.tools)
+      ? { ...(entry.tools as Record<string, unknown>) }
+      : {};
+    const currentDeny = Array.isArray(tools.deny)
+      ? tools.deny
+        .filter((tool): tool is string => typeof tool === 'string')
+        .map((tool) => tool.trim())
+        .filter(Boolean)
+      : [];
+    const denySet = new Set(currentDeny);
+
+    if (activeEvolutionEnabled) {
+      denySet.delete(ACTIVE_EVOLUTION_TOOL_ID);
+    } else {
+      denySet.add(ACTIVE_EVOLUTION_TOOL_ID);
+    }
+
+    const nextDeny = Array.from(denySet).sort((left, right) => left.localeCompare(right));
+    if (!isDeepStrictEqual(currentDeny.slice().sort((left, right) => left.localeCompare(right)), nextDeny)) {
+      if (nextDeny.length > 0) {
+        tools.deny = nextDeny;
+        entry.tools = tools;
+      } else {
+        delete tools.deny;
+        if (Object.keys(tools).length === 0) {
+          delete entry.tools;
+        } else {
+          entry.tools = tools;
+        }
+      }
+      modified = true;
+    }
+  }
+
   return modified;
 }
 
 export async function syncAllAgentConfigToOpenClaw(): Promise<void> {
-  const { agents: storedAgents, bindings: storedBindings } = await readStoredAgentRuntimeConfig();
+  const { agents: storedAgents, bindings: storedBindings, activeEvolution: storedActiveEvolution } = await readStoredAgentRuntimeConfig();
   const derivedDefaultModels = await buildDerivedDefaultModelsMap();
 
   let hasStoredConfigs = false;
@@ -264,13 +366,14 @@ export async function syncAllAgentConfigToOpenClaw(): Promise<void> {
   if (storedBindings && storedBindings.length > 0) hasStoredConfigs = true;
 
   if (!hasStoredConfigs) {
-    return await migrateOpenClawConfigToStore();
+    await migrateOpenClawConfigToStore();
   }
 
   const modified = await mutateOpenClawConfigDocument<boolean>((config) => {
     const changed = applyStoredAgentRuntimeConfig(config as OpenClawConfig, {
       agents: storedAgents,
       bindings: storedBindings,
+      activeEvolution: storedActiveEvolution,
     }, derivedDefaultModels);
 
     return { changed, result: changed };

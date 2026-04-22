@@ -8,6 +8,7 @@
  * - error-response-handler
  * - cron-delivery-guard
  * - tool-sandbox
+ * - evolution-proposal
  * - qmemory
  */
 import type { OpenClawPluginApi } from './core/types.js';

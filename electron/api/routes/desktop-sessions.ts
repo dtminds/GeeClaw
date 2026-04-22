@@ -30,11 +30,17 @@ export async function handleDesktopSessionRoutes(
 
   if (url.pathname === '/api/desktop-sessions' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<{ title?: string; gatewaySessionKey?: string; lastMessagePreview?: string }>(req);
+      const body = await parseJsonBody<{
+        title?: string;
+        gatewaySessionKey?: string;
+        lastMessagePreview?: string;
+        proposalStateEntries?: Array<{ proposalId: string; decision: 'approved' | 'rejected'; updatedAt: number }>;
+      }>(req);
       const session = await createDesktopSession({
         title: body.title,
         gatewaySessionKey: body.gatewaySessionKey,
         lastMessagePreview: body.lastMessagePreview,
+        proposalStateEntries: body.proposalStateEntries,
       });
       sendJson(res, 200, { success: true, session });
     } catch (error) {
@@ -60,12 +66,19 @@ export async function handleDesktopSessionRoutes(
 
   if (req.method === 'PUT') {
     try {
-      const body = await parseJsonBody<{ title?: string; updatedAt?: number; gatewaySessionKey?: string; lastMessagePreview?: string }>(req);
+      const body = await parseJsonBody<{
+        title?: string;
+        updatedAt?: number;
+        gatewaySessionKey?: string;
+        lastMessagePreview?: string;
+        proposalStateEntries?: Array<{ proposalId: string; decision: 'approved' | 'rejected'; updatedAt: number }>;
+      }>(req);
       const session = await updateDesktopSession(sessionId, {
         title: body.title,
         updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : undefined,
         gatewaySessionKey: body.gatewaySessionKey,
         lastMessagePreview: body.lastMessagePreview,
+        proposalStateEntries: body.proposalStateEntries,
       });
       if (!session) {
         sendJson(res, 404, { success: false, error: `Desktop session not found: ${sessionId}` });

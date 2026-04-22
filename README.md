@@ -68,6 +68,8 @@ Move from launch to your first AI interaction through a simplified sign-in-first
 
 ### 💬 Intelligent Chat Interface
 Communicate with AI agents through a modern chat experience. Supports Codex-style `/` skill search with continuous filtering, keyboard navigation, and inline skill tokens for enabled skills inserted directly into the composer. This lets you invoke specific skills for specialized tasks without enabling a large number of skills that would dilute the agent's focus—studies show that enabling more than 20 skills noticeably degrades response quality.
+When the Hermes evolution workflow emits an `evolution_proposal` tool call for desktop delivery, the chat renders it as a native review card with proposal tabs and a one-click approval action.
+Each agent also exposes an **Active Evolution** toggle in **Agent Settings → General**. GeeClaw persists that preference in its local agent store, keeps `evolution_proposal` aligned in the agent-local `tools.deny` list, and only mutates `agents.list[].skills` when that agent already has an explicit skill array.
 
 ### ✅ Global Approval Prompts
 When OpenClaw requests exec or plugin approval, GeeClaw displays a blocking approval dialog above any page, including startup and settings screens.

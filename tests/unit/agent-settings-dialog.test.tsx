@@ -4,6 +4,7 @@ import { useAgentsStore } from '@/stores/agents';
 import { useSkillsStore } from '@/stores/skills';
 import { useGatewayStore } from '@/stores/gateway';
 import { SOUL_TEMPLATES } from '@/pages/Chat/agent-settings/useAgentPersona';
+import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 
 const mockHostApiFetch = vi.fn();
 const mockToastSuccess = vi.fn();
@@ -26,6 +27,8 @@ const translations: Record<string, string> = {
   'agentSettingsDialog.general.activeMemoryLabel': 'Active Memory',
   'agentSettingsDialog.general.activeMemoryDescription': 'Allow this agent to read and write Active Memory.',
   'agentSettingsDialog.general.activeMemoryDisabledHint': 'Enable Active Memory first in Settings -> Memory.',
+  'agentSettingsDialog.general.activeEvolutionLabel': 'Active Evolution',
+  'agentSettingsDialog.general.activeEvolutionDescription': 'Allow this agent to propose evolution changes and use the evolution proposal tool.',
   'agentSettingsDialog.general.deleteLabel': 'Delete Agent',
   'agentSettingsDialog.general.deleteTitle': 'Delete Agent',
   'agentSettingsDialog.general.deleteMessage': 'Delete this agent?',
@@ -160,6 +163,7 @@ describe('AgentSettingsDialog shell', () => {
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockGatewayRpc.mockReset();
+    invalidatePresetAgentSkillsCache();
     useAgentsStore.setState(initialAgentsState, true);
     useSkillsStore.setState(initialSkillsState, true);
     useGatewayStore.setState({
@@ -224,6 +228,7 @@ describe('AgentSettingsDialog shell', () => {
     canUnmanage: false,
     managedFiles: [],
     skillScope: { mode: 'default' },
+    activeEvolutionEnabled: true,
     presetSkills: [],
     canUseDefaultSkillScope: true,
     avatarPresetId: 'gradient-sky',
@@ -274,7 +279,7 @@ describe('AgentSettingsDialog shell', () => {
     expect(deleteCard).not.toHaveClass('mt-auto');
     expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toHaveClass('h-[min(88vh,860px)]', 'min-h-[620px]');
 
-    expect(screen.getByLabelText('Agent Name - writer')).toHaveValue('Writer Bot');
+    expect(screen.getByText('Writer Bot')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete Agent' })).toBeInTheDocument();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
@@ -700,14 +705,19 @@ describe('AgentSettingsDialog shell', () => {
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Sunset/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Sunset/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
-      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        avatarPresetId: 'gradient-sunset',
-      });
+      expect(updateAgentSettings).toHaveBeenCalledWith(
+        'writer',
+        expect.objectContaining({
+          avatarPresetId: 'gradient-sunset',
+        }),
+      );
     });
-    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastSuccess).toHaveBeenCalledWith('agentSettingsDialog.general.toastSaved');
   });
 
   it('shows and updates the current agent active-memory membership', async () => {
@@ -737,7 +747,9 @@ describe('AgentSettingsDialog shell', () => {
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
     const activeMemorySwitch = await screen.findByRole('switch', { name: 'Active Memory' });
-    expect(activeMemorySwitch).toHaveAttribute('aria-checked', 'true');
+    await waitFor(() => {
+      expect(activeMemorySwitch).toHaveAttribute('aria-checked', 'true');
+    });
 
     fireEvent.click(activeMemorySwitch);
 
@@ -778,6 +790,45 @@ describe('AgentSettingsDialog shell', () => {
     const activeMemorySwitch = await screen.findByRole('switch', { name: 'Active Memory' });
     expect(activeMemorySwitch).toBeDisabled();
     expect(screen.getByText('Enable Active Memory first in Settings -> Memory.')).toBeInTheDocument();
+  });
+
+  it('toggles active evolution directly from stored agent state', async () => {
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+      updateAgentSettings,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    const activeEvolutionSwitch = await screen.findByRole('switch', { name: 'Active Evolution' });
+    expect(activeEvolutionSwitch).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(activeEvolutionSwitch);
+
+    await waitFor(() => {
+      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
+        activeEvolutionEnabled: false,
+      });
+    });
+  });
+
+  it('keeps active evolution available even when gateway is stopped', async () => {
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+    useAgentsStore.setState({
+      agents: [agentSummary],
+      defaultAgentId: 'writer',
+      updateAgentSettings,
+    });
+
+    const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
+    render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
+
+    const activeEvolutionSwitch = await screen.findByRole('switch', { name: 'Active Evolution' });
+    expect(activeEvolutionSwitch).not.toBeDisabled();
+    expect(screen.getByText('Allow this agent to propose evolution changes and use the evolution proposal tool.')).toBeInTheDocument();
   });
 
   it('shows preset skills as locked in the summary panel', async () => {

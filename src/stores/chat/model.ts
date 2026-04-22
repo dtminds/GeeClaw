@@ -71,11 +71,18 @@ export interface ContentBlock {
   is_error?: boolean;
 }
 
+export interface ProposalDecisionEntry {
+  proposalId: string;
+  decision: 'approved' | 'rejected';
+  updatedAt: number;
+}
+
 export interface DesktopSessionSummary {
   id: string;
   gatewaySessionKey: string;
   title: string;
   lastMessagePreview: string;
+  proposalStateEntries?: ProposalDecisionEntry[];
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;

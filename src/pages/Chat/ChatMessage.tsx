@@ -28,8 +28,10 @@ import {
 } from './assistant-display';
 import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
-import { isInternalMessage } from '@/stores/chat';
+import { isInternalMessage, useChatStore } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
+import { EvolutionProposalCard } from './EvolutionProposalCard';
+import { extractEvolutionProposalCardData, isEvolutionProposalToolName } from './evolution-proposal';
 import { 
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -226,6 +228,14 @@ function extractPlainTextFromUnknown(content: unknown): string {
   return parts.join('\n').trim();
 }
 
+function shouldRenderAssistantPart(part: AssistantContentPart, showToolCalls: boolean): boolean {
+  if (part.type !== 'tool') {
+    return true;
+  }
+
+  return showToolCalls || extractEvolutionProposalCardData(part.name, part.input, part.result) !== null;
+}
+
 function mergeToolDisplayState(
   current: AssistantContentPart & { type: 'tool' },
   update: Partial<Pick<AssistantContentPart & { type: 'tool' }, 'status' | 'durationMs' | 'result'>>,
@@ -375,6 +385,10 @@ function getToolDisplayIcon(name: string, input?: unknown) {
   return AiGenerativeIcon;
 }
 
+function shouldIncludeToolPart(name: string, showToolCalls: boolean): boolean {
+  return showToolCalls || isEvolutionProposalToolName(name);
+}
+
 function getToolDisplayName(name: string, preferZh: boolean): string {
   const normalized = normalizeToolName(name);
   return preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
@@ -437,24 +451,24 @@ function buildAssistantContentParts(
         ? { type: 'thinking', content: part.text }
         : { type: 'text', text: part.text }
     ));
-    const tools = showToolCalls ? extractToolUse(message) : [];
+    const tools = extractToolUse(message);
     for (const tool of tools) {
       if (shouldHideToolTrace(tool.name)) {
         continue;
       }
-      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-      const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
-      if (showToolCalls) {
-        parts.push({
-          type: 'tool',
-          id: tool.id || tool.name,
-          name: tool.name,
-          input: tool.input,
-          status: toolStatus?.status || 'running',
-          durationMs: toolStatus?.durationMs,
-          result: formattedResult || toolStatus?.result,
-        });
+      if (!shouldIncludeToolPart(tool.name, showToolCalls)) {
+        continue;
       }
+      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
+      parts.push({
+        type: 'tool',
+        id: tool.id || tool.name,
+        name: tool.name,
+        input: tool.input,
+        status: toolStatus?.status || 'running',
+        durationMs: toolStatus?.durationMs,
+        result: toolStatus?.result,
+      });
     }
     return parts;
   }
@@ -493,19 +507,19 @@ function buildAssistantContentParts(
       if (shouldHideToolTrace(block.name)) {
         continue;
       }
-      if (showToolCalls) {
-        const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
-        const formattedResult = formatToolResultText(toolStatus?.result, block.name);
-        parts.push({
-          type: 'tool',
-          id: block.id || block.name,
-          name: block.name,
-          input: block.input ?? block.arguments,
-          status: toolStatus?.status || 'running',
-          durationMs: toolStatus?.durationMs,
-          result: formattedResult || toolStatus?.result,
-        });
+      if (!shouldIncludeToolPart(block.name, showToolCalls)) {
+        continue;
       }
+      const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
+      parts.push({
+        type: 'tool',
+        id: block.id || block.name,
+        name: block.name,
+        input: block.input ?? block.arguments,
+        status: toolStatus?.status || 'running',
+        durationMs: toolStatus?.durationMs,
+        result: toolStatus?.result,
+      });
       continue;
     }
 
@@ -516,10 +530,9 @@ function buildAssistantContentParts(
         if (part.type !== 'tool') continue;
         const isMatch = (block.id && (part.id === block.id)) || (block.name && part.name === block.name) || !block.id;
         if (!isMatch) continue;
-        const formattedResult = formatToolResultText(resultText || block.error?.trim() || '', part.name);
         parts[index] = mergeToolDisplayState(part, {
           status: getInlineToolResultStatus(block, resultText || block.error?.trim() || ''),
-          result: formattedResult || resultText || block.error?.trim() || undefined,
+          result: resultText || block.error?.trim() || undefined,
         });
         break;
       }
@@ -529,30 +542,30 @@ function buildAssistantContentParts(
   // Some streaming providers send text blocks in `content[]` while exposing
   // tool calls only via top-level `tool_calls`. Keep content order first, then
   // append missing tools so "text -> tool" turns render correctly in real time.
-  if (showToolCalls) {
-    const parsedTools = extractToolUse(message);
-    for (const tool of parsedTools) {
-      if (shouldHideToolTrace(tool.name)) {
-        continue;
-      }
-      const alreadyRendered = parts.some((part) => {
-        if (part.type !== 'tool') return false;
-        if (tool.id && part.id === tool.id) return true;
-        return part.name === tool.name;
-      });
-      if (alreadyRendered) continue;
-      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-      const formattedResult = formatToolResultText(toolStatus?.result, tool.name);
-      parts.push({
-        type: 'tool',
-        id: tool.id || tool.name,
-        name: tool.name,
-        input: tool.input,
-        status: toolStatus?.status || 'running',
-        durationMs: toolStatus?.durationMs,
-        result: formattedResult || toolStatus?.result,
-      });
+  const parsedTools = extractToolUse(message);
+  for (const tool of parsedTools) {
+    if (shouldHideToolTrace(tool.name)) {
+      continue;
     }
+    if (!shouldIncludeToolPart(tool.name, showToolCalls)) {
+      continue;
+    }
+    const alreadyRendered = parts.some((part) => {
+      if (part.type !== 'tool') return false;
+      if (tool.id && part.id === tool.id) return true;
+      return part.name === tool.name;
+    });
+    if (alreadyRendered) continue;
+    const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
+    parts.push({
+      type: 'tool',
+      id: tool.id || tool.name,
+      name: tool.name,
+      input: tool.input,
+      status: toolStatus?.status || 'running',
+      durationMs: toolStatus?.durationMs,
+      result: toolStatus?.result,
+    });
   }
 
   return parts;
@@ -632,6 +645,10 @@ export const ChatMessage = memo(function ChatMessage({
       : buildAssistantContentParts(message, showToolCalls, effectiveToolStatuses, assistantDisplay?.parts || [])),
     [assistantDisplay?.parts, effectiveToolStatuses, isUser, message, showToolCalls],
   );
+  const assistantRenderableParts = useMemo(
+    () => assistantContentParts.filter((part) => shouldRenderAssistantPart(part, showToolCalls)),
+    [assistantContentParts, showToolCalls],
+  );
   const assistantText = useMemo(
     () => (isUser ? '' : getAssistantDisplayText(assistantContentParts)),
     [assistantContentParts, isUser],
@@ -648,7 +665,7 @@ export const ChatMessage = memo(function ChatMessage({
   if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
   if (shouldHideInternalMessage) return null;
 
-  if (!hasText && !hasUserSystemNotice && assistantContentParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
+  if (!hasText && !hasUserSystemNotice && assistantRenderableParts.length === 0 && images.length === 0 && attachedFiles.length === 0) return null;
 
   return (
     <div
@@ -732,7 +749,7 @@ export const ChatMessage = memo(function ChatMessage({
           <SystemNotice text={userDisplayDecision.text} />
         )}
 
-        {!isUser && assistantContentParts.map((part, index) => {
+        {!isUser && assistantRenderableParts.map((part, index) => {
           if (part.type === 'thinking') {
             return <ThinkingBlock key={`thinking-${index}`} content={part.content} isStreaming={isStreaming} />;
           }
@@ -745,6 +762,7 @@ export const ChatMessage = memo(function ChatMessage({
                 status={part.status}
                 durationMs={part.durationMs}
                 result={part.result}
+                timestamp={message.timestamp}
               />
             );
           }
@@ -1442,25 +1460,80 @@ function ImageLightbox({
 
 // ── Tool Card ───────────────────────────────────────────────────
 
+function EvolutionProposalMarkdown({ content }: { content: string }) {
+  return (
+    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[15px] leading-7 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1.1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[1rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.95rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.9rem] [&_h4]:font-semibold [&_h4]:leading-6 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.85rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.8rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
+      <Streamdown
+        mode="static"
+        plugins={STREAMDOWN_PLUGINS}
+        components={STREAMDOWN_COMPONENTS}
+        rehypePlugins={STREAMDOWN_REHYPE_PLUGINS}
+        remarkPlugins={STREAMDOWN_REMARK_PLUGINS}
+      >
+        {content}
+      </Streamdown>
+    </div>
+  );
+}
+
+const EVOLUTION_PROPOSAL_AUTO_REJECT_MS = 60 * 60 * 1000;
+
+function normalizeTimestampToMs(timestamp?: number): number | undefined {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return undefined;
+  }
+  return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
+}
+
 function ToolCard({
   name,
   status,
   durationMs,
   result,
   input,
+  timestamp,
 }: {
   name: string;
   status: 'running' | 'completed' | 'error';
   durationMs?: number;
   result?: string;
   input?: unknown;
+  timestamp?: number;
 }) {
   const { i18n } = useTranslation('chat');
   const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
   const [open, setOpen] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
+  const currentDesktopSessionId = useChatStore((state) => state.currentDesktopSessionId);
+  const desktopSessions = useChatStore((state) => state.desktopSessions);
+  const setEvolutionProposalDecision = useChatStore((state) => state.setEvolutionProposalDecision);
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
+  const evolutionProposalCard = useMemo(
+    () => extractEvolutionProposalCardData(name, input, result),
+    [input, name, result],
+  );
+  const proposalTimestampMs = useMemo(() => normalizeTimestampToMs(timestamp), [timestamp]);
+  const currentDesktopSession = useMemo(
+    () => desktopSessions.find((session) => session.id === currentDesktopSessionId),
+    [currentDesktopSessionId, desktopSessions],
+  );
+  const persistedProposalDecision = useMemo(() => {
+    if (!evolutionProposalCard?.proposalId) {
+      return undefined;
+    }
+    const persistedEntry = currentDesktopSession?.proposalStateEntries?.find(
+      (entry) => entry.proposalId === evolutionProposalCard.proposalId,
+    );
+    if (persistedEntry) {
+      return persistedEntry.decision;
+    }
+    if (typeof proposalTimestampMs === 'number' && (renderedAt - proposalTimestampMs) >= EVOLUTION_PROPOSAL_AUTO_REJECT_MS) {
+      return 'rejected';
+    }
+    return undefined;
+  }, [currentDesktopSession?.proposalStateEntries, evolutionProposalCard?.proposalId, proposalTimestampMs, renderedAt]);
   const summary = useMemo(() => formatToolDisplaySummary(name, input, undefined, preferZh), [input, name, preferZh]);
   const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
@@ -1491,6 +1564,20 @@ function ToolCard({
   }, [input, open]);
   const formattedResult = useMemo(() => formatToolResultText(result, name), [name, result]);
   const visibleResult = formattedResult || null;
+
+  if (evolutionProposalCard) {
+    return (
+      <EvolutionProposalCard
+        proposal={evolutionProposalCard}
+        status={status}
+        preferZh={preferZh}
+        renderMarkdown={(content) => <EvolutionProposalMarkdown content={content} />}
+        persistedDecision={persistedProposalDecision === 'approved' ? 'approve' : persistedProposalDecision === 'rejected' ? 'reject' : undefined}
+        onPersistDecision={(proposalId, decision) => setEvolutionProposalDecision(proposalId, decision === 'approve' ? 'approved' : 'rejected')}
+        expiresAtMs={typeof proposalTimestampMs === 'number' ? proposalTimestampMs + EVOLUTION_PROPOSAL_AUTO_REJECT_MS : undefined}
+      />
+    );
+  }
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
