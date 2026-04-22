@@ -30,10 +30,57 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 describe('chat live rendering', () => {
+  const currentTs = () => Date.now();
+
   beforeEach(() => {
     invokeIpcMock.mockReset();
+    invokeIpcMock.mockImplementation(async (channel: string, payload?: { method?: string; path?: string; body?: string }) => {
+      if (channel === 'hostapi:base') {
+        return 'http://127.0.0.1:13210';
+      }
+      if (channel === 'hostapi:token') {
+        return '';
+      }
+      if (channel === 'hostapi:fetch' && payload?.method === 'PUT' && payload.path === '/api/desktop-sessions/desktop-session-1') {
+        const parsedBody = payload.body ? JSON.parse(payload.body) as {
+          proposalStateEntries?: Array<{ proposalId: string; decision: 'approved' | 'rejected'; updatedAt: number }>;
+        } : {};
+        return {
+          ok: true,
+          data: {
+            status: 200,
+            ok: true,
+            json: {
+              success: true,
+              session: {
+                id: 'desktop-session-1',
+                gatewaySessionKey: 'agent:main:geeclaw_main',
+                title: 'Main',
+                lastMessagePreview: '',
+                createdAt: 1,
+                updatedAt: 2,
+                proposalStateEntries: parsedBody.proposalStateEntries || [],
+              },
+            },
+          },
+        };
+      }
+      return undefined;
+    });
     sendMessageMock = vi.fn(async () => undefined);
-    useChatStore.setState({ sending: false, sendMessage: sendMessageMock });
+    useChatStore.setState({
+      sending: false,
+      sendMessage: sendMessageMock,
+      currentDesktopSessionId: 'desktop-session-1',
+      desktopSessions: [{
+        id: 'desktop-session-1',
+        gatewaySessionKey: 'agent:main:geeclaw_main',
+        title: 'Main',
+        lastMessagePreview: '',
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+    });
     mockLanguage = 'zh-CN';
   });
 
@@ -246,12 +293,13 @@ describe('chat live rendering', () => {
   });
 
   it('renders evolution proposal cards from tool input when delivery mode is card', () => {
-    render(
+    const now = currentTs();
+    const { container } = render(
       <ChatMessage
         message={{
           role: 'assistant',
           id: 'assistant-evolution-card',
-          timestamp: 1,
+          timestamp: now,
           content: [
             {
               type: 'toolCall',
@@ -280,7 +328,7 @@ describe('chat live rendering', () => {
               name: 'evolution_proposal',
               status: 'completed',
               result: '{"ok":true,"proposalId":"evo-2026-04-21-0001","deliveryMode":"card","channel":"desktop"}',
-              updatedAt: 1,
+              updatedAt: now,
             },
           ],
         } as unknown as RawMessage}
@@ -289,21 +337,30 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByText('Hermes 进化请求')).toBeInTheDocument();
+    expect(screen.getByText('Agent 请求自我进化')).toBeInTheDocument();
     expect(screen.getByText('基于工具调用失败的教训，固化一套资讯搜索回退策略')).toBeInTheDocument();
-    expect(screen.getByText('工具调用')).toBeInTheDocument();
+    expect(screen.getByText('Web Research / 资讯搜索策略')).toBeInTheDocument();
     expect(screen.getByText('/tmp/tool-policy.md')).toBeInTheDocument();
+    expect(screen.queryByText('/tmp/evolution-proposal.md')).not.toBeInTheDocument();
+    expect(screen.queryByText('打开草稿')).not.toBeInTheDocument();
     expect(screen.getByText('确认进化')).toBeInTheDocument();
     expect(screen.getByText('拒绝')).toBeInTheDocument();
+    expect(container.textContent || '').toContain('提案将在');
+    expect(container.textContent || '').toContain('失效');
+
+    const markdownPanel = container.querySelector('.chat-markdown');
+    expect(markdownPanel?.className).toContain('max-h-[22rem]');
+    expect(markdownPanel?.className).toContain('overflow-y-auto');
   });
 
   it('sends rejection commands from evolution proposal cards', async () => {
-    render(
+    const now = currentTs();
+    const { container } = render(
       <ChatMessage
         message={{
           role: 'assistant',
           id: 'assistant-evolution-reject',
-          timestamp: 1,
+          timestamp: now,
           content: [
             {
               type: 'toolCall',
@@ -329,7 +386,7 @@ describe('chat live rendering', () => {
               name: 'evolution_proposal',
               status: 'completed',
               result: '{"ok":true,"proposalId":"evo-2026-04-21-0003","deliveryMode":"card","channel":"desktop"}',
-              updatedAt: 1,
+              updatedAt: now,
             },
           ],
         } as unknown as RawMessage}
@@ -343,17 +400,27 @@ describe('chat live rendering', () => {
     });
 
     expect(sendMessageMock).toHaveBeenCalledWith('拒绝 evo-2026-04-21-0003');
+    expect(container.textContent || '').toContain('Agent 请求自我进化 · 已拒绝');
+    expect(screen.queryByRole('button', { name: '确认进化' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '拒绝' })).not.toBeInTheDocument();
+    expect(useChatStore.getState().desktopSessions[0]?.proposalStateEntries).toEqual([
+      expect.objectContaining({
+        proposalId: 'evo-2026-04-21-0003',
+        decision: 'rejected',
+      }),
+    ]);
   });
 
   it('sends English decision commands from evolution proposal cards outside Chinese locale', async () => {
     mockLanguage = 'en-US';
+    const now = currentTs();
 
-    render(
+    const { container } = render(
       <ChatMessage
         message={{
           role: 'assistant',
           id: 'assistant-evolution-approve-en',
-          timestamp: 1,
+          timestamp: now,
           content: [
             {
               type: 'toolCall',
@@ -379,7 +446,7 @@ describe('chat live rendering', () => {
               name: 'evolution_proposal',
               status: 'completed',
               result: '{"ok":true,"proposalId":"evo-2026-04-21-0004","deliveryMode":"card","channel":"desktop"}',
-              updatedAt: 1,
+              updatedAt: now,
             },
           ],
         } as unknown as RawMessage}
@@ -393,6 +460,127 @@ describe('chat live rendering', () => {
     });
 
     expect(sendMessageMock).toHaveBeenCalledWith('approve evo-2026-04-21-0004');
+    expect(container.textContent || '').toContain('Agent Self-Evolution Request · Evolved');
+    expect(screen.queryByRole('button', { name: 'Approve evolution' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+    expect(useChatStore.getState().desktopSessions[0]?.proposalStateEntries).toEqual([
+      expect.objectContaining({
+        proposalId: 'evo-2026-04-21-0004',
+        decision: 'approved',
+      }),
+    ]);
+  });
+
+  it('restores persisted proposal decisions from the current desktop session', () => {
+    const now = currentTs();
+    useChatStore.setState({
+      desktopSessions: [{
+        id: 'desktop-session-1',
+        gatewaySessionKey: 'agent:main:geeclaw_main',
+        title: 'Main',
+        lastMessagePreview: '',
+        createdAt: 1,
+        updatedAt: 1,
+        proposalStateEntries: [{
+          proposalId: 'evo-2026-04-21-0005',
+          decision: 'approved',
+          updatedAt: 1,
+        }],
+      }],
+    });
+
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-approved-persisted',
+          timestamp: now,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-approved-persisted',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0005',
+                description: 'Persisted approval state',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Policy',
+                    content: 'Already approved in local store',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-approved-persisted',
+              toolCallId: 'tool-evolution-approved-persisted',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-21-0005","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: now,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    expect(container.textContent || '').toContain('Agent 请求自我进化 · 已进化');
+    expect(screen.queryByRole('button', { name: '确认进化' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '拒绝' })).not.toBeInTheDocument();
+  });
+
+  it('auto-rejects stale proposals older than 60 minutes when no persisted decision exists', () => {
+    const staleTimestamp = Date.now() - (60 * 60 * 1000) - 1000;
+
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-stale',
+          timestamp: staleTimestamp,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-stale',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-19-0001',
+                description: 'Stale proposal',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Policy',
+                    content: 'Should auto reject after timeout',
+                  },
+                ],
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-evolution-stale',
+              toolCallId: 'tool-evolution-stale',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-2026-04-19-0001","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: staleTimestamp,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    expect(container.textContent || '').toContain('Agent 请求自我进化 · 已拒绝');
+    expect(screen.queryByRole('button', { name: '确认进化' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '拒绝' })).not.toBeInTheDocument();
+    expect(container.textContent || '').not.toContain('提案将在');
   });
 
   it('does not render evolution proposal cards when delivery mode is text and tool calls are hidden', () => {
@@ -437,7 +625,7 @@ describe('chat live rendering', () => {
     );
 
     expect(container.firstChild).toBeNull();
-    expect(screen.queryByText('Hermes 进化请求')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agent 请求自我进化')).not.toBeInTheDocument();
   });
 
   it('does not render user bubbles that only contain OpenClaw internal context blocks', () => {

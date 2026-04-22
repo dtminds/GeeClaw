@@ -28,7 +28,7 @@ import {
 } from './assistant-display';
 import { formatToolDisplaySummary } from './tool-display';
 import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
-import { isInternalMessage } from '@/stores/chat';
+import { isInternalMessage, useChatStore } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
 import { EvolutionProposalCard } from './EvolutionProposalCard';
 import { extractEvolutionProposalCardData, isEvolutionProposalToolName } from './evolution-proposal';
@@ -762,6 +762,7 @@ export const ChatMessage = memo(function ChatMessage({
                 status={part.status}
                 durationMs={part.durationMs}
                 result={part.result}
+                timestamp={message.timestamp}
               />
             );
           }
@@ -1461,7 +1462,7 @@ function ImageLightbox({
 
 function EvolutionProposalMarkdown({ content }: { content: string }) {
   return (
-    <div className="chat-markdown prose max-w-none text-[15px] leading-7 text-[#5f5753] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_ol]:my-2 [&_ol]:ps-7 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-6">
+    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[15px] leading-7 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1.1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[1rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.95rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.9rem] [&_h4]:font-semibold [&_h4]:leading-6 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.85rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.8rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
       <Streamdown
         mode="static"
         plugins={STREAMDOWN_PLUGINS}
@@ -1475,22 +1476,37 @@ function EvolutionProposalMarkdown({ content }: { content: string }) {
   );
 }
 
+const EVOLUTION_PROPOSAL_AUTO_REJECT_MS = 60 * 60 * 1000;
+
+function normalizeTimestampToMs(timestamp?: number): number | undefined {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return undefined;
+  }
+  return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
+}
+
 function ToolCard({
   name,
   status,
   durationMs,
   result,
   input,
+  timestamp,
 }: {
   name: string;
   status: 'running' | 'completed' | 'error';
   durationMs?: number;
   result?: string;
   input?: unknown;
+  timestamp?: number;
 }) {
   const { i18n } = useTranslation('chat');
   const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
   const [open, setOpen] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
+  const currentDesktopSessionId = useChatStore((state) => state.currentDesktopSessionId);
+  const desktopSessions = useChatStore((state) => state.desktopSessions);
+  const setEvolutionProposalDecision = useChatStore((state) => state.setEvolutionProposalDecision);
   const duration = formatDuration(durationMs);
   const isRunning = status === 'running';
   const isError = status === 'error';
@@ -1498,6 +1514,26 @@ function ToolCard({
     () => extractEvolutionProposalCardData(name, input, result),
     [input, name, result],
   );
+  const proposalTimestampMs = useMemo(() => normalizeTimestampToMs(timestamp), [timestamp]);
+  const currentDesktopSession = useMemo(
+    () => desktopSessions.find((session) => session.id === currentDesktopSessionId),
+    [currentDesktopSessionId, desktopSessions],
+  );
+  const persistedProposalDecision = useMemo(() => {
+    if (!evolutionProposalCard?.proposalId) {
+      return undefined;
+    }
+    const persistedEntry = currentDesktopSession?.proposalStateEntries?.find(
+      (entry) => entry.proposalId === evolutionProposalCard.proposalId,
+    );
+    if (persistedEntry) {
+      return persistedEntry.decision;
+    }
+    if (typeof proposalTimestampMs === 'number' && (renderedAt - proposalTimestampMs) >= EVOLUTION_PROPOSAL_AUTO_REJECT_MS) {
+      return 'rejected';
+    }
+    return undefined;
+  }, [currentDesktopSession?.proposalStateEntries, evolutionProposalCard?.proposalId, proposalTimestampMs, renderedAt]);
   const summary = useMemo(() => formatToolDisplaySummary(name, input, undefined, preferZh), [input, name, preferZh]);
   const displayName = useMemo(() => getToolDisplayName(name, preferZh), [name, preferZh]);
   const toolIcon = useMemo(() => getToolDisplayIcon(name, input), [input, name]);
@@ -1536,7 +1572,9 @@ function ToolCard({
         status={status}
         preferZh={preferZh}
         renderMarkdown={(content) => <EvolutionProposalMarkdown content={content} />}
-        onOpenDraftPath={openLocalPath}
+        persistedDecision={persistedProposalDecision === 'approved' ? 'approve' : persistedProposalDecision === 'rejected' ? 'reject' : undefined}
+        onPersistDecision={(proposalId, decision) => setEvolutionProposalDecision(proposalId, decision === 'approve' ? 'approved' : 'rejected')}
+        expiresAtMs={typeof proposalTimestampMs === 'number' ? proposalTimestampMs + EVOLUTION_PROPOSAL_AUTO_REJECT_MS : undefined}
       />
     );
   }

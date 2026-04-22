@@ -36,13 +36,20 @@ describe('desktop session cleanup', () => {
     vi.resetModules();
     mockReadOpenClawConfig.mockReset().mockResolvedValue({});
     mockStoreShape = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       sessions: [
         {
           id: 'session-main',
           gatewaySessionKey: 'agent:writer:geeclaw_main',
           title: 'Writer',
           lastMessagePreview: '',
+          proposalStateEntries: [
+            {
+              proposalId: 'evo-1',
+              decision: 'approved',
+              updatedAt: 15,
+            },
+          ],
           createdAt: 10,
           updatedAt: 20,
         },
@@ -160,5 +167,55 @@ describe('desktop session cleanup', () => {
 
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.id).toBe('session-custom-main-new');
+  });
+
+  it('persists proposal states when updating a desktop session', async () => {
+    const { updateDesktopSession, getDesktopSession } = await import('@electron/utils/desktop-sessions');
+
+    await updateDesktopSession('session-main', {
+      proposalStateEntries: [
+        {
+          proposalId: 'evo-1',
+          decision: 'approved',
+          updatedAt: 100,
+        },
+        {
+          proposalId: 'evo-2',
+          decision: 'rejected',
+          updatedAt: 200,
+        },
+      ],
+    });
+
+    const updated = await getDesktopSession('session-main');
+    expect(updated?.proposalStateEntries).toEqual([
+      {
+        proposalId: 'evo-1',
+        decision: 'approved',
+        updatedAt: 100,
+      },
+      {
+        proposalId: 'evo-2',
+        decision: 'rejected',
+        updatedAt: 200,
+      },
+    ]);
+  });
+
+  it('keeps only the latest 50 proposal decision entries', async () => {
+    const { updateDesktopSession, getDesktopSession } = await import('@electron/utils/desktop-sessions');
+
+    await updateDesktopSession('session-main', {
+      proposalStateEntries: Array.from({ length: 55 }, (_, index) => ({
+        proposalId: `evo-${index + 1}`,
+        decision: index % 2 === 0 ? 'approved' as const : 'rejected' as const,
+        updatedAt: index + 1,
+      })),
+    });
+
+    const updated = await getDesktopSession('session-main');
+    expect(updated?.proposalStateEntries).toHaveLength(50);
+    expect(updated?.proposalStateEntries?.[0]?.proposalId).toBe('evo-6');
+    expect(updated?.proposalStateEntries?.[49]?.proposalId).toBe('evo-55');
   });
 });

@@ -1,11 +1,18 @@
 import crypto from 'node:crypto';
 import { isMainGatewaySessionKey, resolveConfiguredMainKey } from './main-session-key';
 
+export interface ProposalDecisionEntry {
+  proposalId: string;
+  decision: 'approved' | 'rejected';
+  updatedAt: number;
+}
+
 export interface DesktopSessionSummary {
   id: string;
   gatewaySessionKey: string;
   title: string;
   lastMessagePreview: string;
+  proposalStateEntries?: ProposalDecisionEntry[];
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
@@ -17,8 +24,9 @@ type DesktopSessionsStoreShape = {
 };
 
 const DESKTOP_SESSIONS_STORE_NAME = 'desktop-sessions';
-const DESKTOP_SESSIONS_SCHEMA_VERSION = 2;
+const DESKTOP_SESSIONS_SCHEMA_VERSION = 3;
 const GEECLAW_SESSION_PREFIX = 'agent:main:geeclaw-';
+const MAX_PROPOSAL_STATE_ENTRIES = 50;
 
 function buildDefaultGatewaySessionKey(id: string): string {
   return `${GEECLAW_SESSION_PREFIX}${id}`;
@@ -38,6 +46,35 @@ function shouldReplaceSession(current: DesktopSessionSummary, candidate: Desktop
     || (candidate.updatedAt === current.updatedAt && candidate.createdAt > current.createdAt);
 }
 
+function normalizeProposalStateEntries(value: unknown): ProposalDecisionEntry[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+    const proposalId = typeof (entry as { proposalId?: unknown }).proposalId === 'string'
+      ? (entry as { proposalId: string }).proposalId.trim()
+      : '';
+    const decision = (entry as { decision?: unknown }).decision;
+    const updatedAt = typeof (entry as { updatedAt?: unknown }).updatedAt === 'number'
+      ? (entry as { updatedAt: number }).updatedAt
+      : 0;
+    if (!proposalId || (decision !== 'approved' && decision !== 'rejected') || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+      return [];
+    }
+    return [{ proposalId, decision, updatedAt }];
+  });
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return entries.slice(-MAX_PROPOSAL_STATE_ENTRIES);
+}
+
 async function normalizeSessions(sessions: DesktopSessionSummary[]): Promise<DesktopSessionSummary[]> {
   const configuredMainKey = await resolveConfiguredMainKey();
   const dedupedMainSessions = new Map<string, DesktopSessionSummary>();
@@ -51,6 +88,7 @@ async function normalizeSessions(sessions: DesktopSessionSummary[]): Promise<Des
     const normalizedSession: DesktopSessionSummary = {
       ...session,
       lastMessagePreview: typeof session.lastMessagePreview === 'string' ? session.lastMessagePreview : '',
+      proposalStateEntries: normalizeProposalStateEntries(session.proposalStateEntries),
     };
 
     if (!isMainGatewaySessionKey(normalizedSession.gatewaySessionKey, configuredMainKey)) {
@@ -98,6 +136,7 @@ async function readSessions(): Promise<DesktopSessionSummary[]> {
       !sessions[index]
       || sessions[index].id !== session.id
       || sessions[index].lastMessagePreview !== session.lastMessagePreview
+      || JSON.stringify(sessions[index].proposalStateEntries || []) !== JSON.stringify(session.proposalStateEntries || [])
     ));
 
   if (needsRewrite) {
@@ -126,7 +165,12 @@ export async function getDesktopSession(id: string): Promise<DesktopSessionSumma
   return sessions.find((session) => session.id === id) ?? null;
 }
 
-export async function createDesktopSession(input?: { title?: string; gatewaySessionKey?: string; lastMessagePreview?: string }): Promise<DesktopSessionSummary> {
+export async function createDesktopSession(input?: {
+  title?: string;
+  gatewaySessionKey?: string;
+  lastMessagePreview?: string;
+  proposalStateEntries?: ProposalDecisionEntry[];
+}): Promise<DesktopSessionSummary> {
   const now = Date.now();
   const id = crypto.randomUUID();
   const gatewaySessionKey = input?.gatewaySessionKey?.trim() || buildDefaultGatewaySessionKey(id);
@@ -144,6 +188,7 @@ export async function createDesktopSession(input?: { title?: string; gatewaySess
     gatewaySessionKey,
     title: input?.title?.trim() ?? '',
     lastMessagePreview: input?.lastMessagePreview?.trim() ?? '',
+    proposalStateEntries: normalizeProposalStateEntries(input?.proposalStateEntries),
     createdAt: now,
     updatedAt: now,
   };
@@ -153,7 +198,7 @@ export async function createDesktopSession(input?: { title?: string; gatewaySess
 
 export async function updateDesktopSession(
   id: string,
-  patch: Partial<Pick<DesktopSessionSummary, 'title' | 'updatedAt' | 'deletedAt' | 'gatewaySessionKey' | 'lastMessagePreview'>>,
+  patch: Partial<Pick<DesktopSessionSummary, 'title' | 'updatedAt' | 'deletedAt' | 'gatewaySessionKey' | 'lastMessagePreview' | 'proposalStateEntries'>>,
 ): Promise<DesktopSessionSummary | null> {
   const configuredMainKey = await resolveConfiguredMainKey();
   const sessions = await readSessions();
@@ -169,6 +214,9 @@ export async function updateDesktopSession(
     title: patch.title !== undefined ? patch.title.trim() : existing.title,
     gatewaySessionKey: patch.gatewaySessionKey?.trim() || existing.gatewaySessionKey,
     lastMessagePreview: patch.lastMessagePreview !== undefined ? patch.lastMessagePreview.trim() : existing.lastMessagePreview,
+    proposalStateEntries: patch.proposalStateEntries !== undefined
+      ? normalizeProposalStateEntries(patch.proposalStateEntries)
+      : existing.proposalStateEntries,
     updatedAt: patch.updatedAt ?? existing.updatedAt,
   };
 

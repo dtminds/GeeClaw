@@ -28,6 +28,7 @@ import type {
   AttachedFileMeta,
   ContentBlock,
   DesktopSessionSummary,
+  ProposalDecisionEntry,
   RawMessage,
   SessionTokenInfo,
   ToolStatus,
@@ -163,6 +164,7 @@ interface ChatState {
   clearError: () => void;
   queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => void;
   consumePendingComposerSeed: () => void;
+  setEvolutionProposalDecision: (proposalId: string, decision: 'approved' | 'rejected') => Promise<void>;
 }
 
 // Module-level timestamp tracking the last chat event received.
@@ -373,7 +375,13 @@ async function createDesktopSessionRequest(title = '', gatewaySessionKey?: strin
 
 async function updateDesktopSessionRequest(
   id: string,
-  patch: { title?: string; updatedAt?: number; gatewaySessionKey?: string; lastMessagePreview?: string },
+  patch: {
+    title?: string;
+    updatedAt?: number;
+    gatewaySessionKey?: string;
+    lastMessagePreview?: string;
+    proposalStateEntries?: ProposalDecisionEntry[];
+  },
 ): Promise<DesktopSessionSummary> {
   const response = await hostApiFetch<DesktopSessionResponse>(
     `${DESKTOP_SESSIONS_API}/${encodeURIComponent(id)}`,
@@ -400,6 +408,21 @@ function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
 
 function resolveMainSessionKeyForKnownAgent(agentId: string): string {
   return resolveMainSessionKeyForAgent(agentId) ?? buildDefaultMainSessionKey(agentId);
+}
+
+function upsertProposalDecisionEntry(
+  entries: ProposalDecisionEntry[] | undefined,
+  proposalId: string,
+  decision: 'approved' | 'rejected',
+): ProposalDecisionEntry[] {
+  const trimmedProposalId = proposalId.trim();
+  const nextEntries = (entries || []).filter((entry) => entry.proposalId !== trimmedProposalId);
+  nextEntries.push({
+    proposalId: trimmedProposalId,
+    decision,
+    updatedAt: Date.now(),
+  });
+  return nextEntries.slice(-50);
 }
 
 function reconcilePreferredMainSession(
@@ -2340,4 +2363,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
   }),
 
   consumePendingComposerSeed: () => set({ pendingComposerSeed: null }),
+
+  setEvolutionProposalDecision: async (proposalId, decision) => {
+    const { currentDesktopSessionId, desktopSessions } = get();
+    if (!currentDesktopSessionId || !proposalId.trim()) {
+      return;
+    }
+
+    const currentSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
+    if (!currentSession) {
+      return;
+    }
+
+    const nextProposalStateEntries = upsertProposalDecisionEntry(
+      currentSession.proposalStateEntries,
+      proposalId,
+      decision,
+    );
+
+    set((state) => ({
+      desktopSessions: state.desktopSessions.map((session) => (
+        session.id === currentDesktopSessionId
+          ? { ...session, proposalStateEntries: nextProposalStateEntries }
+          : session
+      )),
+    }));
+
+    try {
+      const updatedSession = await updateDesktopSessionRequest(currentDesktopSessionId, {
+        proposalStateEntries: nextProposalStateEntries,
+      });
+      set((state) => ({
+        desktopSessions: state.desktopSessions.map((session) => (
+          session.id === currentDesktopSessionId ? updatedSession : session
+        )),
+      }));
+    } catch (error) {
+      console.warn(`Failed to persist proposal decision for desktop session ${currentDesktopSessionId}:`, error);
+    }
+  },
 }));
