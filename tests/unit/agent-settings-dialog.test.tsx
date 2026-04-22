@@ -279,7 +279,7 @@ describe('AgentSettingsDialog shell', () => {
     expect(deleteCard).not.toHaveClass('mt-auto');
     expect(screen.getByRole('dialog', { name: 'Agent Settings' })).toHaveClass('h-[min(88vh,860px)]', 'min-h-[620px]');
 
-    expect(screen.getByLabelText('Agent Name - writer')).toHaveValue('Writer Bot');
+    expect(screen.getByText('Writer Bot')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete Agent' })).toBeInTheDocument();
 
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Identity' }));
@@ -705,14 +705,19 @@ describe('AgentSettingsDialog shell', () => {
     const { AgentSettingsDialog } = await import('@/pages/Chat/AgentSettingsDialog');
     render(<AgentSettingsDialog open agentId="writer" onOpenChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Sunset/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Sunset/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
-      expect(updateAgentSettings).toHaveBeenCalledWith('writer', {
-        avatarPresetId: 'gradient-sunset',
-      });
+      expect(updateAgentSettings).toHaveBeenCalledWith(
+        'writer',
+        expect.objectContaining({
+          avatarPresetId: 'gradient-sunset',
+        }),
+      );
     });
-    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastSuccess).toHaveBeenCalledWith('agentSettingsDialog.general.toastSaved');
   });
 
   it('shows and updates the current agent active-memory membership', async () => {
