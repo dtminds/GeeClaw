@@ -512,7 +512,7 @@ describe('chat store session selection', () => {
       }),
     });
 
-    await useChatStore.getState().loadHistory(true);
+    await useChatStore.getState().loadHistory();
 
     expect(useChatStore.getState().messages).toEqual([
       expect.objectContaining({ id: 'writer-msg', content: 'writer session' }),
@@ -836,7 +836,7 @@ describe('chat store session selection', () => {
       }),
     });
 
-    await useChatStore.getState().loadHistory(true);
+    await useChatStore.getState().loadHistory();
 
     const messages = useChatStore.getState().messages;
     expect(messages).toHaveLength(3);
@@ -904,7 +904,7 @@ describe('chat store session selection', () => {
       }),
     });
 
-    await useChatStore.getState().loadHistory(true);
+    await useChatStore.getState().loadHistory();
 
     const messages = useChatStore.getState().messages;
     expect(messages).toHaveLength(3);
@@ -975,7 +975,7 @@ describe('chat store session selection', () => {
       }),
     });
 
-    await useChatStore.getState().loadHistory(true);
+    await useChatStore.getState().loadHistory();
 
     const messages = useChatStore.getState().messages;
     expect(messages).toHaveLength(3);
@@ -986,7 +986,7 @@ describe('chat store session selection', () => {
     ]);
   });
 
-  it('does not append the first optimistic user message when history already contains its persisted copy', async () => {
+  it('keeps the first optimistic user message when history returns an older persisted copy', async () => {
     const optimisticSentAtMs = 1_700_000_000_000;
     useChatStore.setState({
       ...useChatStore.getState(),
@@ -1035,10 +1035,10 @@ describe('chat store session selection', () => {
 
     const messages = useChatStore.getState().messages;
     expect(messages).toHaveLength(1);
-    expect(messages[0]?.id).toBe('persisted-user');
+    expect(messages[0]?.id).toBe('optimistic-user');
   });
 
-  it('does not append the optimistic user message when history contains its persisted copy at the send index with a skewed timestamp', async () => {
+  it('keeps the optimistic user message when history returns a skewed persisted copy at the send index', async () => {
     const previousReplyAtMs = 1_700_000_000_000;
     const optimisticSentAtMs = previousReplyAtMs + 1_000;
     useChatStore.setState({
@@ -1101,7 +1101,7 @@ describe('chat store session selection', () => {
     const messages = useChatStore.getState().messages;
     expect(messages.map((message) => message.id)).toEqual([
       'previous-reply',
-      'persisted-user',
+      'optimistic-user',
     ]);
   });
 

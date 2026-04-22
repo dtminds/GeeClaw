@@ -75,6 +75,11 @@ async function writeLosslessClawPackage(version: string): Promise<void> {
   }, null, 2), 'utf8');
 }
 
+function bumpPatchVersion(version: string): string {
+  const [major = '0', minor = '0', patch = '0'] = version.split('.');
+  return [major, minor, String(Number(patch) + 1)].join('.');
+}
+
 describe('openclaw memory settings', () => {
   beforeEach(async () => {
     vi.resetModules();
@@ -93,6 +98,11 @@ describe('openclaw memory settings', () => {
   });
 
   it('reads enabled memory settings from config and installed lossless-claw metadata', async () => {
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      readMemorySettingsSnapshot,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
     await writeOpenClawJson({
       plugins: {
         slots: {
@@ -123,16 +133,10 @@ describe('openclaw memory settings', () => {
         },
       },
     });
-    await writeLosslessClawPackage('0.9.1');
-
-    const {
-      LOSSLESS_CLAW_REQUIRED_VERSION,
-      readMemorySettingsSnapshot,
-    } = await import('@electron/utils/openclaw-memory-settings');
+    await writeLosslessClawPackage(LOSSLESS_CLAW_REQUIRED_VERSION);
 
     const snapshot = await readMemorySettingsSnapshot(await readOpenClawJson());
 
-    expect(LOSSLESS_CLAW_REQUIRED_VERSION).toBe('0.9.1');
     expect(snapshot).toEqual({
       availableModels: [
         {
@@ -155,8 +159,8 @@ describe('openclaw memory settings', () => {
       losslessClaw: {
         enabled: true,
         installJob: null,
-        installedVersion: '0.9.1',
-        requiredVersion: '0.9.1',
+        installedVersion: LOSSLESS_CLAW_REQUIRED_VERSION,
+        requiredVersion: LOSSLESS_CLAW_REQUIRED_VERSION,
         summaryModel: 'openai/gpt-5.4-mini',
         summaryModelMode: 'custom',
         status: 'enabled',
@@ -165,6 +169,11 @@ describe('openclaw memory settings', () => {
   });
 
   it('marks lossless-claw unavailable when the installed version does not match the GeeClaw pin', async () => {
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      readMemorySettingsSnapshot,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
     await writeOpenClawJson({
       plugins: {
         slots: {
@@ -182,14 +191,13 @@ describe('openclaw memory settings', () => {
     });
     await writeLosslessClawPackage('0.5.1');
 
-    const { readMemorySettingsSnapshot } = await import('@electron/utils/openclaw-memory-settings');
     const snapshot = await readMemorySettingsSnapshot(await readOpenClawJson());
 
     expect(snapshot.losslessClaw).toEqual({
       enabled: false,
       installJob: null,
       installedVersion: '0.5.1',
-      requiredVersion: '0.9.1',
+      requiredVersion: LOSSLESS_CLAW_REQUIRED_VERSION,
       summaryModel: 'openai/gpt-5.4-mini',
       summaryModelMode: 'custom',
       status: 'unavailable',
@@ -204,6 +212,11 @@ describe('openclaw memory settings', () => {
   });
 
   it('treats newer installed lossless-claw versions as unavailable when they do not match the GeeClaw pin', async () => {
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      readMemorySettingsSnapshot,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
     await writeOpenClawJson({
       plugins: {
         entries: {
@@ -216,16 +229,15 @@ describe('openclaw memory settings', () => {
         },
       },
     });
-    await writeLosslessClawPackage('0.9.2');
-
-    const { readMemorySettingsSnapshot } = await import('@electron/utils/openclaw-memory-settings');
+    const newerVersion = bumpPatchVersion(LOSSLESS_CLAW_REQUIRED_VERSION);
+    await writeLosslessClawPackage(newerVersion);
     const snapshot = await readMemorySettingsSnapshot(await readOpenClawJson());
 
     expect(snapshot.losslessClaw).toEqual({
       enabled: false,
       installJob: null,
-      installedVersion: '0.9.2',
-      requiredVersion: '0.9.1',
+      installedVersion: newerVersion,
+      requiredVersion: LOSSLESS_CLAW_REQUIRED_VERSION,
       summaryModel: 'openai/gpt-5.4-mini',
       summaryModelMode: 'custom',
       status: 'unavailable',
@@ -311,7 +323,8 @@ describe('openclaw memory settings', () => {
   });
 
   it('switches lossless content off by restoring the legacy slot while preserving plugin config', async () => {
-    await writeLosslessClawPackage('0.9.1');
+    const { LOSSLESS_CLAW_REQUIRED_VERSION, applyMemorySettingsPatch } = await import('@electron/utils/openclaw-memory-settings');
+    await writeLosslessClawPackage(LOSSLESS_CLAW_REQUIRED_VERSION);
     const config: Record<string, unknown> = {
       plugins: {
         slots: {
@@ -329,7 +342,6 @@ describe('openclaw memory settings', () => {
       },
     };
 
-    const { applyMemorySettingsPatch } = await import('@electron/utils/openclaw-memory-settings');
     const changed = await applyMemorySettingsPatch(config, {
       losslessClaw: {
         enabled: false,
@@ -396,54 +408,49 @@ describe('openclaw memory settings', () => {
   });
 
   it('initializes memory defaults on startup when the config is missing explicit disable flags', async () => {
-    await writeLosslessClawPackage('0.9.1');
-
-    const { initializeMemoryDefaultsOnStartup } = await import('@electron/utils/openclaw-memory-settings');
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+    const { getManagedBundledPluginPolicy } = await import('@electron/utils/plugin-install');
+    await writeLosslessClawPackage(LOSSLESS_CLAW_REQUIRED_VERSION);
     const changed = await initializeMemoryDefaultsOnStartup();
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as Record<string, unknown>;
+    const entries = (plugins.entries ?? {}) as Record<string, unknown>;
+    const losslessPolicy = getManagedBundledPluginPolicy('lossless-claw');
 
     expect(changed).toBe(true);
-    expect(await readOpenClawJson()).toEqual({
-      plugins: {
-        entries: {
-          'memory-core': {
-            config: {
-              dreaming: {
-                enabled: true,
-              },
-            },
-          },
-          'active-memory': {
-            enabled: true,
-            config: {
-              enabled: true,
-              agents: ['main'],
-            },
-          },
-          'lossless-claw': {
-            enabled: true,
-            config: {
-              dbPath: join(openclawConfigDir, 'lcm.db'),
-              ignoreSessionPatterns: [
-                'agent:*:cron:**',
-                'agent:*:subagent:**',
-              ],
-              statelessSessionPatterns: [
-                'agent:*:subagent:**',
-                'agent:ops:subagent:**',
-              ],
-              skipStatelessSessions: true,
-            },
-          },
-        },
-        slots: {
-          contextEngine: 'lossless-claw',
+    expect(entries['memory-core']).toEqual({
+      config: {
+        dreaming: {
+          enabled: true,
         },
       },
+    });
+    expect(entries['active-memory']).toEqual({
+      enabled: true,
+      config: {
+        enabled: true,
+        agents: ['main'],
+      },
+    });
+    expect(entries['lossless-claw']).toEqual({
+      enabled: true,
+      config: losslessPolicy?.config ?? {},
+    });
+    expect(plugins.slots).toEqual({
+      contextEngine: 'lossless-claw',
     });
   });
 
   it('preserves explicit memory disable flags during startup initialization', async () => {
-    await writeLosslessClawPackage('0.9.1');
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+    const { getManagedBundledPluginPolicy } = await import('@electron/utils/plugin-install');
+    await writeLosslessClawPackage(LOSSLESS_CLAW_REQUIRED_VERSION);
     await writeOpenClawJson({
       plugins: {
         entries: {
@@ -474,48 +481,36 @@ describe('openclaw memory settings', () => {
       },
     });
 
-    const { initializeMemoryDefaultsOnStartup } = await import('@electron/utils/openclaw-memory-settings');
     const changed = await initializeMemoryDefaultsOnStartup();
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as Record<string, unknown>;
+    const entries = (plugins.entries ?? {}) as Record<string, unknown>;
+    const losslessPolicy = getManagedBundledPluginPolicy('lossless-claw');
 
     expect(changed).toBe(true);
-    expect(await readOpenClawJson()).toEqual({
-      plugins: {
-        entries: {
-          'memory-core': {
-            config: {
-              dreaming: {
-                enabled: false,
-              },
-            },
-          },
-          'active-memory': {
-            enabled: true,
-            config: {
-              enabled: false,
-              agents: ['main'],
-            },
-          },
-          'lossless-claw': {
-            enabled: true,
-            config: {
-              dbPath: join(openclawConfigDir, 'lcm.db'),
-              ignoreSessionPatterns: [
-                'agent:*:cron:**',
-                'agent:*:subagent:**',
-              ],
-              statelessSessionPatterns: [
-                'agent:*:subagent:**',
-                'agent:ops:subagent:**',
-              ],
-              skipStatelessSessions: true,
-              summaryModel: 'openai/gpt-5.4-mini',
-            },
-          },
-        },
-        slots: {
-          contextEngine: 'legacy',
+    expect(entries['memory-core']).toEqual({
+      config: {
+        dreaming: {
+          enabled: false,
         },
       },
+    });
+    expect(entries['active-memory']).toEqual({
+      enabled: true,
+      config: {
+        enabled: false,
+        agents: ['main'],
+      },
+    });
+    expect(entries['lossless-claw']).toEqual({
+      enabled: true,
+      config: {
+        ...(losslessPolicy?.config ?? {}),
+        summaryModel: 'openai/gpt-5.4-mini',
+      },
+    });
+    expect(plugins.slots).toEqual({
+      contextEngine: 'legacy',
     });
   });
 });

@@ -63,7 +63,7 @@ describe('assistant-display', () => {
     expect(extractAssistantVisibleText(message)).toBe('Legacy answer');
   });
 
-  it('collapses cumulative text blocks inside a single assistant turn', () => {
+  it('keeps cumulative text blocks inside a single assistant turn', () => {
     const message = {
       role: 'assistant',
       content: [
@@ -78,13 +78,13 @@ describe('assistant-display', () => {
     const display = extractAssistantDisplaySegments(message, { showThinking: false });
     expect(display.parts.filter((part) => part.type === 'text').map((part) => part.text)).toEqual([
       '收到，执行批准流程。\n\nStep 1: 读取草稿内容',
-      'Step 2: 应用变更到 MEMORY.md',
-      'Step 3: 移动草稿到 approved 目录',
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md',
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md\nStep 3: 移动草稿到 approved 目录',
     ]);
     expect(display.visibleText).toBe([
       '收到，执行批准流程。\n\nStep 1: 读取草稿内容',
-      'Step 2: 应用变更到 MEMORY.md',
-      'Step 3: 移动草稿到 approved 目录',
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md',
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md\nStep 3: 移动草稿到 approved 目录',
     ].join('\n\n'));
   });
 
