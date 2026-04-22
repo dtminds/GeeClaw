@@ -63,6 +63,31 @@ describe('assistant-display', () => {
     expect(extractAssistantVisibleText(message)).toBe('Legacy answer');
   });
 
+  it('collapses cumulative text blocks inside a single assistant turn', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: '收到，执行批准流程。\n\nStep 1: 读取草稿内容' },
+        { type: 'toolCall', id: 'read-1', name: 'read', arguments: { filePath: '/tmp/draft.md' } },
+        { type: 'text', text: '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md' },
+        { type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { filePath: '/tmp/MEMORY.md' } },
+        { type: 'text', text: '收到，执行批准流程。\n\nStep 1: 读取草稿内容\nStep 2: 应用变更到 MEMORY.md\nStep 3: 移动草稿到 approved 目录' },
+      ],
+    } as unknown as RawMessage;
+
+    const display = extractAssistantDisplaySegments(message, { showThinking: false });
+    expect(display.parts.filter((part) => part.type === 'text').map((part) => part.text)).toEqual([
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容',
+      'Step 2: 应用变更到 MEMORY.md',
+      'Step 3: 移动草稿到 approved 目录',
+    ]);
+    expect(display.visibleText).toBe([
+      '收到，执行批准流程。\n\nStep 1: 读取草稿内容',
+      'Step 2: 应用变更到 MEMORY.md',
+      'Step 3: 移动草稿到 approved 目录',
+    ].join('\n\n'));
+  });
+
   it('hides truncated OpenClaw internal context from assistant text blocks', () => {
     const message = {
       role: 'assistant',

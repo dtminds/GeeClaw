@@ -35,6 +35,7 @@ import type {
   ToolStreamEntry,
 } from './chat/model';
 import {
+  collectToolUpdates,
   hasNonToolAssistantContent,
   isErroredToolResult,
   isToolOnlyMessage,
@@ -630,6 +631,77 @@ function reconcileToolRuntimeWithHistory(
   for (const toolCallId of persistedToolCallIds) {
     nextToolStreamById.delete(toolCallId);
     nextReloadedIds.delete(toolCallId);
+  }
+
+  return {
+    toolStreamOrder: nextToolStreamOrder,
+    toolStreamById: nextToolStreamById,
+    toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
+    toolResultHistoryReloadedIds: nextReloadedIds,
+  };
+}
+
+function collectHistoryToolResultUpdates(message: RawMessage): ToolStatus[] {
+  const updates: ToolStatus[] = [];
+
+  if (isToolResultRole(message.role)) {
+    for (const update of collectToolUpdates(message, 'final')) {
+      if (!update.toolCallId) continue;
+      if (update.result === undefined && update.status === 'running') continue;
+      updates.push(update);
+    }
+  }
+
+  for (const status of message._toolStatuses || []) {
+    if (!status.toolCallId) continue;
+    if (status.result === undefined && status.status === 'running') continue;
+    updates.push(status);
+  }
+
+  return updates;
+}
+
+function patchToolRuntimeWithHistory(
+  toolStreamOrder: string[],
+  toolStreamById: Map<string, ToolStreamEntry>,
+  toolResultHistoryReloadedIds: Set<string>,
+  messages: RawMessage[],
+  minTimestampMs: number,
+): {
+  toolStreamOrder: string[];
+  toolStreamById: Map<string, ToolStreamEntry>;
+  toolMessages: RawMessage[];
+  toolResultHistoryReloadedIds: Set<string>;
+} {
+  const nextToolStreamById = new Map(toolStreamById);
+  const nextToolStreamOrder = [...toolStreamOrder];
+  const nextReloadedIds = new Set(toolResultHistoryReloadedIds);
+
+  for (const message of messages) {
+    const messageTimestampMs = typeof message.timestamp === 'number' ? toMs(message.timestamp) : 0;
+    if (minTimestampMs > 0 && messageTimestampMs > 0 && messageTimestampMs < minTimestampMs) {
+      continue;
+    }
+
+    for (const update of collectHistoryToolResultUpdates(message)) {
+      const toolCallId = update.toolCallId;
+      if (!toolCallId) continue;
+
+      const existing = nextToolStreamById.get(toolCallId);
+      if (!existing) continue;
+
+      const entry: ToolStreamEntry = {
+        ...existing,
+        name: update.name || existing.name,
+        output: update.result ?? existing.output,
+        status: mergeToolStatus(existing.status, update.status),
+        durationMs: update.durationMs ?? existing.durationMs,
+        updatedAt: update.updatedAt || Date.now(),
+      };
+      entry.message = buildToolStreamMessage(entry);
+      nextToolStreamById.set(toolCallId, entry);
+      nextReloadedIds.add(toolCallId);
+    }
   }
 
   return {
@@ -1236,6 +1308,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
+        const midRunToolOnlyHistoryReload = quiet && get().sending;
+        if (midRunToolOnlyHistoryReload) {
+          set((state) => ({
+            messages: state.messages,
+            loading: false,
+            error: null,
+            ...patchToolRuntimeWithHistory(
+              state.toolStreamOrder,
+              state.toolStreamById,
+              state.toolResultHistoryReloadedIds,
+              enrichedMessages,
+              state.lastUserMessageAt ?? 0,
+            ),
+          }));
+          logChatTrace('loadHistory:applied-tool-only', {
+            quiet,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            toolHistoryMessagesCount: enrichedMessages.length,
+            ...summarizeChatSelection(get()),
+          });
+          return;
+        }
         set((state) => ({
           messages: finalMessages,
           thinkingLevel,
