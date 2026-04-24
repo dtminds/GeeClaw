@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { app } from 'electron';
 import { loadAgentPresetPackageFromDir, type AgentPresetPackage } from './agent-presets';
-import { getAgentMarketplaceCatalogPath } from './paths';
+import { getAgentMarketplaceCatalogPath, getAgentMarketplaceCatalogUrl } from './paths';
 
 const AGENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CHECKSUM_PATTERN = /^sha256-[a-f0-9]{64}$/i;
@@ -19,6 +20,7 @@ const RECOGNIZED_CATALOG_ENTRY_KEYS = new Set([
   'presetSkills',
 ]);
 const RECOGNIZED_PLATFORM_VALUES = new Set(['darwin', 'win32', 'linux']);
+const AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS = 15000;
 
 export interface AgentMarketplaceCatalogEntry {
   agentId: string;
@@ -200,10 +202,7 @@ function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCa
   return validated;
 }
 
-export async function loadAgentMarketplaceCatalog(
-  catalogPath = getAgentMarketplaceCatalogPath(),
-): Promise<AgentMarketplaceCatalog> {
-  const content = await readFile(catalogPath, 'utf8');
+function parseAgentMarketplaceCatalog(content: string): AgentMarketplaceCatalog {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content) as unknown;
@@ -226,6 +225,59 @@ export async function loadAgentMarketplaceCatalog(
   }
 
   return catalog;
+}
+
+async function loadAgentMarketplaceCatalogFromRemote(catalogUrl: string): Promise<AgentMarketplaceCatalog> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(catalogUrl, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`[agent-marketplace] Failed to fetch catalog from ${catalogUrl}: HTTP ${response.status}`);
+    }
+
+    return parseAgentMarketplaceCatalog(await response.text());
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError') {
+      throw new Error(
+        `[agent-marketplace] Timed out fetching catalog from ${catalogUrl} after ${AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS}ms`,
+        { cause: error },
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function resolveAgentMarketplaceCatalogRemoteUrl(): string | null {
+  const overrideUrl = process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL?.trim();
+  if (overrideUrl) {
+    return overrideUrl;
+  }
+
+  if (app.isPackaged) {
+    return getAgentMarketplaceCatalogUrl();
+  }
+
+  return null;
+}
+
+export async function loadAgentMarketplaceCatalog(
+  catalogPath?: string,
+): Promise<AgentMarketplaceCatalog> {
+  if (catalogPath) {
+    return parseAgentMarketplaceCatalog(await readFile(catalogPath, 'utf8'));
+  }
+
+  const remoteUrl = resolveAgentMarketplaceCatalogRemoteUrl();
+  if (remoteUrl) {
+    return await loadAgentMarketplaceCatalogFromRemote(remoteUrl);
+  }
+
+  return parseAgentMarketplaceCatalog(await readFile(getAgentMarketplaceCatalogPath(), 'utf8'));
 }
 
 export async function loadAgentMarketplacePackageFromDir(

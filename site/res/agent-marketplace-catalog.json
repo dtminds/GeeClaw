@@ -439,6 +439,20 @@
     ]
   },
   {
+    "agentId": "interactive-presentation-master",
+    "name": "交互式 Presentation 大师",
+    "description": "3 到 30 分钟，你能 ship 一段产品发布动画、一个能点击的 App 原型、一套能编辑的 PPT、一份印刷级的信息图",
+    "emoji": "📊",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/interactive-presentation-master/1.0.0.zip",
+    "checksum": "sha256-97843abe29341dd62d6e07bd373d1cd2299b519fce9ccd5e8d64ce9309d77231",
+    "size": 31429177,
+    "presetSkills": [
+      "huashu-design"
+    ]
+  },
+  {
     "agentId": "xy-boss-assistant",
     "name": "星云BOSS助手",
     "description": "聚焦星云有客 BOSS 后台里的租户分析、续费判断、升级归因与降级复盘。",

@@ -117,10 +117,17 @@ function resolveDevelopmentPrebuiltOpenClawSidecarRoot(): string | null {
 }
 
 /**
- * Get the official agent marketplace catalog path inside resources.
+ * Get the local agent marketplace catalog path used during development.
  */
 export function getAgentMarketplaceCatalogPath(): string {
-  return join(getResourcesDir(), 'agent-marketplace', 'catalog.json');
+  return join(process.cwd(), 'site', 'res', 'agent-marketplace-catalog.json');
+}
+
+/**
+ * Get the hosted agent marketplace catalog URL used by packaged builds.
+ */
+export function getAgentMarketplaceCatalogUrl(): string {
+  return 'https://www.geeclaw.cn/res/agent-marketplace-catalog.json';
 }
 
 /**
