@@ -158,8 +158,8 @@ importers:
         specifier: ^5.1.4
         version: 5.1.4(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@wecom/wecom-openclaw-plugin':
-        specifier: 2026.4.22
-        version: 2026.4.22
+        specifier: 2026.4.23
+        version: 2026.4.23
       '@whiskeysockets/baileys':
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(jimp@1.6.1)(sharp@0.34.5)
@@ -3297,8 +3297,8 @@ packages:
   '@wecom/aibot-node-sdk@1.0.6':
     resolution: {integrity: sha512-WZJN3Q+s+94Qjc0VW8d5W1cVkA3emYxiqf+mNRO9UEHoF40puHvizreNMtudjFhm7mmkYiK5ue/QzNiCk+xwLA==}
 
-  '@wecom/wecom-openclaw-plugin@2026.4.22':
-    resolution: {integrity: sha512-scrJJ6LEm+b68MO9E5TKvIF7jDB5CDpf0RWT5C5V0WcqX7ZNfGsc6om6D3DZknOs0iPylzCbHCGu8vwbeVXzjA==}
+  '@wecom/wecom-openclaw-plugin@2026.4.23':
+    resolution: {integrity: sha512-bnzfdIEEu1/LFvcdyjaTkyxt27w6c7dqhkPezU62OWaqmcdFsUGR3T55USK/O9pIKsNcnL1Tnu1pqKYCWHFgWQ==}
 
   '@whiskeysockets/baileys@7.0.0-rc.9':
     resolution: {integrity: sha512-YFm5gKXfDP9byCXCW3OPHKXLzrAKzolzgVUlRosHHgwbnf2YOO3XknkMm6J7+F0ns8OA0uuSBhgkRHTDtqkacw==}
@@ -11591,7 +11591,7 @@ snapshots:
       - debug
       - utf-8-validate
 
-  '@wecom/wecom-openclaw-plugin@2026.4.22':
+  '@wecom/wecom-openclaw-plugin@2026.4.23':
     dependencies:
       '@wecom/aibot-node-sdk': 1.0.6
       fast-xml-parser: 5.5.10

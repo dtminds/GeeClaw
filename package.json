@@ -146,7 +146,7 @@
         "@typescript-eslint/eslint-plugin": "^8.56.0",
         "@typescript-eslint/parser": "^8.56.0",
         "@vitejs/plugin-react": "^5.1.4",
-        "@wecom/wecom-openclaw-plugin": "2026.4.22",
+        "@wecom/wecom-openclaw-plugin": "2026.4.23",
         "@whiskeysockets/baileys": "7.0.0-rc.9",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",

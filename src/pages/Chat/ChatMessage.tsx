@@ -32,7 +32,7 @@ import { isInternalMessage, useChatStore } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
 import { EvolutionProposalCard } from './EvolutionProposalCard';
 import { extractEvolutionProposalCardData, isEvolutionProposalToolName } from './evolution-proposal';
-import { 
+import {
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
   ComputerTerminal01Icon,
@@ -671,7 +671,7 @@ export const ChatMessage = memo(function ChatMessage({
     <div
       className={cn(
         'flex gap-3 group',
-        isUser && !isUserSystemNotice ? 'flex-row-reverse' : 'flex-row',
+        isUser && !isUserSystemNotice ? 'flex-row-reverse mt-2' : 'flex-row',
       )}
     >
       {/* Content */}
@@ -1302,7 +1302,7 @@ function FileCard({ file }: { file: AttachedFileMeta }) {
   }, [file.fileName, file.filePath, file.url]);
 
   return (
-    <div 
+    <div
       className={cn(
         "flex items-center gap-2 rounded-full border border-primary/15 bg-primary/8 px-3 py-2 min-w-[180px] max-w-[250px]",
         (file.filePath || file.url) && "surface-hover cursor-pointer transition-colors"
@@ -1605,11 +1605,11 @@ function ToolCard({
               {!isRunning && !isError && <HugeiconsIcon icon={toolIcon} className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
               {isError && <HugeiconsIcon icon={AlertCircleIcon} className="h-4 w-4 shrink-0" />}
             </span>
-            <span 
+            <span
               className={cn(
                 "min-w-0 flex-1 truncate text-xs text-left",
                 isRunning && "animate-shimmer bg-[linear-gradient(110deg,color-mix(in_oklab,var(--color-foreground)_25%,transparent)_35%,var(--color-foreground)_48%,var(--color-foreground)_52%,color-mix(in_oklab,var(--color-foreground)_25%,transparent)_65%)] bg-[length:200%_100%] bg-clip-text text-transparent"
-              )} 
+              )}
               title={summary.summaryLine}
             >
               {displaySummary}
@@ -1617,12 +1617,12 @@ function ToolCard({
             {duration && <span className="text-[11px] opacity-60">{duration}</span>}
           </button>
         </Popover.Trigger>
-        
+
         {open && (
           <Popover.Portal>
-            <Popover.Content 
-              align="start" 
-              side="bottom" 
+            <Popover.Content
+              align="start"
+              side="bottom"
               sideOffset={4}
               className="z-50 max-w-[600px] max-h-64 space-y-2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-[0_10px_20px_0_rgba(28,28,32,0.1)] outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 px-3 py-2 text-xs overscroll-contain"
             >
