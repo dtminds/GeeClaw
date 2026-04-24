@@ -161,6 +161,8 @@ async function setupManagedPresetFixture(options?: {
     getLogsDir: () => join(homeDir, '.geeclaw', 'logs'),
     getDataDir: () => join(homeDir, '.geeclaw'),
     getResourcesDir: () => '/tmp/geeclaw-test-app/resources',
+    getAgentMarketplaceCatalogPath: () => join(homeDir, 'site', 'res', 'agent-marketplace-catalog.json'),
+    getAgentMarketplaceCatalogUrl: () => 'https://www.geeclaw.cn/res/agent-marketplace-catalog.json',
     getOpenClawDir: () => '/tmp/openclaw',
     getOpenClawEntryPath: () => '/tmp/openclaw/openclaw.mjs',
     getClawHubCliEntryPath: () => '/tmp/geeclaw-test-app/node_modules/clawhub/bin/clawdhub.js',

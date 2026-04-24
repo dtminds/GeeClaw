@@ -129,6 +129,13 @@ pnpm run init
 # Start in development mode
 pnpm dev
 ```
+
+To validate the hosted agent marketplace catalog during development, start the app with:
+
+```bash
+GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketplace-catalog.json pnpm dev
+```
+
 ### First Launch
 
 When you launch GeeClaw for the first time, the app completes these steps through a streamlined flow:
@@ -364,6 +371,7 @@ pnpm dev
 ```
 
 - `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
+- Set `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` to force development builds to load the agent marketplace catalog from a remote URL instead of `site/res/agent-marketplace-catalog.json`.
 - Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
 
 ### GitHub Pages Landing Page

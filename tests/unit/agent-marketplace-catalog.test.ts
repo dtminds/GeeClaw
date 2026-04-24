@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
+const originalFetch = global.fetch;
+const originalCatalogUrlEnv = process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL;
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -22,10 +24,23 @@ afterEach(() => {
     const dir = tempDirs.pop();
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
+  vi.restoreAllMocks();
+  vi.resetModules();
+  vi.doUnmock('electron');
+  if (originalFetch) {
+    global.fetch = originalFetch;
+  } else {
+    delete (globalThis as typeof globalThis & { fetch?: typeof fetch }).fetch;
+  }
+  if (originalCatalogUrlEnv === undefined) {
+    delete process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL;
+  } else {
+    process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL = originalCatalogUrlEnv;
+  }
 });
 
 describe('agent marketplace catalog loader', () => {
-  it('loads the bundled official catalog from resources/agent-marketplace/catalog.json', async () => {
+  it('loads the development catalog from site/res/agent-marketplace-catalog.json', async () => {
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
 
     const catalog = await loadAgentMarketplaceCatalog();
@@ -46,6 +61,68 @@ describe('agent marketplace catalog loader', () => {
         expect(entry.presetSkills).toEqual(expect.any(Array));
       }
     }
+  });
+
+  it('loads the packaged catalog from https://www.geeclaw.cn/res/agent-marketplace-catalog.json', async () => {
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: true,
+      },
+    }));
+    global.fetch = vi.fn(async (input: string | URL | Request) => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify([
+        {
+          agentId: 'discovery-research',
+          name: 'User Research',
+          description: 'desc',
+          emoji: '🔍',
+          category: 'PM',
+          version: '1.0.0',
+          downloadUrl: 'https://example.com/discovery-research.zip',
+          checksum: 'sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      ]),
+    })) as typeof fetch;
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        agentId: 'discovery-research',
+      }),
+    ]);
+    expect(global.fetch).toHaveBeenCalledWith('https://www.geeclaw.cn/res/agent-marketplace-catalog.json');
+  });
+
+  it('loads the development catalog from an explicit remote override URL when configured', async () => {
+    process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL = 'https://cdn.example.com/agent-marketplace.json';
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify([
+        {
+          agentId: 'growth-optimization',
+          name: 'Growth Optimization',
+          description: 'desc',
+          emoji: '📈',
+          category: 'PM',
+          version: '1.0.0',
+          downloadUrl: 'https://example.com/growth-optimization.zip',
+          checksum: 'sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        },
+      ]),
+    })) as typeof fetch;
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        agentId: 'growth-optimization',
+      }),
+    ]);
+    expect(global.fetch).toHaveBeenCalledWith('https://cdn.example.com/agent-marketplace.json');
   });
 
   it('loads optional preset skill metadata from catalog entries', async () => {
