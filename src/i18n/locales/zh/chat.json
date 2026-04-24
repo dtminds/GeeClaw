@@ -13,6 +13,9 @@
         "creativeTasksDesc": "写作、头脑风暴、创意"
     },
     "noLogs": "（暂无日志）",
+    "assistant": {
+        "emptyResponse": "⚠️ 模型服务并未返回有效内容"
+    },
     "toolbar": {
         "refresh": "刷新聊天",
         "thinking": "思考过程",

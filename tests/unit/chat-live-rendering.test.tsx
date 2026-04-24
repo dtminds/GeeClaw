@@ -682,6 +682,62 @@ describe('chat live rendering', () => {
     expect(screen.queryByText('HEARTBEAT_OK')).not.toBeInTheDocument();
   });
 
+  it('renders a fallback notice when assistant content is an empty array', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-empty-content',
+          timestamp: 1,
+          content: [],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('模型服务并未返回有效内容')).toBeInTheDocument();
+  });
+
+  it('renders a fallback notice when assistant content is a blank string', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-empty-string',
+          timestamp: 1,
+          content: '   ',
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('模型服务并未返回有效内容')).toBeInTheDocument();
+  });
+
+  it('renders a fallback notice when assistant text blocks are whitespace only', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-empty-text-block',
+          timestamp: 1,
+          content: [
+            {
+              type: 'text',
+              text: '   ',
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('模型服务并未返回有效内容')).toBeInTheDocument();
+  });
+
   it('preserves normal assistant messages that merely mention ack tokens', () => {
     const message: RawMessage = {
       role: 'assistant',

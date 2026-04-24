@@ -123,6 +123,58 @@ describe('prepareHistoryMessagesForDisplay', () => {
     expect(messages).toHaveLength(0);
   });
 
+  it('keeps empty assistant history messages so the UI can show a fallback notice', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [],
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: 'assistant',
+      content: [],
+    });
+  });
+
+  it('keeps blank-string assistant history messages so the UI can show a fallback notice', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: '   ',
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: 'assistant',
+      content: '   ',
+    });
+  });
+
+  it('keeps whitespace-only assistant text blocks so the UI can show a fallback notice', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [
+          {
+            type: 'text',
+            text: '   ',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: 'assistant',
+    });
+  });
+
   it('keeps unmatched tool_result turns visible instead of merging by tool name alone', () => {
     const messages = prepareHistoryMessagesForDisplay([
       {

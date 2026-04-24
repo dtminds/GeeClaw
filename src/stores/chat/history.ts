@@ -1,10 +1,11 @@
 import { hostApiFetch } from '@/lib/host-api';
 import {
   renderSkillMarkersAsPlainText,
-  sanitizeMessagesForDisplay,
+  sanitizeMessageForDisplay,
 } from '@/lib/chat-message-text';
 import {
   extractAssistantVisibleText,
+  isEmptyAssistantTurn,
 } from '@/pages/Chat/assistant-display';
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { AttachedFileMeta, ContentBlock, RawMessage } from './model';
@@ -395,8 +396,12 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
   return next;
 }
 
-function hasRenderableAssistantHistoryContent(message: RawMessage): boolean {
+function hasRenderableAssistantHistoryContent(message: RawMessage, isStrictlyEmptyAssistantTurn = isEmptyAssistantTurn(message)): boolean {
   if (extractAssistantVisibleText(message)) {
+    return true;
+  }
+
+  if (isStrictlyEmptyAssistantTurn) {
     return true;
   }
 
@@ -478,15 +483,25 @@ export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
 }
 
 export function prepareHistoryMessagesForDisplay(rawMessages: RawMessage[]): RawMessage[] {
-  const sanitizedMessages = sanitizeMessagesForDisplay(rawMessages);
-  const visibleMessages = sanitizedMessages.filter((msg) => !isInternalMessage(msg));
-  const messagesWithToolImages = enrichWithToolResultFiles(visibleMessages);
-  const filteredMessages = messagesWithToolImages.filter((msg) => {
+  const sanitizedEntries = rawMessages.map((rawMessage) => ({
+    rawMessage,
+    sanitizedMessage: sanitizeMessageForDisplay(rawMessage),
+  }));
+  const visibleEntries = sanitizedEntries.filter(({ sanitizedMessage }) => !isInternalMessage(sanitizedMessage));
+  const messagesWithToolImages = enrichWithToolResultFiles(visibleEntries.map(({ sanitizedMessage }) => sanitizedMessage));
+  const filteredMessages = messagesWithToolImages.filter((msg, index) => {
     if (isToolResultRole(msg.role)) {
       return !msg._toolResultMatched;
     }
     if (msg.role === 'assistant') {
-      return hasRenderableAssistantHistoryContent(msg);
+      const rawMessage = visibleEntries[index]?.rawMessage;
+      const emptyAssistantTurn = rawMessage
+        ? isEmptyAssistantTurn({
+            ...rawMessage,
+            _attachedFiles: msg._attachedFiles,
+          } as RawMessage)
+        : isEmptyAssistantTurn(msg);
+      return hasRenderableAssistantHistoryContent(msg, emptyAssistantTurn);
     }
     return true;
   });
