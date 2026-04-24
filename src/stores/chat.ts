@@ -848,13 +848,13 @@ function normalizeFinalAssistantContentBlocks(
       && block.type !== 'tool_result';
   });
 
-  const hasOnlyTextBlocks = visibleBlocks.every((block) => block.type === 'text');
-  if (!hasOnlyTextBlocks) {
-    return visibleBlocks;
-  }
+  const fullText = getMessageText(visibleBlocks);
+  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(fullText, streamSegments));
+  const otherBlocks = visibleBlocks.filter((block) => block.type !== 'text');
 
-  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(getMessageText(visibleBlocks), streamSegments));
-  return visibleText.trim() ? [{ type: 'text', text: visibleText }] : [];
+  return visibleText.trim()
+    ? [{ type: 'text', text: visibleText }, ...otherBlocks]
+    : otherBlocks;
 }
 
 function mergeToolStatusesIntoEquivalentAssistantMessage(
@@ -892,6 +892,7 @@ function mergeToolStatusesIntoEquivalentAssistantMessage(
     matched = true;
     return {
       ...message,
+      content: candidate.content,
       _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
     };
   });

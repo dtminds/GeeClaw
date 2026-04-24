@@ -469,7 +469,7 @@ function buildAssistantContentParts(
       });
     }
 
-    parts.push(...assistantTextParts.map((part) => (
+    parts.push(...assistantTextParts.map<AssistantContentPart>((part) => (
       part.type === 'thinking'
         ? { type: 'thinking', content: part.text }
         : { type: 'text', text: part.text }

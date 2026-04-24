@@ -981,6 +981,223 @@ describe('chat tool result history fallback', () => {
     expect(useChatStore.getState().toolMessages).toEqual([]);
   });
 
+  it('strips already rendered text prefixes even when the final assistant content also contains images', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'start',
+        args: { command: 'pwd' },
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-midrun-image-prefix',
+        timestamp: 2,
+        content: '文本1',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'start',
+        args: { url: 'https://example.com/search' },
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'result',
+        result: '/workspace',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'result',
+        result: 'done',
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-image-prefix',
+        timestamp: 5,
+        content: [
+          { type: 'text', text: '文本1\n文本2' },
+          { type: 'image', data: 'AAA=', mimeType: 'image/png' },
+        ],
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      {
+        role: 'assistant',
+        id: 'assistant-final-image-prefix',
+        timestamp: 5,
+        content: [
+          { type: 'text', text: '文本1' },
+          { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: { command: 'pwd' } },
+          { type: 'toolResult', id: 'tool-1', name: 'exec', text: '/workspace', status: 'completed', isError: false },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com/search' } },
+          { type: 'toolResult', id: 'tool-2', name: 'fetch', text: 'done', status: 'completed', isError: false },
+          { type: 'text', text: '文本2' },
+          { type: 'image', data: 'AAA=', mimeType: 'image/png' },
+        ],
+        _hiddenAttachmentCount: undefined,
+        _toolStatuses: [
+          expect.objectContaining({ toolCallId: 'tool-1', status: 'completed', result: '/workspace' }),
+          expect.objectContaining({ toolCallId: 'tool-2', status: 'completed', result: 'done' }),
+        ],
+      },
+    ]);
+  });
+
+  it('updates equivalent final assistant messages with reconstructed live content blocks', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [
+        {
+          role: 'assistant',
+          id: 'assistant-final-existing',
+          timestamp: 3,
+          content: '好的，接下去我们来..',
+        },
+      ],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool:tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'exec',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'exec',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolResult',
+              id: 'tool-1',
+              name: 'exec',
+              text: '/workspace',
+              status: 'completed',
+              isError: false,
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'completed',
+              result: '/workspace',
+              updatedAt: 2_000,
+              input: { command: 'pwd' },
+            },
+          ],
+        },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-existing',
+        timestamp: 3,
+        content: '好的，接下去我们来..',
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      {
+        role: 'assistant',
+        id: 'assistant-final-existing',
+        timestamp: 3,
+        content: [
+          { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: { command: 'pwd' } },
+          { type: 'toolResult', id: 'tool-1', name: 'exec', text: '/workspace', status: 'completed', isError: false },
+          { type: 'text', text: '好的，接下去我们来..' },
+        ],
+        _hiddenAttachmentCount: undefined,
+        _toolStatuses: [
+          expect.objectContaining({ toolCallId: 'tool-1', status: 'completed', result: '/workspace' }),
+        ],
+      },
+    ]);
+  });
+
   it('uses the latest fallback delta timestamp when freezing text before a tool starts', () => {
     useChatStore.setState({
       currentSessionKey: 'agent:test:geeclaw_main',
