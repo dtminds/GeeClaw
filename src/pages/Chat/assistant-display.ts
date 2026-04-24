@@ -491,6 +491,48 @@ export function extractAssistantVisibleText(message: unknown): string | undefine
   return visibleParts.join('\n');
 }
 
+export function isEmptyAssistantTurn(message: RawMessage): boolean {
+  const entry = getMessageContentRecord(message);
+  if (!entry) {
+    return false;
+  }
+
+  const role = typeof entry.role === 'string' ? entry.role.toLowerCase() : '';
+  if (role !== 'assistant') {
+    return false;
+  }
+
+  if (extractAssistantVisibleText(message)) {
+    return false;
+  }
+
+  if ((message._attachedFiles?.length ?? 0) > 0) {
+    return false;
+  }
+
+  const content = entry.content;
+  if (typeof content === 'string') {
+    return content.trim().length === 0;
+  }
+
+  if (!Array.isArray(content)) {
+    return typeof entry.text === 'string' ? entry.text.trim().length === 0 : true;
+  }
+
+  return !(content as ContentBlock[]).some((block) => {
+    if (block.type === 'text') {
+      return Boolean(block.text?.trim());
+    }
+
+    return block.type === 'thinking'
+      || block.type === 'image'
+      || block.type === 'tool_use'
+      || block.type === 'toolCall'
+      || block.type === 'tool_result'
+      || block.type === 'toolResult';
+  });
+}
+
 export function extractAssistantDisplaySegments(
   message: RawMessage,
   options: { showThinking: boolean },

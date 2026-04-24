@@ -4,6 +4,7 @@ import {
   extractAssistantDisplaySegments,
   extractAssistantVisibleText,
   formatToolResultText,
+  isEmptyAssistantTurn,
   parseAssistantTextSignature,
   resolveAssistantMessagePhase,
   shouldRenderStandaloneToolResult,
@@ -61,6 +62,14 @@ describe('assistant-display', () => {
     } as unknown as RawMessage;
 
     expect(extractAssistantVisibleText(message)).toBe('Legacy answer');
+  });
+
+  it('treats assistant messages with no content fields as empty turns', () => {
+    const message = {
+      role: 'assistant',
+    } as unknown as RawMessage;
+
+    expect(isEmptyAssistantTurn(message)).toBe(true);
   });
 
   it('keeps cumulative text blocks inside a single assistant turn', () => {

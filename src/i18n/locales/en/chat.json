@@ -13,6 +13,9 @@
         "creativeTasksDesc": "Writing, brainstorming, ideas"
     },
     "noLogs": "(No logs available yet)",
+    "assistant": {
+        "emptyResponse": "The model service did not return valid content"
+    },
     "toolbar": {
         "refresh": "Refresh chat",
         "thinking": "Thinking",

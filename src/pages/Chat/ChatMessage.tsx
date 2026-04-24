@@ -24,6 +24,7 @@ import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
 import {
   extractAssistantDisplaySegments,
   formatToolResultText,
+  isEmptyAssistantTurn,
   shouldRenderStandaloneToolResult,
 } from './assistant-display';
 import { formatToolDisplaySummary } from './tool-display';
@@ -616,6 +617,7 @@ export const ChatMessage = memo(function ChatMessage({
   showToolCalls,
   isStreaming = false,
 }: ChatMessageProps) {
+  const { t } = useTranslation('chat');
   const isUser = message.role === 'user';
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   const isToolResult = role === 'toolresult' || role === 'tool_result';
@@ -653,13 +655,21 @@ export const ChatMessage = memo(function ChatMessage({
     () => (isUser ? '' : getAssistantDisplayText(assistantContentParts)),
     [assistantContentParts, isUser],
   );
-  const text = isUser ? userText : assistantText;
-  const hasText = text.length > 0;
   const hasUserSystemNotice = isUserSystemNotice && Boolean(userDisplayDecision?.text);
   // const hasAssistantText = assistantText.length > 0;
 
   const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
+  const shouldShowEmptyAssistantFallback = !isStreaming
+    && isEmptyAssistantTurn(message)
+    && !isToolResult
+    && assistantRenderableParts.length === 0
+    && images.length === 0;
+  const emptyAssistantFallbackText = shouldShowEmptyAssistantFallback
+    ? t('assistant.emptyResponse', '模型服务并未返回有效内容')
+    : '';
+  const text = isUser ? userText : (assistantText || emptyAssistantFallbackText);
+  const hasText = text.length > 0;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
 
   if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
@@ -747,6 +757,14 @@ export const ChatMessage = memo(function ChatMessage({
 
         {hasUserSystemNotice && userDisplayDecision?.action === 'show_system_notice' && (
           <SystemNotice text={userDisplayDecision.text} />
+        )}
+
+        {!isUser && assistantRenderableParts.length === 0 && hasText && (
+          <MessageBubble
+            text={text}
+            isUser={false}
+            isStreaming={isStreaming}
+          />
         )}
 
         {!isUser && assistantRenderableParts.map((part, index) => {
