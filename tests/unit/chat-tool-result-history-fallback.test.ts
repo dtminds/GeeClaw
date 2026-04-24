@@ -55,7 +55,7 @@ describe('chat tool result history fallback', () => {
     });
 
     expect(loadHistoryMock).toHaveBeenCalledTimes(1);
-    expect(loadHistoryMock).toHaveBeenCalledWith(true);
+    expect(loadHistoryMock).toHaveBeenCalledWith(true, 'tool_patch');
   });
 
   it('updates the live tool card once history contains the persisted result for the same tool call', async () => {
@@ -436,5 +436,548 @@ describe('chat tool result history fallback', () => {
       status: 'completed',
     });
     expect(useChatStore.getState().toolMessages.some((message) => message.toolCallId === 'tool-old')).toBe(false);
+  });
+
+  it('preserves existing streamed assistant text when history is used only to patch tool results', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.history') {
+        return {
+          thinkingLevel: 'high',
+          messages: [
+            {
+              role: 'assistant',
+              id: 'assistant-final-history',
+              timestamp: 3,
+              content: '这条 history 文本不应该替换现有流式输出',
+              tool_calls: [
+                {
+                  id: 'tool-1',
+                  function: {
+                    name: 'exec',
+                    arguments: '{"command":"pwd"}',
+                  },
+                },
+              ],
+            },
+            {
+              role: 'toolresult',
+              id: 'tool-result-1',
+              toolCallId: 'tool-1',
+              toolName: 'exec',
+              timestamp: 2,
+              content: [{ type: 'text', text: '/workspace' }],
+            },
+          ],
+        };
+      }
+
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+
+      throw new Error(`Unexpected RPC method: ${method}`);
+    });
+
+    useGatewayStore.setState({
+      rpc: rpcMock as never,
+    });
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: false,
+      messages: [
+        {
+          role: 'user',
+          id: 'user-1',
+          timestamp: 0,
+          content: '查一下当前目录',
+        },
+        {
+          role: 'assistant',
+          id: 'assistant-final-live',
+          timestamp: 3,
+          content: '好的，接下去我们来..',
+          tool_calls: [
+            {
+              id: 'tool-1',
+              function: {
+                name: 'exec',
+                arguments: '{"command":"pwd"}',
+              },
+            },
+          ],
+        } as unknown as ReturnType<typeof useChatStore.getState>['messages'][number],
+      ],
+    });
+
+    await useChatStore.getState().loadHistory(true, 'tool_patch');
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        id: 'user-1',
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        id: 'assistant-final-live',
+        content: '好的，接下去我们来..',
+        _toolStatuses: [
+          expect.objectContaining({
+            toolCallId: 'tool-1',
+            status: 'completed',
+            result: '/workspace',
+          }),
+        ],
+      }),
+    ]);
+    expect(useChatStore.getState().messages.some((message) => message.id === 'assistant-final-history')).toBe(false);
+  });
+
+  it('keeps live tool statuses on the final assistant message after streaming completes', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [
+        {
+          role: 'user',
+          id: 'user-1',
+          timestamp: 0,
+          content: '查一下当前目录',
+        },
+      ],
+      toolStreamById: new Map([
+        ['tool-1', {
+          toolCallId: 'tool-1',
+          runId: 'run-1',
+          sessionKey: 'agent:test:geeclaw_main',
+          name: 'exec',
+          args: { command: 'pwd' },
+          output: '/workspace',
+          status: 'completed',
+          startedAt: 1,
+          updatedAt: 2_000,
+          message: {
+            role: 'assistant',
+            id: 'live-tool:tool-1',
+            toolCallId: 'tool-1',
+            toolName: 'exec',
+            timestamp: 1,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'exec',
+                arguments: { command: 'pwd' },
+              },
+              {
+                type: 'toolResult',
+                id: 'tool-1',
+                name: 'exec',
+                text: '/workspace',
+                status: 'completed',
+                isError: false,
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'exec',
+                status: 'completed',
+                result: '/workspace',
+                updatedAt: 2_000,
+                input: { command: 'pwd' },
+              },
+            ],
+          },
+        }],
+      ]),
+      toolStreamOrder: ['tool-1'],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool:tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'exec',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'exec',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolResult',
+              id: 'tool-1',
+              name: 'exec',
+              text: '/workspace',
+              status: 'completed',
+              isError: false,
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'completed',
+              result: '/workspace',
+              updatedAt: 2_000,
+              input: { command: 'pwd' },
+            },
+          ],
+        },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-1',
+        timestamp: 3,
+        content: '好的，接下去我们来..',
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        id: 'user-1',
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        id: 'assistant-final-1',
+        content: [
+          expect.objectContaining({
+            type: 'toolCall',
+            id: 'tool-1',
+            name: 'exec',
+          }),
+          expect.objectContaining({
+            type: 'toolResult',
+            id: 'tool-1',
+            name: 'exec',
+            text: '/workspace',
+          }),
+          expect.objectContaining({
+            type: 'text',
+            text: '好的，接下去我们来..',
+          }),
+        ],
+        _toolStatuses: [
+          expect.objectContaining({
+            toolCallId: 'tool-1',
+            status: 'completed',
+            result: '/workspace',
+          }),
+        ],
+      }),
+    ]);
+    expect(useChatStore.getState().toolMessages).toEqual([]);
+  });
+
+  it('carries live tool blocks onto the final assistant message after streaming completes', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool:tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'exec',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'exec',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolResult',
+              id: 'tool-1',
+              name: 'exec',
+              text: '/workspace',
+              status: 'completed',
+              isError: false,
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'completed',
+              result: '/workspace',
+              updatedAt: 2_000,
+              input: { command: 'pwd' },
+            },
+          ],
+        },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-2',
+        timestamp: 3,
+        content: '好的，接下去我们来..',
+      },
+    });
+
+    expect(useChatStore.getState().messages[0]).toMatchObject({
+      id: 'assistant-final-2',
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-1',
+          name: 'exec',
+          arguments: { command: 'pwd' },
+        },
+        {
+          type: 'toolResult',
+          id: 'tool-1',
+          name: 'exec',
+          text: '/workspace',
+          status: 'completed',
+          isError: false,
+        },
+        {
+          type: 'text',
+          text: '好的，接下去我们来..',
+        },
+      ],
+    });
+  });
+
+  it('does not commit an assistant text message as a finished turn if more tool events continue afterward', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'start',
+        args: { command: 'pwd' },
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-midrun',
+        timestamp: 2,
+        content: '现在我为你查询',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'start',
+        args: { url: 'https://example.com' },
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().toolMessages.map((message) => message.toolCallId)).toEqual(['tool-1', 'tool-2']);
+    expect(useChatStore.getState().streamSegments).toEqual([
+      { text: '现在我为你查询', ts: 2 },
+    ]);
+    expect(useChatStore.getState().streamingText).toBe('');
+    expect(useChatStore.getState().sending).toBe(true);
+  });
+
+  it('keeps pre-tool streamed text ahead of tool blocks when the final assistant text repeats its prefix', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'start',
+        args: { command: 'pwd' },
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-midrun-prefix',
+        timestamp: 2,
+        content: '文本1',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'start',
+        args: { url: 'https://example.com/search' },
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'result',
+        result: '/workspace',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'result',
+        result: 'done',
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-prefix-repeat',
+        timestamp: 5,
+        content: '文本1\n文本2',
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      {
+        role: 'assistant',
+        id: 'assistant-final-prefix-repeat',
+        timestamp: 5,
+        content: [
+          { type: 'text', text: '文本1' },
+          { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: { command: 'pwd' } },
+          { type: 'toolResult', id: 'tool-1', name: 'exec', text: '/workspace', status: 'completed', isError: false },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com/search' } },
+          { type: 'toolResult', id: 'tool-2', name: 'fetch', text: 'done', status: 'completed', isError: false },
+          { type: 'text', text: '文本2' },
+        ],
+        _hiddenAttachmentCount: undefined,
+        _toolStatuses: [
+          expect.objectContaining({ toolCallId: 'tool-1', status: 'completed', result: '/workspace' }),
+          expect.objectContaining({ toolCallId: 'tool-2', status: 'completed', result: 'done' }),
+        ],
+      },
+    ]);
+    expect(useChatStore.getState().streamSegments).toEqual([]);
+    expect(useChatStore.getState().toolMessages).toEqual([]);
   });
 });

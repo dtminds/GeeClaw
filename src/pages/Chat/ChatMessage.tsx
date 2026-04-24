@@ -445,13 +445,10 @@ function buildAssistantContentParts(
   const content = Array.isArray(message.content) ? message.content as ContentBlock[] : null;
 
   // OpenAI-compatible streams may expose text/tool_calls separately rather than
-  // as an ordered block list. Prefer text before tools in that fallback path.
+  // as an ordered block list. In live tool-first turns, rendering tools before
+  // the fallback text best matches the observed stream order.
   if (!content) {
-    const parts: AssistantContentPart[] = assistantTextParts.map((part) => (
-      part.type === 'thinking'
-        ? { type: 'thinking', content: part.text }
-        : { type: 'text', text: part.text }
-    ));
+    const parts: AssistantContentPart[] = [];
     const tools = extractToolUse(message);
     for (const tool of tools) {
       if (shouldHideToolTrace(tool.name)) {
@@ -471,10 +468,20 @@ function buildAssistantContentParts(
         result: toolStatus?.result,
       });
     }
+
+    parts.push(...assistantTextParts.map((part) => (
+      part.type === 'thinking'
+        ? { type: 'thinking', content: part.text }
+        : { type: 'text', text: part.text }
+    )));
+
     return parts;
   }
 
   const parts: AssistantContentPart[] = [];
+  const hasInlineToolBlocks = content.some((block) => (
+    block?.type === 'tool_use' || block?.type === 'toolCall'
+  ));
   const textPartsByBlock = assistantTextParts.reduce<Map<number, Array<{ type: 'text' | 'thinking'; text: string }>>>((map, part) => {
     const group = map.get(part.blockIndex) || [];
     group.push({ type: part.type, text: part.text });
@@ -541,9 +548,11 @@ function buildAssistantContentParts(
   }
 
   // Some streaming providers send text blocks in `content[]` while exposing
-  // tool calls only via top-level `tool_calls`. Keep content order first, then
-  // append missing tools so "text -> tool" turns render correctly in real time.
+  // tool calls only via top-level `tool_calls`. When no inline tool blocks
+  // exist, the top-level tool calls typically represent earlier stream steps,
+  // so render those missing tool cards before the fallback text blocks.
   const parsedTools = extractToolUse(message);
+  const missingToolParts: AssistantContentPart[] = [];
   for (const tool of parsedTools) {
     if (shouldHideToolTrace(tool.name)) {
       continue;
@@ -558,7 +567,7 @@ function buildAssistantContentParts(
     });
     if (alreadyRendered) continue;
     const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-    parts.push({
+    missingToolParts.push({
       type: 'tool',
       id: tool.id || tool.name,
       name: tool.name,
@@ -567,6 +576,10 @@ function buildAssistantContentParts(
       durationMs: toolStatus?.durationMs,
       result: toolStatus?.result,
     });
+  }
+
+  if (missingToolParts.length > 0) {
+    return hasInlineToolBlocks ? [...parts, ...missingToolParts] : [...missingToolParts, ...parts];
   }
 
   return parts;

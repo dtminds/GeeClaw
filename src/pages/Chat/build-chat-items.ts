@@ -7,6 +7,11 @@ export type ChatRenderItem = {
   isStreaming: boolean;
 };
 
+type RuntimeRenderItem = ChatRenderItem & {
+  sortTimestamp: number;
+  sourceIndex: number;
+};
+
 type BuildChatItemsOptions = {
   messages: RawMessage[];
   toolMessages: RawMessage[];
@@ -67,6 +72,52 @@ function isHiddenToolOnlyMessage(message: RawMessage): boolean {
   return sawHiddenToolBlock;
 }
 
+function buildRuntimeRenderItems(
+  toolMessages: RawMessage[],
+  streamSegments: Array<{ text: string; ts: number }>,
+  sessionKey: string,
+  historyCount: number,
+): RuntimeRenderItem[] {
+  const runtimeItems: RuntimeRenderItem[] = [];
+
+  streamSegments.forEach((segment, index) => {
+    if (!segment.text.trim()) {
+      return;
+    }
+
+    runtimeItems.push({
+      key: `stream-seg:${sessionKey}:${index}`,
+      message: makeAssistantTextMessage(segment.text, segment.ts, `stream-seg:${sessionKey}:${index}`),
+      isStreaming: false,
+      sortTimestamp: segment.ts,
+      sourceIndex: index,
+    });
+  });
+
+  toolMessages.forEach((toolMessage, index) => {
+    if (isHiddenToolOnlyMessage(toolMessage)) {
+      return;
+    }
+
+    runtimeItems.push({
+      key: messageKey(toolMessage, historyCount + index),
+      message: toolMessage,
+      isStreaming: false,
+      sortTimestamp: typeof toolMessage.timestamp === 'number' ? toolMessage.timestamp : Number.POSITIVE_INFINITY,
+      sourceIndex: streamSegments.length + index,
+    });
+  });
+
+  runtimeItems.sort((left, right) => {
+    if (left.sortTimestamp !== right.sortTimestamp) {
+      return left.sortTimestamp - right.sortTimestamp;
+    }
+    return left.sourceIndex - right.sourceIndex;
+  });
+
+  return runtimeItems;
+}
+
 export function buildChatItems({
   messages,
   toolMessages,
@@ -88,26 +139,7 @@ export function buildChatItems({
     });
   });
 
-  const maxLen = Math.max(streamSegments.length, toolMessages.length);
-  for (let index = 0; index < maxLen; index += 1) {
-    const segment = streamSegments[index];
-    if (segment && segment.text.trim()) {
-      items.push({
-        key: `stream-seg:${sessionKey}:${index}`,
-        message: makeAssistantTextMessage(segment.text, segment.ts, `stream-seg:${sessionKey}:${index}`),
-        isStreaming: false,
-      });
-    }
-
-    const toolMessage = toolMessages[index];
-    if (toolMessage && !isHiddenToolOnlyMessage(toolMessage)) {
-      items.push({
-        key: messageKey(toolMessage, messages.length + index),
-        message: toolMessage,
-        isStreaming: false,
-      });
-    }
-  }
+  items.push(...buildRuntimeRenderItems(toolMessages, streamSegments, sessionKey, messages.length));
 
   if (streamingText.trim()) {
     const timestamp = streamingTextStartedAt ?? Date.now() / 1000;

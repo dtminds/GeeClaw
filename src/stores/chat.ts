@@ -43,6 +43,7 @@ import {
   looksLikeToolErrorText,
   mergeToolStatus,
   parseDurationMs,
+  upsertToolStatuses,
 } from './chat/tool-status';
 import {
   extractTextFromRuntimeMessage,
@@ -107,6 +108,7 @@ interface ChatState {
   activeRunId: string | null;
   streamingText: string;
   streamingTextStartedAt: number | null;
+  streamingTextLastEventAt: number | null;
   streamSegments: Array<{ text: string; ts: number }>;
   toolStreamById: Map<string, ToolStreamEntry>;
   toolStreamOrder: string[];
@@ -149,7 +151,7 @@ interface ChatState {
   deleteSession: (key: string) => Promise<void>;
   renameSession: (desktopSessionId: string, title: string) => Promise<void>;
   cleanupEmptySession: () => Promise<void>;
-  loadHistory: (quiet?: boolean) => Promise<void>;
+  loadHistory: (quiet?: boolean, mode?: 'default' | 'tool_patch') => Promise<void>;
   sendMessage: (
     text: string,
     attachments?: Array<{ fileName: string; mimeType: string; fileSize: number; stagedPath: string; preview: string | null }>,
@@ -207,6 +209,7 @@ function createEmptyToolRuntimeState() {
   return {
     streamingText: '',
     streamingTextStartedAt: null,
+    streamingTextLastEventAt: null,
     streamSegments: [] as Array<{ text: string; ts: number }>,
     toolStreamById: new Map<string, ToolStreamEntry>(),
     toolStreamOrder: [] as string[],
@@ -661,6 +664,239 @@ function collectHistoryToolResultUpdates(message: RawMessage): ToolStatus[] {
   return updates;
 }
 
+function collectMessageToolCallIds(message: RawMessage): Set<string> {
+  const toolCallIds = new Set<string>();
+
+  for (const update of collectToolUpdates(message, 'delta')) {
+    const toolCallId = update.toolCallId || update.id;
+    if (toolCallId) {
+      toolCallIds.add(toolCallId);
+    }
+  }
+
+  for (const status of message._toolStatuses || []) {
+    const toolCallId = status.toolCallId || status.id;
+    if (toolCallId) {
+      toolCallIds.add(toolCallId);
+    }
+  }
+
+  return toolCallIds;
+}
+
+function mergeHistoryToolStatusesIntoMessages(
+  currentMessages: RawMessage[],
+  historyMessages: RawMessage[],
+): RawMessage[] {
+  const updatesByToolCallId = new Map<string, ToolStatus[]>();
+
+  for (const historyMessage of historyMessages) {
+    for (const update of collectHistoryToolResultUpdates(historyMessage)) {
+      if (!update.toolCallId) continue;
+      const existing = updatesByToolCallId.get(update.toolCallId) || [];
+      existing.push(update);
+      updatesByToolCallId.set(update.toolCallId, existing);
+    }
+  }
+
+  if (updatesByToolCallId.size === 0) {
+    return currentMessages;
+  }
+
+  return currentMessages.map((message) => {
+    if (message.role !== 'assistant') {
+      return message;
+    }
+
+    const updates: ToolStatus[] = [];
+    for (const toolCallId of collectMessageToolCallIds(message)) {
+      const matching = updatesByToolCallId.get(toolCallId);
+      if (matching) {
+        updates.push(...matching);
+      }
+    }
+
+    if (updates.length === 0) {
+      return message;
+    }
+
+    return {
+      ...message,
+      _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
+    };
+  });
+}
+
+function collectLiveToolStatuses(toolMessages: RawMessage[]): ToolStatus[] {
+  let next: ToolStatus[] = [];
+
+  for (const message of toolMessages) {
+    if (!message?._toolStatuses?.length) continue;
+    next = upsertToolStatuses(next, message._toolStatuses);
+  }
+
+  return next;
+}
+
+function hasRunningLiveToolMessages(toolMessages: RawMessage[]): boolean {
+  return toolMessages.some((message) => (
+    (message._toolStatuses || []).some((status) => status.status === 'running')
+  ));
+}
+
+type OrderedLiveAssistantContentItem = {
+  sortTimestamp: number;
+  sourceIndex: number;
+  blocks: ContentBlock[];
+};
+
+function normalizeLiveToolMessageContentBlocks(message: RawMessage): ContentBlock[] {
+  if (!Array.isArray(message.content)) {
+    return [];
+  }
+
+  const blocks: ContentBlock[] = [];
+  const seenToolCallIds = new Set<string>();
+
+  for (const block of message.content) {
+    if (!block || typeof block !== 'object') continue;
+    if (block.type !== 'toolCall' && block.type !== 'toolResult' && block.type !== 'tool_use' && block.type !== 'tool_result') {
+      continue;
+    }
+
+    const normalizedType = block.type === 'tool_use'
+      ? 'toolCall'
+      : block.type === 'tool_result'
+        ? 'toolResult'
+        : block.type;
+    const identity = `${normalizedType}:${block.id || block.name || ''}`;
+    if (seenToolCallIds.has(identity)) {
+      continue;
+    }
+    seenToolCallIds.add(identity);
+    blocks.push({
+      ...block,
+      type: normalizedType,
+    });
+  }
+
+  return blocks;
+}
+
+function buildOrderedLiveAssistantContentBlocks(
+  streamSegments: Array<{ text: string; ts: number }>,
+  toolMessages: RawMessage[],
+): ContentBlock[] {
+  const items: OrderedLiveAssistantContentItem[] = [];
+
+  streamSegments.forEach((segment, index) => {
+    if (!segment.text.trim()) {
+      return;
+    }
+
+    items.push({
+      sortTimestamp: segment.ts,
+      sourceIndex: index,
+      blocks: [{ type: 'text', text: segment.text }],
+    });
+  });
+
+  toolMessages.forEach((message, index) => {
+    const blocks = normalizeLiveToolMessageContentBlocks(message);
+    if (blocks.length === 0) {
+      return;
+    }
+
+    items.push({
+      sortTimestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.POSITIVE_INFINITY,
+      sourceIndex: streamSegments.length + index,
+      blocks,
+    });
+  });
+
+  items.sort((left, right) => {
+    if (left.sortTimestamp !== right.sortTimestamp) {
+      return left.sortTimestamp - right.sortTimestamp;
+    }
+
+    return left.sourceIndex - right.sourceIndex;
+  });
+
+  return items.flatMap((item) => item.blocks);
+}
+
+function normalizeFinalAssistantContentBlocks(
+  content: RawMessage['content'],
+  streamSegments: Array<{ text: string; ts: number }>,
+): ContentBlock[] {
+  const normalizeVisibleText = (text: string): string => text.trimStart();
+
+  if (typeof content === 'string') {
+    const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(content, streamSegments));
+    return visibleText.trim() ? [{ type: 'text', text: visibleText }] : [];
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const visibleBlocks = content.filter((block): block is ContentBlock => {
+    if (!block || typeof block !== 'object') return false;
+    return block.type !== 'toolCall'
+      && block.type !== 'toolResult'
+      && block.type !== 'tool_use'
+      && block.type !== 'tool_result';
+  });
+
+  const hasOnlyTextBlocks = visibleBlocks.every((block) => block.type === 'text');
+  if (!hasOnlyTextBlocks) {
+    return visibleBlocks;
+  }
+
+  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(getMessageText(visibleBlocks), streamSegments));
+  return visibleText.trim() ? [{ type: 'text', text: visibleText }] : [];
+}
+
+function mergeToolStatusesIntoEquivalentAssistantMessage(
+  messages: RawMessage[],
+  candidate: RawMessage,
+  updates: ToolStatus[],
+): RawMessage[] {
+  if (updates.length === 0) {
+    return messages;
+  }
+
+  const candidateId = candidate.id;
+  const candidateText = getMessageText(candidate.content).trim();
+  const candidateTs = typeof candidate.timestamp === 'number' ? toMs(candidate.timestamp) : null;
+  let matched = false;
+
+  return messages.map((message) => {
+    if (matched || message.role !== 'assistant') {
+      return message;
+    }
+
+    const sameId = !!candidateId && message.id === candidateId;
+    const sameText = candidateText
+      && getMessageText(message.content).trim() === candidateText
+      && (
+        candidateTs == null
+        || typeof message.timestamp !== 'number'
+        || Math.abs(toMs(message.timestamp) - candidateTs) < 5000
+      );
+
+    if (!sameId && !sameText) {
+      return message;
+    }
+
+    matched = true;
+    return {
+      ...message,
+      _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
+    };
+  });
+}
+
 function patchToolRuntimeWithHistory(
   toolStreamOrder: string[],
   toolStreamById: Map<string, ToolStreamEntry>,
@@ -724,6 +960,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeRunId: null,
   streamingText: '',
   streamingTextStartedAt: null,
+  streamingTextLastEventAt: null,
   streamSegments: [],
   toolStreamById: new Map<string, ToolStreamEntry>(),
   toolStreamOrder: [],
@@ -1158,7 +1395,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ── Load chat history ──
 
-  loadHistory: async (quiet = false) => {
+  loadHistory: async (quiet = false, mode = 'default') => {
     const startedAt = Date.now();
     clearHistoryStartupRetryTimer();
     const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun, historyRequestGeneration } = get();
@@ -1308,6 +1545,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
+        const toolPatchOnlyHistoryReload = mode === 'tool_patch';
+        if (toolPatchOnlyHistoryReload) {
+          set((state) => ({
+            messages: mergeHistoryToolStatusesIntoMessages(state.messages, enrichedMessages),
+            thinkingLevel,
+            loading: false,
+            error: null,
+            ...patchToolRuntimeWithHistory(
+              state.toolStreamOrder,
+              state.toolStreamById,
+              state.toolResultHistoryReloadedIds,
+              enrichedMessages,
+              state.sending ? (state.lastUserMessageAt ?? 0) : 0,
+            ),
+          }));
+          logChatTrace('loadHistory:applied-tool-patch', {
+            quiet,
+            mode,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            toolHistoryMessagesCount: enrichedMessages.length,
+            ...summarizeChatSelection(get()),
+          });
+          return;
+        }
+
         const midRunToolOnlyHistoryReload = quiet && get().sending;
         if (midRunToolOnlyHistoryReload) {
           set((state) => ({
@@ -1544,7 +1807,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               requestCronRunId: request.cronRunId,
               ...summarizeChatSelection(get()),
             });
-            void get().loadHistory(true);
+            void get().loadHistory(true, 'tool_patch');
           }, retryDelayMs);
           logChatTrace('loadHistory:startup-unavailable', {
             quiet,
@@ -1986,6 +2249,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({ error: null });
         }
         const nextText = extractTextFromRuntimeMessage(event.message);
+        const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
+          ? (event.message as RawMessage).timestamp
+          : undefined;
+        console.log('[CHAT_EVENT_DEBUG] delta event arrived:', {
+          clientTime: Date.now() / 1000,
+          eventTimestamp,
+          textLength: nextText.length,
+          textPreview: nextText.slice(0, 50),
+        });
         const shouldResumeSending = !get().sending
           && !!event.message
           && typeof event.message === 'object'
@@ -2014,6 +2286,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   : Date.now() / 1000)
               )
             : s.streamingTextStartedAt,
+          streamingTextLastEventAt: nextText.trim()
+            ? (eventTimestamp ?? Date.now() / 1000)
+            : s.streamingTextLastEventAt,
         }));
         break;
       }
@@ -2021,6 +2296,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         clearErrorRecoveryTimer();
         if (get().error) set({ error: null });
         const finalMsg = event.message as RawMessage | undefined;
+        console.log('[CHAT_EVENT_DEBUG] final event arrived:', {
+          clientTime: Date.now() / 1000,
+          eventTimestamp: finalMsg?.timestamp,
+          role: finalMsg?.role,
+          isToolResult: finalMsg ? isToolResultRole(finalMsg.role) : false,
+          contentPreview: finalMsg ? (typeof finalMsg.content === 'string' ? finalMsg.content.slice(0, 50) : 'array') : 'none',
+        });
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [
@@ -2102,27 +2384,67 @@ export const useChatStore = create<ChatState>((set, get) => ({
               };
             });
             break;
-          }
+        }
 
           const toolOnly = isToolOnlyMessage(finalMsg);
           const hasOutput = hasNonToolAssistantContent(finalMsg);
           const hadToolEvents = get().toolStreamOrder.length > 0;
+          const shouldDeferFinalAssistantText = hasOutput && hasRunningLiveToolMessages(get().toolMessages);
           const msgId = finalMsg.id || (toolOnly ? `run-${runId}-tool-${Date.now()}` : `run-${runId}`);
           const inlineMediaFiles = (() => {
             const text = getMessageText(finalMsg.content);
             if (!text) return [] as AttachedFileMeta[];
             return extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource);
           })();
+          if (shouldDeferFinalAssistantText) {
+            const nextText = extractTextFromRuntimeMessage(finalMsg);
+            set((s) => ({
+              streamingText: nextText.trim()
+                ? (() => {
+                    const visibleText = stripRenderedPrefixFromStreamingText(nextText, s.streamSegments);
+                    return !s.streamingText || visibleText.length >= s.streamingText.length
+                      ? visibleText
+                      : s.streamingText;
+                  })()
+                : s.streamingText,
+              streamingTextStartedAt: nextText.trim()
+                ? (
+                    s.streamingTextStartedAt
+                    ?? (typeof finalMsg.timestamp === 'number' ? finalMsg.timestamp : Date.now() / 1000)
+                  )
+                : s.streamingTextStartedAt,
+              streamingTextLastEventAt: nextText.trim()
+                ? (typeof finalMsg.timestamp === 'number' ? finalMsg.timestamp : Date.now() / 1000)
+                : s.streamingTextLastEventAt,
+              pendingFinal: true,
+            }));
+            break;
+          }
           set((s) => {
+            const liveToolStatuses = collectLiveToolStatuses(s.toolMessages);
+            const orderedLiveContentBlocks = buildOrderedLiveAssistantContentBlocks(s.streamSegments, s.toolMessages);
             const pendingImgs = s.pendingToolImages;
             const limitedMessageAttachments = limitAttachedFilesForMessage(
               [...(finalMsg._attachedFiles || []), ...inlineMediaFiles, ...pendingImgs],
               (finalMsg._hiddenAttachmentCount || 0) + s.pendingToolHiddenCount,
             );
+            const normalizedFinalContent = orderedLiveContentBlocks.length > 0
+              ? normalizeFinalAssistantContentBlocks(finalMsg.content, s.streamSegments)
+              : Array.isArray(finalMsg.content)
+                ? finalMsg.content
+                : (typeof finalMsg.content === 'string' && finalMsg.content.trim())
+                  ? [{ type: 'text', text: finalMsg.content.trim() } satisfies ContentBlock]
+                  : [];
             const msgWithImages: RawMessage = {
               ...finalMsg,
               role: (finalMsg.role || 'assistant') as RawMessage['role'],
               id: msgId,
+              content: orderedLiveContentBlocks.length > 0
+                ? [...orderedLiveContentBlocks, ...normalizedFinalContent]
+                : finalMsg.content,
+              _toolStatuses: liveToolStatuses.length > 0
+                ? upsertToolStatuses(finalMsg._toolStatuses || [], liveToolStatuses)
+                : finalMsg._toolStatuses,
               ...(limitedMessageAttachments.files.length > 0
                 ? { _attachedFiles: limitedMessageAttachments.files }
                 : {}),
@@ -2132,6 +2454,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const alreadyExists = hasEquivalentFinalAssistantMessage(s.messages, msgWithImages, msgId);
             if (alreadyExists) {
               return {
+                messages: mergeToolStatusesIntoEquivalentAssistantMessage(s.messages, msgWithImages, liveToolStatuses),
                 ...(hasOutput ? createEmptyToolRuntimeState() : {}),
                 sending: hasOutput ? false : s.sending,
                 activeRunId: hasOutput ? null : s.activeRunId,
@@ -2156,7 +2479,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           if (hasOutput && hadToolEvents && !toolOnly) {
             clearHistoryPoll();
-            void get().loadHistory(true);
+            void get().loadHistory(true, 'tool_patch');
           }
         } else {
           set({
@@ -2317,6 +2640,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? ((data.isError === true || outputLooksErrored) ? 'error' : 'completed')
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
+    console.log('[CHAT_EVENT_DEBUG] agent tool event arrived:', {
+      clientTime: Date.now() / 1000,
+      eventTs: event.ts,
+      startedAt,
+      toolCallId,
+      name,
+      phase,
+    });
     const shouldReloadHistoryForMissingResult = phase === 'result'
       && output === undefined
       && !get().toolResultHistoryReloadedIds.has(toolCallId);
@@ -2336,16 +2667,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let nextStreamSegments = s.streamSegments;
       let nextStreamingText = s.streamingText;
       let nextStreamingTextStartedAt = s.streamingTextStartedAt;
+      let nextStreamingTextLastEventAt = s.streamingTextLastEventAt;
 
       let entry = nextToolStreamById.get(toolCallId);
       if (!entry) {
         if (s.streamingText.trim()) {
+          // Use the last text event timestamp to ensure proper chronological ordering
+          const frozenTs = s.streamingTextLastEventAt ?? s.streamingTextStartedAt ?? startedAt;
+          console.log('[CHAT_EVENT_DEBUG] freezing streamingText into segment:', {
+            text: s.streamingText.slice(0, 50),
+            frozenTs,
+            streamingTextLastEventAt: s.streamingTextLastEventAt,
+            streamingTextStartedAt: s.streamingTextStartedAt,
+            startedAt,
+            toolCallId,
+          });
           nextStreamSegments = [
             ...s.streamSegments,
-            { text: s.streamingText, ts: s.streamingTextStartedAt ?? startedAt },
+            { text: s.streamingText, ts: frozenTs },
           ];
           nextStreamingText = '';
           nextStreamingTextStartedAt = null;
+          nextStreamingTextLastEventAt = null;
         }
         entry = {
           toolCallId,
@@ -2393,6 +2736,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         pendingFinal: phase === 'result' ? true : s.pendingFinal,
         streamingText: nextStreamingText,
         streamingTextStartedAt: nextStreamingTextStartedAt,
+        streamingTextLastEventAt: nextStreamingTextLastEventAt,
         streamSegments: nextStreamSegments,
         toolStreamById: nextToolStreamById,
         toolStreamOrder: nextToolStreamOrder,
@@ -2402,7 +2746,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
 
     if (shouldReloadHistoryForMissingResult) {
-      void get().loadHistory(true);
+      void get().loadHistory(true, 'tool_patch');
     }
   },
 
