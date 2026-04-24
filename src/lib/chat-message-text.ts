@@ -11,8 +11,10 @@ const OPENCLAW_EXEC_FOLLOWUP_PREFIX =
   'An async command you ran earlier has completed. The result is shown in the system messages above.';
 const OPENCLAW_EXEC_FOLLOWUP_SUFFIX =
   'Handle the result internally. Do not relay it to the user unless explicitly requested.';
-const OPENCLAW_CRON_DELIVERY_SUFFIX =
-  'Return your response as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.';
+const OPENCLAW_CRON_DELIVERY_SUFFIXES = [
+  'Return your response as plain text; it will be delivered automatically. If the task explicitly calls for messaging a specific external recipient, note who/where it should go instead of sending it yourself.',
+  'Use the message tool if you need to notify the user directly for the current chat. If you do not send directly, your final plain-text reply will be delivered automatically.',
+] as const;
 const OPENCLAW_NOTICE_PREFIXES = [
   'A scheduled reminder has been triggered. The reminder content is:',
   'A scheduled cron event was triggered, but no event content was found.',
@@ -407,7 +409,7 @@ function isOpenClawCronSyntheticPrompt(text: string): boolean {
 
   return OPENCLAW_CRON_HEADER_RE.test(lines[0] ?? '')
     && isOpenClawCurrentTimeLine(lines[1] ?? '')
-    && (lines[lines.length - 1] ?? '') === OPENCLAW_CRON_DELIVERY_SUFFIX;
+    && OPENCLAW_CRON_DELIVERY_SUFFIXES.includes((lines[lines.length - 1] ?? '') as typeof OPENCLAW_CRON_DELIVERY_SUFFIXES[number]);
 }
 
 function stripTrailingCurrentTimeLine(text: string): string {

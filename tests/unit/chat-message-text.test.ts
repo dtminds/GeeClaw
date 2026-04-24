@@ -136,6 +136,21 @@ describe('cleanUserMessageText', () => {
     expect(cleanUserMessageText(polluted)).toBe('');
   });
 
+  it('hides cron synthetic prompts that use the newer automatic-delivery suffix', () => {
+    const polluted = [
+      '[cron:24102cae-8131-4468-b1e9-45f5ba567c22 打招呼] 杭州当前天气',
+      'Current time: Friday, April 24th, 2026 - 09:00 (Asia/Shanghai) / 2026-04-24 01:00 UTC',
+      '',
+      'Use the message tool if you need to notify the user directly for the current chat. If you do not send directly, your final plain-text reply will be delivered automatically.',
+    ].join('\n');
+
+    expect(decideOpenClawUserMessageForUi(polluted)).toEqual({
+      action: 'hide',
+      reason: 'openclaw_synthetic_cron_prompt',
+    });
+    expect(cleanUserMessageText(polluted)).toBe('');
+  });
+
   it('hides exec synthetic followups without a prelude when a trailing current-time line is present', () => {
     const polluted = [
       'An async command you ran earlier has completed. The result is shown in the system messages above.',
