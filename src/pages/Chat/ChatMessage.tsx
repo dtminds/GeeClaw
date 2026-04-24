@@ -660,7 +660,8 @@ export const ChatMessage = memo(function ChatMessage({
 
   const attachedFiles = message._attachedFiles || EMPTY_ATTACHMENTS;
   const hiddenAttachmentCount = message._hiddenAttachmentCount || 0;
-  const shouldShowEmptyAssistantFallback = isEmptyAssistantTurn(message)
+  const shouldShowEmptyAssistantFallback = !isStreaming
+    && isEmptyAssistantTurn(message)
     && !isToolResult
     && assistantRenderableParts.length === 0
     && images.length === 0;
