@@ -44,6 +44,7 @@ afterEach(() => {
   } else {
     process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL = originalCatalogUrlEnv;
   }
+  vi.useRealTimers();
 });
 
 describe('agent marketplace catalog loader', () => {
@@ -96,7 +97,12 @@ describe('agent marketplace catalog loader', () => {
         agentId: 'discovery-research',
       }),
     ]);
-    expect(global.fetch).toHaveBeenCalledWith('https://www.geeclaw.cn/res/agent-marketplace-catalog.json');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://www.geeclaw.cn/res/agent-marketplace-catalog.json',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it('loads the development catalog from an explicit remote override URL when configured', async () => {
@@ -125,7 +131,30 @@ describe('agent marketplace catalog loader', () => {
         agentId: 'growth-optimization',
       }),
     ]);
-    expect(global.fetch).toHaveBeenCalledWith('https://cdn.example.com/agent-marketplace.json');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://cdn.example.com/agent-marketplace.json',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('times out when the remote catalog does not respond', async () => {
+    vi.useFakeTimers();
+    process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL = 'https://cdn.example.com/agent-marketplace.json';
+    global.fetch = vi.fn((_: string | URL | Request, init?: RequestInit) => new Promise((_, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      }, { once: true });
+    })) as typeof fetch;
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+    const request = expect(loadAgentMarketplaceCatalog()).rejects.toThrow(
+      'Timed out fetching catalog after 15000ms',
+    );
+
+    await vi.advanceTimersByTimeAsync(15000);
+    await request;
   });
 
   it('loads optional preset skill metadata from catalog entries', async () => {

@@ -20,6 +20,7 @@ const RECOGNIZED_CATALOG_ENTRY_KEYS = new Set([
   'presetSkills',
 ]);
 const RECOGNIZED_PLATFORM_VALUES = new Set(['darwin', 'win32', 'linux']);
+const AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS = 15000;
 
 export interface AgentMarketplaceCatalogEntry {
   agentId: string;
@@ -227,12 +228,28 @@ function parseAgentMarketplaceCatalog(content: string): AgentMarketplaceCatalog 
 }
 
 async function loadAgentMarketplaceCatalogFromRemote(catalogUrl: string): Promise<AgentMarketplaceCatalog> {
-  const response = await fetch(catalogUrl);
-  if (!response.ok) {
-    throw new Error(`[agent-marketplace] Failed to fetch catalog: HTTP ${response.status}`);
-  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS);
 
-  return parseAgentMarketplaceCatalog(await response.text());
+  try {
+    const response = await fetch(catalogUrl, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`[agent-marketplace] Failed to fetch catalog: HTTP ${response.status}`);
+    }
+
+    return parseAgentMarketplaceCatalog(await response.text());
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError') {
+      throw new Error(
+        `[agent-marketplace] Timed out fetching catalog after ${AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS}ms`,
+        { cause: error },
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function resolveAgentMarketplaceCatalogRemoteUrl(): string | null {
