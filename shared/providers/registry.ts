@@ -69,7 +69,7 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     defaultModels: [
       createDefaultProviderModel('qwen3.6-plus', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('hunyuan-3.0-preview', { contextWindow: 256000, maxTokens: 8192 }),
-      createDefaultProviderModel('deepseek-v3.2', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
+      createDefaultProviderModel('deepseek-v4-pro', { contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('mimo-v2.5-pro', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('mimo-v2.5', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('glm-5.1', { contextWindow: 200000, maxTokens: 8192 }),
