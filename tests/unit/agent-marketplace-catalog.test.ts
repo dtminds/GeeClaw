@@ -6,6 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 const originalFetch = global.fetch;
 const originalCatalogUrlEnv = process.env.GEECLAW_AGENT_MARKETPLACE_CATALOG_URL;
+const electronAppMock = {
+  isPackaged: false,
+};
+
+vi.mock('electron', () => ({
+  app: electronAppMock,
+}));
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -26,7 +33,7 @@ afterEach(() => {
   }
   vi.restoreAllMocks();
   vi.resetModules();
-  vi.doUnmock('electron');
+  electronAppMock.isPackaged = false;
   if (originalFetch) {
     global.fetch = originalFetch;
   } else {
@@ -64,12 +71,8 @@ describe('agent marketplace catalog loader', () => {
   });
 
   it('loads the packaged catalog from https://www.geeclaw.cn/res/agent-marketplace-catalog.json', async () => {
-    vi.doMock('electron', () => ({
-      app: {
-        isPackaged: true,
-      },
-    }));
-    global.fetch = vi.fn(async (input: string | URL | Request) => ({
+    electronAppMock.isPackaged = true;
+    global.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
       text: async () => JSON.stringify([
