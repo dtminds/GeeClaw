@@ -234,14 +234,14 @@ async function loadAgentMarketplaceCatalogFromRemote(catalogUrl: string): Promis
   try {
     const response = await fetch(catalogUrl, { signal: controller.signal });
     if (!response.ok) {
-      throw new Error(`[agent-marketplace] Failed to fetch catalog: HTTP ${response.status}`);
+      throw new Error(`[agent-marketplace] Failed to fetch catalog from ${catalogUrl}: HTTP ${response.status}`);
     }
 
     return parseAgentMarketplaceCatalog(await response.text());
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError') {
       throw new Error(
-        `[agent-marketplace] Timed out fetching catalog after ${AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS}ms`,
+        `[agent-marketplace] Timed out fetching catalog from ${catalogUrl} after ${AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS}ms`,
         { cause: error },
       );
     }

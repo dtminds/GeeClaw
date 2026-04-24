@@ -150,7 +150,7 @@ describe('agent marketplace catalog loader', () => {
 
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
     const request = expect(loadAgentMarketplaceCatalog()).rejects.toThrow(
-      'Timed out fetching catalog after 15000ms',
+      'Timed out fetching catalog from https://cdn.example.com/agent-marketplace.json after 15000ms',
     );
 
     await vi.advanceTimersByTimeAsync(15000);
