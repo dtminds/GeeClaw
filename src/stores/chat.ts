@@ -181,7 +181,7 @@ let _lastChatEventAt = 0;
 // poll chat.history to surface intermediate tool-call turns.
 let _historyPollTimer: ReturnType<typeof setTimeout> | null = null;
 let _historyStartupRetryTimer: ReturnType<typeof setTimeout> | null = null;
-let _historyStartupRetryState: { requestKey: string; attempt: number } | null = null;
+let _historyStartupRetryState: { requestKey: string; attempt: number; mode: 'default' | 'tool_patch' } | null = null;
 
 // Timer for delayed error finalization. When the Gateway reports a mid-stream
 // error (e.g. "terminated"), it may retry internally and recover. We wait
@@ -1787,6 +1787,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           _historyStartupRetryState = {
             requestKey,
             attempt: nextAttempt,
+            mode,
           };
           set({
             error: null,
@@ -1807,7 +1808,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               requestCronRunId: request.cronRunId,
               ...summarizeChatSelection(get()),
             });
-            void get().loadHistory(true, 'tool_patch');
+            void get().loadHistory(true, _historyStartupRetryState?.mode ?? mode);
           }, retryDelayMs);
           logChatTrace('loadHistory:startup-unavailable', {
             quiet,
@@ -2252,12 +2253,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
           ? (event.message as RawMessage).timestamp
           : undefined;
-        console.log('[CHAT_EVENT_DEBUG] delta event arrived:', {
-          clientTime: Date.now() / 1000,
-          eventTimestamp,
-          textLength: nextText.length,
-          textPreview: nextText.slice(0, 50),
-        });
         const shouldResumeSending = !get().sending
           && !!event.message
           && typeof event.message === 'object'
@@ -2296,13 +2291,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         clearErrorRecoveryTimer();
         if (get().error) set({ error: null });
         const finalMsg = event.message as RawMessage | undefined;
-        console.log('[CHAT_EVENT_DEBUG] final event arrived:', {
-          clientTime: Date.now() / 1000,
-          eventTimestamp: finalMsg?.timestamp,
-          role: finalMsg?.role,
-          isToolResult: finalMsg ? isToolResultRole(finalMsg.role) : false,
-          contentPreview: finalMsg ? (typeof finalMsg.content === 'string' ? finalMsg.content.slice(0, 50) : 'array') : 'none',
-        });
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [
@@ -2344,14 +2332,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
               let nextStreamSegments = s.streamSegments;
               let nextStreamingText = s.streamingText;
               let nextStreamingTextStartedAt = s.streamingTextStartedAt;
+              let nextStreamingTextLastEventAt = s.streamingTextLastEventAt;
               let entry = nextToolStreamById.get(toolCallId);
               if (!entry && s.streamingText.trim()) {
+                const frozenTs = s.streamingTextLastEventAt ?? s.streamingTextStartedAt ?? finalMsg.timestamp ?? Date.now() / 1000;
                 nextStreamSegments = [
                   ...s.streamSegments,
-                  { text: s.streamingText, ts: s.streamingTextStartedAt ?? finalMsg.timestamp ?? Date.now() / 1000 },
+                  { text: s.streamingText, ts: frozenTs },
                 ];
                 nextStreamingText = '';
                 nextStreamingTextStartedAt = null;
+                nextStreamingTextLastEventAt = null;
               }
               entry = {
                 toolCallId,
@@ -2374,6 +2365,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               return {
                 streamingText: nextStreamingText,
                 streamingTextStartedAt: nextStreamingTextStartedAt,
+                streamingTextLastEventAt: nextStreamingTextLastEventAt,
                 streamSegments: nextStreamSegments,
                 toolStreamById: nextToolStreamById,
                 toolStreamOrder: nextToolStreamOrder,
@@ -2585,6 +2577,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (sending && event.message && typeof event.message === 'object') {
           console.warn(`[handleChatEvent] Unknown event state "${resolvedState}", treating message as streaming delta. Event keys:`, Object.keys(event));
           const nextText = extractTextFromRuntimeMessage(event.message);
+          const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
+            ? (event.message as RawMessage).timestamp
+            : undefined;
           set((s) => ({
             streamingText: nextText.trim()
               ? (() => {
@@ -2602,6 +2597,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     : Date.now() / 1000)
                 )
               : s.streamingTextStartedAt,
+            streamingTextLastEventAt: nextText.trim()
+              ? (eventTimestamp ?? Date.now() / 1000)
+              : s.streamingTextLastEventAt,
           }));
         }
         break;
@@ -2640,14 +2638,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? ((data.isError === true || outputLooksErrored) ? 'error' : 'completed')
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
-    console.log('[CHAT_EVENT_DEBUG] agent tool event arrived:', {
-      clientTime: Date.now() / 1000,
-      eventTs: event.ts,
-      startedAt,
-      toolCallId,
-      name,
-      phase,
-    });
     const shouldReloadHistoryForMissingResult = phase === 'result'
       && output === undefined
       && !get().toolResultHistoryReloadedIds.has(toolCallId);
@@ -2672,16 +2662,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let entry = nextToolStreamById.get(toolCallId);
       if (!entry) {
         if (s.streamingText.trim()) {
-          // Use the last text event timestamp to ensure proper chronological ordering
           const frozenTs = s.streamingTextLastEventAt ?? s.streamingTextStartedAt ?? startedAt;
-          console.log('[CHAT_EVENT_DEBUG] freezing streamingText into segment:', {
-            text: s.streamingText.slice(0, 50),
-            frozenTs,
-            streamingTextLastEventAt: s.streamingTextLastEventAt,
-            streamingTextStartedAt: s.streamingTextStartedAt,
-            startedAt,
-            toolCallId,
-          });
           nextStreamSegments = [
             ...s.streamSegments,
             { text: s.streamingText, ts: frozenTs },

@@ -980,4 +980,111 @@ describe('chat tool result history fallback', () => {
     expect(useChatStore.getState().streamSegments).toEqual([]);
     expect(useChatStore.getState().toolMessages).toEqual([]);
   });
+
+  it('uses the latest fallback delta timestamp when freezing text before a tool starts', () => {
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'mystery',
+      message: {
+        role: 'assistant',
+        timestamp: 10,
+        content: '现在',
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'mystery',
+      message: {
+        role: 'assistant',
+        timestamp: 12,
+        content: '现在我为你查询',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      ts: 20,
+      data: {
+        toolCallId: 'tool-1',
+        name: 'fetch',
+        phase: 'start',
+        args: { url: 'https://example.com' },
+      },
+    });
+
+    expect(useChatStore.getState().streamSegments).toEqual([
+      { text: '现在我为你查询', ts: 12 },
+    ]);
+  });
+
+  it('does not emit debug console logs for routine stream handling', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      useChatStore.setState({
+        currentSessionKey: 'agent:test:geeclaw_main',
+        currentDesktopSessionId: '',
+        currentViewMode: 'session',
+        desktopSessions: [],
+        sending: true,
+        activeRunId: 'run-1',
+        messages: [],
+      });
+
+      useChatStore.getState().handleChatEvent({
+        runId: 'run-1',
+        sessionKey: 'agent:test:geeclaw_main',
+        state: 'delta',
+        message: {
+          role: 'assistant',
+          timestamp: 10,
+          content: '现在我为你查询',
+        },
+      });
+
+      useChatStore.getState().handleAgentEvent({
+        stream: 'tool',
+        runId: 'run-1',
+        sessionKey: 'agent:test:geeclaw_main',
+        ts: 12,
+        data: {
+          toolCallId: 'tool-1',
+          name: 'fetch',
+          phase: 'start',
+          args: { url: 'https://example.com' },
+        },
+      });
+
+      useChatStore.getState().handleChatEvent({
+        runId: 'run-1',
+        sessionKey: 'agent:test:geeclaw_main',
+        state: 'final',
+        message: {
+          role: 'assistant',
+          id: 'assistant-final-quiet',
+          timestamp: 14,
+          content: '查询好了',
+        },
+      });
+
+      expect(logSpy).not.toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });
