@@ -516,7 +516,7 @@ export function isEmptyAssistantTurn(message: RawMessage): boolean {
   }
 
   if (!Array.isArray(content)) {
-    return typeof entry.text === 'string' ? entry.text.trim().length === 0 : false;
+    return typeof entry.text === 'string' ? entry.text.trim().length === 0 : true;
   }
 
   return !(content as ContentBlock[]).some((block) => {

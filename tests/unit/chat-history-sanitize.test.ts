@@ -175,6 +175,31 @@ describe('prepareHistoryMessagesForDisplay', () => {
     });
   });
 
+  it('keeps assistant history messages that only contain attachments', () => {
+    const messages = prepareHistoryMessagesForDisplay([
+      {
+        role: 'assistant',
+        timestamp: 1,
+        content: [],
+        _attachedFiles: [
+          {
+            fileName: 'report.png',
+            mimeType: 'image/png',
+            fileSize: 123,
+            preview: 'data:image/png;base64,AAA=',
+          },
+        ],
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?._attachedFiles).toEqual([
+      expect.objectContaining({
+        fileName: 'report.png',
+      }),
+    ]);
+  });
+
   it('keeps unmatched tool_result turns visible instead of merging by tool name alone', () => {
     const messages = prepareHistoryMessagesForDisplay([
       {

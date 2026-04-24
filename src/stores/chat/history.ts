@@ -401,6 +401,10 @@ function hasRenderableAssistantHistoryContent(message: RawMessage, isStrictlyEmp
     return true;
   }
 
+  if ((message._attachedFiles?.length ?? 0) > 0) {
+    return true;
+  }
+
   if (isStrictlyEmptyAssistantTurn) {
     return true;
   }
