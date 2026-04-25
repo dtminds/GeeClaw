@@ -610,6 +610,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ?? sameAgentRemaining.find((session) => session.gatewaySessionKey === preferredMainSessionKey)
       ?? sameAgentRemaining[0]
       ?? remaining[0];
+    const conversationState = createConversationResetState();
+    if (currentDesktopSessionId !== desktopSessionId) {
+      conversationState.messages = get().messages;
+    }
 
     set({
       desktopSessions: remaining,
@@ -619,8 +623,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentAgentId: next?.gatewaySessionKey ? getAgentIdFromSessionKey(next.gatewaySessionKey) : 'main',
       currentViewMode: 'session',
       selectedCronRun: null,
-      ...createConversationResetState(),
-      messages: currentDesktopSessionId === desktopSessionId ? [] : get().messages,
+      ...conversationState,
     });
     logChatTrace('deleteSession:done', {
       deletedSessionId: desktopSessionId,
