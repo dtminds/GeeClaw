@@ -57,6 +57,13 @@ describe('buildChatItems', () => {
         role: 'assistant',
         id: 'stream:agent:main:main:6',
         timestamp: 6,
+        content: [
+          { type: 'text', text: 'text-1' },
+          { type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'pwd' } },
+          { type: 'text', text: 'text-2' },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } },
+          { type: 'text', text: 'final-live' },
+        ],
       },
     });
   });
@@ -98,6 +105,11 @@ describe('buildChatItems', () => {
         role: 'assistant',
         id: 'stream:agent:main:main:3',
         timestamp: 3,
+        content: [
+          { type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'pwd' } },
+          { type: 'text', text: '现在我为你查询' },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } },
+        ],
       },
     });
   });
@@ -144,6 +156,9 @@ describe('buildChatItems', () => {
         role: 'assistant',
         id: 'stream:agent:main:main:4',
         timestamp: 4,
+        content: [
+          { type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } },
+        ],
       },
     });
   });
@@ -184,6 +199,11 @@ describe('buildChatItems', () => {
         role: 'assistant',
         id: 'stream:agent:main:main:20',
         timestamp: 20,
+        content: [
+          { type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } },
+          { type: 'text', text: 'text-1' },
+          { type: 'text', text: 'text-2' },
+        ],
       },
     });
   });
@@ -252,6 +272,16 @@ describe('buildChatItems', () => {
           id: 'tool-bash',
           toolCallId: 'tool-bash',
           content: [{ type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } }],
+          _toolStatuses: [
+            {
+              id: 'tool-bash',
+              toolCallId: 'tool-bash',
+              name: 'bash',
+              status: 'running',
+              input: { command: 'pwd' },
+              updatedAt: 100,
+            },
+          ],
         } as RawMessage,
       ],
       streamSegments: [],
@@ -268,6 +298,19 @@ describe('buildChatItems', () => {
         role: 'assistant',
         id: 'stream:agent:main:main:1777118400',
         timestamp: 1777118400,
+        content: [
+          { type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } },
+        ],
+        _toolStatuses: [
+          {
+            id: 'tool-bash',
+            toolCallId: 'tool-bash',
+            name: 'bash',
+            status: 'running',
+            input: { command: 'pwd' },
+            updatedAt: 100,
+          },
+        ],
       },
     });
   });

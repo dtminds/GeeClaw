@@ -1,4 +1,4 @@
-import type { RawMessage } from '@/stores/chat';
+import type { ContentBlock, RawMessage, ToolStatus } from '@/stores/chat';
 import { shouldHideToolTrace } from './message-utils';
 
 export type ChatRenderItem = {
@@ -23,15 +23,6 @@ function messageKey(message: RawMessage, index: number): string {
     return `msg:${message.role}:${message.timestamp}:${index}`;
   }
   return `msg:${message.role}:${index}`;
-}
-
-function makeAssistantTextMessage(text: string, timestamp: number, id: string): RawMessage {
-  return {
-    role: 'assistant',
-    id,
-    content: text,
-    timestamp,
-  };
 }
 
 function isHiddenToolOnlyMessage(message: RawMessage): boolean {
@@ -65,6 +56,128 @@ function isHiddenToolOnlyMessage(message: RawMessage): boolean {
   }
 
   return sawHiddenToolBlock;
+}
+
+function makeAssistantLiveMessage(
+  content: RawMessage['content'],
+  timestamp: number,
+  id: string,
+  toolStatuses: ToolStatus[],
+): RawMessage {
+  return {
+    role: 'assistant',
+    id,
+    content,
+    timestamp,
+    _toolStatuses: toolStatuses.length > 0 ? toolStatuses : undefined,
+  };
+}
+
+function normalizeLiveToolMessageContentBlocks(message: RawMessage): ContentBlock[] {
+  if (!Array.isArray(message.content) || isHiddenToolOnlyMessage(message)) {
+    return [];
+  }
+
+  const blocks: ContentBlock[] = [];
+  const seenBlockKeys = new Set<string>();
+
+  for (const block of message.content) {
+    if (!block || typeof block !== 'object') {
+      continue;
+    }
+
+    if (
+      block.type !== 'tool_use'
+      && block.type !== 'tool_result'
+      && block.type !== 'toolCall'
+      && block.type !== 'toolResult'
+    ) {
+      continue;
+    }
+
+    const normalizedType = block.type === 'tool_use'
+      ? 'toolCall'
+      : block.type === 'tool_result'
+        ? 'toolResult'
+        : block.type;
+    const blockKey = `${normalizedType}:${block.id || block.name || ''}`;
+    if (seenBlockKeys.has(blockKey)) {
+      continue;
+    }
+
+    seenBlockKeys.add(blockKey);
+    blocks.push({
+      ...block,
+      type: normalizedType,
+    });
+  }
+
+  return blocks;
+}
+
+function buildLiveAssistantContent(
+  toolMessages: RawMessage[],
+  streamSegments: Array<{ text: string; ts: number }>,
+  streamingText: string,
+): ContentBlock[] {
+  const items: Array<{ sortTimestamp: number; sourceIndex: number; blocks: ContentBlock[] }> = [];
+
+  streamSegments.forEach((segment, index) => {
+    if (!segment.text.trim()) {
+      return;
+    }
+
+    items.push({
+      sortTimestamp: segment.ts,
+      sourceIndex: index,
+      blocks: [{ type: 'text', text: segment.text }],
+    });
+  });
+
+  toolMessages.forEach((message, index) => {
+    const blocks = normalizeLiveToolMessageContentBlocks(message);
+    if (blocks.length === 0) {
+      return;
+    }
+
+    items.push({
+      sortTimestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.POSITIVE_INFINITY,
+      sourceIndex: streamSegments.length + index,
+      blocks,
+    });
+  });
+
+  items.sort((left, right) => {
+    if (left.sortTimestamp !== right.sortTimestamp) {
+      return left.sortTimestamp - right.sortTimestamp;
+    }
+
+    return left.sourceIndex - right.sourceIndex;
+  });
+
+  const blocks = items.flatMap((item) => item.blocks);
+  if (streamingText.trim()) {
+    blocks.push({ type: 'text', text: streamingText });
+  }
+
+  return blocks;
+}
+
+function collectLiveToolStatuses(toolMessages: RawMessage[]): ToolStatus[] {
+  const statusesById = new Map<string, ToolStatus>();
+
+  for (const message of toolMessages) {
+    if (isHiddenToolOnlyMessage(message) || !message._toolStatuses?.length) {
+      continue;
+    }
+
+    for (const status of message._toolStatuses) {
+      const statusKey = status.toolCallId || status.id || status.name;
+      statusesById.set(statusKey, status);
+    }
+  }
+
+  return [...statusesById.values()];
 }
 
 function hasVisibleRuntimeContent(
@@ -136,9 +249,11 @@ export function buildChatItems({
   if (streamingText.trim() || hasVisibleRuntimeContent(toolMessages, streamSegments)) {
     const timestamp = getLiveAssistantTimestamp(streamingTextStartedAt, toolMessages, streamSegments);
     const streamId = `stream:${sessionKey}:${timestamp}`;
+    const liveContent = buildLiveAssistantContent(toolMessages, streamSegments, streamingText);
+    const liveToolStatuses = collectLiveToolStatuses(toolMessages);
     items.push({
       key: streamId,
-      message: makeAssistantTextMessage(streamingText, timestamp, streamId),
+      message: makeAssistantLiveMessage(liveContent, timestamp, streamId, liveToolStatuses),
       isStreaming: true,
     });
   }
