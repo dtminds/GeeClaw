@@ -136,6 +136,12 @@ pnpm dev
 GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketplace-catalog.json pnpm dev
 ```
 
+如果你想在开发模式下验证线上 GeeClaw Provider 代理配置，可以这样启动：
+
+```bash
+GEECLAW_PROVIDER_CONFIG_URL=https://www.geeclaw.cn/res/geeclaw-provider-config.json pnpm dev
+```
+
 ### 首次启动
 
 首次启动 GeeClaw 时，应用会先用更简洁的启动流程完成这些事：
@@ -149,6 +155,7 @@ GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketpla
 
 - 打开 **设置 → 模型服务商** 添加 provider 账号及其可用模型目录。
 - 打开 **设置 → 模型配置** 选择默认聊天模型，以及图像理解 / PDF / 生图 / 生视频等模型槽位。
+- GeeClaw 内置 Provider 会包含一个 `auto` 模型。本地透明代理会每 30 分钟刷新一次 `site/res/geeclaw-provider-config.json` 或线上配置，用来选择真实上游 URL、限制允许请求的模型列表，并从 `autoModels` 中选择当前应用版本已经在 provider registry 里合法定义的第一个模型作为 `auto`。这个代理配置不会发布新的 UI 模型，也不会覆盖 OpenClaw runtime 配置；新增可见模型仍然需要更新应用内 provider registry。
 - 如果当前还没有任何可用模型，聊天输入框会保持禁用，并直接引导你去 **模型服务商**。
 - 如果已经有可用模型，但还没有设置默认聊天模型，聊天输入框会改为引导你去 **模型配置**。
 
@@ -393,6 +400,7 @@ pnpm dev
 
 - `pnpm dev` 和 `openclaw-runtime:prepare` 使用的是仓库内的 `openclaw-runtime/` 安装结果，默认不会下载 sidecar。
 - 设置 `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` 可以让开发模式优先从远程 URL 加载智能体广场 catalog，而不是读取 `site/res/agent-marketplace-catalog.json`。
+- 设置 `GEECLAW_PROVIDER_CONFIG_URL` 可以让开发模式优先从远程 URL 加载 GeeClaw Provider 代理配置，而不是读取 `site/res/geeclaw-provider-config.json`。
 - 当你修改了 `openclaw-runtime/package.json`、需要干净重装，或者想明确刷新本地 runtime 时，再执行 `pnpm run openclaw-runtime:install`。
 - sidecar 应该被视为 release 产物，而不是默认的开发输入。
 

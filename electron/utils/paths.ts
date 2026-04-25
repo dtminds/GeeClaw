@@ -131,6 +131,20 @@ export function getAgentMarketplaceCatalogUrl(): string {
 }
 
 /**
+ * Get the local GeeClaw provider proxy config path used during development.
+ */
+export function getGeeClawProviderConfigPath(): string {
+  return join(process.cwd(), 'site', 'res', 'geeclaw-provider-config.json');
+}
+
+/**
+ * Get the hosted GeeClaw provider proxy config URL used by packaged builds.
+ */
+export function getGeeClawProviderConfigUrl(): string {
+  return 'https://www.geeclaw.cn/res/geeclaw-provider-config.json';
+}
+
+/**
  * Get preload script path
  */
 export function getPreloadPath(): string {

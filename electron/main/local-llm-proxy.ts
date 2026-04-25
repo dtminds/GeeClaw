@@ -1,14 +1,21 @@
 import { createServer, type IncomingMessage, type RequestListener, type Server, type ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
-import { getProviderConfig } from '../utils/provider-registry';
 import { proxyAwareFetch } from '../utils/proxy-fetch';
 import { logger } from '../utils/logger';
+import {
+  GEECLAW_MODEL_UNAVAILABLE_MESSAGE,
+  type GeeClawProviderConfig,
+  createDefaultGeeClawProviderConfig,
+  getActiveGeeClawProviderConfig,
+  isGeeClawRegisteredModelId,
+  startGeeClawProviderConfigRefresh,
+  stopGeeClawProviderConfigRefresh,
+} from '../utils/geeclaw-provider-config';
 
 const LOOPBACK_HOST = '127.0.0.1';
 const DEFAULT_START_PORT = 19100;
 const DEFAULT_MAX_PORT = 19120;
 const GEECLAW_PROXY_PREFIX = '/proxy';
-const GEECLAW_UPSTREAM_BASE_URL = getProviderConfig('geeclaw')?.baseUrl ?? 'https://geekai.co/api/v1';
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'content-length',
@@ -30,6 +37,8 @@ type LocalLlmProxyManagerOptions = {
   maxPort?: number;
   upstreamBaseUrl?: string;
   fetchImpl?: FetchImpl;
+  getConfig?: () => GeeClawProviderConfig;
+  refreshConfig?: boolean;
 };
 
 function toOutgoingHeaders(headers: IncomingMessage['headers']): Record<string, string> {
@@ -90,6 +99,91 @@ function buildUpstreamUrl(rawUrl: string, upstreamBaseUrl: string): string {
   return upstream.toString();
 }
 
+function normalizeGeeClawModelId(modelId: string): string {
+  const trimmed = modelId.trim();
+  return trimmed.startsWith('geeclaw/') ? trimmed.slice('geeclaw/'.length) : trimmed;
+}
+
+function buildModelUnavailableResponseBody(): string {
+  return JSON.stringify({
+    error: {
+      code: 'geeclaw_model_unavailable',
+      message: GEECLAW_MODEL_UNAVAILABLE_MESSAGE,
+      type: 'model_unavailable',
+    },
+  });
+}
+
+function writeModelUnavailableResponse(res: ServerResponse): void {
+  res.statusCode = 503;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.end(buildModelUnavailableResponseBody());
+}
+
+type RequestBodyResolution = {
+  body: Buffer | undefined;
+  modelUnavailable: boolean;
+};
+
+function resolveGeeClawAutoModel(config: GeeClawProviderConfig): string | null {
+  const allowedModels = new Set(config.allowedModels.map(normalizeGeeClawModelId));
+  for (const candidate of config.autoModels) {
+    const modelId = normalizeGeeClawModelId(candidate);
+    if (allowedModels.has(modelId) && isGeeClawRegisteredModelId(modelId)) {
+      return modelId;
+    }
+  }
+  return null;
+}
+
+function resolveRequestBodyForGeeClawConfig(
+  body: Buffer | undefined,
+  config: GeeClawProviderConfig,
+): RequestBodyResolution {
+  if (!body || body.length === 0) {
+    return { body, modelUnavailable: false };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body.toString('utf8')) as unknown;
+  } catch {
+    return { body, modelUnavailable: false };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { body, modelUnavailable: false };
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.model !== 'string' || !record.model.trim()) {
+    return { body, modelUnavailable: false };
+  }
+
+  const requestedModel = normalizeGeeClawModelId(record.model);
+  const allowedModels = new Set(config.allowedModels.map(normalizeGeeClawModelId));
+  const shouldUseAuto = requestedModel === 'auto'
+    || !allowedModels.has(requestedModel)
+    || !isGeeClawRegisteredModelId(requestedModel);
+
+  if (!shouldUseAuto) {
+    return { body, modelUnavailable: false };
+  }
+
+  const autoModel = resolveGeeClawAutoModel(config);
+  if (!autoModel) {
+    return { body: undefined, modelUnavailable: true };
+  }
+
+  return {
+    body: Buffer.from(JSON.stringify({
+      ...record,
+      model: autoModel,
+    })),
+    modelUnavailable: false,
+  };
+}
+
 function copyResponseHeaders(res: ServerResponse, headers: Headers): void {
   headers.forEach((value, key) => {
     if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
@@ -117,15 +211,28 @@ export class LocalLlmProxyManager {
   private readonly host: string;
   private readonly startPort: number;
   private readonly maxPort: number;
-  private readonly upstreamBaseUrl: string;
   private readonly fetchImpl: FetchImpl;
+  private readonly getConfig: () => GeeClawProviderConfig;
+  private readonly refreshConfig: boolean;
 
   constructor(options: LocalLlmProxyManagerOptions = {}) {
     this.host = options.host ?? LOOPBACK_HOST;
     this.startPort = options.startPort ?? DEFAULT_START_PORT;
     this.maxPort = options.maxPort ?? DEFAULT_MAX_PORT;
-    this.upstreamBaseUrl = options.upstreamBaseUrl ?? GEECLAW_UPSTREAM_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? proxyAwareFetch;
+    this.refreshConfig = options.refreshConfig ?? false;
+    const upstreamBaseUrl = options.upstreamBaseUrl?.trim().replace(/\/+$/, '');
+    this.getConfig = options.getConfig ?? (() => {
+      const activeConfig = getActiveGeeClawProviderConfig();
+      if (!upstreamBaseUrl) {
+        return activeConfig;
+      }
+      return {
+        ...createDefaultGeeClawProviderConfig(),
+        ...activeConfig,
+        upstreamBaseUrl,
+      };
+    });
   }
 
   getPort(): number | null {
@@ -149,6 +256,9 @@ export class LocalLlmProxyManager {
         });
         this.server = server;
         this.port = port;
+        if (this.refreshConfig) {
+          startGeeClawProviderConfigRefresh();
+        }
         logger.info(`Local LLM proxy listening on http://${this.host}:${port}${GEECLAW_PROXY_PREFIX}`);
         return { port };
       } catch (error) {
@@ -184,6 +294,10 @@ export class LocalLlmProxyManager {
         resolve();
       });
     });
+
+    if (this.refreshConfig) {
+      stopGeeClawProviderConfigRefresh();
+    }
   }
 
   private readonly handleRequest: RequestListener = async (req, res) => {
@@ -209,13 +323,19 @@ export class LocalLlmProxyManager {
         return;
       }
 
-      const upstreamUrl = buildUpstreamUrl(rawUrl, this.upstreamBaseUrl);
+      const config = this.getConfig();
+      const upstreamUrl = buildUpstreamUrl(rawUrl, config.upstreamBaseUrl);
       const body = await readRequestBody(req);
+      const resolvedBody = resolveRequestBodyForGeeClawConfig(body, config);
+      if (resolvedBody.modelUnavailable) {
+        writeModelUnavailableResponse(res);
+        return;
+      }
       const outgoingHeaders = toOutgoingHeaders(req.headers);
       const response = await this.fetchImpl(upstreamUrl, {
         method: req.method || 'GET',
         headers: outgoingHeaders,
-        body,
+        body: resolvedBody.body,
         signal: upstreamController.signal,
       });
 
@@ -278,7 +398,7 @@ export class LocalLlmProxyManager {
   };
 }
 
-export const localLlmProxyManager = new LocalLlmProxyManager();
+export const localLlmProxyManager = new LocalLlmProxyManager({ refreshConfig: true });
 
 export function getLocalLlmProxyPort(): number | null {
   return localLlmProxyManager.getPort();

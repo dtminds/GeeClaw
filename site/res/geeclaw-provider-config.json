@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "upstreamBaseUrl": "https://geekai.co/api/v1",
+  "autoModels": [
+    "qwen3.6-plus"
+  ],
+  "allowedModels": [
+    "qwen3.6-plus",
+    "hunyuan-3.0-preview",
+    "deepseek-v4-pro",
+    "mimo-v2.5-pro",
+    "mimo-v2.5",
+    "glm-5.1",
+    "glm-4.7-flash"
+  ]
+}

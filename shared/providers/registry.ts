@@ -66,7 +66,9 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     showBaseUrl: false,
     showModelId: true,
     modelCatalogMode: 'builtin-only',
+    defaultModelId: 'auto',
     defaultModels: [
+      createDefaultProviderModel('auto', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('qwen3.6-plus', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('hunyuan-3.0-preview', { contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('deepseek-v4-pro', { contextWindow: 256000, maxTokens: 8192 }),
