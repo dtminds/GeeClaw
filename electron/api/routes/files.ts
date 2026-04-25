@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { dialog, nativeImage } from 'electron';
 import crypto from 'node:crypto';
 import { extname, join } from 'node:path';
-import { getOpenClawConfigDir } from '../../utils/paths';
+import { expandPath, getOpenClawConfigDir } from '../../utils/paths';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 
@@ -137,16 +137,17 @@ export async function handleFileRoutes(
 
   if (url.pathname === '/api/files/thumbnails' && req.method === 'POST') {
     try {
-      const body = await parseJsonBody<{ paths: Array<{ filePath: string; mimeType: string }> }>(req);
+      const body = await parseJsonBody<{ paths: Array<{ filePath: string; mimeType: string; preview?: boolean }> }>(req);
       const fsP = await import('node:fs/promises');
       const results: Record<string, { exists: boolean; preview: string | null; fileSize: number }> = {};
-      for (const { filePath, mimeType } of body.paths) {
+      for (const { filePath, mimeType, preview } of body.paths) {
+        const resolvedFilePath = expandPath(filePath);
         try {
-          const s = await fsP.stat(filePath);
-          const preview = mimeType.startsWith('image/')
-            ? await generateImagePreview(filePath, mimeType)
+          const s = await fsP.stat(resolvedFilePath);
+          const imagePreview = preview !== false && mimeType.startsWith('image/')
+            ? await generateImagePreview(resolvedFilePath, mimeType)
             : null;
-          results[filePath] = { exists: true, preview, fileSize: s.size };
+          results[filePath] = { exists: true, preview: imagePreview, fileSize: s.size };
         } catch {
           results[filePath] = { exists: false, preview: null, fileSize: 0 };
         }

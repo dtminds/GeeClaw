@@ -2146,4 +2146,112 @@ describe('chat live rendering', () => {
     expect(userText.parentElement?.className).toContain('leading-6');
     expect(container.textContent || '').not.toContain('[media attached:');
   });
+
+  it('renders assistant file artifacts behind a capped popover list', async () => {
+    const files = Array.from({ length: 22 }, (_, index) => ({
+      fileName: `artifact-${index}.pdf`,
+      mimeType: 'application/pdf',
+      fileSize: 100 + index,
+      preview: null,
+      filePath: `/tmp/artifacts/artifact-${index}.pdf`,
+    }));
+
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-artifacts',
+          timestamp: 1,
+          content: '已生成文件。',
+          _attachedFiles: files.slice(0, 20),
+          _hiddenAttachmentCount: 2,
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: '查看 22 个文件产物' });
+    expect(trigger).toBeInTheDocument();
+    expect(screen.queryByText('artifact-0.pdf')).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(trigger);
+    expect(screen.queryByText('artifact-0.pdf')).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText('artifact-0.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('/tmp/artifacts/artifact-0.pdf')).not.toBeInTheDocument();
+    expect(document.body.querySelectorAll('[data-artifact-file-row]')).toHaveLength(20);
+    expect(document.body.querySelectorAll('[data-row-tone="alternate"]')).toHaveLength(10);
+    expect(screen.getAllByRole('button', { name: '打开文件' })).toHaveLength(20);
+    expect(screen.getAllByRole('button', { name: '打开目录' })).toHaveLength(20);
+    expect(screen.getByText('仅显示前 20 个，另有 2 个未显示')).toBeInTheDocument();
+  });
+
+  it('uses specific icons for common document artifact formats', async () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-document-artifacts',
+          timestamp: 1,
+          content: '已生成文件。',
+          _attachedFiles: [
+            {
+              fileName: 'report.pdf',
+              mimeType: 'application/pdf',
+              fileSize: 100,
+              preview: null,
+              filePath: '/tmp/artifacts/report.pdf',
+            },
+            {
+              fileName: 'index.html',
+              mimeType: 'text/html',
+              fileSize: 100,
+              preview: null,
+              filePath: '/tmp/artifacts/index.html',
+            },
+            {
+              fileName: 'README.md',
+              mimeType: 'text/markdown',
+              fileSize: 100,
+              preview: null,
+              filePath: '/tmp/artifacts/README.md',
+            },
+            {
+              fileName: 'brief.docx',
+              mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              fileSize: 100,
+              preview: null,
+              filePath: '/tmp/artifacts/brief.docx',
+            },
+            {
+              fileName: 'deck.pptx',
+              mimeType: 'application/octet-stream',
+              fileSize: 100,
+              preview: null,
+              filePath: '/tmp/artifacts/deck.pptx',
+            },
+          ],
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '查看 5 个文件产物' }));
+
+    expect(await screen.findByText('index.html')).toBeInTheDocument();
+    expect(document.body.querySelectorAll('[data-file-icon-kind="pdf"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-kind="html"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-kind="markdown"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-kind="word"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-kind="presentation"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-tone="pdf"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-tone="html"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-tone="markdown"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-tone="word"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-file-icon-tone="presentation"]')).toHaveLength(1);
+  });
 });

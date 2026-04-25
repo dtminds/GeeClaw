@@ -437,4 +437,51 @@ describe('buildChatItems', () => {
       },
     });
   });
+
+  it('caps merged history assistant artifacts at twenty files', () => {
+    const firstFiles = Array.from({ length: 15 }, (_, index) => ({
+      fileName: `first-${index}.txt`,
+      mimeType: 'text/plain',
+      fileSize: index,
+      preview: null,
+      filePath: `/tmp/first-${index}.txt`,
+    }));
+    const secondFiles = Array.from({ length: 10 }, (_, index) => ({
+      fileName: `second-${index}.txt`,
+      mimeType: 'text/plain',
+      fileSize: index,
+      preview: null,
+      filePath: `/tmp/second-${index}.txt`,
+    }));
+
+    const items = buildChatItems({
+      messages: [
+        {
+          role: 'assistant',
+          id: 'assistant-artifacts-1',
+          timestamp: 1,
+          content: '生成第一批文件',
+          _attachedFiles: firstFiles,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'assistant-artifacts-2',
+          timestamp: 2,
+          content: '生成第二批文件',
+          _attachedFiles: secondFiles,
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.message._attachedFiles).toHaveLength(20);
+    expect(items[0]?.message._attachedFiles?.[0]?.fileName).toBe('first-0.txt');
+    expect(items[0]?.message._attachedFiles?.[19]?.fileName).toBe('second-4.txt');
+    expect(items[0]?.message._hiddenAttachmentCount).toBe(5);
+  });
 });

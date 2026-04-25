@@ -1,6 +1,5 @@
 import { hostApiFetch } from '@/lib/host-api';
 import {
-  renderSkillMarkersAsPlainText,
   sanitizeMessageForDisplay,
 } from '@/lib/chat-message-text';
 import {
@@ -26,8 +25,25 @@ import {
 
 const IMAGE_CACHE_KEY = 'geeclaw:image-cache';
 const IMAGE_CACHE_MAX = 100;
-const MAX_MESSAGE_ATTACHMENTS = 9;
-const HIDDEN_ATTACHMENT_FILE_NAMES = new Set(['skill.md', 'agent.md', 'memory.md', 'soul.md']);
+const MAX_MESSAGE_ATTACHMENTS = 20;
+const DEFAULT_ARTIFACT_MESSAGE_LIMIT = 100;
+const FILE_EXTENSION_PATTERN = 'htm?l|png|jpe?g|gif|webp|bmp|avif|svg|pdf|docx?|xlsx?|pptx?|txt|csv|md|rtf|epub|zip|tar|gz|rar|7z|mp3|wav|ogg|aac|flac|m4a|mp4|mov|avi|mkv|webm|m4v';
+const FILE_EXTENSION_REGEX = new RegExp(`\\.(?:${FILE_EXTENSION_PATTERN})(?:[?#].*)?$`, 'i');
+const TOOL_INPUT_ARTIFACT_PATH_TOOL_NAMES = new Set([
+  'write',
+  'write_file',
+  'create_file',
+  'edit',
+  'edit_file',
+  'replace',
+  'str_replace',
+  'str_replace_editor',
+]);
+
+export interface FileArtifactExtractionOptions {
+  artifactBaseDir?: string | null;
+  artifactMessageLimit?: number | null;
+}
 
 function loadImageCache(): Map<string, AttachedFileMeta> {
   try {
@@ -56,39 +72,20 @@ function saveImageCache(cache: Map<string, AttachedFileMeta>): void {
 
 const imageCache = loadImageCache();
 
-function normalizeAttachmentFileName(value: string): string {
-  const normalizedValue = value.trim();
-  if (!normalizedValue) return '';
-  return normalizedValue.split(/[\\/]/).pop()?.toLowerCase() || '';
-}
-
-function shouldHideAttachmentFile(file: Pick<AttachedFileMeta, 'fileName' | 'filePath'>): boolean {
-  const filePathName = normalizeAttachmentFileName(file.filePath || '');
-  if (filePathName && HIDDEN_ATTACHMENT_FILE_NAMES.has(filePathName)) {
-    return true;
-  }
-
-  const fileName = normalizeAttachmentFileName(file.fileName || '');
-  return !!fileName && HIDDEN_ATTACHMENT_FILE_NAMES.has(fileName);
-}
-
 export function limitAttachedFilesForMessage(
   files: AttachedFileMeta[],
   hiddenCount = 0,
 ): { files: AttachedFileMeta[]; hiddenCount: number } {
-  const visibleFiles = files.filter((file) => !shouldHideAttachmentFile(file));
-  const hiddenByReservedNameCount = files.length - visibleFiles.length;
-
-  if (visibleFiles.length <= MAX_MESSAGE_ATTACHMENTS) {
+  if (files.length <= MAX_MESSAGE_ATTACHMENTS) {
     return {
-      files: visibleFiles,
-      hiddenCount: hiddenCount + hiddenByReservedNameCount,
+      files,
+      hiddenCount,
     };
   }
 
   return {
-    files: visibleFiles.slice(0, MAX_MESSAGE_ATTACHMENTS),
-    hiddenCount: hiddenCount + hiddenByReservedNameCount + (visibleFiles.length - MAX_MESSAGE_ATTACHMENTS),
+    files: files.slice(0, MAX_MESSAGE_ATTACHMENTS),
+    hiddenCount: hiddenCount + (files.length - MAX_MESSAGE_ATTACHMENTS),
   };
 }
 
@@ -187,6 +184,26 @@ function getAttachmentIdentity(file: Pick<AttachedFileMeta, 'filePath' | 'url' |
   return file.filePath || file.url || file.preview || undefined;
 }
 
+function getArtifactExtractionStartIndex(messages: RawMessage[], opts?: FileArtifactExtractionOptions): number {
+  const limit = opts?.artifactMessageLimit ?? DEFAULT_ARTIFACT_MESSAGE_LIMIT;
+  if (limit == null || !Number.isFinite(limit)) return 0;
+  if (limit <= 0) return messages.length;
+  return Math.max(0, messages.length - Math.floor(limit));
+}
+
+function stripAssistantArtifactsOutsideWindow(
+  message: RawMessage,
+  index: number,
+  artifactStartIndex: number,
+): RawMessage {
+  if (index >= artifactStartIndex || message.role !== 'assistant' || !message._attachedFiles) {
+    return message;
+  }
+
+  const { _attachedFiles: _discardedAttachedFiles, _hiddenAttachmentCount: _discardedHiddenCount, ...rest } = message;
+  return rest as RawMessage;
+}
+
 export function extractMediaDirectiveSources(text: string): string[] {
   return splitMediaFromOutput(text).mediaUrls || [];
 }
@@ -206,20 +223,183 @@ export function makeAttachedFileFromMediaSource(source: string): AttachedFileMet
   };
 }
 
+function normalizePathSegments(pathValue: string, separator: '/' | '\\'): string {
+  const parts = pathValue.split(/[\\/]+/);
+  const stack: string[] = [];
+
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (stack.length > 0 && stack[stack.length - 1] !== '..') {
+        stack.pop();
+      } else {
+        stack.push(part);
+      }
+      continue;
+    }
+    stack.push(part);
+  }
+
+  return stack.join(separator);
+}
+
+function resolveRelativeArtifactPath(relativePath: string, baseDir?: string | null): string | null {
+  const trimmedBase = baseDir?.trim().replace(/[\\/]+$/, '');
+  if (!trimmedBase) return null;
+
+  const separator: '/' | '\\' = trimmedBase.includes('\\') && !trimmedBase.includes('/') ? '\\' : '/';
+  const normalizedRelative = normalizePathSegments(relativePath, separator);
+
+  if (/^[A-Za-z]:[\\/]/.test(trimmedBase)) {
+    const drive = trimmedBase.slice(0, 2);
+    const baseRest = normalizePathSegments(trimmedBase.slice(2), separator);
+    const joinedRest = normalizePathSegments(`${baseRest}${separator}${normalizedRelative}`, separator);
+    return `${drive}${separator}${joinedRest}`;
+  }
+
+  if (trimmedBase.startsWith('~/')) {
+    const joined = normalizePathSegments(`${trimmedBase.slice(2)}${separator}${normalizedRelative}`, separator);
+    return `~/${joined}`;
+  }
+
+  if (trimmedBase.startsWith('~\\')) {
+    const joined = normalizePathSegments(`${trimmedBase.slice(2)}${separator}${normalizedRelative}`, separator);
+    return `~\\${joined}`;
+  }
+
+  const isAbsoluteBase = trimmedBase.startsWith('/') || trimmedBase.startsWith('\\');
+  const joined = normalizePathSegments(`${trimmedBase}${separator}${normalizedRelative}`, separator);
+  return isAbsoluteBase ? `${separator}${joined}` : joined;
+}
+
+function normalizeToolNameForArtifactInput(toolName: string | undefined): string {
+  return (toolName || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function parseToolInputRecord(toolInput: unknown): Record<string, unknown> | null {
+  if (!toolInput) return null;
+  if (typeof toolInput === 'object' && !Array.isArray(toolInput)) {
+    return toolInput as Record<string, unknown>;
+  }
+  if (typeof toolInput !== 'string') return null;
+
+  const trimmed = toolInput.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveToolInputArtifactPath(pathValue: string, opts?: FileArtifactExtractionOptions): string | null {
+  const trimmed = pathValue.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed)) return null;
+
+  if (
+    trimmed.startsWith('/')
+    || trimmed.startsWith('\\')
+    || trimmed.startsWith('~/')
+    || trimmed.startsWith('~\\')
+    || /^[A-Za-z]:[\\/]/.test(trimmed)
+  ) {
+    return trimmed;
+  }
+
+  return resolveRelativeArtifactPath(trimmed, opts?.artifactBaseDir);
+}
+
+function decodeFileLinkTarget(target: string): string {
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return target;
+  }
+}
+
+function normalizeMarkdownLocalFileTarget(target: string, opts?: FileArtifactExtractionOptions): string | null {
+  const trimmed = target.trim().replace(/^<|>$/g, '');
+  if (!trimmed || trimmed.startsWith('#')) return null;
+
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const pathname = decodeFileLinkTarget(url.pathname);
+      return /^\/[A-Za-z]:\//.test(pathname) ? pathname.slice(1) : pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/i.test(trimmed)) return null;
+
+  const decodedTarget = decodeFileLinkTarget(trimmed);
+  if (!FILE_EXTENSION_REGEX.test(decodedTarget)) return null;
+
+  return resolveToolInputArtifactPath(decodedTarget, opts);
+}
+
+export function extractMarkdownLocalFileRefs(
+  text: string,
+  opts?: FileArtifactExtractionOptions,
+): Array<{ filePath: string; mimeType: string }> {
+  const refs: Array<{ filePath: string; mimeType: string }> = [];
+  const seen = new Set<string>();
+  const markdownLinkRegex = /(?<!!)\[[^\]\n]+\]\(\s*(<[^>\n]+>|[^\s)\n]+)(?:\s+["'][^"'\n]*["'])?\s*\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = markdownLinkRegex.exec(text)) !== null) {
+    const target = match[1];
+    const filePath = target ? normalizeMarkdownLocalFileTarget(target, opts) : null;
+    if (!filePath || seen.has(filePath)) continue;
+    seen.add(filePath);
+    refs.push({ filePath, mimeType: mimeFromExtension(filePath) });
+  }
+
+  return refs;
+}
+
+export function extractToolInputArtifactRefs(
+  toolName: string | undefined,
+  toolInput: unknown,
+  opts?: FileArtifactExtractionOptions,
+): Array<{ filePath: string; mimeType: string }> {
+  const normalizedToolName = normalizeToolNameForArtifactInput(toolName);
+  if (!TOOL_INPUT_ARTIFACT_PATH_TOOL_NAMES.has(normalizedToolName)) return [];
+
+  const inputRecord = parseToolInputRecord(toolInput);
+  if (!inputRecord) return [];
+
+  const pathValue = inputRecord.path ?? inputRecord.file_path;
+  if (typeof pathValue !== 'string') return [];
+
+  const filePath = resolveToolInputArtifactPath(pathValue, opts);
+  return filePath ? [{ filePath, mimeType: mimeFromExtension(filePath) }] : [];
+}
+
 /**
  * Extract raw file paths from message text.
  * Detects absolute paths (Unix: / or ~/, Windows: C:\ etc.) ending with common file extensions.
  * Handles both image and non-image files, including browser-style `MEDIA:/abs/path.ext`
  * refs from tool outputs, consistent with channel push message behavior.
+ *
+ * Relative paths are only extracted when an artifact base directory is supplied,
+ * so prose like package/file references is not treated as a local artifact.
  */
-export function extractRawFilePaths(text: string): Array<{ filePath: string; mimeType: string }> {
+export function extractRawFilePaths(
+  text: string,
+  opts?: FileArtifactExtractionOptions,
+): Array<{ filePath: string; mimeType: string }> {
   const refs: Array<{ filePath: string; mimeType: string }> = [];
   const seen = new Set<string>();
-  const exts = 'htm?l|png|jpe?g|gif|webp|bmp|avif|svg|pdf|docx?|xlsx?|pptx?|txt|csv|md|rtf|epub|zip|tar|gz|rar|7z|mp3|wav|ogg|aac|flac|m4a|mp4|mov|avi|mkv|webm|m4v';
-  const unixRegex = new RegExp(`(?<![\\w./:])((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
-  const winRegex = new RegExp(`(?<![\\w])([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
-  const mediaUnixRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
-  const mediaWinRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${exts}))`, 'gi');
+  const unixRegex = new RegExp(`(?<![\\w./:])((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${FILE_EXTENSION_PATTERN}))`, 'gi');
+  const winRegex = new RegExp(`(?<![\\w])([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${FILE_EXTENSION_PATTERN}))`, 'gi');
+  const mediaUnixRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*((?:\\/|~\\/)[^\\s\\n"'()\\[\\],<>]*?\\.(?:${FILE_EXTENSION_PATTERN}))`, 'gi');
+  const mediaWinRegex = new RegExp(`(?<![\\w./])MEDIA:\\s*([A-Za-z]:\\\\[^\\s\\n"'()\\[\\],<>]*?\\.(?:${FILE_EXTENSION_PATTERN}))`, 'gi');
+  const relativeRegex = new RegExp(`(?<![\\w./:])((?:\\.{1,2}[\\\\/])[^\\s\\n"'()\\[\\],<>]*?\\.(?:${FILE_EXTENSION_PATTERN}))`, 'gi');
 
   for (const regex of [unixRegex, winRegex, mediaUnixRegex, mediaWinRegex]) {
     let match: RegExpExecArray | null;
@@ -231,6 +411,19 @@ export function extractRawFilePaths(text: string): Array<{ filePath: string; mim
       }
     }
   }
+
+  if (opts?.artifactBaseDir) {
+    let match: RegExpExecArray | null;
+    while ((match = relativeRegex.exec(text)) !== null) {
+      const relativePath = match[1];
+      const filePath = relativePath ? resolveRelativeArtifactPath(relativePath, opts.artifactBaseDir) : null;
+      if (filePath && !seen.has(filePath)) {
+        seen.add(filePath);
+        refs.push({ filePath, mimeType: mimeFromExtension(filePath) });
+      }
+    }
+  }
+
   return refs;
 }
 
@@ -290,9 +483,20 @@ export function makeAttachedFile(ref: { filePath: string; mimeType: string }): A
   return { fileName, mimeType: ref.mimeType, fileSize: 0, preview: null, filePath: ref.filePath };
 }
 
-export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] {
-  const next = [...messages];
+export function enrichWithToolResultFiles(
+  messages: RawMessage[],
+  opts?: FileArtifactExtractionOptions,
+): RawMessage[] {
+  const artifactStartIndex = getArtifactExtractionStartIndex(messages, opts);
+  const next = messages.map((message, index) => stripAssistantArtifactsOutsideWindow(message, index, artifactStartIndex));
   const pending: AttachedFileMeta[] = [];
+  const pendingAttachmentIds = new Set<string>();
+  const pushPendingFile = (file: AttachedFileMeta) => {
+    const identity = getAttachmentIdentity(file);
+    if (identity && pendingAttachmentIds.has(identity)) return;
+    if (identity) pendingAttachmentIds.add(identity);
+    pending.push(file);
+  };
 
   for (let index = 0; index < next.length; index += 1) {
     const msg = next[index];
@@ -309,32 +513,40 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
     }
 
     if (isToolResultRole(msg.role)) {
-      const imageFiles = extractImagesAsAttachedFiles(msg.content);
-      pending.push(...imageFiles);
-
+      const toolName = typeof msg.toolName === 'string' ? msg.toolName : undefined;
+      const toolInput = findToolCallInputBeforeIndex(next, index, msg.toolCallId, toolName);
+      const shouldExtractToolArtifacts = index >= artifactStartIndex
+        && shouldExtractRawFilePathsForTool(toolName, toolInput);
       const text = getMessageText(msg.content);
-      if (text && !isErroredToolResult(msg)) {
+      if (shouldExtractToolArtifacts) {
+        const imageFiles = extractImagesAsAttachedFiles(msg.content);
+        imageFiles.forEach(pushPendingFile);
+      }
+
+      if (shouldExtractToolArtifacts && !isErroredToolResult(msg)) {
+        for (const ref of extractToolInputArtifactRefs(toolName, toolInput, opts)) {
+          pushPendingFile(makeAttachedFile(ref));
+        }
+      }
+
+      if (shouldExtractToolArtifacts && text && !isErroredToolResult(msg)) {
         const mediaDirectiveSources = extractMediaDirectiveSources(text);
         const mediaDirectivePathSet = new Set(
           mediaDirectiveSources.filter((source) => !isRemoteMediaSource(source)),
         );
         for (const source of mediaDirectiveSources) {
-          pending.push(makeAttachedFileFromMediaSource(source));
+          pushPendingFile(makeAttachedFileFromMediaSource(source));
         }
 
         const mediaRefs = extractMediaRefs(text);
         const mediaRefPaths = new Set(mediaRefs.map((ref) => ref.filePath));
         for (const ref of mediaRefs) {
-          pending.push(makeAttachedFile(ref));
+          pushPendingFile(makeAttachedFile(ref));
         }
 
-        const toolName = typeof msg.toolName === 'string' ? msg.toolName : undefined;
-        const toolInput = findToolCallInputBeforeIndex(next, index, msg.toolCallId, toolName);
-        if (shouldExtractRawFilePathsForTool(toolName, toolInput)) {
-          for (const ref of extractRawFilePaths(text)) {
-            if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
-              pending.push(makeAttachedFile(ref));
-            }
+        for (const ref of extractRawFilePaths(text, opts)) {
+          if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
+            pushPendingFile(makeAttachedFile(ref));
           }
         }
       }
@@ -371,6 +583,7 @@ export function enrichWithToolResultFiles(messages: RawMessage[]): RawMessage[] 
 
     if (msg.role === 'assistant' && pending.length > 0) {
       const toAttach = pending.splice(0);
+      pendingAttachmentIds.clear();
       const existingAttachmentIds = new Set(
         (msg._attachedFiles || []).map(getAttachmentIdentity).filter(Boolean),
       );
@@ -423,39 +636,38 @@ function hasRenderableAssistantHistoryContent(message: RawMessage, isStrictlyEmp
   return false;
 }
 
-export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
-  return messages.map((msg, idx) => {
+export function enrichWithCachedImages(
+  messages: RawMessage[],
+  opts?: FileArtifactExtractionOptions,
+): RawMessage[] {
+  const artifactStartIndex = getArtifactExtractionStartIndex(messages, opts);
+  return messages.map((msg, index) => {
+    const shouldExtractAssistantArtifacts = msg.role === 'assistant' && index >= artifactStartIndex && !isToolOnlyMessage(msg);
+    const shouldExtractMessageArtifacts = msg.role === 'user' || shouldExtractAssistantArtifacts;
+    msg = stripAssistantArtifactsOutsideWindow(msg, index, artifactStartIndex);
     if ((msg.role !== 'user' && msg.role !== 'assistant') || msg._attachedFiles) return msg;
     const text = getMessageText(msg.content);
 
-    const mediaDirectiveFiles = extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource);
+    const mediaDirectiveFiles = shouldExtractMessageArtifacts
+      ? extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource)
+      : [];
     const attachmentIds = new Set(mediaDirectiveFiles.map(getAttachmentIdentity).filter(Boolean));
-    const mediaRefs = extractMediaRefs(text);
+    const mediaRefs = shouldExtractMessageArtifacts ? extractMediaRefs(text) : [];
     const mediaRefPaths = new Set(mediaRefs.map((ref) => ref.filePath));
+    const markdownLinkRefs = shouldExtractAssistantArtifacts
+      ? extractMarkdownLocalFileRefs(text, opts)
+      : [];
+    const markdownLinkPaths = new Set(markdownLinkRefs.map((ref) => ref.filePath));
 
     let rawRefs: Array<{ filePath: string; mimeType: string }> = [];
-    if (msg.role === 'assistant' && !isToolOnlyMessage(msg)) {
-      rawRefs = extractRawFilePaths(text).filter((ref) => !mediaRefPaths.has(ref.filePath));
-
-      const seenPaths = new Set(rawRefs.map((ref) => ref.filePath));
-      for (let i = idx - 1; i >= Math.max(0, idx - 5); i -= 1) {
-        const prev = messages[i];
-        if (!prev) break;
-        if (prev.role === 'user') {
-          const prevText = renderSkillMarkersAsPlainText(getMessageText(prev.content));
-          for (const ref of extractRawFilePaths(prevText)) {
-            if (!mediaRefPaths.has(ref.filePath) && !seenPaths.has(ref.filePath)) {
-              seenPaths.add(ref.filePath);
-              rawRefs.push(ref);
-            }
-          }
-          break;
-        }
-      }
+    if (shouldExtractAssistantArtifacts) {
+      rawRefs = extractRawFilePaths(text, opts).filter((ref) => (
+        !mediaRefPaths.has(ref.filePath) && !markdownLinkPaths.has(ref.filePath)
+      ));
     }
 
     const files: AttachedFileMeta[] = [...mediaDirectiveFiles];
-    for (const ref of [...mediaRefs, ...rawRefs]) {
+    for (const ref of [...mediaRefs, ...markdownLinkRefs, ...rawRefs]) {
       const cached = imageCache.get(ref.filePath);
       const file = cached
         ? { ...cached, filePath: ref.filePath, exists: cached.exists ?? true }
@@ -486,13 +698,16 @@ export function enrichWithCachedImages(messages: RawMessage[]): RawMessage[] {
   });
 }
 
-export function prepareHistoryMessagesForDisplay(rawMessages: RawMessage[]): RawMessage[] {
+export function prepareHistoryMessagesForDisplay(
+  rawMessages: RawMessage[],
+  opts?: FileArtifactExtractionOptions,
+): RawMessage[] {
   const sanitizedEntries = rawMessages.map((rawMessage) => ({
     rawMessage,
     sanitizedMessage: sanitizeMessageForDisplay(rawMessage),
   }));
   const visibleEntries = sanitizedEntries.filter(({ sanitizedMessage }) => !isInternalMessage(sanitizedMessage));
-  const messagesWithToolImages = enrichWithToolResultFiles(visibleEntries.map(({ sanitizedMessage }) => sanitizedMessage));
+  const messagesWithToolImages = enrichWithToolResultFiles(visibleEntries.map(({ sanitizedMessage }) => sanitizedMessage), opts);
   const filteredMessages = messagesWithToolImages.filter((msg, index) => {
     if (isToolResultRole(msg.role)) {
       return !msg._toolResultMatched;
@@ -509,11 +724,14 @@ export function prepareHistoryMessagesForDisplay(rawMessages: RawMessage[]): Raw
     }
     return true;
   });
-  return enrichWithCachedImages(filteredMessages);
+  return enrichWithCachedImages(filteredMessages, opts);
 }
 
-export async function hydrateHistoryMessagesForDisplay(rawMessages: RawMessage[]): Promise<RawMessage[]> {
-  const messages = prepareHistoryMessagesForDisplay(rawMessages);
+export async function hydrateHistoryMessagesForDisplay(
+  rawMessages: RawMessage[],
+  opts?: FileArtifactExtractionOptions,
+): Promise<RawMessage[]> {
+  const messages = prepareHistoryMessagesForDisplay(rawMessages, opts);
   const updated = await loadMissingPreviews(messages);
   if (!updated) return messages;
 
@@ -525,7 +743,7 @@ export async function hydrateHistoryMessagesForDisplay(rawMessages: RawMessage[]
 }
 
 export async function loadMissingPreviews(messages: RawMessage[]): Promise<boolean> {
-  const needPreview: Array<{ filePath: string; mimeType: string }> = [];
+  const needPreview: Array<{ filePath: string; mimeType: string; preview?: boolean }> = [];
   const seenPaths = new Set<string>();
 
   for (const msg of messages) {
@@ -534,12 +752,12 @@ export async function loadMissingPreviews(messages: RawMessage[]): Promise<boole
     for (const file of msg._attachedFiles) {
       const filePath = file.filePath;
       if (!filePath || seenPaths.has(filePath)) continue;
-      const needsLoad = file.exists !== true
-        || (file.mimeType.startsWith('image/') ? !file.preview : file.fileSize === 0);
-      if (needsLoad) {
-        seenPaths.add(filePath);
-        needPreview.push({ filePath, mimeType: file.mimeType });
-      }
+      seenPaths.add(filePath);
+      needPreview.push({
+        filePath,
+        mimeType: file.mimeType,
+        preview: file.mimeType.startsWith('image/') && file.preview ? false : undefined,
+      });
     }
 
     if (msg.role === 'user') {
@@ -549,12 +767,11 @@ export async function loadMissingPreviews(messages: RawMessage[]): Promise<boole
         const file = msg._attachedFiles[i];
         const ref = refs[i];
         if (!file || !ref || seenPaths.has(ref.filePath)) continue;
-        const needsLoad = file.exists !== true
-          || (ref.mimeType.startsWith('image/') ? !file.preview : file.fileSize === 0);
-        if (needsLoad) {
-          seenPaths.add(ref.filePath);
-          needPreview.push(ref);
-        }
+        seenPaths.add(ref.filePath);
+        needPreview.push({
+          ...ref,
+          preview: ref.mimeType.startsWith('image/') && file.preview ? false : undefined,
+        });
       }
     }
   }
