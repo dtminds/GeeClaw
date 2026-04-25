@@ -1490,7 +1490,7 @@ function ToolGroupCard({
           }}
           aria-expanded={isExpanded}
           className={cn(
-            'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/80',
+            'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/50',
             'cursor-pointer focus:outline-none transition-[opacity,transform] duration-200 ease-out',
             summaryVisible ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0 pointer-events-none',
           )}
