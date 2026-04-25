@@ -1194,6 +1194,128 @@ describe('chat tool result history fallback', () => {
     ]);
   });
 
+  it('preserves interleaved image positions when stripping already rendered text prefixes', () => {
+    useGatewayStore.setState({
+      rpc: vi.fn(async (method: string) => {
+        if (method === 'chat.history') {
+          return { thinkingLevel: 'high', messages: [] };
+        }
+        if (method === 'sessions.list') {
+          return { sessions: [] };
+        }
+        throw new Error(`Unexpected RPC method: ${method}`);
+      }) as never,
+    });
+
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      sending: true,
+      activeRunId: 'run-1',
+      messages: [],
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'start',
+        args: { command: 'pwd' },
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-midrun-image-interleave',
+        timestamp: 2,
+        content: '文本1',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'start',
+        args: { url: 'https://example.com/search' },
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'result',
+        result: '/workspace',
+      },
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-2',
+        name: 'fetch',
+        phase: 'result',
+        result: 'done',
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      state: 'final',
+      message: {
+        role: 'assistant',
+        id: 'assistant-final-image-interleave',
+        timestamp: 5,
+        content: [
+          { type: 'text', text: '文本1' },
+          { type: 'image', data: 'AAA=', mimeType: 'image/png' },
+          { type: 'text', text: '文本2' },
+        ],
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      {
+        role: 'assistant',
+        id: 'assistant-final-image-interleave',
+        timestamp: 5,
+        content: [
+          { type: 'text', text: '文本1' },
+          { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: { command: 'pwd' } },
+          { type: 'toolResult', id: 'tool-1', name: 'exec', text: '/workspace', status: 'completed', isError: false },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com/search' } },
+          { type: 'toolResult', id: 'tool-2', name: 'fetch', text: 'done', status: 'completed', isError: false },
+          { type: 'image', data: 'AAA=', mimeType: 'image/png' },
+          { type: 'text', text: '文本2' },
+        ],
+        _hiddenAttachmentCount: undefined,
+        _toolStatuses: [
+          expect.objectContaining({ toolCallId: 'tool-1', status: 'completed', result: '/workspace' }),
+          expect.objectContaining({ toolCallId: 'tool-2', status: 'completed', result: 'done' }),
+        ],
+      },
+    ]);
+  });
+
   it('updates equivalent final assistant messages with reconstructed live content blocks', () => {
     useGatewayStore.setState({
       rpc: vi.fn(async (method: string) => {

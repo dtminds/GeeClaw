@@ -849,12 +849,54 @@ function normalizeFinalAssistantContentBlocks(
   });
 
   const fullText = getMessageText(visibleBlocks);
-  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(fullText, streamSegments));
-  const otherBlocks = visibleBlocks.filter((block) => block.type !== 'text');
+  if (!fullText) {
+    return visibleBlocks;
+  }
 
-  return visibleText.trim()
-    ? [{ type: 'text', text: visibleText }, ...otherBlocks]
-    : otherBlocks;
+  const normalizedFullText = normalizeVisibleText(fullText);
+  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(fullText, streamSegments));
+  let prefixToRemove = normalizedFullText.endsWith(visibleText)
+    ? normalizedFullText.slice(0, normalizedFullText.length - visibleText.length)
+    : '';
+  const normalizedBlocks: ContentBlock[] = [];
+  let sawTextBlock = false;
+  let emittedVisibleText = false;
+
+  for (const block of visibleBlocks) {
+    if (block.type !== 'text') {
+      normalizedBlocks.push(block);
+      continue;
+    }
+
+    let nextText = block.text ?? '';
+
+    if (sawTextBlock && prefixToRemove.startsWith('\n')) {
+      prefixToRemove = prefixToRemove.slice(1);
+    }
+    sawTextBlock = true;
+
+    if (prefixToRemove && nextText) {
+      const consumeLength = Math.min(prefixToRemove.length, nextText.length);
+      nextText = nextText.slice(consumeLength);
+      prefixToRemove = prefixToRemove.slice(consumeLength);
+    }
+
+    if (!emittedVisibleText) {
+      nextText = normalizeVisibleText(nextText);
+    }
+
+    if (!nextText) {
+      continue;
+    }
+
+    normalizedBlocks.push({
+      ...block,
+      text: nextText,
+    });
+    emittedVisibleText = true;
+  }
+
+  return normalizedBlocks;
 }
 
 function mergeToolStatusesIntoEquivalentAssistantMessage(
