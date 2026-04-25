@@ -451,6 +451,92 @@ describe('chat live rendering', () => {
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
   });
 
+  it('keeps tool group hooks stable when a grouped tool row grows from one item to multiple items', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { rerender } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-growing-tool-group',
+          timestamp: 3,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'completed',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+
+    expect(() => {
+      rerender(
+        <ChatMessage
+          message={{
+            role: 'assistant',
+            id: 'assistant-growing-tool-group',
+            timestamp: 3,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'bash',
+                arguments: { command: 'pwd' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-2',
+                name: 'fetch',
+                arguments: { url: 'https://example.com/search?q=xxxx' },
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'bash',
+                status: 'completed',
+                input: { command: 'pwd' },
+                updatedAt: 1,
+              },
+              {
+                id: 'tool-2',
+                toolCallId: 'tool-2',
+                name: 'fetch',
+                status: 'completed',
+                input: { url: 'https://example.com/search?q=xxxx' },
+                updatedAt: 2,
+              },
+            ],
+          } as unknown as RawMessage}
+          showThinking
+          showToolCalls
+        />,
+      );
+    }).not.toThrow();
+
+    expect(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i })).toBeInTheDocument();
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it('hides process tool cards while keeping session tool cards in Chinese', () => {
     render(
       <div>
@@ -886,6 +972,58 @@ describe('chat live rendering', () => {
     expect(screen.queryByRole('button', { name: '确认进化' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '拒绝' })).not.toBeInTheDocument();
     expect(container.textContent || '').not.toContain('提案将在');
+  });
+
+  it('renders evolution proposal cards from inline tool results even when tool calls are hidden', () => {
+    const now = currentTs();
+
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-inline-result',
+          timestamp: now,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-inline-result',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-2026-04-21-0006',
+                description: 'Inline tool result should still surface the card',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Policy',
+                    content: 'Result metadata only exists in the inline tool result block',
+                  },
+                ],
+              },
+            },
+            {
+              type: 'tool_result',
+              id: 'tool-evolution-inline-result',
+              name: 'evolution_proposal',
+              status: 'completed',
+              content: [
+                {
+                  type: 'text',
+                  text: '{"ok":true,"proposalId":"evo-2026-04-21-0006","deliveryMode":"card","channel":"desktop"}',
+                },
+              ],
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls={false}
+      />,
+    );
+
+    expect(screen.getByText('Agent 请求自我进化')).toBeInTheDocument();
+    expect(screen.getByText('Inline tool result should still surface the card')).toBeInTheDocument();
+    expect(screen.getByText('Policy', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText('确认进化')).toBeInTheDocument();
+    expect(screen.getByText('拒绝')).toBeInTheDocument();
   });
 
   it('does not render evolution proposal cards when delivery mode is text and tool calls are hidden', () => {

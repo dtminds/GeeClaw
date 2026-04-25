@@ -744,6 +744,42 @@ function shouldIncludeToolDisplay(
   return showToolCalls || extractEvolutionProposalCardData(name, input, result) !== null;
 }
 
+type InlineToolResultData = {
+  status: AssistantToolGroupItem['status'];
+  result?: string;
+};
+
+function buildInlineToolResultMap(content: ContentBlock[]): Map<string, InlineToolResultData> {
+  const inlineResults = new Map<string, InlineToolResultData>();
+
+  const remember = (key: string | undefined, value: InlineToolResultData) => {
+    if (!key) {
+      return;
+    }
+    inlineResults.set(key, value);
+  };
+
+  for (const block of content) {
+    if (block.type !== 'tool_result' && block.type !== 'toolResult') {
+      continue;
+    }
+
+    const resultText = extractInlineToolResultText(block);
+    const inlineResult = {
+      status: getInlineToolResultStatus(block, resultText),
+      result: resultText,
+    } satisfies InlineToolResultData;
+
+    remember(block.id, inlineResult);
+    remember(block.name, inlineResult);
+    if (!block.id && !block.name) {
+      remember('__unnamed__', inlineResult);
+    }
+  }
+
+  return inlineResults;
+}
+
 function extractFinalizedAssistantDisplayParts(
   message: RawMessage | null,
   options: Pick<BuildAssistantDisplayModelOptions, 'showThinking' | 'showToolCalls'>,
@@ -792,6 +828,7 @@ function extractFinalizedAssistantDisplayParts(
   const hasInlineToolBlocks = content.some((block) => (
     block?.type === 'tool_use' || block?.type === 'toolCall'
   ));
+  const inlineToolResults = buildInlineToolResultMap(content);
 
   for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
     pushTextPartsForBlock(blockIndex);
@@ -802,20 +839,27 @@ function extractFinalizedAssistantDisplayParts(
         continue;
       }
       const toolStatus = findMatchingToolStatus(toolStatuses, block.id, block.name);
+      const inlineResult = inlineToolResults.get(block.id) ?? inlineToolResults.get(block.name);
+      const mergedStatus = inlineResult?.status ?? toolStatus?.status;
+      const mergedResult = inlineResult?.result ?? toolStatus?.result;
       if (!shouldIncludeToolDisplay(
         block.name,
         block.input ?? block.arguments,
-        toolStatus?.result,
+        mergedResult,
         options.showToolCalls,
       )) {
         continue;
       }
-      parts.push(toAssistantToolGroupItem(
-        block.name,
-        block.id,
-        block.input ?? block.arguments,
-        toolStatus,
-      ));
+      parts.push({
+        ...toAssistantToolGroupItem(
+          block.name,
+          block.id,
+          block.input ?? block.arguments,
+          toolStatus,
+        ),
+        ...(mergedStatus ? { status: mergedStatus } : {}),
+        ...(typeof mergedResult === 'string' ? { result: mergedResult } : {}),
+      });
       continue;
     }
 
@@ -858,10 +902,16 @@ function extractFinalizedAssistantDisplayParts(
     }
 
     const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
-    if (!shouldIncludeToolDisplay(tool.name, tool.input, toolStatus?.result, options.showToolCalls)) {
+    const inlineResult = inlineToolResults.get(tool.id) ?? inlineToolResults.get(tool.name);
+    const mergedResult = inlineResult?.result ?? toolStatus?.result;
+    if (!shouldIncludeToolDisplay(tool.name, tool.input, mergedResult, options.showToolCalls)) {
       continue;
     }
-    missingToolParts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
+    missingToolParts.push({
+      ...toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus),
+      ...(inlineResult?.status ? { status: inlineResult.status } : {}),
+      ...(typeof mergedResult === 'string' ? { result: mergedResult } : {}),
+    });
   }
 
   if (missingToolParts.length > 0) {

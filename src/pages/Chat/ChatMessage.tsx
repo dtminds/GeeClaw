@@ -1228,20 +1228,7 @@ function ToolGroupCard({
   part: AssistantDisplayToolGroupPart;
   timestamp?: number;
 }) {
-  if (part.items.length === 1) {
-    const [item] = part.items;
-    return (
-      <ToolCard
-        name={item.name}
-        input={item.input}
-        status={item.status}
-        durationMs={item.durationMs}
-        result={item.result}
-        timestamp={item.timestamp ?? timestamp}
-      />
-    );
-  }
-
+  const isSingleItem = part.items.length === 1;
   const isFinished = part.items.every((item) => item.status !== 'running');
   const groupStateKey = useMemo(
     () => JSON.stringify({
@@ -1255,6 +1242,20 @@ function ToolGroupCard({
   useEffect(() => {
     setExpanded(!part.collapsed || !isFinished);
   }, [groupStateKey, isFinished, part.collapsed]);
+
+  if (isSingleItem) {
+    const [item] = part.items;
+    return (
+      <ToolCard
+        name={item.name}
+        input={item.input}
+        status={item.status}
+        durationMs={item.durationMs}
+        result={item.result}
+        timestamp={item.timestamp ?? timestamp}
+      />
+    );
+  }
 
   const showChildren = !isFinished || expanded;
   const SummaryRoot = isFinished ? 'button' : 'div';
