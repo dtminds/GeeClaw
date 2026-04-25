@@ -606,6 +606,11 @@
   margin: 0;
 }
 
+.chat-markdown [data-streamdown="horizontal-rule"] {
+  margin-top: 1.5em !important;
+  margin-bottom: 1.5em !important;
+}
+
 .chat-markdown [data-streamdown="strong"] {
   color: var(--foreground);
 }

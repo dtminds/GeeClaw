@@ -146,6 +146,210 @@ describe('chat live rendering', () => {
     expect(markdownBlocks).toHaveLength(2);
   });
 
+  it('keeps a frozen assistant text segment between the surrounding tool cards', () => {
+    const firstToolMessage: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'bash',
+      timestamp: 1,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-1',
+          name: 'bash',
+          arguments: { command: 'pwd' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'bash',
+          status: 'running',
+          input: { command: 'pwd' },
+          updatedAt: 1,
+        },
+      ],
+    };
+
+    const secondToolMessage: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:tool-2',
+      toolCallId: 'tool-2',
+      toolName: 'fetch',
+      timestamp: 3,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-2',
+          name: 'fetch',
+          arguments: { url: 'https://example.com/search?q=clawx' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'fetch',
+          status: 'running',
+          input: { url: 'https://example.com/search?q=clawx' },
+          updatedAt: 3,
+        },
+      ],
+    };
+
+    const chatItems = buildChatItems({
+      messages: [],
+      toolMessages: [firstToolMessage, secondToolMessage],
+      streamSegments: [{ text: '现在我为你查询', ts: 2 }],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'session-live-order',
+    });
+
+    const { container } = render(
+      <div>
+        {chatItems.map((item) => (
+          <ChatMessage
+            key={item.key}
+            message={item.message}
+            showThinking
+            showToolCalls
+            isStreaming={item.isStreaming}
+          />
+        ))}
+      </div>,
+    );
+
+    expect(screen.getByText('现在我为你查询')).toBeInTheDocument();
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=clawx/)).toBeInTheDocument();
+
+    const renderedText = container.textContent || '';
+    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('现在我为你查询'));
+    expect(renderedText.indexOf('现在我为你查询')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=clawx'));
+  });
+
+  it('keeps fallback text after top-level tool calls when content has no ordered blocks', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-openai-fallback-order',
+          timestamp: 3,
+          content: '先搜一下xxxx',
+          tool_calls: [
+            {
+              id: 'tool-1',
+              function: {
+                name: 'exec',
+                arguments: '{"command":"pwd"}',
+              },
+            },
+            {
+              id: 'tool-2',
+              function: {
+                name: 'fetch',
+                arguments: '{"url":"https://example.com/search?q=xxxx"}',
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'running',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'running',
+              input: { url: 'https://example.com/search?q=xxxx' },
+              updatedAt: 2,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+
+    const renderedText = container.textContent || '';
+    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=xxxx'));
+    expect(renderedText.indexOf('https://example.com/search?q=xxxx')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+  });
+
+  it('keeps text blocks after top-level tool calls when ordered tool blocks are missing', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-openai-text-block-order',
+          timestamp: 3,
+          content: [
+            {
+              type: 'text',
+              text: '先搜一下xxxx',
+            },
+          ],
+          tool_calls: [
+            {
+              id: 'tool-1',
+              function: {
+                name: 'exec',
+                arguments: '{"command":"pwd"}',
+              },
+            },
+            {
+              id: 'tool-2',
+              function: {
+                name: 'fetch',
+                arguments: '{"url":"https://example.com/search?q=xxxx"}',
+              },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'running',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'running',
+              input: { url: 'https://example.com/search?q=xxxx' },
+              updatedAt: 2,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+
+    const renderedText = container.textContent || '';
+    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=xxxx'));
+    expect(renderedText.indexOf('https://example.com/search?q=xxxx')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+  });
+
   it('hides process tool cards while keeping session tool cards in Chinese', () => {
     render(
       <div>

@@ -55,6 +55,42 @@ describe('buildChatItems', () => {
     expect(items.at(-1)?.isStreaming).toBe(true);
   });
 
+  it('keeps a frozen stream segment between the surrounding tool calls', () => {
+    const toolMessages: RawMessage[] = [
+      {
+        role: 'assistant',
+        id: 'tool-1',
+        toolCallId: 'tool-1',
+        content: [{ type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'pwd' } }],
+        timestamp: 1,
+      },
+      {
+        role: 'assistant',
+        id: 'tool-2',
+        toolCallId: 'tool-2',
+        content: [{ type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } }],
+        timestamp: 3,
+      },
+    ];
+
+    const items = buildChatItems({
+      messages: [],
+      toolMessages,
+      streamSegments: [
+        { text: '现在我为你查询', ts: 2 },
+      ],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items.map((item) => item.message.id)).toEqual([
+      'tool-1',
+      'stream-seg:agent:main:main:0',
+      'tool-2',
+    ]);
+  });
+
   it('filters process-only history and tool messages before rendering', () => {
     const items = buildChatItems({
       messages: [
@@ -94,7 +130,7 @@ describe('buildChatItems', () => {
     ]);
   });
 
-  it('preserves stream and tool message alignment when skipping hidden process tool messages', () => {
+  it('keeps chronological order when hidden process tool messages are skipped', () => {
     const items = buildChatItems({
       messages: [],
       toolMessages: [
@@ -123,9 +159,9 @@ describe('buildChatItems', () => {
     });
 
     expect(items.map((item) => item.message.id)).toEqual([
+      'tool-bash',
       'stream-seg:agent:main:main:0',
       'stream-seg:agent:main:main:1',
-      'tool-bash',
     ]);
   });
 
