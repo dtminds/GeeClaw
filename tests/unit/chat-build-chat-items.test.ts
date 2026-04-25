@@ -114,6 +114,52 @@ describe('buildChatItems', () => {
     });
   });
 
+  it('orders trailing streaming text by the latest text event time instead of the original start time', () => {
+    const items = buildChatItems({
+      messages: [],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          content: [{ type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'pwd' } }],
+          timestamp: 1,
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          content: [{ type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } }],
+          timestamp: 2,
+        } as RawMessage,
+      ],
+      streamSegments: [],
+      streamingText: '接下去让我为你整理结果',
+      streamingTextStartedAt: 0.5,
+      streamingTextLastEventAt: 3,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'stream:agent:main:main:0.5',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:0.5',
+        timestamp: 0.5,
+        _liveStreamSegments: [
+          { text: '接下去让我为你整理结果', ts: 3 },
+        ],
+        content: [
+          { type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'pwd' } },
+          { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } },
+          { type: 'text', text: '接下去让我为你整理结果' },
+        ],
+      },
+    });
+  });
+
   it('filters process-only history and tool messages before rendering', () => {
     const items = buildChatItems({
       messages: [

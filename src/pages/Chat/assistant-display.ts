@@ -1084,11 +1084,7 @@ function summarizeToolGroup(items: AssistantToolGroupItem[]): {
   const readItems = items.filter((item) => ['read', 'view', 'glob', 'grep'].includes(item.name.trim().toLowerCase()));
   const editItems = items.filter((item) => ['edit', 'write', 'apply_patch'].includes(item.name.trim().toLowerCase()));
   const commandItems = items.filter((item) => ['bash', 'exec', 'run_command'].includes(item.name.trim().toLowerCase()));
-  const webItems = items.filter((item) => (
-    ['fetch', 'web_search', 'browser', 'browser_fetch', 'browser_open'].includes(item.name.trim().toLowerCase())
-    || item.name.trim().toLowerCase().includes('search')
-    || item.name.trim().toLowerCase().includes('web')
-  ));
+  const webItems = items.filter((item) => ['fetch', 'web_search', 'browser', 'browser_fetch', 'browser_open'].includes(item.name.trim().toLowerCase()));
 
   const categorizedNames = new Set([
     ...readItems.map((item) => item.id),

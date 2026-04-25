@@ -1234,6 +1234,10 @@ function EvolutionProposalMarkdown({ content }: { content: string }) {
 }
 
 const EVOLUTION_PROPOSAL_AUTO_REJECT_MS = 60 * 60 * 1000;
+const TOOL_GROUP_COLLAPSE_START_DELAY_MS = 16;
+const TOOL_GROUP_COLLAPSE_ANIMATION_MS = 220;
+
+type ToolGroupTransitionMode = 'idle' | 'manual-expanding' | 'manual-collapsing' | 'auto-collapsing';
 
 function normalizeTimestampToMs(timestamp?: number): number | undefined {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
@@ -1253,7 +1257,7 @@ function formatToolGroupSummaryLabel(
         case 'edit_files':
           return `${prefix}编辑 ${summaryPart.count} 个文件`;
         case 'execute_commands':
-          return `${prefix}执行 ${summaryPart.count} 条命令`;
+          return `${prefix}运行 ${summaryPart.count} 条命令`;
         case 'read_files':
           return `${prefix}读取 ${summaryPart.count} 个文件`;
         case 'web_access':
@@ -1302,6 +1306,7 @@ function ToolGroupCard({
     () => formatToolGroupSummaryLabel(part, preferZh),
     [part, preferZh],
   );
+  const previousCollapsedRef = useRef(part.collapsed);
   const groupStateKey = useMemo(
     () => JSON.stringify({
       collapsed: part.collapsed,
@@ -1309,13 +1314,99 @@ function ToolGroupCard({
     }),
     [part.collapsed, part.items],
   );
-  const [expanded, setExpanded] = useState(() => !part.collapsed);
+  const previousGroupStateKeyRef = useRef(groupStateKey);
+  const transitionStartTimerRef = useRef<number | null>(null);
+  const transitionFinishTimerRef = useRef<number | null>(null);
+  const [childrenMounted, setChildrenMounted] = useState(() => !part.collapsed);
+  const [childrenExpanded, setChildrenExpanded] = useState(() => !part.collapsed);
+  const [transitionMode, setTransitionMode] = useState<ToolGroupTransitionMode>('idle');
+
+  const clearTransitionTimers = useCallback(() => {
+    if (transitionStartTimerRef.current !== null) {
+      window.clearTimeout(transitionStartTimerRef.current);
+      transitionStartTimerRef.current = null;
+    }
+    if (transitionFinishTimerRef.current !== null) {
+      window.clearTimeout(transitionFinishTimerRef.current);
+      transitionFinishTimerRef.current = null;
+    }
+  }, []);
+
+  const startCollapseTransition = useCallback((mode: 'manual-collapsing' | 'auto-collapsing') => {
+    clearTransitionTimers();
+    setTransitionMode(mode);
+    setChildrenMounted(true);
+    setChildrenExpanded(true);
+
+    transitionStartTimerRef.current = window.setTimeout(() => {
+      setChildrenExpanded(false);
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS);
+    transitionFinishTimerRef.current = window.setTimeout(() => {
+      setChildrenMounted(false);
+      setTransitionMode('idle');
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS + TOOL_GROUP_COLLAPSE_ANIMATION_MS);
+  }, [clearTransitionTimers]);
+
+  const startExpandTransition = useCallback(() => {
+    clearTransitionTimers();
+    setTransitionMode('manual-expanding');
+    setChildrenMounted(true);
+    setChildrenExpanded(false);
+
+    transitionStartTimerRef.current = window.setTimeout(() => {
+      setChildrenExpanded(true);
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS);
+    transitionFinishTimerRef.current = window.setTimeout(() => {
+      setTransitionMode('idle');
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS + TOOL_GROUP_COLLAPSE_ANIMATION_MS);
+  }, [clearTransitionTimers]);
 
   useEffect(() => {
-    setExpanded(!part.collapsed);
-  }, [groupStateKey, part.collapsed]);
+    const wasCollapsed = previousCollapsedRef.current;
+    const previousGroupStateKey = previousGroupStateKeyRef.current;
+    previousCollapsedRef.current = part.collapsed;
+    previousGroupStateKeyRef.current = groupStateKey;
 
-  if (isSingleItem && !part.collapsed) {
+    if (!part.collapsed) {
+      clearTransitionTimers();
+      setTransitionMode('idle');
+      setChildrenMounted(true);
+      setChildrenExpanded(true);
+      return;
+    }
+
+    if (!wasCollapsed) {
+      startCollapseTransition('auto-collapsing');
+      return;
+    }
+
+    if (previousGroupStateKey !== groupStateKey) {
+      clearTransitionTimers();
+      setTransitionMode('idle');
+      setChildrenMounted(false);
+      setChildrenExpanded(false);
+    }
+  }, [clearTransitionTimers, groupStateKey, part.collapsed, startCollapseTransition]);
+
+  useEffect(() => clearTransitionTimers, [clearTransitionTimers]);
+
+  const renderToolItems = useCallback(() => (
+    <>
+      {part.items.map((item) => (
+        <ToolCard
+          key={item.id}
+          name={item.name}
+          input={item.input}
+          status={item.status}
+          durationMs={item.durationMs}
+          result={item.result}
+          timestamp={item.timestamp ?? timestamp}
+        />
+      ))}
+    </>
+  ), [part.items, timestamp]);
+
+  if (isSingleItem && !part.collapsed && transitionMode === 'idle') {
     const [item] = part.items;
     return (
       <ToolCard
@@ -1329,66 +1420,81 @@ function ToolGroupCard({
     );
   }
 
-  if (!part.collapsed) {
+  if (!part.collapsed && transitionMode === 'idle') {
     return (
       <div className="flex w-full max-w-[30rem] flex-col">
-        {part.items.map((item) => (
-          <ToolCard
-            key={item.id}
-            name={item.name}
-            input={item.input}
-            status={item.status}
-            durationMs={item.durationMs}
-            result={item.result}
-            timestamp={item.timestamp ?? timestamp}
-          />
-        ))}
+        {renderToolItems()}
       </div>
     );
   }
 
-  const showChildren = expanded;
+  const isAutoCollapsing = transitionMode === 'auto-collapsing';
+  const isExpanding = transitionMode === 'manual-expanding';
+  const isCollapsing = transitionMode === 'manual-collapsing' || isAutoCollapsing;
+  const isExpanded = childrenMounted && childrenExpanded;
+  const showChildren = childrenMounted;
+  const showSummary = part.collapsed || isCollapsing;
+  const summaryVisible = !isAutoCollapsing || !childrenExpanded;
+  const groupVisualState = isExpanding
+    ? 'expanding'
+    : isCollapsing
+      ? 'collapsing'
+      : isExpanded
+        ? 'expanded'
+        : 'collapsed';
   const SummaryRoot = 'button';
 
   return (
-    <div className="flex w-full max-w-[30rem] flex-col gap-1">
-      <SummaryRoot
-        type="button"
-        onClick={() => setExpanded((current) => !current)}
-        aria-expanded={expanded}
-        className={cn(
-          'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/80',
-          'cursor-pointer focus:outline-none',
-        )}
-        aria-label={displaySummary}
-      >
-        <span className="truncate" title={displaySummary}>
-          {displaySummary}
-        </span>
-        <span
+    <div
+      className="flex w-full max-w-[30rem] flex-col gap-1"
+      data-tool-group-state={groupVisualState}
+    >
+      {showSummary && (
+        <SummaryRoot
+          type="button"
+          onClick={() => {
+            if (transitionMode !== 'idle') {
+              return;
+            }
+            if (childrenMounted && childrenExpanded) {
+              startCollapseTransition('manual-collapsing');
+              return;
+            }
+            startExpandTransition();
+          }}
+          aria-expanded={isExpanded}
           className={cn(
-            'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/60 transition-opacity',
-            showChildren ? 'opacity-100' : 'opacity-0 group-hover/tool-group:opacity-100',
+            'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/80',
+            'cursor-pointer focus:outline-none transition-[opacity,transform] duration-200 ease-out',
+            summaryVisible ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0 pointer-events-none',
           )}
-          aria-hidden="true"
+          aria-label={displaySummary}
         >
-          {showChildren ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </span>
-      </SummaryRoot>
+          <span className="truncate" title={displaySummary}>
+            {displaySummary}
+          </span>
+          <span
+            className={cn(
+              'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/60 transition-opacity',
+              isExpanded ? 'opacity-100' : 'opacity-0 group-hover/tool-group:opacity-100',
+            )}
+            aria-hidden="true"
+          >
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </span>
+        </SummaryRoot>
+      )}
 
       {showChildren && (
-        <div>
-          {part.items.map((item) => (
-            <ToolCard
-              key={item.id}
-              name={item.name}
-              input={item.input}
-              status={item.status}
-              durationMs={item.durationMs}
-              result={item.result}
-              timestamp={item.timestamp ?? timestamp}
-            />
-          ))}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+            childrenExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="overflow-hidden">
+            {renderToolItems()}
+          </div>
         </div>
       )}
     </div>

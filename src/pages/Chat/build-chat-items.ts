@@ -14,6 +14,7 @@ type BuildChatItemsOptions = {
   streamSegments: LiveAssistantStreamSegment[];
   streamingText: string;
   streamingTextStartedAt: number | null;
+  streamingTextLastEventAt?: number | null;
   sessionKey: string;
 };
 
@@ -441,6 +442,7 @@ export function buildChatItems({
   streamSegments,
   streamingText,
   streamingTextStartedAt,
+  streamingTextLastEventAt,
   sessionKey,
 }: BuildChatItemsOptions): ChatRenderItem[] {
   const items: ChatRenderItem[] = [];
@@ -457,7 +459,11 @@ export function buildChatItems({
     const timestamp = getLiveAssistantTimestamp(streamingTextStartedAt, toolMessages, streamSegments);
     const streamId = `stream:${sessionKey}:${timestamp}`;
     const liveContent = buildLiveAssistantContent(toolMessages, streamSegments, streamingText);
-    const liveStreamSegments = buildLiveAssistantStreamSegments(streamSegments, streamingText, timestamp + 0.001);
+    const liveStreamSegments = buildLiveAssistantStreamSegments(
+      streamSegments,
+      streamingText,
+      streamingTextLastEventAt ?? (timestamp + 0.001),
+    );
     const liveToolStatuses = collectLiveToolStatuses(toolMessages);
     items.push({
       key: streamId,

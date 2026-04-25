@@ -84,7 +84,7 @@ describe('chat live rendering', () => {
     mockLanguage = 'zh-CN';
   });
 
-  it('renders text-tool-text as three separate live items', () => {
+  it('renders text-summary-text when a live tool is followed by later assistant text', () => {
     const liveToolMessage: RawMessage = {
       role: 'assistant',
       id: 'live-tool:tool-1',
@@ -135,12 +135,12 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('我先看一下当前目录。')).toBeInTheDocument();
-    expect(screen.getByLabelText('执行本地命令 pwd')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令/i })).toBeInTheDocument();
     expect(screen.getByText('接着我继续分析结果。')).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('我先看一下当前目录。')).toBeLessThan(renderedText.indexOf('pwd'));
-    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('接着我继续分析结果。'));
+    expect(renderedText.indexOf('我先看一下当前目录。')).toBeLessThan(renderedText.indexOf('已运行 1 条命令'));
+    expect(renderedText.indexOf('已运行 1 条命令')).toBeLessThan(renderedText.indexOf('接着我继续分析结果。'));
 
     const markdownBlocks = container.querySelectorAll('.chat-markdown');
     expect(markdownBlocks).toHaveLength(2);
@@ -222,12 +222,12 @@ describe('chat live rendering', () => {
       </div>,
     );
 
+    expect(screen.getByRole('button', { name: /已运行 1 条命令/i })).toBeInTheDocument();
     expect(screen.getByText('现在我为你查询')).toBeInTheDocument();
-    expect(screen.getByText(/pwd/)).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=clawx/)).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('现在我为你查询'));
+    expect(renderedText.indexOf('已运行 1 条命令')).toBeLessThan(renderedText.indexOf('现在我为你查询'));
     expect(renderedText.indexOf('现在我为你查询')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=clawx'));
   });
 
@@ -346,10 +346,114 @@ describe('chat live rendering', () => {
 
     expect(screen.getByText('我先检查本地环境。')).toBeInTheDocument();
     expect(screen.getByText('接着我继续联网确认。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /已执行 1 条命令，读取 1 个文件/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令，读取 1 个文件/i })).toBeInTheDocument();
     expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
     expect(screen.queryByText('/tmp/notes.md')).not.toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=clawx-live/)).toBeInTheDocument();
+  });
+
+  it('keeps finished tool groups ahead of newly streamed assistant text across live rerenders', () => {
+    vi.useFakeTimers();
+
+    const roundOneTool: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:round-tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'bash',
+      timestamp: 1,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-1',
+          name: 'bash',
+          arguments: { command: 'pwd' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'bash',
+          status: 'completed',
+          input: { command: 'pwd' },
+          updatedAt: 1,
+        },
+      ],
+    };
+
+    const roundTwoTool: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:round-tool-2',
+      toolCallId: 'tool-2',
+      toolName: 'fetch',
+      timestamp: 2,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-2',
+          name: 'fetch',
+          arguments: { url: 'https://example.com/search?q=weather' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'fetch',
+          status: 'completed',
+          input: { url: 'https://example.com/search?q=weather' },
+          updatedAt: 2,
+        },
+      ],
+    };
+
+    const renderRound = (toolMessages: RawMessage[], streamingText: string) => {
+      const chatItems = buildChatItems({
+        messages: [],
+        toolMessages,
+        streamSegments: [],
+        streamingText,
+        streamingTextStartedAt: streamingText ? 3 : null,
+        streamingTextLastEventAt: streamingText ? 3 : null,
+        sessionKey: 'session-live-round-order',
+      });
+
+      expect(chatItems).toHaveLength(1);
+      return (
+        <ChatMessage
+          message={chatItems[0].message}
+          showThinking
+          showToolCalls
+          isStreaming={chatItems[0].isStreaming}
+        />
+      );
+    };
+
+    try {
+      const { rerender, container } = render(renderRound([roundOneTool], ''));
+      expect(screen.getByText(/pwd/)).toBeInTheDocument();
+
+      rerender(renderRound([roundOneTool, roundTwoTool], ''));
+      expect(screen.getByText(/pwd/)).toBeInTheDocument();
+      expect(screen.getByText(/https:\/\/example\.com\/search\?q=weather/)).toBeInTheDocument();
+
+      rerender(renderRound([roundOneTool, roundTwoTool], '接下去让我为你整理结果'));
+
+      expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+      expect(screen.getByText('接下去让我为你整理结果')).toBeInTheDocument();
+
+      const renderedText = container.textContent || '';
+      expect(renderedText.indexOf('已运行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('接下去让我为你整理结果'));
+
+      act(() => {
+        vi.advanceTimersByTime(240);
+      });
+
+      expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/https:\/\/example\.com\/search\?q=weather/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps fallback text after top-level tool calls when content has no ordered blocks', () => {
@@ -401,10 +505,10 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('已执行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+    expect(renderedText.indexOf('已运行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
   });
 
   it('keeps text blocks after top-level tool calls when ordered tool blocks are missing', () => {
@@ -461,10 +565,10 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('已执行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+    expect(renderedText.indexOf('已运行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
   });
 
   it('renders reopened history turns with collapsed tool summaries instead of separate tool rows', () => {
@@ -593,7 +697,7 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
     expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
     expect(screen.queryByText(/https:\/\/example\.com\/search\?q=xxxx/)).not.toBeInTheDocument();
   });
@@ -629,7 +733,7 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /已执行 1 条命令/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令/i })).toBeInTheDocument();
   });
 
   it('renders live multi-tool groups without a summary header before they collapse', () => {
@@ -678,9 +782,120 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).not.toBeInTheDocument();
     expect(screen.getByText(/pwd/)).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+  });
+
+  it('animates from expanded live tools into a collapsed summary when the turn completes', () => {
+    vi.useFakeTimers();
+
+    try {
+      const { rerender, container } = render(
+        <ChatMessage
+          message={{
+            role: 'assistant',
+            id: 'assistant-live-tool-group-collapse-animation',
+            timestamp: 3,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'bash',
+                arguments: { command: 'pwd' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-2',
+                name: 'fetch',
+                arguments: { url: 'https://example.com/search?q=xxxx' },
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'bash',
+                status: 'running',
+                input: { command: 'pwd' },
+                updatedAt: 1,
+              },
+              {
+                id: 'tool-2',
+                toolCallId: 'tool-2',
+                name: 'fetch',
+                status: 'running',
+                input: { url: 'https://example.com/search?q=xxxx' },
+                updatedAt: 2,
+              },
+            ],
+          } as unknown as RawMessage}
+          showThinking
+          showToolCalls
+          isStreaming
+        />,
+      );
+
+      rerender(
+        <ChatMessage
+          message={{
+            role: 'assistant',
+            id: 'assistant-live-tool-group-collapse-animation',
+            timestamp: 3,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'bash',
+                arguments: { command: 'pwd' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-2',
+                name: 'fetch',
+                arguments: { url: 'https://example.com/search?q=xxxx' },
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'bash',
+                status: 'completed',
+                input: { command: 'pwd' },
+                updatedAt: 3,
+              },
+              {
+                id: 'tool-2',
+                toolCallId: 'tool-2',
+                name: 'fetch',
+                status: 'completed',
+                input: { url: 'https://example.com/search?q=xxxx' },
+                updatedAt: 4,
+              },
+            ],
+          } as unknown as RawMessage}
+          showThinking
+          showToolCalls
+          isStreaming={false}
+        />,
+      );
+
+      expect(container.querySelector('[data-tool-group-state="collapsing"]')).not.toBeNull();
+      expect(screen.getByText(/pwd/)).toBeInTheDocument();
+      expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(240);
+      });
+
+      expect(container.querySelector('[data-tool-group-state="collapsed"]')).not.toBeNull();
+      expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+      expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/https:\/\/example\.com\/search\?q=xxxx/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders completed tool rows after expanding a collapsed tool group', () => {
@@ -728,10 +943,89 @@ describe('chat live rendering', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i }));
+    fireEvent.click(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i }));
 
     expect(screen.getByText(/pwd/)).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+  });
+
+  it('animates manual expand and collapse for a completed tool group', () => {
+    vi.useFakeTimers();
+
+    try {
+      const { container } = render(
+        <ChatMessage
+          message={{
+            role: 'assistant',
+            id: 'assistant-manual-tool-group-animation',
+            timestamp: 3,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'bash',
+                arguments: { command: 'pwd' },
+              },
+              {
+                type: 'toolCall',
+                id: 'tool-2',
+                name: 'fetch',
+                arguments: { url: 'https://example.com/search?q=xxxx' },
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'bash',
+                status: 'completed',
+                input: { command: 'pwd' },
+                updatedAt: 1,
+              },
+              {
+                id: 'tool-2',
+                toolCallId: 'tool-2',
+                name: 'fetch',
+                status: 'completed',
+                input: { url: 'https://example.com/search?q=xxxx' },
+                updatedAt: 2,
+              },
+            ],
+          } as unknown as RawMessage}
+          showThinking
+          showToolCalls
+        />,
+      );
+
+      const summary = screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i });
+      expect(container.querySelector('[data-tool-group-state="collapsed"]')).not.toBeNull();
+
+      fireEvent.click(summary);
+
+      expect(container.querySelector('[data-tool-group-state="expanding"]')).not.toBeNull();
+      expect(screen.getByText(/pwd/)).toBeInTheDocument();
+      expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(240);
+      });
+
+      expect(container.querySelector('[data-tool-group-state="expanded"]')).not.toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i }));
+
+      expect(container.querySelector('[data-tool-group-state="collapsing"]')).not.toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(240);
+      });
+
+      expect(container.querySelector('[data-tool-group-state="collapsed"]')).not.toBeNull();
+      expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/https:\/\/example\.com\/search\?q=xxxx/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps tool group hooks stable when a grouped tool row grows from one item to multiple items', () => {
@@ -767,7 +1061,7 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令/i })).toBeInTheDocument();
 
     expect(() => {
       rerender(
@@ -815,7 +1109,7 @@ describe('chat live rendering', () => {
       );
     }).not.toThrow();
 
-    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已运行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     consoleErrorSpy.mockRestore();
   });
@@ -1724,6 +2018,8 @@ describe('chat live rendering', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /已发起 1 次网络请求/i }));
+
     const trigger = screen.getByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i });
     expect(trigger).toBeInTheDocument();
     expect(trigger.textContent).toContain('使用浏览器 open · https://example.com');
@@ -1731,7 +2027,10 @@ describe('chat live rendering', () => {
     expect(trigger.querySelector('svg')).not.toBeNull();
 
     fireEvent.click(trigger);
-    fireEvent.click(screen.getAllByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i })[1]!);
+    const expandedTriggers = screen.getAllByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i });
+    if (expandedTriggers[1]) {
+      fireEvent.click(expandedTriggers[1]);
+    }
     expect(screen.getByText('Raw Result')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });

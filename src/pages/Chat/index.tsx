@@ -130,6 +130,7 @@ export function Chat() {
   const showToolCalls = useChatStore((s) => s.showToolCalls);
   const streamingText = useChatStore((s) => s.streamingText);
   const streamingTextStartedAt = useChatStore((s) => s.streamingTextStartedAt);
+  const streamingTextLastEventAt = useChatStore((s) => s.streamingTextLastEventAt);
   const streamSegments = useChatStore((s) => s.streamSegments);
   const toolMessages = useChatStore((s) => s.toolMessages);
   const pendingFinal = useChatStore((s) => s.pendingFinal);
@@ -152,6 +153,7 @@ export function Chat() {
     streamSegments,
     streamingText,
     streamingTextStartedAt,
+    streamingTextLastEventAt,
     sessionKey: currentSessionKey,
   });
   const hasLiveText = streamingText.trim().length > 0;
