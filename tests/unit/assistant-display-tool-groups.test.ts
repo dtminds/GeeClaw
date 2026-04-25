@@ -573,6 +573,101 @@ describe('buildAssistantDisplayModel', () => {
     ]);
   });
 
+  it('keeps live stream text ahead of same-timestamp tool messages without order collisions', () => {
+    const display = buildAssistantDisplayModel(null, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: true,
+      liveToolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'read',
+          timestamp: 10,
+          content: [
+            { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { filePath: '/tmp/a.ts' } },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'read',
+              status: 'completed',
+              updatedAt: 10,
+              input: { filePath: '/tmp/a.ts' },
+            },
+          ],
+        } as RawMessage,
+      ],
+      liveStreamSegments: [{ text: 'I will inspect the file first.', ts: 10 }],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({ type: 'text', text: 'I will inspect the file first.' }),
+      expect.objectContaining({
+        type: 'tool_group',
+        items: [expect.objectContaining({ id: 'tool-1', name: 'read' })],
+      }),
+    ]);
+  });
+
+  it('categorizes common filesystem tools into read and edit summaries', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'toolCall', id: 'tool-1', name: 'ls', arguments: { path: '/tmp' } },
+        { type: 'toolCall', id: 'tool-2', name: 'mkdir', arguments: { path: '/tmp/new-dir' } },
+        { type: 'toolCall', id: 'tool-3', name: 'rm', arguments: { path: '/tmp/old.txt' } },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'ls',
+          status: 'completed',
+          updatedAt: 1,
+          input: { path: '/tmp' },
+        },
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'mkdir',
+          status: 'completed',
+          updatedAt: 2,
+          input: { path: '/tmp/new-dir' },
+        },
+        {
+          id: 'tool-3',
+          toolCallId: 'tool-3',
+          name: 'rm',
+          status: 'completed',
+          updatedAt: 3,
+          input: { path: '/tmp/old.txt' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: false,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        summary: 'Edited 2 files, Read 1 file',
+        summaryParts: [
+          expect.objectContaining({ category: 'edit_files', count: 2 }),
+          expect.objectContaining({ category: 'read_files', count: 1 }),
+        ],
+      }),
+    ]);
+  });
+
   it('collapses a tool group once any later assistant part appears during streaming', () => {
     const message = {
       role: 'assistant',

@@ -944,6 +944,8 @@ function extractLiveAssistantDisplayParts(
   parts: Array<(AssistantDisplaySegment & { sortTs: number; order: number }) | AssistantToolGroupItem>;
   markdownImages: AssistantMarkdownImage[];
 } {
+  const LIVE_STREAM_ORDER_BASE = 0;
+  const LIVE_TOOL_ORDER_BASE = 1_000_000;
   const parts: Array<(AssistantDisplaySegment & { sortTs: number; order: number }) | AssistantToolGroupItem> = [];
   const markdownImages: AssistantMarkdownImage[] = [];
 
@@ -954,7 +956,7 @@ function extractLiveAssistantDisplayParts(
       parts.push({
         ...part,
         sortTs: segment.ts,
-        order: (index * 100) + partIndex,
+        order: LIVE_STREAM_ORDER_BASE + (index * 100) + partIndex,
       });
     });
   });
@@ -988,7 +990,7 @@ function extractLiveAssistantDisplayParts(
         typeof message.timestamp === 'number' ? message.timestamp : undefined,
       ),
       timestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.MAX_SAFE_INTEGER,
-      order: index,
+      order: LIVE_TOOL_ORDER_BASE + index,
     });
   });
 
@@ -1082,9 +1084,28 @@ function summarizeToolGroup(items: AssistantToolGroupItem[]): {
   summary: string;
   summaryParts: AssistantToolGroupSummaryPart[];
 } {
-  const readItems = items.filter((item) => ['read', 'view', 'glob', 'grep'].includes(item.name.trim().toLowerCase()));
-  const editItems = items.filter((item) => ['edit', 'write', 'apply_patch'].includes(item.name.trim().toLowerCase()));
-  const commandItems = items.filter((item) => ['bash', 'exec', 'run_command'].includes(item.name.trim().toLowerCase()));
+  const readItems = items.filter((item) => (
+    ['read', 'read_file', 'cat', 'view', 'list_dir', 'ls', 'tree', 'glob', 'find', 'fd', 'grep', 'search']
+      .includes(item.name.trim().toLowerCase())
+  ));
+  const editItems = items.filter((item) => (
+    [
+      'write',
+      'write_file',
+      'create_file',
+      'edit',
+      'edit_file',
+      'replace',
+      'apply_patch',
+      'rename',
+      'move_file',
+      'delete_file',
+      'rm',
+      'rmdir',
+      'mkdir',
+    ].includes(item.name.trim().toLowerCase())
+  ));
+  const commandItems = items.filter((item) => ['bash', 'shell', 'exec', 'run_command', 'command'].includes(item.name.trim().toLowerCase()));
   const webItems = items.filter((item) => ['fetch', 'web_search', 'browser', 'browser_fetch', 'browser_open'].includes(item.name.trim().toLowerCase()));
 
   const categorizedNames = new Set([

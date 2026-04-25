@@ -1265,7 +1265,7 @@ function formatToolGroupSummaryLabel(
         case 'generic_tools':
           return `${prefix}调用 ${summaryPart.count} 个工具`;
         default:
-          return part.summary;
+          return `${prefix}${summaryPart.label}`;
       }
     }
 
@@ -1281,7 +1281,7 @@ function formatToolGroupSummaryLabel(
       case 'generic_tools':
         return `Used ${summaryPart.count} ${summaryPart.count === 1 ? 'tool' : 'tools'}`;
       default:
-        return part.summary;
+        return summaryPart.label;
     }
   });
 
