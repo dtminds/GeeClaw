@@ -38,7 +38,7 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-function normalizeModelId(value: string): string {
+export function normalizeModelId(value: string): string {
   const trimmed = value.trim();
   return trimmed.startsWith('geeclaw/') ? trimmed.slice('geeclaw/'.length) : trimmed;
 }

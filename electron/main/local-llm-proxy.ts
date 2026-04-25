@@ -8,6 +8,7 @@ import {
   createDefaultGeeClawProviderConfig,
   getActiveGeeClawProviderConfig,
   isGeeClawRegisteredModelId,
+  normalizeModelId,
   startGeeClawProviderConfigRefresh,
   stopGeeClawProviderConfigRefresh,
 } from '../utils/geeclaw-provider-config';
@@ -99,11 +100,6 @@ function buildUpstreamUrl(rawUrl: string, upstreamBaseUrl: string): string {
   return upstream.toString();
 }
 
-function normalizeGeeClawModelId(modelId: string): string {
-  const trimmed = modelId.trim();
-  return trimmed.startsWith('geeclaw/') ? trimmed.slice('geeclaw/'.length) : trimmed;
-}
-
 function buildModelUnavailableResponseBody(): string {
   return JSON.stringify({
     error: {
@@ -126,9 +122,9 @@ type RequestBodyResolution = {
 };
 
 function resolveGeeClawAutoModel(config: GeeClawProviderConfig): string | null {
-  const allowedModels = new Set(config.allowedModels.map(normalizeGeeClawModelId));
+  const allowedModels = new Set(config.allowedModels.map(normalizeModelId));
   for (const candidate of config.autoModels) {
-    const modelId = normalizeGeeClawModelId(candidate);
+    const modelId = normalizeModelId(candidate);
     if (allowedModels.has(modelId) && isGeeClawRegisteredModelId(modelId)) {
       return modelId;
     }
@@ -160,28 +156,37 @@ function resolveRequestBodyForGeeClawConfig(
     return { body, modelUnavailable: false };
   }
 
-  const requestedModel = normalizeGeeClawModelId(record.model);
-  const allowedModels = new Set(config.allowedModels.map(normalizeGeeClawModelId));
+  const requestedModel = normalizeModelId(record.model);
+  const allowedModels = new Set(config.allowedModels.map(normalizeModelId));
   const shouldUseAuto = requestedModel === 'auto'
     || !allowedModels.has(requestedModel)
     || !isGeeClawRegisteredModelId(requestedModel);
 
-  if (!shouldUseAuto) {
-    return { body, modelUnavailable: false };
+  if (shouldUseAuto) {
+    const autoModel = resolveGeeClawAutoModel(config);
+    if (!autoModel) {
+      return { body: undefined, modelUnavailable: true };
+    }
+    return {
+      body: Buffer.from(JSON.stringify({
+        ...record,
+        model: autoModel,
+      })),
+      modelUnavailable: false,
+    };
   }
 
-  const autoModel = resolveGeeClawAutoModel(config);
-  if (!autoModel) {
-    return { body: undefined, modelUnavailable: true };
+  if (requestedModel !== record.model) {
+    return {
+      body: Buffer.from(JSON.stringify({
+        ...record,
+        model: requestedModel,
+      })),
+      modelUnavailable: false,
+    };
   }
 
-  return {
-    body: Buffer.from(JSON.stringify({
-      ...record,
-      model: autoModel,
-    })),
-    modelUnavailable: false,
-  };
+  return { body, modelUnavailable: false };
 }
 
 function copyResponseHeaders(res: ServerResponse, headers: Headers): void {

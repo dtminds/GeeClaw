@@ -134,7 +134,7 @@ describe('LocalLlmProxyManager', () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(seenUrl).toBe('/api/v1/chat/completions?stream=true');
     expect(seenMethod).toBe('POST');
-    expect(seenBody).toContain('"model":"geeclaw/qwen3.6-plus"');
+    expect(JSON.parse(seenBody).model).toBe('qwen3.6-plus');
   });
 
   it('replaces auto model requests with the configured registered auto target', async () => {
