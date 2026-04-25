@@ -1139,7 +1139,7 @@ function ArtifactFilesPopover({
       <Popover.Trigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm surface-hover transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 my-2 text-xs cursor-pointer font-medium text-muted-foreground surface-hover transition-colors"
           aria-label={`查看 ${totalCount} 个文件产物`}
         >
           <HugeiconsIcon icon={FolderLibraryIcon} className="h-3.5 w-3.5" />
