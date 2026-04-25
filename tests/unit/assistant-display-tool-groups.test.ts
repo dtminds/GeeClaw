@@ -120,8 +120,6 @@ describe('buildAssistantDisplayModel', () => {
       }),
     ]);
   });
-<<<<<<< HEAD
-
   it('keeps inline errored tool results marked as error even when they include text, an error payload, or a failed status', () => {
     const message = {
       role: 'assistant',
@@ -245,7 +243,6 @@ describe('buildAssistantDisplayModel', () => {
       }),
     ]);
   });
-
   it('keeps distinct top-level tool_calls with the same tool name when ids differ', () => {
     const message = {
       role: 'assistant',
