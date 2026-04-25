@@ -13,9 +13,11 @@ import {
 import type { CronAgentRunSummary } from '@/types/cron';
 import {
   extractImagesAsAttachedFiles,
+  extractAssistantInlineArtifactFiles,
   extractMediaDirectiveSources,
   extractMediaRefs,
   extractRawFilePaths,
+  extractToolInputArtifactRefs,
   hydrateHistoryMessagesForDisplay,
   limitAttachedFilesForMessage,
   loadMissingPreviews,
@@ -412,6 +414,13 @@ function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
 
 function resolveMainSessionKeyForKnownAgent(agentId: string): string {
   return resolveMainSessionKeyForAgent(agentId) ?? buildDefaultMainSessionKey(agentId);
+}
+
+function resolveAgentWorkspace(agentId?: string | null): string | null {
+  if (!agentId) return null;
+  const workspace = useAgentsStore.getState().agents.find((agent) => agent.id === agentId)?.workspace;
+  const trimmed = workspace?.trim();
+  return trimmed || null;
 }
 
 function upsertProposalDecisionEntry(
@@ -1492,7 +1501,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           rawMessages = Array.isArray(data.messages) ? data.messages : [];
         }
 
-        const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages);
+        const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages, {
+          artifactBaseDir: resolveAgentWorkspace(selectedCronRun.agentId || get().currentAgentId),
+        });
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
@@ -1540,7 +1551,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
 
         // Before filtering: attach images/files from tool_result messages to the next assistant message
-        const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages);
+        const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages, {
+          artifactBaseDir: resolveAgentWorkspace(getAgentIdFromSessionKey(currentSessionKey)),
+        });
         const enrichedMessages = filteredMessages;
         const thinkingLevel = data.thinkingLevel ? String(data.thinkingLevel) : null;
 
@@ -2336,31 +2349,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
-            const toolFiles: AttachedFileMeta[] = [
-              ...extractImagesAsAttachedFiles(finalMsg.content),
-            ];
+            const toolFiles: AttachedFileMeta[] = [];
+            const toolFileIds = new Set<string>();
+            const pushToolFile = (file: AttachedFileMeta) => {
+              const identity = file.filePath || file.url || file.preview || file.fileName;
+              if (identity && toolFileIds.has(identity)) return;
+              if (identity) toolFileIds.add(identity);
+              toolFiles.push(file);
+            };
             const text = getMessageText(finalMsg.content);
-            if (text && !isErroredToolResult(finalMsg)) {
+            const currentToolMessage = [...get().toolMessages]
+              .reverse()
+              .find((message) => (
+                (finalMsg.toolCallId && message.toolCallId === finalMsg.toolCallId)
+                || (!finalMsg.toolCallId && finalMsg.toolName && message.toolName === finalMsg.toolName)
+              ));
+            const toolInput = getToolCallInput(currentToolMessage, finalMsg.toolCallId, finalMsg.toolName);
+            const shouldExtractToolArtifacts = shouldExtractRawFilePathsForTool(finalMsg.toolName, toolInput);
+            if (shouldExtractToolArtifacts) {
+              extractImagesAsAttachedFiles(finalMsg.content).forEach(pushToolFile);
+            }
+            const artifactExtractionOptions = {
+              artifactBaseDir: resolveAgentWorkspace(get().currentAgentId),
+            };
+            if (shouldExtractToolArtifacts && !isErroredToolResult(finalMsg)) {
+              for (const ref of extractToolInputArtifactRefs(finalMsg.toolName, toolInput, artifactExtractionOptions)) {
+                pushToolFile(makeAttachedFile(ref));
+              }
+            }
+            if (shouldExtractToolArtifacts && text && !isErroredToolResult(finalMsg)) {
               const mediaDirectiveSources = extractMediaDirectiveSources(text);
               const mediaDirectivePathSet = new Set(
                 mediaDirectiveSources.filter((source) => !/^https?:\/\//i.test(source)),
               );
-              for (const source of mediaDirectiveSources) toolFiles.push(makeAttachedFileFromMediaSource(source));
+              for (const source of mediaDirectiveSources) pushToolFile(makeAttachedFileFromMediaSource(source));
               const mediaRefs = extractMediaRefs(text);
               const mediaRefPaths = new Set(mediaRefs.map(r => r.filePath));
-              for (const ref of mediaRefs) toolFiles.push(makeAttachedFile(ref));
-              const currentToolMessage = [...get().toolMessages]
-                .reverse()
-                .find((message) => (
-                  (finalMsg.toolCallId && message.toolCallId === finalMsg.toolCallId)
-                  || (!finalMsg.toolCallId && finalMsg.toolName && message.toolName === finalMsg.toolName)
-                ));
-              const toolInput = getToolCallInput(currentToolMessage, finalMsg.toolCallId, finalMsg.toolName);
-              if (shouldExtractRawFilePathsForTool(finalMsg.toolName, toolInput)) {
-                for (const ref of extractRawFilePaths(text)) {
-                  if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
-                    toolFiles.push(makeAttachedFile(ref));
-                  }
+              for (const ref of mediaRefs) pushToolFile(makeAttachedFile(ref));
+              for (const ref of extractRawFilePaths(text, artifactExtractionOptions)) {
+                if (!mediaRefPaths.has(ref.filePath) && !mediaDirectivePathSet.has(ref.filePath)) {
+                  pushToolFile(makeAttachedFile(ref));
                 }
               }
             }
@@ -2429,7 +2457,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const inlineMediaFiles = (() => {
             const text = getMessageText(finalMsg.content);
             if (!text) return [] as AttachedFileMeta[];
-            return extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource);
+            return extractAssistantInlineArtifactFiles(text, {
+              artifactBaseDir: resolveAgentWorkspace(get().currentAgentId),
+            });
           })();
           if (shouldDeferFinalAssistantText) {
             const nextText = extractTextFromRuntimeMessage(finalMsg);

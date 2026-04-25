@@ -1,4 +1,5 @@
 import type { ContentBlock, RawMessage, ToolStatus } from '@/stores/chat';
+import { limitAttachedFilesForMessage } from '@/stores/chat';
 import type { AssistantMessageWithLiveRuntime, LiveAssistantStreamSegment } from './assistant-display';
 import { shouldHideToolTrace } from './message-utils';
 
@@ -179,9 +180,11 @@ function mergeAttachedFiles(group: RawMessage[]): Pick<RawMessage, '_attachedFil
     }
   }
 
+  const limited = limitAttachedFilesForMessage(files, hiddenCount);
+
   return {
-    _attachedFiles: files.length > 0 ? files : undefined,
-    _hiddenAttachmentCount: hiddenCount > 0 ? hiddenCount : undefined,
+    _attachedFiles: limited.files.length > 0 ? limited.files : undefined,
+    _hiddenAttachmentCount: limited.hiddenCount > 0 ? limited.hiddenCount : undefined,
   };
 }
 

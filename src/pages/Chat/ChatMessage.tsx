@@ -3,7 +3,7 @@
  * Renders user / assistant / system / toolresult messages
  * with markdown, thinking sections, images, and tool cards.
  */
-import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, memo, type MouseEvent } from 'react';
 import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, X, FolderOpen, FolderSymlink, ZoomIn } from 'lucide-react';
 import { Streamdown, defaultRehypePlugins, defaultRemarkPlugins, type LinkSafetyModalProps } from 'streamdown';
 import { code } from '@streamdown/code';
@@ -40,6 +40,10 @@ import {
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
   ComputerTerminal01Icon,
   FileViewIcon,
+  HtmlFile01Icon,
+  DocumentCodeIcon,
+  Doc01Icon,
+  Ppt01Icon,
   LeftToRightListStarIcon,
   Globe02Icon,
   ChromeIcon,
@@ -401,6 +405,18 @@ export const ChatMessage = memo(function ChatMessage({
   const text = isUser ? userText : (assistantText || emptyAssistantFallbackText);
   const hasText = text.length > 0;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
+  const assistantPreviewOnlyImages = useMemo(
+    () => isUser
+      ? EMPTY_ATTACHMENTS
+      : attachedFiles.filter((file) => (
+          file.exists !== false
+          && file.mimeType.startsWith('image/')
+          && Boolean(file.preview)
+          && !file.filePath
+          && !file.url
+        )),
+    [attachedFiles, isUser],
+  );
 
   if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
   if (shouldHideInternalMessage) return null;
@@ -553,39 +569,27 @@ export const ChatMessage = memo(function ChatMessage({
           </div>
         )}
 
-        {/* File attachments — assistant messages (below text) */}
-        {!isUser && attachedFiles.length > 0 && (
+        {/* Preview-only image artifacts from tool results — assistant messages */}
+        {!isUser && assistantPreviewOnlyImages.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {attachedFiles.map((file, i) => {
-              if (file.exists === false) return null;
-              const isImage = file.mimeType.startsWith('image/');
-              const isInlinePreviewableImage = isImage && file.mimeType !== 'image/svg+xml';
-              if (isImage && images.length > 0) return null;
-              if (isInlinePreviewableImage && file.preview) {
-                return (
-                  <ImagePreviewCard
-                    key={`local-${i}`}
-                    src={file.preview}
-                    fileName={file.fileName}
-                    filePath={file.filePath}
-                    mimeType={file.mimeType}
-                    onPreview={() => setLightboxImg({ src: file.preview!, fileName: file.fileName, filePath: file.filePath, mimeType: file.mimeType })}
-                  />
-                );
-              }
-              if (isInlinePreviewableImage && !file.preview) {
-                return (
-                  <div key={`local-${i}`} className="w-36 h-36 rounded-xl border overflow-hidden bg-muted flex items-center justify-center text-muted-foreground">
-                    <HugeiconsIcon icon={ImageNotFound01Icon} className="h-8 w-8"/>
-                  </div>
-                );
-              }
-              return <FileCard key={`local-${i}`} file={file} />;
-            })}
+            {assistantPreviewOnlyImages.map((file, i) => (
+              <ImagePreviewCard
+                key={`preview-only-${i}`}
+                src={file.preview!}
+                fileName={file.fileName}
+                mimeType={file.mimeType}
+                onPreview={() => setLightboxImg({ src: file.preview!, fileName: file.fileName, mimeType: file.mimeType })}
+              />
+            ))}
           </div>
         )}
 
-        {hiddenAttachmentCount > 0 && attachedFiles.length > 0 && (
+        {/* File artifacts — assistant messages (behind a compact popover) */}
+        {!isUser && attachedFiles.length > 0 && (
+          <ArtifactFilesPopover files={attachedFiles} hiddenCount={hiddenAttachmentCount} />
+        )}
+
+        {isUser && hiddenAttachmentCount > 0 && attachedFiles.length > 0 && (
           <div className="text-xs text-muted-foreground">
             {`仅显示前 ${attachedFiles.length} 个文件产物，另有 ${hiddenAttachmentCount} 个未显示`}
           </div>
@@ -695,6 +699,15 @@ async function openLocalPath(filePath: string, displayName = getPathDisplayName(
   } catch (error) {
     console.error('Failed to open local path', error);
     toast.error(`打开 ${displayName} 失败`);
+  }
+}
+
+async function openContainingFolder(filePath: string): Promise<void> {
+  try {
+    await invokeIpc('shell:showItemInFolder', filePath);
+  } catch (error) {
+    console.error('Failed to reveal file:', error);
+    toast.error('无法打开所在目录');
   }
 }
 
@@ -1039,13 +1052,71 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
 
 // ── File Card (for user-uploaded non-image files) ───────────────
 
-function FileIcon({ mimeType, className }: { mimeType: string; className?: string }) {
-  if (mimeType.startsWith('video/')) return <HugeiconsIcon icon={FileVideoIcon} className={className} />;
-  if (mimeType.startsWith('audio/')) return <HugeiconsIcon icon={MusicNote04Icon} className={className} />;
-  if (mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/xml') return <HugeiconsIcon icon={File01Icon} className={className} />;
-  if (mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('archive') || mimeType.includes('tar') || mimeType.includes('rar') || mimeType.includes('7z')) return <HugeiconsIcon icon={FolderLibraryIcon} className={className} />;
-  if (mimeType === 'application/pdf') return <HugeiconsIcon icon={Pdf02Icon} className={className} />;
-  return <HugeiconsIcon icon={File01Icon} className={className} />;
+type FileIconKind =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'spreadsheet'
+  | 'html'
+  | 'markdown'
+  | 'word'
+  | 'presentation'
+  | 'text'
+  | 'archive'
+  | 'pdf'
+  | 'file';
+
+function getFileExtension(fileName?: string): string {
+  const baseName = (fileName || '').split(/[\\/]/).pop() || '';
+  const dotIndex = baseName.lastIndexOf('.');
+  return dotIndex > 0 ? baseName.slice(dotIndex + 1).toLowerCase() : '';
+}
+
+function getFileIconKind(mimeType: string, fileName?: string): FileIconKind {
+  const normalizedMimeType = mimeType.toLowerCase().split(';')[0].trim();
+  const extension = getFileExtension(fileName);
+
+  if (normalizedMimeType.startsWith('image/')) return 'image';
+  if (normalizedMimeType.startsWith('video/')) return 'video';
+  if (normalizedMimeType.startsWith('audio/')) return 'audio';
+  if (normalizedMimeType === 'text/html' || normalizedMimeType === 'application/xhtml+xml' || ['html', 'htm', 'xhtml'].includes(extension)) return 'html';
+  if (['text/markdown', 'text/x-markdown', 'text/md', 'text/mdx', 'application/markdown'].includes(normalizedMimeType) || ['md', 'markdown', 'mdx'].includes(extension)) return 'markdown';
+  if (normalizedMimeType === 'application/msword' || normalizedMimeType.includes('wordprocessingml') || ['doc', 'docx'].includes(extension)) return 'word';
+  if (normalizedMimeType === 'application/vnd.ms-powerpoint' || normalizedMimeType.includes('presentationml') || ['ppt', 'pptx', 'pps', 'ppsx'].includes(extension)) return 'presentation';
+  if (normalizedMimeType.includes('spreadsheet') || normalizedMimeType.includes('excel') || normalizedMimeType === 'text/csv' || ['csv', 'xls', 'xlsx'].includes(extension)) return 'spreadsheet';
+  if (normalizedMimeType.startsWith('text/') || normalizedMimeType === 'application/json' || normalizedMimeType === 'application/xml') return 'text';
+  if (normalizedMimeType.includes('zip') || normalizedMimeType.includes('compressed') || normalizedMimeType.includes('archive') || normalizedMimeType.includes('tar') || normalizedMimeType.includes('rar') || normalizedMimeType.includes('7z')) return 'archive';
+  if (normalizedMimeType === 'application/pdf' || extension === 'pdf') return 'pdf';
+  return 'file';
+}
+
+function getFileIconToneClass(kind: FileIconKind): string {
+  if (kind === 'pdf') return 'bg-red-500/10 text-red-600 ring-1 ring-red-500/15 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/20';
+  if (kind === 'word') return 'bg-blue-500/10 text-blue-600 ring-1 ring-blue-500/15 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20';
+  if (kind === 'presentation') return 'bg-orange-500/10 text-orange-600 ring-1 ring-orange-500/15 dark:bg-orange-400/10 dark:text-orange-300 dark:ring-orange-400/20';
+  if (kind === 'spreadsheet') return 'bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/15 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20';
+  if (kind === 'html') return 'bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/15 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20';
+  if (kind === 'markdown') return 'bg-slate-500/10 text-slate-700 ring-1 ring-slate-500/15 dark:bg-slate-400/10 dark:text-slate-300 dark:ring-slate-400/20';
+  if (kind === 'image') return 'bg-sky-500/10 text-sky-600 ring-1 ring-sky-500/15 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/20';
+  if (kind === 'video') return 'bg-fuchsia-500/10 text-fuchsia-600 ring-1 ring-fuchsia-500/15 dark:bg-fuchsia-400/10 dark:text-fuchsia-300 dark:ring-fuchsia-400/20';
+  if (kind === 'audio') return 'bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/15 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-violet-400/20';
+  if (kind === 'archive') return 'bg-yellow-500/10 text-yellow-700 ring-1 ring-yellow-500/15 dark:bg-yellow-400/10 dark:text-yellow-300 dark:ring-yellow-400/20';
+  return 'bg-primary/8 text-primary ring-1 ring-primary/10';
+}
+
+function FileIcon({ mimeType, fileName, className }: { mimeType: string; fileName?: string; className?: string }) {
+  const kind = getFileIconKind(mimeType, fileName);
+  if (kind === 'image') return <HugeiconsIcon icon={File01Icon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'video') return <HugeiconsIcon icon={FileVideoIcon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'audio') return <HugeiconsIcon icon={MusicNote04Icon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'spreadsheet') return <HugeiconsIcon icon={DatabaseIcon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'html') return <HugeiconsIcon icon={HtmlFile01Icon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'markdown') return <HugeiconsIcon icon={DocumentCodeIcon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'word') return <HugeiconsIcon icon={Doc01Icon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'presentation') return <HugeiconsIcon icon={Ppt01Icon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'archive') return <HugeiconsIcon icon={FolderLibraryIcon} className={className} data-file-icon-kind={kind} />;
+  if (kind === 'pdf') return <HugeiconsIcon icon={Pdf02Icon} className={className} data-file-icon-kind={kind} />;
+  return <HugeiconsIcon icon={File01Icon} className={className} data-file-icon-kind={kind} />;
 }
 
 function FileCard({ file }: { file: AttachedFileMeta }) {
@@ -1067,9 +1138,127 @@ function FileCard({ file }: { file: AttachedFileMeta }) {
       onClick={handleOpen}
       title={file.filePath || file.url ? "Open file" : undefined}
     >
-      <FileIcon mimeType={file.mimeType} className="h-4 w-4 shrink-0 text-primary" />
+      <FileIcon mimeType={file.mimeType} fileName={file.fileName} className="h-4 w-4 shrink-0 text-primary" />
       <div className="min-w-0 overflow-hidden text-primary">
         <p className="text-xs truncate">{file.fileName}</p>
+      </div>
+    </div>
+  );
+}
+
+function ArtifactFilesPopover({
+  files,
+  hiddenCount,
+}: {
+  files: AttachedFileMeta[];
+  hiddenCount: number;
+}) {
+  const visibleFiles = useMemo(
+    () => files.filter((file) => file.exists !== false && Boolean(file.filePath || file.url)),
+    [files],
+  );
+  const totalCount = visibleFiles.length + hiddenCount;
+
+  if (visibleFiles.length === 0) return null;
+
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 my-2 text-xs cursor-pointer font-medium text-muted-foreground surface-hover transition-colors"
+          aria-label={`查看 ${totalCount} 个文件产物`}
+        >
+          <HugeiconsIcon icon={FolderLibraryIcon} className="h-3.5 w-3.5" />
+          <span>{`查看 ${totalCount} 个文件产物`}</span>
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={8}
+          className="z-50 w-[min(520px,calc(100vw-2rem))] rounded-2xl border bg-popover p-2 text-popover-foreground shadow-xl outline-none"
+        >
+          <div className="max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-1">
+              {visibleFiles.map((file, index) => (
+                <ArtifactFileListItem
+                  key={`${file.filePath || file.url || file.fileName}-${index}`}
+                  file={file}
+                  index={index}
+                />
+              ))}
+            </div>
+          </div>
+          {hiddenCount > 0 && (
+            <div className="border-t px-2 pt-2 mt-2 text-xs text-muted-foreground">
+              {`仅显示前 ${visibleFiles.length} 个，另有 ${hiddenCount} 个未显示`}
+            </div>
+          )}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function ArtifactFileListItem({ file, index }: { file: AttachedFileMeta; index: number }) {
+  const iconKind = getFileIconKind(file.mimeType, file.fileName);
+  const handleOpenFile = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (file.url) {
+      await invokeIpc('shell:openExternal', file.url);
+      return;
+    }
+    if (file.filePath) {
+      await openLocalPath(file.filePath, file.fileName);
+    }
+  }, [file.fileName, file.filePath, file.url]);
+
+  const handleOpenFolder = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (file.filePath) {
+      await openContainingFolder(file.filePath);
+    }
+  }, [file.filePath]);
+
+  return (
+    <div
+      className={cn(
+        'flex min-h-11 items-center gap-3 rounded-xl px-2 py-1.5 text-sm transition-colors hover:bg-muted/65',
+        index % 2 === 1 && 'bg-muted/35',
+      )}
+      data-artifact-file-row=""
+      data-row-tone={index % 2 === 1 ? 'alternate' : 'base'}
+    >
+      <div
+        className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', getFileIconToneClass(iconKind))}
+        data-file-icon-tone={iconKind}
+      >
+        <FileIcon mimeType={file.mimeType} fileName={file.fileName} className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-foreground">{file.fileName}</div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs text-muted-foreground surface-hover"
+          onClick={handleOpenFile}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          打开文件
+        </button>
+        {file.filePath && (
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs text-muted-foreground surface-hover"
+            onClick={handleOpenFolder}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            打开目录
+          </button>
+        )}
       </div>
     </div>
   );

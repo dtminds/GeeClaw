@@ -8,6 +8,8 @@ import type { ContentBlock, RawMessage } from './model';
 
 const EXEC_TOOL_NAMES = new Set(['exec', 'bash', 'shell', 'run_command', 'command']);
 const RAW_PATH_SCAN_COMMANDS = new Set(['ls', 'find', 'tree', 'fd', 'rg', 'grep', 'ag', 'locate', 'which', 'where']);
+const RAW_PATH_READ_TOOL_NAMES = new Set(['read', 'read_file', 'cat', 'view', 'list_dir', 'glob', 'grep', 'search']);
+const RAW_PATH_READ_COMMANDS = new Set(['cat', 'less', 'more', 'head', 'tail', 'bat', 'sed', 'awk']);
 const INTERNAL_ASSISTANT_ACK_MESSAGES = new Set(['HEARTBEAT_OK', 'NO_REPLY']);
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
@@ -299,6 +301,7 @@ export function getBaseCommand(command: string): string {
 
 export function shouldExtractRawFilePathsForTool(toolName: string | undefined, toolInput: unknown): boolean {
   const normalizedToolName = normalizeToolName(toolName);
+  if (RAW_PATH_READ_TOOL_NAMES.has(normalizedToolName)) return false;
   if (!EXEC_TOOL_NAMES.has(normalizedToolName)) return true;
 
   const command = extractExecCommand(toolInput);
@@ -307,6 +310,7 @@ export function shouldExtractRawFilePathsForTool(toolName: string | undefined, t
   const normalizedCommand = stripShellWrapper(command);
   const baseCommand = getBaseCommand(normalizedCommand);
   if (RAW_PATH_SCAN_COMMANDS.has(baseCommand)) return false;
+  if (RAW_PATH_READ_COMMANDS.has(baseCommand)) return false;
   if (baseCommand === 'git' && /\bgit\s+ls-files\b/i.test(normalizedCommand)) return false;
   return true;
 }

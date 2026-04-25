@@ -9,6 +9,7 @@ import {
   enrichWithCachedImages,
   enrichWithToolResultFiles,
   extractRawFilePaths,
+  hydrateHistoryMessagesForDisplay,
   limitAttachedFilesForMessage,
   loadMissingPreviews,
   prepareHistoryMessagesForDisplay,
@@ -91,6 +92,164 @@ describe('chat file path extraction', () => {
     }]);
   });
 
+  it('resolves relative tool output artifacts against the agent workspace', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-write',
+          name: 'exec',
+          input: { command: 'node scripts/write-html.mjs' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-write',
+        toolName: 'exec',
+        content: 'Successfully wrote 9076 bytes to ./deliverables/presentation-master/2026-04-24-openclaw-intro/index.html',
+      },
+      {
+        role: 'assistant',
+        content: 'Done.',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages, { artifactBaseDir: '/Users/demo/geeclaw/workspace' });
+
+    expect(enriched[2]?._attachedFiles).toEqual([{
+      fileName: 'index.html',
+      mimeType: 'text/html',
+      fileSize: 0,
+      preview: null,
+      filePath: '/Users/demo/geeclaw/workspace/deliverables/presentation-master/2026-04-24-openclaw-intro/index.html',
+    }]);
+  });
+
+  it('uses write tool input path for relative artifacts without a dot prefix', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-write-readme',
+          name: 'write_file',
+          input: { path: 'README.md', content: '# Hello' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-write-readme',
+        toolName: 'write_file',
+        content: 'Successfully wrote 7 bytes',
+      },
+      {
+        role: 'assistant',
+        content: 'Done.',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages, { artifactBaseDir: '/Users/demo/geeclaw/workspace' });
+
+    expect(enriched[2]?._attachedFiles).toEqual([{
+      fileName: 'README.md',
+      mimeType: 'text/markdown',
+      fileSize: 0,
+      preview: null,
+      filePath: '/Users/demo/geeclaw/workspace/README.md',
+    }]);
+  });
+
+  it('does not guess relative tool output artifacts without an agent workspace', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-write',
+          name: 'exec',
+          input: { command: 'node scripts/write-html.mjs' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-write',
+        toolName: 'exec',
+        content: 'Successfully wrote 9076 bytes to ./deliverables/presentation-master/2026-04-24-openclaw-intro/index.html',
+      },
+      {
+        role: 'assistant',
+        content: 'Done.',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages);
+
+    expect(enriched[2]?._attachedFiles).toBeUndefined();
+  });
+
+  it('does not treat read-file tool output paths as produced artifacts', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-read-memory',
+          name: 'read_file',
+          input: { path: '/tmp/MEMORY/2026-04-24.md' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-read-memory',
+        toolName: 'read_file',
+        content: 'Read /tmp/MEMORY/2026-04-24.md',
+      },
+      {
+        role: 'assistant',
+        content: '我已读取上下文。',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages);
+
+    expect(enriched[2]?._attachedFiles).toBeUndefined();
+  });
+
+  it('keeps edited reserved files as produced artifacts', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tool-edit-memory',
+          name: 'edit_file',
+          input: { path: '/tmp/memory.md' },
+        }],
+      },
+      {
+        role: 'toolresult',
+        toolCallId: 'tool-edit-memory',
+        toolName: 'edit_file',
+        content: 'Updated /tmp/memory.md',
+      },
+      {
+        role: 'assistant',
+        content: '已更新记忆。',
+      },
+    ];
+
+    const enriched = enrichWithToolResultFiles(messages);
+
+    expect(enriched[2]?._attachedFiles).toEqual([{
+      fileName: 'memory.md',
+      mimeType: 'text/markdown',
+      fileSize: 0,
+      preview: null,
+      filePath: '/tmp/memory.md',
+    }]);
+  });
+
   it('keeps MEDIA-prefixed tool output attachments for non-scan tools', () => {
     const messages: RawMessage[] = [
       {
@@ -170,6 +329,107 @@ describe('chat file path extraction', () => {
     expect(messages[0]?._attachedFiles).toEqual([]);
   });
 
+  it('filters markdown-linked assistant artifacts whose paths do not exist during hydration', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      '/tmp/reports/missing.xlsx': { exists: false, preview: null, fileSize: 0 },
+    });
+
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: '已生成 [报销明细](/tmp/reports/missing.xlsx)。',
+      },
+    ];
+
+    const hydrated = await hydrateHistoryMessagesForDisplay(messages);
+
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/files/thumbnails', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        paths: [{
+          filePath: '/tmp/reports/missing.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }],
+      }),
+    }));
+    expect(hydrated[0]?._attachedFiles).toEqual([]);
+  });
+
+  it('revalidates cached existing local artifacts so deleted files are removed', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      '/tmp/reports/deleted.xlsx': { exists: false, preview: null, fileSize: 0 },
+    });
+
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: '已生成 [报销明细](/tmp/reports/deleted.xlsx)。',
+        _attachedFiles: [{
+          fileName: 'deleted.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          fileSize: 123,
+          preview: null,
+          filePath: '/tmp/reports/deleted.xlsx',
+          exists: true,
+        }],
+      },
+    ];
+
+    const updated = await loadMissingPreviews(messages);
+
+    expect(updated).toBe(true);
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/files/thumbnails', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        paths: [{
+          filePath: '/tmp/reports/deleted.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }],
+      }),
+    }));
+    expect(messages[0]?._attachedFiles).toEqual([]);
+  });
+
+  it('revalidates cached image artifacts without regenerating existing previews', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      '/tmp/reports/chart.png': { exists: true, preview: null, fileSize: 456 },
+    });
+
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: '已生成图表。',
+        _attachedFiles: [{
+          fileName: 'chart.png',
+          mimeType: 'image/png',
+          fileSize: 456,
+          preview: 'data:image/png;base64,cached',
+          filePath: '/tmp/reports/chart.png',
+          exists: true,
+        }],
+      },
+    ];
+
+    const updated = await loadMissingPreviews(messages);
+
+    expect(updated).toBe(true);
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/files/thumbnails', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        paths: [{
+          filePath: '/tmp/reports/chart.png',
+          mimeType: 'image/png',
+          preview: false,
+        }],
+      }),
+    }));
+    expect(messages[0]?._attachedFiles?.[0]).toEqual(expect.objectContaining({
+      exists: true,
+      preview: 'data:image/png;base64,cached',
+      fileSize: 456,
+    }));
+  });
+
   it('keeps attached files whose paths exist', async () => {
     hostApiFetchMock.mockResolvedValue({
       '/tmp/exports/slide-01.jpg': {
@@ -206,7 +466,7 @@ describe('chat file path extraction', () => {
     }]);
   });
 
-  it('caps displayed attachments per message and records hidden count', () => {
+  it('caps displayed attachments per message at twenty and records hidden count', () => {
     const files = Array.from({ length: 60 }, (_, index) => ({
       fileName: `file-${index}.txt`,
       mimeType: 'text/plain',
@@ -217,10 +477,10 @@ describe('chat file path extraction', () => {
 
     const limited = limitAttachedFilesForMessage(files);
 
-    expect(limited.files).toHaveLength(9);
-    expect(limited.hiddenCount).toBe(51);
+    expect(limited.files).toHaveLength(20);
+    expect(limited.hiddenCount).toBe(40);
     expect(limited.files[0]?.fileName).toBe('file-0.txt');
-    expect(limited.files[8]?.fileName).toBe('file-8.txt');
+    expect(limited.files[19]?.fileName).toBe('file-19.txt');
   });
 
   it('does not create file cards from skill marker paths in the previous user message', () => {
@@ -240,6 +500,118 @@ describe('chat file path extraction', () => {
     expect(enriched[1]?._attachedFiles).toBeUndefined();
   });
 
+  it('does not create assistant artifacts from raw paths in the previous user message', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'user',
+        content: '请读取 /tmp/MEMORY/2026-04-24.md',
+      },
+      {
+        role: 'assistant',
+        content: '我已经读取完毕。',
+      },
+    ];
+
+    const enriched = enrichWithCachedImages(messages);
+
+    expect(enriched[1]?._attachedFiles).toBeUndefined();
+  });
+
+  it('extracts local markdown file links from assistant text as artifacts', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: '已生成 [报销明细](/tmp/reports/expense.xlsx)，参考 [官网](https://example.com/report)。',
+      },
+    ];
+
+    const enriched = enrichWithCachedImages(messages);
+
+    expect(enriched[0]?._attachedFiles).toEqual([{
+      fileName: 'expense.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileSize: 0,
+      preview: null,
+      filePath: '/tmp/reports/expense.xlsx',
+    }]);
+  });
+
+  it('resolves relative markdown file links against the agent workspace', () => {
+    const messages: RawMessage[] = [
+      {
+        role: 'assistant',
+        content: '已生成 [报销明细](reports/expense.xlsx)。',
+      },
+    ];
+
+    const enriched = enrichWithCachedImages(messages, { artifactBaseDir: '/Users/demo/geeclaw/workspace' });
+
+    expect(enriched[0]?._attachedFiles).toEqual([{
+      fileName: 'expense.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileSize: 0,
+      preview: null,
+      filePath: '/Users/demo/geeclaw/workspace/reports/expense.xlsx',
+    }]);
+  });
+
+  it('only builds assistant artifacts for the most recent history messages by default', async () => {
+    hostApiFetchMock.mockResolvedValue({
+      '/tmp/reports/recent.xlsx': { exists: true, preview: null, fileSize: 123 },
+    });
+
+    const messages: RawMessage[] = Array.from({ length: 101 }, (_, index) => ({
+      role: 'assistant',
+      content: index === 0
+        ? '早期产物 [旧报表](/tmp/reports/old.xlsx)。'
+        : index === 100
+          ? '近期产物 [新报表](/tmp/reports/recent.xlsx)。'
+          : `普通消息 ${index}`,
+    }));
+
+    const hydrated = await hydrateHistoryMessagesForDisplay(messages);
+
+    expect(hydrated[0]?._attachedFiles).toBeUndefined();
+    expect(hydrated[100]?._attachedFiles).toEqual([{
+      fileName: 'recent.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileSize: 123,
+      preview: null,
+      filePath: '/tmp/reports/recent.xlsx',
+      exists: true,
+    }]);
+    expect(hostApiFetchMock).toHaveBeenCalledWith('/api/files/thumbnails', expect.objectContaining({
+      body: JSON.stringify({
+        paths: [{
+          filePath: '/tmp/reports/recent.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }],
+      }),
+    }));
+    expect(String(hostApiFetchMock.mock.calls[0]?.[1]?.body)).not.toContain('/tmp/reports/old.xlsx');
+  });
+
+  it('drops persisted assistant artifacts outside the history artifact window', () => {
+    const messages: RawMessage[] = Array.from({ length: 101 }, (_, index) => ({
+      role: 'assistant',
+      content: `消息 ${index}`,
+      _attachedFiles: index === 0
+        ? [{
+            fileName: 'old.xlsx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            fileSize: 123,
+            preview: null,
+            filePath: '/tmp/reports/old.xlsx',
+            exists: true,
+          }]
+        : undefined,
+    }));
+
+    const prepared = prepareHistoryMessagesForDisplay(messages);
+
+    expect(prepared[0]?._attachedFiles).toBeUndefined();
+  });
+
   it('does not create runtime file cards from skill marker paths in history preparation', () => {
     const messages = [
       {
@@ -257,7 +629,7 @@ describe('chat file path extraction', () => {
     expect(prepared[1]?._attachedFiles).toBeUndefined();
   });
 
-  it('hides reserved attachment marker files regardless of case', () => {
+  it('does not hide reserved attachment marker files after they are classified as artifacts', () => {
     const files = [
       {
         fileName: 'SKILL.md',
@@ -277,7 +649,7 @@ describe('chat file path extraction', () => {
 
     const limited = limitAttachedFilesForMessage(files);
 
-    expect(limited.files).toEqual([files[1]]);
-    expect(limited.hiddenCount).toBe(1);
+    expect(limited.files).toEqual(files);
+    expect(limited.hiddenCount).toBe(0);
   });
 });
