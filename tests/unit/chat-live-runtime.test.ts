@@ -66,4 +66,24 @@ describe('chat live runtime helpers', () => {
       { type: 'text', text: 'last' },
     ]);
   });
+
+  it('normalizes seconds and milliseconds when ordering live content', () => {
+    const toolMessage = buildToolStreamMessage({
+      toolCallId: 'tool-1',
+      runId: 'run-1',
+      name: 'exec',
+      status: 'running',
+      startedAt: 1_777_000_003,
+      updatedAt: 1_777_000_003,
+      message: {} as never,
+    });
+
+    expect(buildOrderedLiveAssistantContentBlocks(
+      [{ text: 'from ms timestamp', ts: 1_777_000_002_000 }],
+      [toolMessage],
+    )).toEqual([
+      { type: 'text', text: 'from ms timestamp' },
+      { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: {} },
+    ]);
+  });
 });

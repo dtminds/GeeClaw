@@ -308,8 +308,10 @@ export function buildOrderedLiveAssistantContentBlocks(
   });
 
   items.sort((left, right) => {
-    if (left.sortTimestamp !== right.sortTimestamp) {
-      return left.sortTimestamp - right.sortTimestamp;
+    const leftTimestampMs = toMs(left.sortTimestamp);
+    const rightTimestampMs = toMs(right.sortTimestamp);
+    if (leftTimestampMs !== rightTimestampMs) {
+      return leftTimestampMs - rightTimestampMs;
     }
 
     return left.sourceIndex - right.sourceIndex;
