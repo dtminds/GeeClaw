@@ -703,7 +703,8 @@ function extractInlineToolResultText(block: ContentBlock): string | undefined {
 
 function getInlineToolResultStatus(block: ContentBlock, resultText?: string): AssistantToolGroupItem['status'] {
   const rawStatus = typeof block.status === 'string' ? block.status.toLowerCase() : '';
-  if (rawStatus === 'error' || block.isError === true || block.is_error === true) {
+  const hasErrorPayload = typeof block.error === 'string' && block.error.trim().length > 0;
+  if (rawStatus === 'error' || block.isError === true || block.is_error === true || hasErrorPayload) {
     return 'error';
   }
   if (rawStatus === 'completed' || rawStatus === 'success' || typeof resultText === 'string') {
@@ -818,6 +819,25 @@ function extractFinalizedAssistantDisplayParts(
         };
         break;
       }
+    }
+  }
+
+  if (options.showToolCalls) {
+    for (const tool of extractToolUse(message)) {
+      if (shouldHideToolTrace(tool.name)) {
+        continue;
+      }
+
+      const alreadyRendered = parts.some((part) => (
+        !('type' in part)
+        && ((tool.id && part.id === tool.id) || part.name === tool.name)
+      ));
+      if (alreadyRendered) {
+        continue;
+      }
+
+      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+      parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
     }
   }
 

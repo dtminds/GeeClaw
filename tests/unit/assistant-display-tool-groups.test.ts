@@ -120,4 +120,113 @@ describe('buildAssistantDisplayModel', () => {
       }),
     ]);
   });
+
+  it('keeps inline errored tool results marked as error even when they include text or an error payload', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'toolCall', id: 'tool-1', name: 'exec', arguments: { command: 'cat missing.txt' } },
+        { type: 'toolResult', id: 'tool-1', name: 'exec', text: 'cat: missing.txt: No such file or directory', status: 'error' },
+        { type: 'toolCall', id: 'tool-2', name: 'exec', arguments: { command: 'ls /missing' } },
+        { type: 'toolResult', id: 'tool-2', name: 'exec', error: 'ls: /missing: No such file or directory' },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'exec',
+          status: 'running',
+          updatedAt: 1,
+          input: { command: 'cat missing.txt' },
+        },
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'exec',
+          status: 'running',
+          updatedAt: 2,
+          input: { command: 'ls /missing' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: true,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        items: [
+          expect.objectContaining({
+            id: 'tool-1',
+            status: 'error',
+            result: 'cat: missing.txt: No such file or directory',
+          }),
+          expect.objectContaining({
+            id: 'tool-2',
+            status: 'error',
+            result: 'ls: /missing: No such file or directory',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('restores top-level tool_calls fallback for content arrays that only contain text', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'I looked up the page for you.' },
+      ],
+      tool_calls: [
+        {
+          id: 'tool-1',
+          function: {
+            name: 'fetch',
+            arguments: JSON.stringify({ url: 'https://example.com' }),
+          },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'fetch',
+          status: 'completed',
+          result: 'ok',
+          updatedAt: 1,
+          input: { url: 'https://example.com' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: false,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({ type: 'text', text: 'I looked up the page for you.' }),
+      expect.objectContaining({
+        type: 'tool_group',
+        collapsed: true,
+        summary: 'Made 1 web request',
+        items: [
+          expect.objectContaining({
+            id: 'tool-1',
+            name: 'fetch',
+            status: 'completed',
+          }),
+        ],
+      }),
+    ]);
+  });
 });
