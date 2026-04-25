@@ -59,6 +59,193 @@ function isHiddenToolOnlyMessage(message: RawMessage): boolean {
   return sawHiddenToolBlock;
 }
 
+function isAssistantMessage(message: RawMessage): boolean {
+  return (message.role || '').toLowerCase() === 'assistant';
+}
+
+function normalizeAssistantPhaseForMerge(value: unknown): 'commentary' | 'final_answer' | undefined {
+  return value === 'commentary' || value === 'final_answer' ? value : undefined;
+}
+
+function buildAssistantTextSignature(message: RawMessage): string | undefined {
+  const phase = normalizeAssistantPhaseForMerge(message.phase);
+  if (!phase) {
+    return undefined;
+  }
+
+  return JSON.stringify({
+    v: 1,
+    ...(message.id ? { id: message.id } : {}),
+    phase,
+  });
+}
+
+function getTopLevelToolCallBlocks(message: RawMessage): ContentBlock[] {
+  const toolCalls = (message as RawMessage & {
+    tool_calls?: unknown;
+    toolCalls?: unknown;
+  }).tool_calls ?? (message as RawMessage & { toolCalls?: unknown }).toolCalls;
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+
+  return toolCalls.flatMap((toolCall): ContentBlock[] => {
+    if (!toolCall || typeof toolCall !== 'object') {
+      return [];
+    }
+
+    const record = toolCall as Record<string, unknown>;
+    const fn = (record.function && typeof record.function === 'object'
+      ? record.function
+      : record) as Record<string, unknown>;
+    const name = typeof fn.name === 'string' ? fn.name : undefined;
+    if (!name) {
+      return [];
+    }
+
+    return [{
+      type: 'toolCall',
+      id: typeof record.id === 'string' ? record.id : undefined,
+      name,
+      arguments: fn.arguments ?? fn.input,
+    }];
+  });
+}
+
+function normalizeAssistantHistoryContentBlocks(message: RawMessage): ContentBlock[] {
+  const phaseSignature = buildAssistantTextSignature(message);
+  const contentBlocks: ContentBlock[] = Array.isArray(message.content)
+    ? (message.content as ContentBlock[])
+        .filter((block): block is ContentBlock => Boolean(block && typeof block === 'object'))
+        .map((block) => {
+          if (block.type === 'text' && phaseSignature && !block.textSignature) {
+            return {
+              ...block,
+              textSignature: phaseSignature,
+            };
+          }
+
+          return { ...block };
+        })
+    : typeof message.content === 'string' && message.content.trim()
+      ? [{
+          type: 'text' as const,
+          text: message.content,
+          ...(phaseSignature ? { textSignature: phaseSignature } : {}),
+        }]
+      : [];
+
+  const hasInlineToolBlocks = contentBlocks.some((block) => (
+    block?.type === 'tool_use' || block?.type === 'toolCall'
+  ));
+  if (hasInlineToolBlocks) {
+    return contentBlocks;
+  }
+
+  const topLevelToolCallBlocks = getTopLevelToolCallBlocks(message);
+  return topLevelToolCallBlocks.length > 0
+    ? [...topLevelToolCallBlocks, ...contentBlocks]
+    : contentBlocks;
+}
+
+function mergeToolStatuses(group: RawMessage[]): ToolStatus[] | undefined {
+  const statusesById = new Map<string, ToolStatus>();
+
+  for (const message of group) {
+    for (const status of message._toolStatuses || []) {
+      const key = status.toolCallId || status.id || status.name;
+      statusesById.set(key, status);
+    }
+  }
+
+  return statusesById.size > 0 ? [...statusesById.values()] : undefined;
+}
+
+function mergeAttachedFiles(group: RawMessage[]): Pick<RawMessage, '_attachedFiles' | '_hiddenAttachmentCount'> {
+  const files: NonNullable<RawMessage['_attachedFiles']> = [];
+  const seen = new Set<string>();
+  let hiddenCount = 0;
+
+  for (const message of group) {
+    hiddenCount += message._hiddenAttachmentCount || 0;
+    for (const file of message._attachedFiles || []) {
+      const key = `${file.filePath || ''}|${file.url || ''}|${file.fileName}|${file.mimeType}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      files.push(file);
+    }
+  }
+
+  return {
+    _attachedFiles: files.length > 0 ? files : undefined,
+    _hiddenAttachmentCount: hiddenCount > 0 ? hiddenCount : undefined,
+  };
+}
+
+function mergeAssistantHistoryGroup(group: RawMessage[], groupIndex: number): RawMessage {
+  if (group.length === 1) {
+    return group[0];
+  }
+
+  const first = group[0];
+  const last = group[group.length - 1];
+  const mergedToolStatuses = mergeToolStatuses(group);
+  const mergedAttachments = mergeAttachedFiles(group);
+
+  return {
+    ...first,
+    id: [first.id, last.id].filter(Boolean).join('::') || `merged-history-assistant:${groupIndex}`,
+    timestamp: first.timestamp ?? last.timestamp,
+    content: group.flatMap((message) => normalizeAssistantHistoryContentBlocks(message)),
+    _toolStatuses: mergedToolStatuses,
+    ...mergedAttachments,
+  };
+}
+
+type HistoryRenderMessage = {
+  message: RawMessage;
+  sourceIndex: number;
+};
+
+function mergeHistoryAssistantMessages(messages: RawMessage[]): HistoryRenderMessage[] {
+  const merged: HistoryRenderMessage[] = [];
+  let assistantGroup: Array<{ message: RawMessage; sourceIndex: number }> = [];
+
+  const flushAssistantGroup = () => {
+    if (assistantGroup.length === 0) {
+      return;
+    }
+
+    merged.push({
+      message: mergeAssistantHistoryGroup(
+        assistantGroup.map(({ message }) => message),
+        merged.length,
+      ),
+      sourceIndex: assistantGroup[0].sourceIndex,
+    });
+    assistantGroup = [];
+  };
+
+  messages.forEach((message, index) => {
+    if (isHiddenToolOnlyMessage(message)) {
+      return;
+    }
+
+    if (isAssistantMessage(message)) {
+      assistantGroup.push({ message, sourceIndex: index });
+      return;
+    }
+
+    flushAssistantGroup();
+    merged.push({ message, sourceIndex: index });
+  });
+
+  flushAssistantGroup();
+  return merged;
+}
+
 function makeAssistantLiveMessage(
   content: RawMessage['content'],
   timestamp: number,
@@ -257,13 +444,10 @@ export function buildChatItems({
   sessionKey,
 }: BuildChatItemsOptions): ChatRenderItem[] {
   const items: ChatRenderItem[] = [];
-  messages.forEach((message, index) => {
-    if (isHiddenToolOnlyMessage(message)) {
-      return;
-    }
-
+  const historyMessages = mergeHistoryAssistantMessages(messages);
+  historyMessages.forEach(({ message, sourceIndex }) => {
     items.push({
-      key: messageKey(message, index),
+      key: messageKey(message, sourceIndex),
       message,
       isStreaming: false,
     });

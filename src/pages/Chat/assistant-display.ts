@@ -63,7 +63,15 @@ export type AssistantDisplayToolGroupPart = {
   collapsed: boolean;
 };
 
-export type AssistantDisplayPart = AssistantDisplaySegment | AssistantDisplayToolGroupPart;
+export type AssistantDisplayToolItemPart = {
+  type: 'tool_item';
+  item: AssistantToolGroupItem;
+};
+
+export type AssistantDisplayPart =
+  | AssistantDisplaySegment
+  | AssistantDisplayToolGroupPart
+  | AssistantDisplayToolItemPart;
 
 export type AssistantTurnDisplayModel = {
   parts: AssistantDisplayPart[];
@@ -1010,7 +1018,11 @@ export function getLiveAssistantRuntimePayload(message: RawMessage): Pick<
 }
 
 function isAssistantToolGroupItem(
-  part: AssistantDisplaySegment | AssistantToolGroupItem | (AssistantDisplaySegment & { sortTs: number; order: number }),
+  part:
+    | AssistantDisplaySegment
+    | AssistantToolGroupItem
+    | AssistantDisplayToolItemPart
+    | (AssistantDisplaySegment & { sortTs: number; order: number }),
 ): part is AssistantToolGroupItem {
   return !('type' in part);
 }
@@ -1103,8 +1115,12 @@ function summarizeToolGroup(items: AssistantToolGroupItem[]): {
   };
 }
 
+function shouldKeepToolItemStandalone(item: AssistantToolGroupItem): boolean {
+  return extractEvolutionProposalCardData(item.name, item.input, item.result) !== null;
+}
+
 function groupConsecutiveToolParts(
-  parts: Array<AssistantDisplaySegment | AssistantToolGroupItem>,
+  parts: Array<AssistantDisplaySegment | AssistantToolGroupItem | AssistantDisplayToolItemPart>,
 ): AssistantDisplayPart[] {
   const grouped: AssistantDisplayPart[] = [];
   let toolBuffer: AssistantToolGroupItem[] = [];
@@ -1127,6 +1143,14 @@ function groupConsecutiveToolParts(
 
   for (const part of parts) {
     if (isAssistantToolGroupItem(part)) {
+      if (shouldKeepToolItemStandalone(part)) {
+        flushToolBuffer();
+        grouped.push({
+          type: 'tool_item',
+          item: part,
+        });
+        continue;
+      }
       toolBuffer.push(part);
       continue;
     }

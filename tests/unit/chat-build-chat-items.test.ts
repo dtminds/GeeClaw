@@ -314,4 +314,81 @@ describe('buildChatItems', () => {
       },
     });
   });
+
+  it('merges consecutive history assistant messages into one render row', () => {
+    const items = buildChatItems({
+      messages: [
+        {
+          role: 'assistant',
+          id: 'assistant-1',
+          timestamp: 1,
+          content: [
+            {
+              type: 'text',
+              text: '好的，接下去我先检查环境',
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'completed',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+          ],
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'assistant-2',
+          timestamp: 2,
+          content: '已经定位到工作目录',
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      isStreaming: false,
+      message: {
+        role: 'assistant',
+        id: 'assistant-1::assistant-2',
+        timestamp: 1,
+        content: [
+          {
+            type: 'text',
+            text: '好的，接下去我先检查环境',
+          },
+          {
+            type: 'toolCall',
+            id: 'tool-1',
+            name: 'bash',
+            arguments: { command: 'pwd' },
+          },
+          {
+            type: 'text',
+            text: '已经定位到工作目录',
+          },
+        ],
+        _toolStatuses: [
+          expect.objectContaining({
+            toolCallId: 'tool-1',
+            status: 'completed',
+          }),
+        ],
+      },
+    });
+  });
 });

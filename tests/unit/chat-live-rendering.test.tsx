@@ -135,7 +135,7 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('我先看一下当前目录。')).toBeInTheDocument();
-    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByLabelText('执行本地命令 pwd')).toBeInTheDocument();
     expect(screen.getByText('接着我继续分析结果。')).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
@@ -346,7 +346,7 @@ describe('chat live rendering', () => {
 
     expect(screen.getByText('我先检查本地环境。')).toBeInTheDocument();
     expect(screen.getByText('接着我继续联网确认。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /ran 1 command, read 1 file/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已执行 1 条命令，读取 1 个文件/i })).toBeInTheDocument();
     expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
     expect(screen.queryByText('/tmp/notes.md')).not.toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=clawx-live/)).toBeInTheDocument();
@@ -401,12 +401,10 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
-    expect(screen.getByText(/pwd/)).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=xxxx'));
-    expect(renderedText.indexOf('https://example.com/search?q=xxxx')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+    expect(renderedText.indexOf('已执行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
   });
 
   it('keeps text blocks after top-level tool calls when ordered tool blocks are missing', () => {
@@ -463,12 +461,91 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.getByText('先搜一下xxxx')).toBeInTheDocument();
-    expect(screen.getByText(/pwd/)).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     const renderedText = container.textContent || '';
-    expect(renderedText.indexOf('pwd')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=xxxx'));
-    expect(renderedText.indexOf('https://example.com/search?q=xxxx')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+    expect(renderedText.indexOf('已执行 1 条命令，发起 1 次网络请求')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
+  });
+
+  it('renders reopened history turns with collapsed tool summaries instead of separate tool rows', () => {
+    const chatItems = buildChatItems({
+      messages: [
+        {
+          role: 'assistant',
+          id: 'assistant-history-1',
+          timestamp: 1,
+          content: [
+            {
+              type: 'text',
+              text: '好的，接下去我会查询天气',
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'read',
+              arguments: { filePath: '/tmp/SKILL.md' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-2',
+              name: 'fetch',
+              arguments: { url: 'https://example.com/weather?q=hangzhou' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'read',
+              status: 'completed',
+              input: { filePath: '/tmp/SKILL.md' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'completed',
+              input: { url: 'https://example.com/weather?q=hangzhou' },
+              updatedAt: 2,
+            },
+          ],
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'assistant-history-2',
+          timestamp: 2,
+          content: '查到了，杭州当前多云，22°C。',
+        } as RawMessage,
+      ],
+      toolMessages: [],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'session-history-collapse',
+    });
+
+    expect(chatItems).toHaveLength(1);
+
+    render(
+      <div>
+        {chatItems.map((item) => (
+          <ChatMessage
+            key={item.key}
+            message={item.message}
+            showThinking
+            showToolCalls
+            isStreaming={item.isStreaming}
+          />
+        ))}
+      </div>,
+    );
+
+    expect(screen.getByText('好的，接下去我会查询天气')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已读取 1 个文件，发起 1 次网络请求/i })).toBeInTheDocument();
+    expect(screen.queryByText('/tmp/SKILL.md')).not.toBeInTheDocument();
+    expect(screen.queryByText(/https:\/\/example\.com\/weather\?q=hangzhou/)).not.toBeInTheDocument();
+    expect(screen.getByText('查到了，杭州当前多云，22°C。')).toBeInTheDocument();
   });
 
   it('renders a collapsed summary row for a completed tool group', () => {
@@ -516,9 +593,94 @@ describe('chat live rendering', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
     expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
     expect(screen.queryByText(/https:\/\/example\.com\/search\?q=xxxx/)).not.toBeInTheDocument();
+  });
+
+  it('renders a collapsed summary row for a completed single-tool group', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-collapsed-single-tool-group',
+          timestamp: 3,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'completed',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /已执行 1 条命令/i })).toBeInTheDocument();
+  });
+
+  it('renders live multi-tool groups without a summary header before they collapse', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-live-expanded-tool-group',
+          timestamp: 3,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-2',
+              name: 'fetch',
+              arguments: { url: 'https://example.com/search?q=xxxx' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'running',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'running',
+              input: { url: 'https://example.com/search?q=xxxx' },
+              updatedAt: 2,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+        isStreaming
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
   });
 
   it('renders completed tool rows after expanding a collapsed tool group', () => {
@@ -566,7 +728,7 @@ describe('chat live rendering', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i }));
+    fireEvent.click(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i }));
 
     expect(screen.getByText(/pwd/)).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
@@ -653,7 +815,7 @@ describe('chat live rendering', () => {
       );
     }).not.toThrow();
 
-    expect(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已执行 1 条命令，发起 1 次网络请求/i })).toBeInTheDocument();
 
     consoleErrorSpy.mockRestore();
   });
@@ -694,6 +856,7 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.queryByText('process 查看进程状态')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /已调用 2 个工具/i }));
     expect(screen.getByText('启动子任务 整理日志')).toBeInTheDocument();
     expect(screen.getByText('等待子任务结果')).toBeInTheDocument();
   });
@@ -734,6 +897,7 @@ describe('chat live rendering', () => {
     );
 
     expect(screen.queryByText('process poll')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Used 2 tools/i }));
     expect(screen.getByText('sessions_spawn spawn · analyze logs')).toBeInTheDocument();
     expect(screen.getByText('sessions_yield yield')).toBeInTheDocument();
   });
@@ -1147,6 +1311,83 @@ describe('chat live rendering', () => {
     expect(screen.getByText('拒绝')).toBeInTheDocument();
   });
 
+  it('keeps evolution proposal cards visible when surrounded by collapsible tool groups', () => {
+    const now = currentTs();
+
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-evolution-between-tools',
+          timestamp: now,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-read',
+              name: 'read',
+              arguments: { filePath: '/tmp/SKILL.md' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-evolution-between',
+              name: 'evolution_proposal',
+              arguments: {
+                proposalId: 'evo-between-tools',
+                description: 'Keep proposal cards outside folded tool groups',
+                tabs: [
+                  {
+                    kind: 'tool',
+                    label: 'Policy',
+                    content: 'Proposal body',
+                  },
+                ],
+              },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-fetch',
+              name: 'fetch',
+              arguments: { url: 'https://example.com' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-read',
+              toolCallId: 'tool-read',
+              name: 'read',
+              status: 'completed',
+              updatedAt: now,
+              input: { filePath: '/tmp/SKILL.md' },
+            },
+            {
+              id: 'tool-evolution-between',
+              toolCallId: 'tool-evolution-between',
+              name: 'evolution_proposal',
+              status: 'completed',
+              result: '{"ok":true,"proposalId":"evo-between-tools","deliveryMode":"card","channel":"desktop"}',
+              updatedAt: now + 1,
+            },
+            {
+              id: 'tool-fetch',
+              toolCallId: 'tool-fetch',
+              name: 'fetch',
+              status: 'completed',
+              updatedAt: now + 2,
+              input: { url: 'https://example.com' },
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByText('Agent 请求自我进化')).toBeInTheDocument();
+    expect(screen.getByText('Keep proposal cards outside folded tool groups')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已读取 1 个文件/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /已发起 1 次网络请求/i })).toBeInTheDocument();
+  });
+
   it('does not render evolution proposal cards when delivery mode is text and tool calls are hidden', () => {
     const { container } = render(
       <ChatMessage
@@ -1490,6 +1731,7 @@ describe('chat live rendering', () => {
     expect(trigger.querySelector('svg')).not.toBeNull();
 
     fireEvent.click(trigger);
+    fireEvent.click(screen.getAllByRole('button', { name: /使用浏览器 open · https:\/\/example\.com/i })[1]!);
     expect(screen.getByText('Raw Result')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });

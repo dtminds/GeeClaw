@@ -444,4 +444,73 @@ describe('buildAssistantDisplayModel', () => {
       summary: 'Edited 3 files, Ran 2 commands, Made 1 web request',
     }));
   });
+
+  it('keeps evolution proposal tools outside collapsed tool groups', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { filePath: '/tmp/a.ts' } },
+        {
+          type: 'toolCall',
+          id: 'tool-evo',
+          name: 'evolution_proposal',
+          arguments: {
+            proposalId: 'evo-1',
+            description: 'Extract a reusable search fallback strategy',
+            tabs: [{ kind: 'tool', label: 'Policy', content: '...' }],
+          },
+        },
+        { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'read',
+          status: 'completed',
+          updatedAt: 1,
+          input: { filePath: '/tmp/a.ts' },
+        },
+        {
+          id: 'tool-evo',
+          toolCallId: 'tool-evo',
+          name: 'evolution_proposal',
+          status: 'completed',
+          result: '{"ok":true,"proposalId":"evo-1","deliveryMode":"card","channel":"desktop"}',
+          updatedAt: 2,
+        },
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'fetch',
+          status: 'completed',
+          updatedAt: 3,
+          input: { url: 'https://example.com' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: false,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        items: [expect.objectContaining({ id: 'tool-1', name: 'read' })],
+      }),
+      expect.objectContaining({
+        type: 'tool_item',
+        item: expect.objectContaining({ id: 'tool-evo', name: 'evolution_proposal' }),
+      }),
+      expect.objectContaining({
+        type: 'tool_group',
+        items: [expect.objectContaining({ id: 'tool-2', name: 'fetch' })],
+      }),
+    ]);
+  });
 });

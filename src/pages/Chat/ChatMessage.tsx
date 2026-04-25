@@ -501,6 +501,19 @@ export const ChatMessage = memo(function ChatMessage({
           if (part.type === 'thinking') {
             return <ThinkingBlock key={`thinking-${index}`} content={part.text} isStreaming={isStreaming} />;
           }
+          if (part.type === 'tool_item') {
+            return (
+              <ToolCard
+                key={`tool-item-${index}`}
+                name={part.item.name}
+                input={part.item.input}
+                status={part.item.status}
+                durationMs={part.item.durationMs}
+                result={part.item.result}
+                timestamp={part.item.timestamp ?? message.timestamp}
+              />
+            );
+          }
           if (part.type === 'tool_group') {
             return (
               <ToolGroupCard
@@ -1229,6 +1242,52 @@ function normalizeTimestampToMs(timestamp?: number): number | undefined {
   return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
 }
 
+function formatToolGroupSummaryLabel(
+  part: AssistantDisplayToolGroupPart,
+  preferZh: boolean,
+): string {
+  const labels = part.summaryParts.slice(0, 3).map((summaryPart, index) => {
+    if (preferZh) {
+      const prefix = index === 0 ? '已' : '';
+      switch (summaryPart.category) {
+        case 'edit_files':
+          return `${prefix}编辑 ${summaryPart.count} 个文件`;
+        case 'execute_commands':
+          return `${prefix}执行 ${summaryPart.count} 条命令`;
+        case 'read_files':
+          return `${prefix}读取 ${summaryPart.count} 个文件`;
+        case 'web_access':
+          return `${prefix}发起 ${summaryPart.count} 次网络请求`;
+        case 'generic_tools':
+          return `${prefix}调用 ${summaryPart.count} 个工具`;
+        default:
+          return part.summary;
+      }
+    }
+
+    switch (summaryPart.category) {
+      case 'edit_files':
+        return `Edited ${summaryPart.count} ${summaryPart.count === 1 ? 'file' : 'files'}`;
+      case 'execute_commands':
+        return `Ran ${summaryPart.count} ${summaryPart.count === 1 ? 'command' : 'commands'}`;
+      case 'read_files':
+        return `Read ${summaryPart.count} ${summaryPart.count === 1 ? 'file' : 'files'}`;
+      case 'web_access':
+        return `Made ${summaryPart.count} ${summaryPart.count === 1 ? 'web request' : 'web requests'}`;
+      case 'generic_tools':
+        return `Used ${summaryPart.count} ${summaryPart.count === 1 ? 'tool' : 'tools'}`;
+      default:
+        return part.summary;
+    }
+  });
+
+  if (labels.length > 0) {
+    return labels.join(preferZh ? '，' : ', ');
+  }
+
+  return part.summary;
+}
+
 function ToolGroupCard({
   part,
   timestamp,
@@ -1236,8 +1295,13 @@ function ToolGroupCard({
   part: AssistantDisplayToolGroupPart;
   timestamp?: number;
 }) {
+  const { i18n } = useTranslation('chat');
+  const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
   const isSingleItem = part.items.length === 1;
-  const isFinished = part.items.every((item) => item.status !== 'running');
+  const displaySummary = useMemo(
+    () => formatToolGroupSummaryLabel(part, preferZh),
+    [part, preferZh],
+  );
   const groupStateKey = useMemo(
     () => JSON.stringify({
       collapsed: part.collapsed,
@@ -1245,13 +1309,13 @@ function ToolGroupCard({
     }),
     [part.collapsed, part.items],
   );
-  const [expanded, setExpanded] = useState(() => !part.collapsed || !isFinished);
+  const [expanded, setExpanded] = useState(() => !part.collapsed);
 
   useEffect(() => {
-    setExpanded(!part.collapsed || !isFinished);
-  }, [groupStateKey, isFinished, part.collapsed]);
+    setExpanded(!part.collapsed);
+  }, [groupStateKey, part.collapsed]);
 
-  if (isSingleItem) {
+  if (isSingleItem && !part.collapsed) {
     const [item] = part.items;
     return (
       <ToolCard
@@ -1265,33 +1329,55 @@ function ToolGroupCard({
     );
   }
 
-  const showChildren = !isFinished || expanded;
-  const SummaryRoot = isFinished ? 'button' : 'div';
+  if (!part.collapsed) {
+    return (
+      <div className="flex w-full max-w-[30rem] flex-col">
+        {part.items.map((item) => (
+          <ToolCard
+            key={item.id}
+            name={item.name}
+            input={item.input}
+            status={item.status}
+            durationMs={item.durationMs}
+            result={item.result}
+            timestamp={item.timestamp ?? timestamp}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const showChildren = expanded;
+  const SummaryRoot = 'button';
 
   return (
     <div className="flex w-full max-w-[30rem] flex-col gap-1">
       <SummaryRoot
-        {...(isFinished ? {
-          type: 'button' as const,
-          onClick: () => setExpanded((current) => !current),
-          'aria-expanded': expanded,
-        } : {})}
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
         className={cn(
-          'flex w-full items-center gap-2 rounded-lg py-1.5 text-left text-xs text-muted-foreground/80',
-          isFinished && 'cursor-pointer focus:outline-none',
+          'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/80',
+          'cursor-pointer focus:outline-none',
         )}
-        aria-label={part.summary}
+        aria-label={displaySummary}
       >
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/60">
-          {showChildren ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        <span className="truncate" title={displaySummary}>
+          {displaySummary}
         </span>
-        <span className="min-w-0 flex-1 truncate" title={part.summary}>
-          {part.summary}
+        <span
+          className={cn(
+            'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/60 transition-opacity',
+            showChildren ? 'opacity-100' : 'opacity-0 group-hover/tool-group:opacity-100',
+          )}
+          aria-hidden="true"
+        >
+          {showChildren ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </span>
       </SummaryRoot>
 
       {showChildren && (
-        <div className="pl-6">
+        <div>
           {part.items.map((item) => (
             <ToolCard
               key={item.id}
