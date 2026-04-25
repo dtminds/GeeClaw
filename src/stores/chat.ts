@@ -2727,7 +2727,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     });
 
-    if (shouldReloadHistoryForMissingResult) {
+    if (get().pendingFinal && get().streamingText.trim() && !hasRunningLiveToolMessages(get().toolMessages)) {
+      void get().loadHistory(true);
+    } else if (shouldReloadHistoryForMissingResult) {
       void get().loadHistory(true, 'tool_patch');
     }
   },

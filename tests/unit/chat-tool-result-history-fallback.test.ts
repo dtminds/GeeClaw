@@ -58,6 +58,98 @@ describe('chat tool result history fallback', () => {
     expect(loadHistoryMock).toHaveBeenCalledWith(true, 'tool_patch');
   });
 
+  it('triggers a full history reload when the deferred final text is waiting on the last running tool', () => {
+    const loadHistoryMock = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      pendingFinal: true,
+      streamingText: '现在我为你查询',
+      streamingTextStartedAt: 2,
+      streamingTextLastEventAt: 2,
+      loadHistory: loadHistoryMock,
+      toolStreamById: new Map([
+        ['tool-1', {
+          toolCallId: 'tool-1',
+          runId: 'run-1',
+          sessionKey: 'agent:test:geeclaw_main',
+          name: 'exec',
+          args: { command: 'pwd' },
+          status: 'running',
+          startedAt: 1,
+          updatedAt: 1_000,
+          message: {
+            role: 'assistant',
+            id: 'live-tool:tool-1',
+            toolCallId: 'tool-1',
+            toolName: 'exec',
+            timestamp: 1,
+            content: [
+              {
+                type: 'toolCall',
+                id: 'tool-1',
+                name: 'exec',
+                arguments: { command: 'pwd' },
+              },
+            ],
+            _toolStatuses: [
+              {
+                id: 'tool-1',
+                toolCallId: 'tool-1',
+                name: 'exec',
+                status: 'running',
+                updatedAt: 1_000,
+                input: { command: 'pwd' },
+              },
+            ],
+          },
+        }],
+      ]),
+      toolStreamOrder: ['tool-1'],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool:tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'exec',
+          timestamp: 1,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'exec',
+              arguments: { command: 'pwd' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'exec',
+              status: 'running',
+              updatedAt: 1_000,
+              input: { command: 'pwd' },
+            },
+          ],
+        },
+      ],
+    });
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-1',
+      sessionKey: 'agent:test:geeclaw_main',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'result',
+        result: '/workspace',
+      },
+    });
+
+    expect(loadHistoryMock).toHaveBeenCalledTimes(1);
+    expect(loadHistoryMock).toHaveBeenCalledWith(true);
+  });
+
   it('updates the live tool card once history contains the persisted result for the same tool call', async () => {
     const rpcMock = vi.fn(async (method: string) => {
       if (method === 'chat.history') {
