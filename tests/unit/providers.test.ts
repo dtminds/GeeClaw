@@ -121,9 +121,9 @@ describe('provider metadata', () => {
       id: 'openai',
       isOAuth: true,
       supportsApiKey: true,
-      defaultModelId: 'gpt-5.4',
+      defaultModelId: 'gpt-5.5',
       showModelId: true,
-      modelIdPlaceholder: 'gpt-5.4',
+      modelIdPlaceholder: 'gpt-5.5',
       apiKeyUrl: 'https://platform.openai.com/api-keys',
     });
 
@@ -251,8 +251,13 @@ describe('provider metadata', () => {
     });
     expect(openai).toMatchObject({
       showModelId: true,
-      defaultModelId: 'gpt-5.4',
+      defaultModelId: 'gpt-5.5',
       defaultModels: [
+        expect.objectContaining({
+          id: 'gpt-5.5',
+          name: 'gpt-5.5',
+          reasoning: false,
+        }),
         expect.objectContaining({
           id: 'gpt-5.4',
           name: 'gpt-5.4',

@@ -22,17 +22,19 @@ import { cn } from '@/lib/utils';
 import { invokeIpc } from '@/lib/api-client';
 import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
 import {
-  extractAssistantDisplaySegments,
+  buildAssistantDisplayModel,
   formatToolResultText,
+  getLiveAssistantRuntimePayload,
   isEmptyAssistantTurn,
   shouldRenderStandaloneToolResult,
+  type AssistantDisplayToolGroupPart,
 } from './assistant-display';
 import { formatToolDisplaySummary } from './tool-display';
-import type { RawMessage, AttachedFileMeta, ContentBlock } from '@/stores/chat';
+import type { RawMessage, AttachedFileMeta } from '@/stores/chat';
 import { isInternalMessage, useChatStore } from '@/stores/chat';
-import { extractText, extractImages, extractToolUse, extractUserDisplayDecision, formatTimestamp, shouldHideToolTrace } from './message-utils';
+import { extractText, extractImages, extractUserDisplayDecision, formatTimestamp } from './message-utils';
 import { EvolutionProposalCard } from './EvolutionProposalCard';
-import { extractEvolutionProposalCardData, isEvolutionProposalToolName } from './evolution-proposal';
+import { extractEvolutionProposalCardData } from './evolution-proposal';
 import {
   File01Icon, FileVideoIcon, FolderLibraryIcon, ImageNotFound01Icon, MusicNote04Icon, Pdf02Icon,
   DatabaseIcon, FileSearchIcon, FileEditIcon, Delete01Icon, AiGenerativeIcon,
@@ -56,15 +58,6 @@ interface ChatMessageProps {
 }
 
 interface ExtractedImage { url?: string; data?: string; mimeType: string; }
-
-type ToolDisplayStatus = {
-  id?: string;
-  toolCallId?: string;
-  name: string;
-  status: 'running' | 'completed' | 'error';
-  durationMs?: number;
-  result?: string;
-};
 
 // const STREAMDOWN_ANIMATION = {
 //   animation: 'fadeIn' as const,
@@ -195,75 +188,7 @@ function imageSrc(img: ExtractedImage): string | null {
   return null;
 }
 
-type AssistantContentPart =
-  | { type: 'text'; text: string }
-  | { type: 'thinking'; content: string }
-  | {
-      type: 'tool';
-      id: string;
-      name: string;
-      input: unknown;
-      status: 'running' | 'completed' | 'error';
-      durationMs?: number;
-      result?: string;
-    };
-
-function extractPlainTextFromUnknown(content: unknown): string {
-  if (typeof content === 'string') return content.trim();
-  if (!Array.isArray(content)) return '';
-
-  const parts: string[] = [];
-  for (const block of content as ContentBlock[]) {
-    if (block.type === 'text' && block.text?.trim()) {
-      parts.push(block.text.trim());
-      continue;
-    }
-    if ((block.type === 'tool_result' || block.type === 'toolResult') && block.content) {
-      const nested = extractPlainTextFromUnknown(block.content);
-      if (nested) {
-        parts.push(nested);
-      }
-    }
-  }
-
-  return parts.join('\n').trim();
-}
-
-function shouldRenderAssistantPart(part: AssistantContentPart, showToolCalls: boolean): boolean {
-  if (part.type !== 'tool') {
-    return true;
-  }
-
-  return showToolCalls || extractEvolutionProposalCardData(part.name, part.input, part.result) !== null;
-}
-
-function mergeToolDisplayState(
-  current: AssistantContentPart & { type: 'tool' },
-  update: Partial<Pick<AssistantContentPart & { type: 'tool' }, 'status' | 'durationMs' | 'result'>>,
-): AssistantContentPart & { type: 'tool' } {
-  const statusOrder = { running: 0, completed: 1, error: 2 } as const;
-  const nextStatus = update.status
-    ? (statusOrder[update.status] >= statusOrder[current.status] ? update.status : current.status)
-    : current.status;
-
-  return {
-    ...current,
-    status: nextStatus,
-    durationMs: update.durationMs ?? current.durationMs,
-    result: update.result ?? current.result,
-  };
-}
-
-function looksLikeToolErrorText(text: string | undefined): boolean {
-  if (!text) return false;
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  return /^(error|failed?|exception|traceback|invalid|denied|unauthorized|forbidden|not found|错误|失败|异常|未找到|无权限|拒绝访问)\b/i.test(trimmed);
-}
-
 const EMPTY_ATTACHMENTS: AttachedFileMeta[] = [];
-const EMPTY_ASSISTANT_CONTENT_PARTS: AssistantContentPart[] = [];
-const EMPTY_TOOL_DISPLAY_STATUSES: ToolDisplayStatus[] = [];
 const EMPTY_MARKDOWN_IMAGES: ExtractedImage[] = [];
 
 const COMMON_TOOL_NAME_MAP_ZH: Record<string, string> = {
@@ -386,218 +311,9 @@ function getToolDisplayIcon(name: string, input?: unknown) {
   return AiGenerativeIcon;
 }
 
-function shouldIncludeToolPart(name: string, showToolCalls: boolean): boolean {
-  return showToolCalls || isEvolutionProposalToolName(name);
-}
-
 function getToolDisplayName(name: string, preferZh: boolean): string {
   const normalized = normalizeToolName(name);
   return preferZh ? (COMMON_TOOL_NAME_MAP_ZH[normalized] || name) : name;
-}
-
-function getInlineToolResultStatus(block: ContentBlock, resultText: string): 'running' | 'completed' | 'error' {
-  if (block.isError || block.is_error) return 'error';
-  if (typeof block.error === 'string' && block.error.trim()) return 'error';
-  const status = typeof block.status === 'string' ? block.status.toLowerCase() : '';
-  if (status === 'running' || status === 'in_progress') return 'running';
-  if (status === 'error' || status === 'failed') return 'error';
-  if (looksLikeToolErrorText(resultText)) return 'error';
-  return 'completed';
-}
-
-type ToolStatusLookup = {
-  byId: Map<string, ToolDisplayStatus>;
-  byName: Map<string, ToolDisplayStatus>;
-};
-
-function buildToolStatusLookup(toolStatuses: ToolDisplayStatus[]): ToolStatusLookup {
-  const byId = new Map<string, ToolDisplayStatus>();
-  const byName = new Map<string, ToolDisplayStatus>();
-
-  for (const tool of toolStatuses) {
-    if (!tool) continue;
-    if (tool.id) byId.set(tool.id, tool);
-    if (tool.toolCallId) byId.set(tool.toolCallId, tool);
-    if (tool.name) byName.set(tool.name, tool);
-  }
-
-  return { byId, byName };
-}
-
-function findMatchingToolStatus(toolStatusLookup: ToolStatusLookup, id?: string, name?: string): ToolDisplayStatus | undefined {
-  if (id) {
-    const statusById = toolStatusLookup.byId.get(id);
-    if (statusById) {
-      return statusById;
-    }
-  }
-
-  return name ? toolStatusLookup.byName.get(name) : undefined;
-}
-
-function buildAssistantContentParts(
-  message: RawMessage,
-  showToolCalls: boolean,
-  toolStatuses: ToolDisplayStatus[] = [],
-  assistantTextParts: Array<{ type: 'text' | 'thinking'; text: string; blockIndex: number }> = [],
-): AssistantContentPart[] {
-  const toolStatusLookup = buildToolStatusLookup(toolStatuses);
-  const content = Array.isArray(message.content) ? message.content as ContentBlock[] : null;
-
-  // OpenAI-compatible streams may expose text/tool_calls separately rather than
-  // as an ordered block list. In live tool-first turns, rendering tools before
-  // the fallback text best matches the observed stream order.
-  if (!content) {
-    const parts: AssistantContentPart[] = [];
-    const tools = extractToolUse(message);
-    for (const tool of tools) {
-      if (shouldHideToolTrace(tool.name)) {
-        continue;
-      }
-      if (!shouldIncludeToolPart(tool.name, showToolCalls)) {
-        continue;
-      }
-      const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-      parts.push({
-        type: 'tool',
-        id: tool.id || tool.name,
-        name: tool.name,
-        input: tool.input,
-        status: toolStatus?.status || 'running',
-        durationMs: toolStatus?.durationMs,
-        result: toolStatus?.result,
-      });
-    }
-
-    parts.push(...assistantTextParts.map<AssistantContentPart>((part) => (
-      part.type === 'thinking'
-        ? { type: 'thinking', content: part.text }
-        : { type: 'text', text: part.text }
-    )));
-
-    return parts;
-  }
-
-  const parts: AssistantContentPart[] = [];
-  const hasInlineToolBlocks = content.some((block) => (
-    block?.type === 'tool_use' || block?.type === 'toolCall'
-  ));
-  const textPartsByBlock = assistantTextParts.reduce<Map<number, Array<{ type: 'text' | 'thinking'; text: string }>>>((map, part) => {
-    const group = map.get(part.blockIndex) || [];
-    group.push({ type: part.type, text: part.text });
-    map.set(part.blockIndex, group);
-    return map;
-  }, new Map());
-
-  const pushTextPartsForBlock = (blockIndex: number) => {
-    const blockParts = textPartsByBlock.get(blockIndex);
-    if (!blockParts || blockParts.length === 0) {
-      return;
-    }
-    for (const part of blockParts) {
-      if (part.type === 'thinking') {
-        parts.push({ type: 'thinking', content: part.text });
-      } else {
-        parts.push({ type: 'text', text: part.text });
-      }
-    }
-  };
-
-  for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
-    const block = content[blockIndex];
-    pushTextPartsForBlock(blockIndex);
-
-    if (block.type === 'text' || block.type === 'thinking') {
-      continue;
-    }
-
-    if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
-      if (shouldHideToolTrace(block.name)) {
-        continue;
-      }
-      if (!shouldIncludeToolPart(block.name, showToolCalls)) {
-        continue;
-      }
-      const toolStatus = findMatchingToolStatus(toolStatusLookup, block.id, block.name);
-      parts.push({
-        type: 'tool',
-        id: block.id || block.name,
-        name: block.name,
-        input: block.input ?? block.arguments,
-        status: toolStatus?.status || 'running',
-        durationMs: toolStatus?.durationMs,
-        result: toolStatus?.result,
-      });
-      continue;
-    }
-
-    if (block.type === 'tool_result' || block.type === 'toolResult') {
-      const resultText = extractPlainTextFromUnknown(block.content ?? block.text ?? '');
-      for (let index = parts.length - 1; index >= 0; index -= 1) {
-        const part = parts[index];
-        if (part.type !== 'tool') continue;
-        const isMatch = (block.id && (part.id === block.id)) || (block.name && part.name === block.name) || !block.id;
-        if (!isMatch) continue;
-        parts[index] = mergeToolDisplayState(part, {
-          status: getInlineToolResultStatus(block, resultText || block.error?.trim() || ''),
-          result: resultText || block.error?.trim() || undefined,
-        });
-        break;
-      }
-    }
-  }
-
-  // Some streaming providers send text blocks in `content[]` while exposing
-  // tool calls only via top-level `tool_calls`. When no inline tool blocks
-  // exist, the top-level tool calls typically represent earlier stream steps,
-  // so render those missing tool cards before the fallback text blocks.
-  const parsedTools = extractToolUse(message);
-  const missingToolParts: AssistantContentPart[] = [];
-  for (const tool of parsedTools) {
-    if (shouldHideToolTrace(tool.name)) {
-      continue;
-    }
-    if (!shouldIncludeToolPart(tool.name, showToolCalls)) {
-      continue;
-    }
-    const alreadyRendered = parts.some((part) => {
-      if (part.type !== 'tool') return false;
-      if (tool.id && part.id === tool.id) return true;
-      return part.name === tool.name;
-    });
-    if (alreadyRendered) continue;
-    const toolStatus = findMatchingToolStatus(toolStatusLookup, tool.id, tool.name);
-    missingToolParts.push({
-      type: 'tool',
-      id: tool.id || tool.name,
-      name: tool.name,
-      input: tool.input,
-      status: toolStatus?.status || 'running',
-      durationMs: toolStatus?.durationMs,
-      result: toolStatus?.result,
-    });
-  }
-
-  if (missingToolParts.length > 0) {
-    return hasInlineToolBlocks ? [...parts, ...missingToolParts] : [...missingToolParts, ...parts];
-  }
-
-  return parts;
-}
-
-function getAssistantDisplayText(parts: AssistantContentPart[]): string {
-  if (parts.length === 0) {
-    return '';
-  }
-
-  const textParts: string[] = [];
-  for (const part of parts) {
-    if (part.type === 'text' && part.text.trim()) {
-      textParts.push(part.text);
-    }
-  }
-
-  return textParts.join('\n\n').trim();
 }
 
 function areMessagesEquivalent(prevMessage: RawMessage, nextMessage: RawMessage): boolean {
@@ -638,8 +354,22 @@ export const ChatMessage = memo(function ChatMessage({
   const userDisplayDecision = useMemo(() => (isUser ? extractUserDisplayDecision(message) : null), [isUser, message]);
   const isUserSystemNotice = userDisplayDecision?.action === 'show_system_notice';
   const assistantDisplay = useMemo(
-    () => (!isUser ? extractAssistantDisplaySegments(message, { showThinking }) : null),
-    [isUser, message, showThinking],
+    () => {
+      if (isUser) {
+        return null;
+      }
+
+      const liveRuntimePayload = getLiveAssistantRuntimePayload(message);
+      return buildAssistantDisplayModel(message, {
+        showThinking,
+        showToolCalls,
+        isStreaming,
+        liveToolMessages: liveRuntimePayload.liveToolMessages,
+        liveStreamSegments: liveRuntimePayload.liveStreamSegments,
+        liveToolStatuses: message._toolStatuses,
+      });
+    },
+    [isStreaming, isUser, message, showThinking, showToolCalls],
   );
   const markdownImages = useMemo<Array<ExtractedImage>>(
     () => assistantDisplay?.markdownImages.map((image) => ({
@@ -653,21 +383,8 @@ export const ChatMessage = memo(function ChatMessage({
     [markdownImages, message],
   );
   const userText = useMemo(() => (isUser ? extractText(message) : ''), [isUser, message]);
-  const effectiveToolStatuses = !isUser ? (message._toolStatuses || EMPTY_TOOL_DISPLAY_STATUSES) : EMPTY_TOOL_DISPLAY_STATUSES;
-  const assistantContentParts = useMemo(
-    () => (isUser
-      ? EMPTY_ASSISTANT_CONTENT_PARTS
-      : buildAssistantContentParts(message, showToolCalls, effectiveToolStatuses, assistantDisplay?.parts || [])),
-    [assistantDisplay?.parts, effectiveToolStatuses, isUser, message, showToolCalls],
-  );
-  const assistantRenderableParts = useMemo(
-    () => assistantContentParts.filter((part) => shouldRenderAssistantPart(part, showToolCalls)),
-    [assistantContentParts, showToolCalls],
-  );
-  const assistantText = useMemo(
-    () => (isUser ? '' : getAssistantDisplayText(assistantContentParts)),
-    [assistantContentParts, isUser],
-  );
+  const assistantRenderableParts = assistantDisplay?.parts || [];
+  const assistantText = isUser ? '' : (assistantDisplay?.visibleText || '');
   const hasUserSystemNotice = isUserSystemNotice && Boolean(userDisplayDecision?.text);
   // const hasAssistantText = assistantText.length > 0;
 
@@ -782,17 +499,26 @@ export const ChatMessage = memo(function ChatMessage({
 
         {!isUser && assistantRenderableParts.map((part, index) => {
           if (part.type === 'thinking') {
-            return <ThinkingBlock key={`thinking-${index}`} content={part.content} isStreaming={isStreaming} />;
+            return <ThinkingBlock key={`thinking-${index}`} content={part.text} isStreaming={isStreaming} />;
           }
-          if (part.type === 'tool') {
+          if (part.type === 'tool_item') {
             return (
               <ToolCard
-                key={part.id || `tool-${index}`}
-                name={part.name}
-                input={part.input}
-                status={part.status}
-                durationMs={part.durationMs}
-                result={part.result}
+                key={`tool-item-${index}`}
+                name={part.item.name}
+                input={part.item.input}
+                status={part.item.status}
+                durationMs={part.item.durationMs}
+                result={part.item.result}
+                timestamp={part.item.timestamp ?? message.timestamp}
+              />
+            );
+          }
+          if (part.type === 'tool_group') {
+            return (
+              <ToolGroupCard
+                key={`tool-group-${index}`}
+                part={part}
                 timestamp={message.timestamp}
               />
             );
@@ -1211,7 +937,7 @@ function MessageBubble({
       )}
     >
       {isUser ? (
-        <div className="whitespace-pre-wrap break-words break-all text-base">
+        <div className="whitespace-pre-wrap break-words break-all text-[15px] leading-6">
           {skillSegments.length > 0 ? (
             skillSegments.map((segment, index) => {
               if (segment.type === 'text') {
@@ -1233,7 +959,7 @@ function MessageBubble({
           )}
         </div>
       ) : (
-        <div className="chat-markdown prose dark:prose-invert max-w-none [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
+        <div className="chat-markdown prose dark:prose-invert max-w-none text-[15px] leading-6 [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
           <Streamdown
             mode={isStreaming ? undefined : 'static'}
             // animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
@@ -1493,7 +1219,7 @@ function ImageLightbox({
 
 function EvolutionProposalMarkdown({ content }: { content: string }) {
   return (
-    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[15px] leading-7 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1.1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[1rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.95rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.9rem] [&_h4]:font-semibold [&_h4]:leading-6 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.85rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.8rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
+    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[14px] leading-6 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[0.95rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.9rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.85rem] [&_h4]:font-semibold [&_h4]:leading-5 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.8rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.75rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
       <Streamdown
         mode="static"
         plugins={STREAMDOWN_PLUGINS}
@@ -1508,12 +1234,297 @@ function EvolutionProposalMarkdown({ content }: { content: string }) {
 }
 
 const EVOLUTION_PROPOSAL_AUTO_REJECT_MS = 60 * 60 * 1000;
+const TOOL_GROUP_COLLAPSE_START_DELAY_MS = 16;
+const TOOL_GROUP_COLLAPSE_ANIMATION_MS = 220;
+
+type ToolGroupTransitionMode = 'idle' | 'manual-expanding' | 'manual-collapsing' | 'auto-collapsing';
 
 function normalizeTimestampToMs(timestamp?: number): number | undefined {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
     return undefined;
   }
   return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
+}
+
+function formatToolGroupSummaryLabel(
+  part: AssistantDisplayToolGroupPart,
+  preferZh: boolean,
+): string {
+  const labels = part.summaryParts.slice(0, 3).map((summaryPart, index) => {
+    if (preferZh) {
+      const prefix = index === 0 ? '已' : '';
+      switch (summaryPart.category) {
+        case 'edit_files':
+          return `${prefix}编辑 ${summaryPart.count} 个文件`;
+        case 'execute_commands':
+          return `${prefix}运行 ${summaryPart.count} 条命令`;
+        case 'read_files':
+          return `${prefix}读取 ${summaryPart.count} 个文件`;
+        case 'web_access':
+          return `${prefix}发起 ${summaryPart.count} 次网络请求`;
+        case 'generic_tools':
+          return `${prefix}调用 ${summaryPart.count} 个工具`;
+        default:
+          return `${prefix}${summaryPart.label}`;
+      }
+    }
+
+    switch (summaryPart.category) {
+      case 'edit_files':
+        return `Edited ${summaryPart.count} ${summaryPart.count === 1 ? 'file' : 'files'}`;
+      case 'execute_commands':
+        return `Ran ${summaryPart.count} ${summaryPart.count === 1 ? 'command' : 'commands'}`;
+      case 'read_files':
+        return `Read ${summaryPart.count} ${summaryPart.count === 1 ? 'file' : 'files'}`;
+      case 'web_access':
+        return `Made ${summaryPart.count} ${summaryPart.count === 1 ? 'web request' : 'web requests'}`;
+      case 'generic_tools':
+        return `Used ${summaryPart.count} ${summaryPart.count === 1 ? 'tool' : 'tools'}`;
+      default:
+        return summaryPart.label;
+    }
+  });
+
+  if (labels.length > 0) {
+    return labels.join(preferZh ? '，' : ', ');
+  }
+
+  return part.summary;
+}
+
+function ToolGroupCard({
+  part,
+  timestamp,
+}: {
+  part: AssistantDisplayToolGroupPart;
+  timestamp?: number;
+}) {
+  const { i18n } = useTranslation('chat');
+  const preferZh = (i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('zh');
+  const isSingleItem = part.items.length === 1;
+  const displaySummary = useMemo(
+    () => formatToolGroupSummaryLabel(part, preferZh),
+    [part, preferZh],
+  );
+  const previousCollapsedRef = useRef(part.collapsed);
+  const groupStateKey = useMemo(
+    () => JSON.stringify({
+      collapsed: part.collapsed,
+      items: part.items.map((item) => ({ id: item.id, status: item.status })),
+    }),
+    [part.collapsed, part.items],
+  );
+  const previousGroupStateKeyRef = useRef(groupStateKey);
+  const transitionSyncTimerRef = useRef<number | null>(null);
+  const transitionStartTimerRef = useRef<number | null>(null);
+  const transitionFinishTimerRef = useRef<number | null>(null);
+  const [childrenMounted, setChildrenMounted] = useState(() => !part.collapsed);
+  const [childrenExpanded, setChildrenExpanded] = useState(() => !part.collapsed);
+  const [transitionMode, setTransitionMode] = useState<ToolGroupTransitionMode>('idle');
+
+  const clearTransitionTimers = useCallback(() => {
+    if (transitionSyncTimerRef.current !== null) {
+      window.clearTimeout(transitionSyncTimerRef.current);
+      transitionSyncTimerRef.current = null;
+    }
+    if (transitionStartTimerRef.current !== null) {
+      window.clearTimeout(transitionStartTimerRef.current);
+      transitionStartTimerRef.current = null;
+    }
+    if (transitionFinishTimerRef.current !== null) {
+      window.clearTimeout(transitionFinishTimerRef.current);
+      transitionFinishTimerRef.current = null;
+    }
+  }, []);
+
+  const syncExpandedTransitionState = useCallback(() => {
+    setTransitionMode('idle');
+    setChildrenMounted(true);
+    setChildrenExpanded(true);
+  }, []);
+
+  const syncCollapsedTransitionState = useCallback(() => {
+    setTransitionMode('idle');
+    setChildrenMounted(false);
+    setChildrenExpanded(false);
+  }, []);
+
+  const startCollapseTransition = useCallback((mode: 'manual-collapsing' | 'auto-collapsing') => {
+    clearTransitionTimers();
+    setTransitionMode(mode);
+    setChildrenMounted(true);
+    setChildrenExpanded(true);
+
+    transitionStartTimerRef.current = window.setTimeout(() => {
+      setChildrenExpanded(false);
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS);
+    transitionFinishTimerRef.current = window.setTimeout(() => {
+      setChildrenMounted(false);
+      setTransitionMode('idle');
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS + TOOL_GROUP_COLLAPSE_ANIMATION_MS);
+  }, [clearTransitionTimers]);
+
+  const startExpandTransition = useCallback(() => {
+    clearTransitionTimers();
+    setTransitionMode('manual-expanding');
+    setChildrenMounted(true);
+    setChildrenExpanded(false);
+
+    transitionStartTimerRef.current = window.setTimeout(() => {
+      setChildrenExpanded(true);
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS);
+    transitionFinishTimerRef.current = window.setTimeout(() => {
+      setTransitionMode('idle');
+    }, TOOL_GROUP_COLLAPSE_START_DELAY_MS + TOOL_GROUP_COLLAPSE_ANIMATION_MS);
+  }, [clearTransitionTimers]);
+
+  useEffect(() => {
+    const wasCollapsed = previousCollapsedRef.current;
+    const previousGroupStateKey = previousGroupStateKeyRef.current;
+    previousCollapsedRef.current = part.collapsed;
+    previousGroupStateKeyRef.current = groupStateKey;
+
+    if (!part.collapsed) {
+      clearTransitionTimers();
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        syncExpandedTransitionState();
+      }, 0);
+      return;
+    }
+
+    if (!wasCollapsed) {
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        startCollapseTransition('auto-collapsing');
+      }, 0);
+      return;
+    }
+
+    if (previousGroupStateKey !== groupStateKey) {
+      clearTransitionTimers();
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        syncCollapsedTransitionState();
+      }, 0);
+    }
+  }, [
+    clearTransitionTimers,
+    groupStateKey,
+    part.collapsed,
+    startCollapseTransition,
+    syncCollapsedTransitionState,
+    syncExpandedTransitionState,
+  ]);
+
+  useEffect(() => clearTransitionTimers, [clearTransitionTimers]);
+
+  const renderToolItems = useCallback(() => (
+    <>
+      {part.items.map((item) => (
+        <ToolCard
+          key={item.id}
+          name={item.name}
+          input={item.input}
+          status={item.status}
+          durationMs={item.durationMs}
+          result={item.result}
+          timestamp={item.timestamp ?? timestamp}
+        />
+      ))}
+    </>
+  ), [part.items, timestamp]);
+
+  if (isSingleItem && !part.collapsed && transitionMode === 'idle') {
+    const [item] = part.items;
+    return (
+      <ToolCard
+        name={item.name}
+        input={item.input}
+        status={item.status}
+        durationMs={item.durationMs}
+        result={item.result}
+        timestamp={item.timestamp ?? timestamp}
+      />
+    );
+  }
+
+  if (!part.collapsed && transitionMode === 'idle') {
+    return (
+      <div className="flex w-full max-w-[30rem] flex-col">
+        {renderToolItems()}
+      </div>
+    );
+  }
+
+  const isAutoCollapsing = transitionMode === 'auto-collapsing';
+  const isExpanding = transitionMode === 'manual-expanding';
+  const isCollapsing = transitionMode === 'manual-collapsing' || isAutoCollapsing;
+  const isExpanded = childrenMounted && childrenExpanded;
+  const showChildren = childrenMounted;
+  const showSummary = part.collapsed || isCollapsing;
+  const summaryVisible = !isAutoCollapsing || !childrenExpanded;
+  const groupVisualState = isExpanding
+    ? 'expanding'
+    : isCollapsing
+      ? 'collapsing'
+      : isExpanded
+        ? 'expanded'
+        : 'collapsed';
+  const SummaryRoot = 'button';
+
+  return (
+    <div
+      className="flex w-full max-w-[30rem] flex-col gap-1"
+      data-tool-group-state={groupVisualState}
+    >
+      {showSummary && (
+        <SummaryRoot
+          type="button"
+          onClick={() => {
+            if (transitionMode !== 'idle') {
+              return;
+            }
+            if (childrenMounted && childrenExpanded) {
+              startCollapseTransition('manual-collapsing');
+              return;
+            }
+            startExpandTransition();
+          }}
+          aria-expanded={isExpanded}
+          className={cn(
+            'group/tool-group inline-flex max-w-full items-center gap-1 rounded-lg py-1.5 text-left text-xs text-muted-foreground/50',
+            'cursor-pointer focus:outline-none transition-[opacity,transform] duration-200 ease-out',
+            summaryVisible ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0 pointer-events-none',
+          )}
+          aria-label={displaySummary}
+        >
+          <span className="truncate" title={displaySummary}>
+            {displaySummary}
+          </span>
+          <span
+            className={cn(
+              'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/60 transition-opacity',
+              isExpanded ? 'opacity-100' : 'opacity-0 group-hover/tool-group:opacity-100',
+            )}
+            aria-hidden="true"
+          >
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </span>
+        </SummaryRoot>
+      )}
+
+      {showChildren && (
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+            childrenExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="overflow-hidden">
+            {renderToolItems()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ToolCard({

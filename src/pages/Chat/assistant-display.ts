@@ -5,8 +5,9 @@ import {
   stripOpenClawInternalContextBlocks,
 } from '@/lib/chat-message-text';
 import { splitMediaFromOutput } from '@/lib/media-output';
-import type { ContentBlock, RawMessage } from '@/stores/chat';
-import { shouldHideToolTrace } from './message-utils';
+import type { ContentBlock, RawMessage, ToolStatus } from '@/stores/chat';
+import { extractToolUse, shouldHideToolTrace } from './message-utils';
+import { extractEvolutionProposalCardData } from './evolution-proposal';
 
 export type AssistantPhase = 'commentary' | 'final_answer';
 
@@ -22,10 +23,69 @@ export type AssistantMarkdownImage = {
   data: string;
 };
 
+export type LiveAssistantStreamSegment = {
+  text: string;
+  ts: number;
+};
+
+export type AssistantMessageWithLiveRuntime = RawMessage & {
+  _liveToolMessages?: RawMessage[];
+  _liveStreamSegments?: LiveAssistantStreamSegment[];
+};
+
 export type AssistantDisplayModel = {
   parts: AssistantDisplaySegment[];
   visibleText: string;
   markdownImages: AssistantMarkdownImage[];
+};
+
+export type AssistantToolGroupItem = {
+  id: string;
+  name: string;
+  input: unknown;
+  status: 'running' | 'completed' | 'error';
+  durationMs?: number;
+  result?: string;
+  timestamp?: number;
+};
+
+export type AssistantToolGroupSummaryPart = {
+  category: 'read_files' | 'edit_files' | 'execute_commands' | 'web_access' | 'generic_tools';
+  count: number;
+  label: string;
+};
+
+export type AssistantDisplayToolGroupPart = {
+  type: 'tool_group';
+  items: AssistantToolGroupItem[];
+  summary: string;
+  summaryParts: AssistantToolGroupSummaryPart[];
+  collapsed: boolean;
+};
+
+export type AssistantDisplayToolItemPart = {
+  type: 'tool_item';
+  item: AssistantToolGroupItem;
+};
+
+export type AssistantDisplayPart =
+  | AssistantDisplaySegment
+  | AssistantDisplayToolGroupPart
+  | AssistantDisplayToolItemPart;
+
+export type AssistantTurnDisplayModel = {
+  parts: AssistantDisplayPart[];
+  visibleText: string;
+  markdownImages: AssistantMarkdownImage[];
+};
+
+export type BuildAssistantDisplayModelOptions = {
+  showThinking: boolean;
+  showToolCalls: boolean;
+  isStreaming: boolean;
+  liveToolMessages: RawMessage[];
+  liveStreamSegments: LiveAssistantStreamSegment[];
+  liveToolStatuses?: ToolStatus[];
 };
 
 const REPLY_DIRECTIVE_RE = /\[\[\s*(?:reply_to_current|reply_to:[^\]]+)\s*\]\]/gi;
@@ -368,6 +428,46 @@ function appendProcessedSegments(
   }
 }
 
+function collectProcessedAssistantSegments(
+  rawText: string,
+  blockIndex: number,
+  showThinking: boolean,
+): {
+  parts: AssistantDisplaySegment[];
+  markdownImages: AssistantMarkdownImage[];
+} {
+  const parts: AssistantDisplaySegment[] = [];
+  const markdownImages: AssistantMarkdownImage[] = [];
+  appendProcessedSegments(parts, markdownImages, rawText, blockIndex, showThinking);
+  return { parts, markdownImages };
+}
+
+function extractPlainTextFromUnknown(content: unknown): string {
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  const parts: string[] = [];
+  for (const block of content as ContentBlock[]) {
+    if (block.type === 'text' && block.text?.trim()) {
+      parts.push(block.text.trim());
+      continue;
+    }
+
+    if ((block.type === 'tool_result' || block.type === 'toolResult') && block.content) {
+      const nested = extractPlainTextFromUnknown(block.content);
+      if (nested) {
+        parts.push(nested);
+      }
+    }
+  }
+
+  return parts.join('\n').trim();
+}
+
 function getFallbackAssistantText(message: unknown): string {
   const entry = getMessageContentRecord(message);
   if (!entry) return '';
@@ -589,6 +689,615 @@ export function extractAssistantDisplaySegments(
     parts,
     visibleText,
     markdownImages,
+  };
+}
+
+function findMatchingToolStatus(
+  toolStatuses: ToolStatus[],
+  id?: string,
+  name?: string,
+): ToolStatus | undefined {
+  if (id) {
+    const byId = toolStatuses.find((status) => status.toolCallId === id || status.id === id);
+    if (byId) {
+      return byId;
+    }
+  }
+
+  return name ? toolStatuses.find((status) => status.name === name) : undefined;
+}
+
+function extractInlineToolResultText(block: ContentBlock): string | undefined {
+  const raw = extractPlainTextFromUnknown(block.content ?? block.text ?? '');
+  if (raw) {
+    return raw;
+  }
+
+  if (typeof block.error === 'string' && block.error.trim()) {
+    return block.error.trim();
+  }
+
+  return undefined;
+}
+
+function getInlineToolResultStatus(block: ContentBlock, resultText?: string): AssistantToolGroupItem['status'] {
+  const rawStatus = typeof block.status === 'string' ? block.status.toLowerCase() : '';
+  const hasErrorPayload = typeof block.error === 'string' && block.error.trim().length > 0;
+  const isFailedStatus = rawStatus === 'error'
+    || rawStatus === 'failed'
+    || rawStatus === 'failure';
+  if (isFailedStatus || block.isError === true || block.is_error === true || hasErrorPayload) {
+    return 'error';
+  }
+  if (rawStatus === 'completed' || rawStatus === 'success' || typeof resultText === 'string') {
+    return 'completed';
+  }
+  return 'running';
+}
+
+function toAssistantToolGroupItem(
+  name: string,
+  id: string | undefined,
+  input: unknown,
+  toolStatus?: ToolStatus,
+  timestamp?: number,
+): AssistantToolGroupItem {
+  return {
+    id: id || name,
+    name,
+    input,
+    status: toolStatus?.status || 'running',
+    durationMs: toolStatus?.durationMs,
+    result: toolStatus?.result,
+    ...(typeof timestamp === 'number' ? { timestamp } : {}),
+  };
+}
+
+function shouldIncludeToolDisplay(
+  name: string,
+  input: unknown,
+  result: unknown,
+  showToolCalls: boolean,
+): boolean {
+  return showToolCalls || extractEvolutionProposalCardData(name, input, result) !== null;
+}
+
+type InlineToolResultData = {
+  status: AssistantToolGroupItem['status'];
+  result?: string;
+};
+
+function buildInlineToolResultMap(content: ContentBlock[]): Map<string, InlineToolResultData> {
+  const inlineResults = new Map<string, InlineToolResultData>();
+
+  const remember = (key: string | undefined, value: InlineToolResultData) => {
+    if (!key) {
+      return;
+    }
+    inlineResults.set(key, value);
+  };
+
+  for (const block of content) {
+    if (block.type !== 'tool_result' && block.type !== 'toolResult') {
+      continue;
+    }
+
+    const resultText = extractInlineToolResultText(block);
+    const inlineResult = {
+      status: getInlineToolResultStatus(block, resultText),
+      result: resultText,
+    } satisfies InlineToolResultData;
+
+    remember(block.id, inlineResult);
+    remember(block.name, inlineResult);
+    if (!block.id && !block.name) {
+      remember('__unnamed__', inlineResult);
+    }
+  }
+
+  return inlineResults;
+}
+
+function extractFinalizedAssistantDisplayParts(
+  message: RawMessage | null,
+  options: Pick<BuildAssistantDisplayModelOptions, 'showThinking' | 'showToolCalls'>,
+): {
+  parts: Array<AssistantDisplaySegment | AssistantToolGroupItem>;
+  markdownImages: AssistantMarkdownImage[];
+} {
+  if (!message) {
+    return { parts: [], markdownImages: [] };
+  }
+
+  const display = extractAssistantDisplaySegments(message, { showThinking: options.showThinking });
+  const parts: Array<AssistantDisplaySegment | AssistantToolGroupItem> = [];
+  const toolStatuses = message._toolStatuses || [];
+  const textPartsByBlock = display.parts.reduce<Map<number, AssistantDisplaySegment[]>>((map, part) => {
+    const blockParts = map.get(part.blockIndex) || [];
+    blockParts.push(part);
+    map.set(part.blockIndex, blockParts);
+    return map;
+  }, new Map());
+  const content = Array.isArray(message.content) ? message.content : null;
+
+  if (!content) {
+    for (const tool of extractToolUse(message)) {
+      if (shouldHideToolTrace(tool.name)) {
+        continue;
+      }
+      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+      if (!shouldIncludeToolDisplay(tool.name, tool.input, toolStatus?.result, options.showToolCalls)) {
+        continue;
+      }
+      parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
+    }
+
+    parts.push(...display.parts);
+    return { parts, markdownImages: display.markdownImages };
+  }
+
+  const pushTextPartsForBlock = (blockIndex: number) => {
+    const blockParts = textPartsByBlock.get(blockIndex);
+    if (!blockParts) {
+      return;
+    }
+    parts.push(...blockParts);
+  };
+  const hasInlineToolBlocks = content.some((block) => (
+    block?.type === 'tool_use' || block?.type === 'toolCall'
+  ));
+  const inlineToolResults = buildInlineToolResultMap(content);
+
+  for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
+    pushTextPartsForBlock(blockIndex);
+    const block = content[blockIndex];
+
+    if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
+      if (shouldHideToolTrace(block.name)) {
+        continue;
+      }
+      const toolStatus = findMatchingToolStatus(toolStatuses, block.id, block.name);
+      const inlineResult = inlineToolResults.get(block.id) ?? inlineToolResults.get(block.name);
+      const mergedStatus = inlineResult?.status ?? toolStatus?.status;
+      const mergedResult = inlineResult?.result ?? toolStatus?.result;
+      if (!shouldIncludeToolDisplay(
+        block.name,
+        block.input ?? block.arguments,
+        mergedResult,
+        options.showToolCalls,
+      )) {
+        continue;
+      }
+      parts.push({
+        ...toAssistantToolGroupItem(
+          block.name,
+          block.id,
+          block.input ?? block.arguments,
+          toolStatus,
+        ),
+        ...(mergedStatus ? { status: mergedStatus } : {}),
+        ...(typeof mergedResult === 'string' ? { result: mergedResult } : {}),
+      });
+      continue;
+    }
+
+    if (block.type === 'tool_result' || block.type === 'toolResult') {
+      const resultText = extractInlineToolResultText(block);
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const part = parts[index];
+        if ('type' in part) {
+          continue;
+        }
+        const matchesById = Boolean(block.id) && part.id === block.id;
+        const matchesByName = Boolean(block.name) && part.name === block.name;
+        const matchesUnnamedResult = !block.id && !block.name;
+        if (!matchesById && !matchesByName && !matchesUnnamedResult) {
+          continue;
+        }
+
+        parts[index] = {
+          ...part,
+          status: getInlineToolResultStatus(block, resultText),
+          result: resultText ?? part.result,
+        };
+        break;
+      }
+    }
+  }
+
+  const missingToolParts: AssistantToolGroupItem[] = [];
+  for (const tool of extractToolUse(message)) {
+    if (shouldHideToolTrace(tool.name)) {
+      continue;
+    }
+
+    const alreadyRendered = parts.some((part) => (
+      !('type' in part)
+      && (tool.id ? part.id === tool.id : part.name === tool.name)
+    ));
+    if (alreadyRendered) {
+      continue;
+    }
+
+    const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+    const inlineResult = inlineToolResults.get(tool.id) ?? inlineToolResults.get(tool.name);
+    const mergedResult = inlineResult?.result ?? toolStatus?.result;
+    if (!shouldIncludeToolDisplay(tool.name, tool.input, mergedResult, options.showToolCalls)) {
+      continue;
+    }
+    missingToolParts.push({
+      ...toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus),
+      ...(inlineResult?.status ? { status: inlineResult.status } : {}),
+      ...(typeof mergedResult === 'string' ? { result: mergedResult } : {}),
+    });
+  }
+
+  if (missingToolParts.length > 0) {
+    parts.splice(hasInlineToolBlocks ? parts.length : 0, 0, ...missingToolParts);
+  }
+  return { parts, markdownImages: display.markdownImages };
+}
+
+function extractLiveAssistantDisplayParts(
+  options: Pick<BuildAssistantDisplayModelOptions, 'showThinking' | 'showToolCalls' | 'liveToolMessages' | 'liveStreamSegments' | 'liveToolStatuses'>,
+): {
+  parts: Array<(AssistantDisplaySegment & { sortTs: number; order: number }) | AssistantToolGroupItem>;
+  markdownImages: AssistantMarkdownImage[];
+} {
+  const LIVE_STREAM_ORDER_BASE = 0;
+  const LIVE_TOOL_ORDER_BASE = 1_000_000;
+  const parts: Array<(AssistantDisplaySegment & { sortTs: number; order: number }) | AssistantToolGroupItem> = [];
+  const markdownImages: AssistantMarkdownImage[] = [];
+
+  options.liveStreamSegments.forEach((segment, index) => {
+    const processed = collectProcessedAssistantSegments(segment.text, index, options.showThinking);
+    markdownImages.push(...processed.markdownImages);
+    processed.parts.forEach((part, partIndex) => {
+      parts.push({
+        ...part,
+        sortTs: segment.ts,
+        order: LIVE_STREAM_ORDER_BASE + (index * 100) + partIndex,
+      });
+    });
+  });
+
+  if (!options.showToolCalls) {
+    return { parts, markdownImages };
+  }
+
+  options.liveToolMessages.forEach((message, index) => {
+    const tool = extractToolUse(message)[0];
+    if (!tool || shouldHideToolTrace(tool.name)) {
+      return;
+    }
+
+    const toolStatuses = [
+      ...(message._toolStatuses || []),
+      ...(options.liveToolStatuses || []),
+    ];
+    const toolStatus = findMatchingToolStatus(
+      toolStatuses,
+      tool.id || message.toolCallId,
+      tool.name || message.toolName,
+    );
+
+    parts.push({
+      ...toAssistantToolGroupItem(
+        tool.name,
+        tool.id || message.toolCallId,
+        tool.input,
+        toolStatus,
+        typeof message.timestamp === 'number' ? message.timestamp : undefined,
+      ),
+      timestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.MAX_SAFE_INTEGER,
+      order: LIVE_TOOL_ORDER_BASE + index,
+    });
+  });
+
+  parts.sort((left, right) => {
+    const leftTs = 'sortTs' in left ? left.sortTs : (left.timestamp ?? Number.MAX_SAFE_INTEGER);
+    const rightTs = 'sortTs' in right ? right.sortTs : (right.timestamp ?? Number.MAX_SAFE_INTEGER);
+    if (leftTs !== rightTs) {
+      return leftTs - rightTs;
+    }
+
+    const leftOrder = 'order' in left ? left.order : Number.MAX_SAFE_INTEGER;
+    const rightOrder = 'order' in right ? right.order : Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder;
+  });
+
+  return { parts, markdownImages };
+}
+
+export function getLiveAssistantRuntimePayload(message: RawMessage): Pick<
+  BuildAssistantDisplayModelOptions,
+  'liveToolMessages' | 'liveStreamSegments'
+> {
+  const liveMessage = message as AssistantMessageWithLiveRuntime;
+  return {
+    liveToolMessages: liveMessage._liveToolMessages || [],
+    liveStreamSegments: liveMessage._liveStreamSegments || [],
+  };
+}
+
+function isAssistantToolGroupItem(
+  part:
+    | AssistantDisplaySegment
+    | AssistantToolGroupItem
+    | AssistantDisplayToolItemPart
+    | (AssistantDisplaySegment & { sortTs: number; order: number }),
+): part is AssistantToolGroupItem {
+  return !('type' in part);
+}
+
+function extractToolFilePaths(input: unknown): string[] {
+  if (!input || typeof input !== 'object') {
+    return [];
+  }
+
+  const record = input as Record<string, unknown>;
+  const candidates = [
+    record.filePath,
+    record.file_path,
+    record.path,
+    record.targetFile,
+    record.target_file,
+    record.relativePath,
+    record.paths,
+    record.files,
+  ];
+
+  return candidates.flatMap((value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed] : [];
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+
+    return [];
+  });
+}
+
+function formatCountLabel(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function buildToolGroupSummaryPart(
+  category: AssistantToolGroupSummaryPart['category'],
+  count: number,
+  label: string,
+): AssistantToolGroupSummaryPart | null {
+  return count > 0 ? { category, count, label } : null;
+}
+
+const TOOL_GROUP_READ_NAMES = new Set([
+  'read',
+  'read_file',
+  'cat',
+  'view',
+  'list_dir',
+  'ls',
+  'tree',
+  'glob',
+  'find',
+  'fd',
+  'grep',
+  'search',
+]);
+
+const TOOL_GROUP_EDIT_NAMES = new Set([
+  'write',
+  'write_file',
+  'create_file',
+  'edit',
+  'edit_file',
+  'replace',
+  'apply_patch',
+  'rename',
+  'move_file',
+  'delete_file',
+  'rm',
+  'rmdir',
+  'mkdir',
+]);
+
+const TOOL_GROUP_COMMAND_NAMES = new Set([
+  'bash',
+  'shell',
+  'exec',
+  'run_command',
+  'command',
+]);
+
+const TOOL_GROUP_WEB_NAMES = new Set([
+  'fetch',
+  'web_search',
+  'browser',
+  'browser_fetch',
+  'browser_open',
+]);
+
+function summarizeToolGroup(items: AssistantToolGroupItem[]): {
+  summary: string;
+  summaryParts: AssistantToolGroupSummaryPart[];
+} {
+  const readPaths = new Set<string>();
+  const editPaths = new Set<string>();
+  let readItemsCount = 0;
+  let editItemsCount = 0;
+  let commandItemsCount = 0;
+  let webItemsCount = 0;
+  let genericItemsCount = 0;
+
+  for (const item of items) {
+    const normalizedName = item.name.trim().toLowerCase();
+
+    if (TOOL_GROUP_READ_NAMES.has(normalizedName)) {
+      readItemsCount += 1;
+      for (const filePath of extractToolFilePaths(item.input)) {
+        readPaths.add(filePath);
+      }
+      continue;
+    }
+
+    if (TOOL_GROUP_EDIT_NAMES.has(normalizedName)) {
+      editItemsCount += 1;
+      for (const filePath of extractToolFilePaths(item.input)) {
+        editPaths.add(filePath);
+      }
+      continue;
+    }
+
+    if (TOOL_GROUP_COMMAND_NAMES.has(normalizedName)) {
+      commandItemsCount += 1;
+      continue;
+    }
+
+    if (TOOL_GROUP_WEB_NAMES.has(normalizedName)) {
+      webItemsCount += 1;
+      continue;
+    }
+
+    genericItemsCount += 1;
+  }
+
+  const readCount = readPaths.size || readItemsCount;
+  const editCount = editPaths.size || editItemsCount;
+
+  const summaryParts = [
+    buildToolGroupSummaryPart('edit_files', editCount, `Edited ${formatCountLabel(editCount, 'file')}`),
+    buildToolGroupSummaryPart('execute_commands', commandItemsCount, `Ran ${formatCountLabel(commandItemsCount, 'command')}`),
+    buildToolGroupSummaryPart('read_files', readCount, `Read ${formatCountLabel(readCount, 'file')}`),
+    buildToolGroupSummaryPart('web_access', webItemsCount, `Made ${formatCountLabel(webItemsCount, 'web request')}`),
+    buildToolGroupSummaryPart('generic_tools', genericItemsCount, `Used ${formatCountLabel(genericItemsCount, 'tool')}`),
+  ].filter((part): part is AssistantToolGroupSummaryPart => Boolean(part));
+
+  return {
+    summaryParts,
+    summary: summaryParts.slice(0, 3).map((part) => part.label).join(', ') || `Used ${formatCountLabel(items.length, 'tool')}`,
+  };
+}
+
+function shouldKeepToolItemStandalone(item: AssistantToolGroupItem): boolean {
+  return extractEvolutionProposalCardData(item.name, item.input, item.result) !== null;
+}
+
+function groupConsecutiveToolParts(
+  parts: Array<AssistantDisplaySegment | AssistantToolGroupItem | AssistantDisplayToolItemPart>,
+): AssistantDisplayPart[] {
+  const grouped: AssistantDisplayPart[] = [];
+  let toolBuffer: AssistantToolGroupItem[] = [];
+
+  const flushToolBuffer = () => {
+    if (toolBuffer.length === 0) {
+      return;
+    }
+
+    const summary = summarizeToolGroup(toolBuffer);
+    grouped.push({
+      type: 'tool_group',
+      items: toolBuffer,
+      summary: summary.summary,
+      summaryParts: summary.summaryParts,
+      collapsed: false,
+    });
+    toolBuffer = [];
+  };
+
+  for (const part of parts) {
+    if (isAssistantToolGroupItem(part)) {
+      if (shouldKeepToolItemStandalone(part)) {
+        flushToolBuffer();
+        grouped.push({
+          type: 'tool_item',
+          item: part,
+        });
+        continue;
+      }
+      toolBuffer.push(part);
+      continue;
+    }
+
+    flushToolBuffer();
+    grouped.push(part);
+  }
+
+  flushToolBuffer();
+  return grouped;
+}
+
+function resolveToolGroupCollapseState(
+  parts: AssistantDisplayPart[],
+  isStreaming: boolean,
+): AssistantDisplayPart[] {
+  const hasLaterAssistantContent = (part: AssistantDisplayPart): boolean => {
+    if (part.type === 'text' || part.type === 'thinking') {
+      return part.text.trim().length > 0;
+    }
+
+    if (part.type === 'tool_item') {
+      return true;
+    }
+
+    return false;
+  };
+
+  const hasLaterAssistantContentByIndex = new Array<boolean>(parts.length).fill(false);
+  let foundLaterAssistantContent = false;
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    hasLaterAssistantContentByIndex[index] = foundLaterAssistantContent;
+    if (hasLaterAssistantContent(parts[index])) {
+      foundLaterAssistantContent = true;
+    }
+  }
+
+  return parts.map((part, index) => {
+    if (part.type !== 'tool_group') {
+      return part;
+    }
+
+    return {
+      ...part,
+      collapsed: !isStreaming || hasLaterAssistantContentByIndex[index],
+    };
+  });
+}
+
+export function buildAssistantDisplayModel(
+  message: RawMessage | null,
+  options: BuildAssistantDisplayModelOptions,
+): AssistantTurnDisplayModel {
+  const hasExplicitLiveRuntime = options.liveToolMessages.length > 0 || options.liveStreamSegments.length > 0;
+  const finalized = hasExplicitLiveRuntime
+    ? { parts: [], markdownImages: [] }
+    : extractFinalizedAssistantDisplayParts(message, options);
+  const live = extractLiveAssistantDisplayParts(options);
+  const normalizedParts = groupConsecutiveToolParts([
+    ...finalized.parts,
+    ...live.parts,
+  ]);
+  const parts = resolveToolGroupCollapseState(normalizedParts, options.isStreaming);
+  const visibleText = parts
+    .filter((part): part is AssistantDisplaySegment => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n\n')
+    .trim();
+
+  return {
+    parts,
+    visibleText,
+    markdownImages: [...finalized.markdownImages, ...live.markdownImages],
   };
 }
 
