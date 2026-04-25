@@ -1080,51 +1080,106 @@ function buildToolGroupSummaryPart(
   return count > 0 ? { category, count, label } : null;
 }
 
+const TOOL_GROUP_READ_NAMES = new Set([
+  'read',
+  'read_file',
+  'cat',
+  'view',
+  'list_dir',
+  'ls',
+  'tree',
+  'glob',
+  'find',
+  'fd',
+  'grep',
+  'search',
+]);
+
+const TOOL_GROUP_EDIT_NAMES = new Set([
+  'write',
+  'write_file',
+  'create_file',
+  'edit',
+  'edit_file',
+  'replace',
+  'apply_patch',
+  'rename',
+  'move_file',
+  'delete_file',
+  'rm',
+  'rmdir',
+  'mkdir',
+]);
+
+const TOOL_GROUP_COMMAND_NAMES = new Set([
+  'bash',
+  'shell',
+  'exec',
+  'run_command',
+  'command',
+]);
+
+const TOOL_GROUP_WEB_NAMES = new Set([
+  'fetch',
+  'web_search',
+  'browser',
+  'browser_fetch',
+  'browser_open',
+]);
+
 function summarizeToolGroup(items: AssistantToolGroupItem[]): {
   summary: string;
   summaryParts: AssistantToolGroupSummaryPart[];
 } {
-  const readItems = items.filter((item) => (
-    ['read', 'read_file', 'cat', 'view', 'list_dir', 'ls', 'tree', 'glob', 'find', 'fd', 'grep', 'search']
-      .includes(item.name.trim().toLowerCase())
-  ));
-  const editItems = items.filter((item) => (
-    [
-      'write',
-      'write_file',
-      'create_file',
-      'edit',
-      'edit_file',
-      'replace',
-      'apply_patch',
-      'rename',
-      'move_file',
-      'delete_file',
-      'rm',
-      'rmdir',
-      'mkdir',
-    ].includes(item.name.trim().toLowerCase())
-  ));
-  const commandItems = items.filter((item) => ['bash', 'shell', 'exec', 'run_command', 'command'].includes(item.name.trim().toLowerCase()));
-  const webItems = items.filter((item) => ['fetch', 'web_search', 'browser', 'browser_fetch', 'browser_open'].includes(item.name.trim().toLowerCase()));
+  const readPaths = new Set<string>();
+  const editPaths = new Set<string>();
+  let readItemsCount = 0;
+  let editItemsCount = 0;
+  let commandItemsCount = 0;
+  let webItemsCount = 0;
+  let genericItemsCount = 0;
 
-  const categorizedNames = new Set([
-    ...readItems.map((item) => item.id),
-    ...editItems.map((item) => item.id),
-    ...commandItems.map((item) => item.id),
-    ...webItems.map((item) => item.id),
-  ]);
-  const genericItems = items.filter((item) => !categorizedNames.has(item.id));
+  for (const item of items) {
+    const normalizedName = item.name.trim().toLowerCase();
 
-  const readCount = new Set(readItems.flatMap((item) => extractToolFilePaths(item.input))).size || readItems.length;
-  const editCount = new Set(editItems.flatMap((item) => extractToolFilePaths(item.input))).size || editItems.length;
+    if (TOOL_GROUP_READ_NAMES.has(normalizedName)) {
+      readItemsCount += 1;
+      for (const filePath of extractToolFilePaths(item.input)) {
+        readPaths.add(filePath);
+      }
+      continue;
+    }
+
+    if (TOOL_GROUP_EDIT_NAMES.has(normalizedName)) {
+      editItemsCount += 1;
+      for (const filePath of extractToolFilePaths(item.input)) {
+        editPaths.add(filePath);
+      }
+      continue;
+    }
+
+    if (TOOL_GROUP_COMMAND_NAMES.has(normalizedName)) {
+      commandItemsCount += 1;
+      continue;
+    }
+
+    if (TOOL_GROUP_WEB_NAMES.has(normalizedName)) {
+      webItemsCount += 1;
+      continue;
+    }
+
+    genericItemsCount += 1;
+  }
+
+  const readCount = readPaths.size || readItemsCount;
+  const editCount = editPaths.size || editItemsCount;
 
   const summaryParts = [
     buildToolGroupSummaryPart('edit_files', editCount, `Edited ${formatCountLabel(editCount, 'file')}`),
-    buildToolGroupSummaryPart('execute_commands', commandItems.length, `Ran ${formatCountLabel(commandItems.length, 'command')}`),
+    buildToolGroupSummaryPart('execute_commands', commandItemsCount, `Ran ${formatCountLabel(commandItemsCount, 'command')}`),
     buildToolGroupSummaryPart('read_files', readCount, `Read ${formatCountLabel(readCount, 'file')}`),
-    buildToolGroupSummaryPart('web_access', webItems.length, `Made ${formatCountLabel(webItems.length, 'web request')}`),
-    buildToolGroupSummaryPart('generic_tools', genericItems.length, `Used ${formatCountLabel(genericItems.length, 'tool')}`),
+    buildToolGroupSummaryPart('web_access', webItemsCount, `Made ${formatCountLabel(webItemsCount, 'web request')}`),
+    buildToolGroupSummaryPart('generic_tools', genericItemsCount, `Used ${formatCountLabel(genericItemsCount, 'tool')}`),
   ].filter((part): part is AssistantToolGroupSummaryPart => Boolean(part));
 
   return {
@@ -1197,16 +1252,24 @@ function resolveToolGroupCollapseState(
     return false;
   };
 
+  const hasLaterAssistantContentByIndex = new Array<boolean>(parts.length).fill(false);
+  let foundLaterAssistantContent = false;
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    hasLaterAssistantContentByIndex[index] = foundLaterAssistantContent;
+    if (hasLaterAssistantContent(parts[index])) {
+      foundLaterAssistantContent = true;
+    }
+  }
+
   return parts.map((part, index) => {
     if (part.type !== 'tool_group') {
       return part;
     }
 
-    const hasLaterAssistantText = parts.slice(index + 1).some(hasLaterAssistantContent);
-
     return {
       ...part,
-      collapsed: !isStreaming || hasLaterAssistantText,
+      collapsed: !isStreaming || hasLaterAssistantContentByIndex[index],
     };
   });
 }
