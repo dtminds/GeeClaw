@@ -24,6 +24,7 @@ import { parseSkillMarkerSegments } from '@/lib/chat-message-text';
 import {
   buildAssistantDisplayModel,
   formatToolResultText,
+  getLiveAssistantRuntimePayload,
   isEmptyAssistantTurn,
   shouldRenderStandaloneToolResult,
   type AssistantDisplayToolGroupPart,
@@ -353,14 +354,21 @@ export const ChatMessage = memo(function ChatMessage({
   const userDisplayDecision = useMemo(() => (isUser ? extractUserDisplayDecision(message) : null), [isUser, message]);
   const isUserSystemNotice = userDisplayDecision?.action === 'show_system_notice';
   const assistantDisplay = useMemo(
-    () => (!isUser ? buildAssistantDisplayModel(message, {
-      showThinking,
-      showToolCalls,
-      isStreaming,
-      liveToolMessages: [],
-      liveStreamSegments: [],
-      liveToolStatuses: message._toolStatuses,
-    }) : null),
+    () => {
+      if (isUser) {
+        return null;
+      }
+
+      const liveRuntimePayload = getLiveAssistantRuntimePayload(message);
+      return buildAssistantDisplayModel(message, {
+        showThinking,
+        showToolCalls,
+        isStreaming,
+        liveToolMessages: liveRuntimePayload.liveToolMessages,
+        liveStreamSegments: liveRuntimePayload.liveStreamSegments,
+        liveToolStatuses: message._toolStatuses,
+      });
+    },
     [isStreaming, isUser, message, showThinking, showToolCalls],
   );
   const markdownImages = useMemo<Array<ExtractedImage>>(

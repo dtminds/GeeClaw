@@ -23,6 +23,16 @@ export type AssistantMarkdownImage = {
   data: string;
 };
 
+export type LiveAssistantStreamSegment = {
+  text: string;
+  ts: number;
+};
+
+export type AssistantMessageWithLiveRuntime = RawMessage & {
+  _liveToolMessages?: RawMessage[];
+  _liveStreamSegments?: LiveAssistantStreamSegment[];
+};
+
 export type AssistantDisplayModel = {
   parts: AssistantDisplaySegment[];
   visibleText: string;
@@ -66,7 +76,7 @@ export type BuildAssistantDisplayModelOptions = {
   showToolCalls: boolean;
   isStreaming: boolean;
   liveToolMessages: RawMessage[];
-  liveStreamSegments: Array<{ text: string; ts: number }>;
+  liveStreamSegments: LiveAssistantStreamSegment[];
   liveToolStatuses?: ToolStatus[];
 };
 
@@ -988,6 +998,17 @@ function extractLiveAssistantDisplayParts(
   return { parts, markdownImages };
 }
 
+export function getLiveAssistantRuntimePayload(message: RawMessage): Pick<
+  BuildAssistantDisplayModelOptions,
+  'liveToolMessages' | 'liveStreamSegments'
+> {
+  const liveMessage = message as AssistantMessageWithLiveRuntime;
+  return {
+    liveToolMessages: liveMessage._liveToolMessages || [],
+    liveStreamSegments: liveMessage._liveStreamSegments || [],
+  };
+}
+
 function isAssistantToolGroupItem(
   part: AssistantDisplaySegment | AssistantToolGroupItem | (AssistantDisplaySegment & { sortTs: number; order: number }),
 ): part is AssistantToolGroupItem {
@@ -1142,7 +1163,10 @@ export function buildAssistantDisplayModel(
   message: RawMessage | null,
   options: BuildAssistantDisplayModelOptions,
 ): AssistantTurnDisplayModel {
-  const finalized = extractFinalizedAssistantDisplayParts(message, options);
+  const hasExplicitLiveRuntime = options.liveToolMessages.length > 0 || options.liveStreamSegments.length > 0;
+  const finalized = hasExplicitLiveRuntime
+    ? { parts: [], markdownImages: [] }
+    : extractFinalizedAssistantDisplayParts(message, options);
   const live = extractLiveAssistantDisplayParts(options);
   const normalizedParts = groupConsecutiveToolParts([
     ...finalized.parts,

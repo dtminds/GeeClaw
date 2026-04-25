@@ -1,4 +1,5 @@
 import type { ContentBlock, RawMessage, ToolStatus } from '@/stores/chat';
+import type { AssistantMessageWithLiveRuntime, LiveAssistantStreamSegment } from './assistant-display';
 import { shouldHideToolTrace } from './message-utils';
 
 export type ChatRenderItem = {
@@ -10,7 +11,7 @@ export type ChatRenderItem = {
 type BuildChatItemsOptions = {
   messages: RawMessage[];
   toolMessages: RawMessage[];
-  streamSegments: Array<{ text: string; ts: number }>;
+  streamSegments: LiveAssistantStreamSegment[];
   streamingText: string;
   streamingTextStartedAt: number | null;
   sessionKey: string;
@@ -63,13 +64,17 @@ function makeAssistantLiveMessage(
   timestamp: number,
   id: string,
   toolStatuses: ToolStatus[],
-): RawMessage {
+  liveToolMessages: RawMessage[],
+  liveStreamSegments: LiveAssistantStreamSegment[],
+): AssistantMessageWithLiveRuntime {
   return {
     role: 'assistant',
     id,
     content,
     timestamp,
     _toolStatuses: toolStatuses.length > 0 ? toolStatuses : undefined,
+    _liveToolMessages: liveToolMessages,
+    _liveStreamSegments: liveStreamSegments,
   };
 }
 
@@ -117,7 +122,7 @@ function normalizeLiveToolMessageContentBlocks(message: RawMessage): ContentBloc
 
 function buildLiveAssistantContent(
   toolMessages: RawMessage[],
-  streamSegments: Array<{ text: string; ts: number }>,
+  streamSegments: LiveAssistantStreamSegment[],
   streamingText: string,
 ): ContentBlock[] {
   const items: Array<{ sortTimestamp: number; sourceIndex: number; blocks: ContentBlock[] }> = [];
@@ -161,6 +166,24 @@ function buildLiveAssistantContent(
   }
 
   return blocks;
+}
+
+function buildLiveAssistantStreamSegments(
+  streamSegments: LiveAssistantStreamSegment[],
+  streamingText: string,
+  trailingTimestamp: number,
+): LiveAssistantStreamSegment[] {
+  if (!streamingText.trim()) {
+    return streamSegments;
+  }
+
+  return [
+    ...streamSegments,
+    {
+      text: streamingText,
+      ts: trailingTimestamp,
+    },
+  ];
 }
 
 function collectLiveToolStatuses(toolMessages: RawMessage[]): ToolStatus[] {
@@ -250,10 +273,18 @@ export function buildChatItems({
     const timestamp = getLiveAssistantTimestamp(streamingTextStartedAt, toolMessages, streamSegments);
     const streamId = `stream:${sessionKey}:${timestamp}`;
     const liveContent = buildLiveAssistantContent(toolMessages, streamSegments, streamingText);
+    const liveStreamSegments = buildLiveAssistantStreamSegments(streamSegments, streamingText, timestamp + 0.001);
     const liveToolStatuses = collectLiveToolStatuses(toolMessages);
     items.push({
       key: streamId,
-      message: makeAssistantLiveMessage(liveContent, timestamp, streamId, liveToolStatuses),
+      message: makeAssistantLiveMessage(
+        liveContent,
+        timestamp,
+        streamId,
+        liveToolStatuses,
+        toolMessages,
+        liveStreamSegments,
+      ),
       isStreaming: true,
     });
   }

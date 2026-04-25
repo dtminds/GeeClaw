@@ -231,6 +231,127 @@ describe('chat live rendering', () => {
     expect(renderedText.indexOf('现在我为你查询')).toBeLessThan(renderedText.indexOf('https://example.com/search?q=clawx'));
   });
 
+  it('stores explicit live runtime payloads and collapses only the older finished live tool group', () => {
+    const completedCommandTool: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'bash',
+      timestamp: 1,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-1',
+          name: 'bash',
+          arguments: { command: 'pwd' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'bash',
+          status: 'completed',
+          input: { command: 'pwd' },
+          updatedAt: 1,
+        },
+      ],
+    };
+
+    const completedReadTool: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:tool-2',
+      toolCallId: 'tool-2',
+      toolName: 'read',
+      timestamp: 2,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-2',
+          name: 'read',
+          arguments: { filePath: '/tmp/notes.md' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'read',
+          status: 'completed',
+          input: { filePath: '/tmp/notes.md' },
+          updatedAt: 2,
+        },
+      ],
+    };
+
+    const runningFetchTool: RawMessage = {
+      role: 'assistant',
+      id: 'live-tool:tool-3',
+      toolCallId: 'tool-3',
+      toolName: 'fetch',
+      timestamp: 4,
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-3',
+          name: 'fetch',
+          arguments: { url: 'https://example.com/search?q=clawx-live' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-3',
+          toolCallId: 'tool-3',
+          name: 'fetch',
+          status: 'running',
+          input: { url: 'https://example.com/search?q=clawx-live' },
+          updatedAt: 4,
+        },
+      ],
+    };
+
+    const liveToolMessages = [completedCommandTool, completedReadTool, runningFetchTool];
+    const liveStreamSegments = [
+      { text: '我先检查本地环境。', ts: 0 },
+      { text: '接着我继续联网确认。', ts: 3 },
+    ];
+
+    const chatItems = buildChatItems({
+      messages: [],
+      toolMessages: liveToolMessages,
+      streamSegments: liveStreamSegments,
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'session-live-collapse',
+    });
+
+    expect(chatItems).toHaveLength(1);
+
+    const liveMessage = chatItems[0].message as RawMessage & {
+      _liveToolMessages?: RawMessage[];
+      _liveStreamSegments?: Array<{ text: string; ts: number }>;
+    };
+
+    expect(liveMessage._liveToolMessages).toEqual(liveToolMessages);
+    expect(liveMessage._liveStreamSegments).toEqual(liveStreamSegments);
+
+    render(
+      <ChatMessage
+        message={liveMessage}
+        showThinking
+        showToolCalls
+        isStreaming={chatItems[0].isStreaming}
+      />,
+    );
+
+    expect(screen.getByText('我先检查本地环境。')).toBeInTheDocument();
+    expect(screen.getByText('接着我继续联网确认。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ran 1 command, read 1 file/i })).toBeInTheDocument();
+    expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
+    expect(screen.queryByText('/tmp/notes.md')).not.toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=clawx-live/)).toBeInTheDocument();
+  });
+
   it('keeps fallback text after top-level tool calls when content has no ordered blocks', () => {
     const { container } = render(
       <ChatMessage
