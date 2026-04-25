@@ -7,6 +7,7 @@ import {
 import { splitMediaFromOutput } from '@/lib/media-output';
 import type { ContentBlock, RawMessage, ToolStatus } from '@/stores/chat';
 import { extractToolUse, shouldHideToolTrace } from './message-utils';
+import { extractEvolutionProposalCardData } from './evolution-proposal';
 
 export type AssistantPhase = 'commentary' | 'final_answer';
 
@@ -734,6 +735,15 @@ function toAssistantToolGroupItem(
   };
 }
 
+function shouldIncludeToolDisplay(
+  name: string,
+  input: unknown,
+  result: unknown,
+  showToolCalls: boolean,
+): boolean {
+  return showToolCalls || extractEvolutionProposalCardData(name, input, result) !== null;
+}
+
 function extractFinalizedAssistantDisplayParts(
   message: RawMessage | null,
   options: Pick<BuildAssistantDisplayModelOptions, 'showThinking' | 'showToolCalls'>,
@@ -757,14 +767,15 @@ function extractFinalizedAssistantDisplayParts(
   const content = Array.isArray(message.content) ? message.content : null;
 
   if (!content) {
-    if (options.showToolCalls) {
-      for (const tool of extractToolUse(message)) {
-        if (shouldHideToolTrace(tool.name)) {
-          continue;
-        }
-        const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
-        parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
+    for (const tool of extractToolUse(message)) {
+      if (shouldHideToolTrace(tool.name)) {
+        continue;
       }
+      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+      if (!shouldIncludeToolDisplay(tool.name, tool.input, toolStatus?.result, options.showToolCalls)) {
+        continue;
+      }
+      parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
     }
 
     parts.push(...display.parts);
@@ -778,20 +789,27 @@ function extractFinalizedAssistantDisplayParts(
     }
     parts.push(...blockParts);
   };
+  const hasInlineToolBlocks = content.some((block) => (
+    block?.type === 'tool_use' || block?.type === 'toolCall'
+  ));
 
   for (let blockIndex = 0; blockIndex < content.length; blockIndex += 1) {
     pushTextPartsForBlock(blockIndex);
     const block = content[blockIndex];
-
-    if (!options.showToolCalls) {
-      continue;
-    }
 
     if ((block.type === 'tool_use' || block.type === 'toolCall') && block.name) {
       if (shouldHideToolTrace(block.name)) {
         continue;
       }
       const toolStatus = findMatchingToolStatus(toolStatuses, block.id, block.name);
+      if (!shouldIncludeToolDisplay(
+        block.name,
+        block.input ?? block.arguments,
+        toolStatus?.result,
+        options.showToolCalls,
+      )) {
+        continue;
+      }
       parts.push(toAssistantToolGroupItem(
         block.name,
         block.id,
@@ -825,23 +843,29 @@ function extractFinalizedAssistantDisplayParts(
     }
   }
 
-  if (options.showToolCalls) {
-    for (const tool of extractToolUse(message)) {
-      if (shouldHideToolTrace(tool.name)) {
-        continue;
-      }
-
-      const alreadyRendered = parts.some((part) => (
-        !('type' in part)
-        && (tool.id ? part.id === tool.id : part.name === tool.name)
-      ));
-      if (alreadyRendered) {
-        continue;
-      }
-
-      const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
-      parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
+  const missingToolParts: AssistantToolGroupItem[] = [];
+  for (const tool of extractToolUse(message)) {
+    if (shouldHideToolTrace(tool.name)) {
+      continue;
     }
+
+    const alreadyRendered = parts.some((part) => (
+      !('type' in part)
+      && (tool.id ? part.id === tool.id : part.name === tool.name)
+    ));
+    if (alreadyRendered) {
+      continue;
+    }
+
+    const toolStatus = findMatchingToolStatus(toolStatuses, tool.id, tool.name);
+    if (!shouldIncludeToolDisplay(tool.name, tool.input, toolStatus?.result, options.showToolCalls)) {
+      continue;
+    }
+    missingToolParts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
+  }
+
+  if (missingToolParts.length > 0) {
+    parts.splice(hasInlineToolBlocks ? parts.length : 0, 0, ...missingToolParts);
   }
   return { parts, markdownImages: display.markdownImages };
 }

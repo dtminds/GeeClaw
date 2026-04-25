@@ -350,6 +350,107 @@ describe('chat live rendering', () => {
     expect(renderedText.indexOf('https://example.com/search?q=xxxx')).toBeLessThan(renderedText.indexOf('先搜一下xxxx'));
   });
 
+  it('renders a collapsed summary row for a completed tool group', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-collapsed-tool-group',
+          timestamp: 3,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-2',
+              name: 'fetch',
+              arguments: { url: 'https://example.com/search?q=xxxx' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'completed',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'completed',
+              input: { url: 'https://example.com/search?q=xxxx' },
+              updatedAt: 2,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i })).toBeInTheDocument();
+    expect(screen.queryByText(/pwd/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/https:\/\/example\.com\/search\?q=xxxx/)).not.toBeInTheDocument();
+  });
+
+  it('renders completed tool rows after expanding a collapsed tool group', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-expanded-tool-group',
+          timestamp: 3,
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'bash',
+              arguments: { command: 'pwd' },
+            },
+            {
+              type: 'toolCall',
+              id: 'tool-2',
+              name: 'fetch',
+              arguments: { url: 'https://example.com/search?q=xxxx' },
+            },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'bash',
+              status: 'completed',
+              input: { command: 'pwd' },
+              updatedAt: 1,
+            },
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'completed',
+              input: { url: 'https://example.com/search?q=xxxx' },
+              updatedAt: 2,
+            },
+          ],
+        } as unknown as RawMessage}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /ran 1 command, made 1 web request/i }));
+
+    expect(screen.getByText(/pwd/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
+  });
+
   it('hides process tool cards while keeping session tool cards in Chinese', () => {
     render(
       <div>
