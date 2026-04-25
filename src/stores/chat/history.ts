@@ -362,6 +362,29 @@ export function extractMarkdownLocalFileRefs(
   return refs;
 }
 
+export function extractAssistantInlineArtifactFiles(
+  text: string,
+  opts?: FileArtifactExtractionOptions,
+): AttachedFileMeta[] {
+  const files: AttachedFileMeta[] = [];
+  const seen = new Set<string>();
+  const pushFile = (file: AttachedFileMeta) => {
+    const identity = getAttachmentIdentity(file) || file.fileName;
+    if (identity && seen.has(identity)) return;
+    if (identity) seen.add(identity);
+    files.push(file);
+  };
+
+  extractMediaDirectiveSources(text)
+    .map(makeAttachedFileFromMediaSource)
+    .forEach(pushFile);
+  extractMarkdownLocalFileRefs(text, opts)
+    .map(makeAttachedFile)
+    .forEach(pushFile);
+
+  return files;
+}
+
 export function extractToolInputArtifactRefs(
   toolName: string | undefined,
   toolInput: unknown,
@@ -648,26 +671,26 @@ export function enrichWithCachedImages(
     if ((msg.role !== 'user' && msg.role !== 'assistant') || msg._attachedFiles) return msg;
     const text = getMessageText(msg.content);
 
-    const mediaDirectiveFiles = shouldExtractMessageArtifacts
-      ? extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource)
+    const inlineArtifactFiles = shouldExtractAssistantArtifacts
+      ? extractAssistantInlineArtifactFiles(text, opts)
       : [];
+    const mediaDirectiveFiles = msg.role === 'user'
+      ? extractMediaDirectiveSources(text).map(makeAttachedFileFromMediaSource)
+      : inlineArtifactFiles;
     const attachmentIds = new Set(mediaDirectiveFiles.map(getAttachmentIdentity).filter(Boolean));
     const mediaRefs = shouldExtractMessageArtifacts ? extractMediaRefs(text) : [];
     const mediaRefPaths = new Set(mediaRefs.map((ref) => ref.filePath));
-    const markdownLinkRefs = shouldExtractAssistantArtifacts
-      ? extractMarkdownLocalFileRefs(text, opts)
-      : [];
-    const markdownLinkPaths = new Set(markdownLinkRefs.map((ref) => ref.filePath));
+    const inlineArtifactPaths = new Set(inlineArtifactFiles.map((file) => file.filePath).filter(Boolean));
 
     let rawRefs: Array<{ filePath: string; mimeType: string }> = [];
     if (shouldExtractAssistantArtifacts) {
       rawRefs = extractRawFilePaths(text, opts).filter((ref) => (
-        !mediaRefPaths.has(ref.filePath) && !markdownLinkPaths.has(ref.filePath)
+        !mediaRefPaths.has(ref.filePath) && !inlineArtifactPaths.has(ref.filePath)
       ));
     }
 
     const files: AttachedFileMeta[] = [...mediaDirectiveFiles];
-    for (const ref of [...mediaRefs, ...markdownLinkRefs, ...rawRefs]) {
+    for (const ref of [...mediaRefs, ...rawRefs]) {
       const cached = imageCache.get(ref.filePath);
       const file = cached
         ? { ...cached, filePath: ref.filePath, exists: cached.exists ?? true }

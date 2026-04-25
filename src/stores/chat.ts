@@ -13,9 +13,9 @@ import {
 import type { CronAgentRunSummary } from '@/types/cron';
 import {
   extractImagesAsAttachedFiles,
+  extractAssistantInlineArtifactFiles,
   extractMediaDirectiveSources,
   extractMediaRefs,
-  extractMarkdownLocalFileRefs,
   extractRawFilePaths,
   extractToolInputArtifactRefs,
   hydrateHistoryMessagesForDisplay,
@@ -2457,24 +2457,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const inlineMediaFiles = (() => {
             const text = getMessageText(finalMsg.content);
             if (!text) return [] as AttachedFileMeta[];
-            const artifactExtractionOptions = {
+            return extractAssistantInlineArtifactFiles(text, {
               artifactBaseDir: resolveAgentWorkspace(get().currentAgentId),
-            };
-            const files: AttachedFileMeta[] = [];
-            const fileIds = new Set<string>();
-            const pushFile = (file: AttachedFileMeta) => {
-              const identity = file.filePath || file.url || file.preview || file.fileName;
-              if (identity && fileIds.has(identity)) return;
-              if (identity) fileIds.add(identity);
-              files.push(file);
-            };
-            extractMediaDirectiveSources(text)
-              .map(makeAttachedFileFromMediaSource)
-              .forEach(pushFile);
-            extractMarkdownLocalFileRefs(text, artifactExtractionOptions)
-              .map(makeAttachedFile)
-              .forEach(pushFile);
-            return files;
+            });
           })();
           if (shouldDeferFinalAssistantText) {
             const nextText = extractTextFromRuntimeMessage(finalMsg);

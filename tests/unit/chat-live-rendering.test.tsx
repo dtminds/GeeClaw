@@ -2189,6 +2189,30 @@ describe('chat live rendering', () => {
     expect(screen.getByText('仅显示前 20 个，另有 2 个未显示')).toBeInTheDocument();
   });
 
+  it('renders assistant preview-only image attachments inline instead of hiding them in artifacts', () => {
+    render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-preview-only-image',
+          timestamp: 1,
+          content: '已生成图片。',
+          _attachedFiles: [{
+            fileName: 'generated.png',
+            mimeType: 'image/png',
+            fileSize: 2048,
+            preview: 'data:image/png;base64,abc',
+          }],
+        }}
+        showThinking={false}
+        showToolCalls
+      />,
+    );
+
+    expect(screen.getByAltText('generated.png')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /查看 .*文件产物/ })).not.toBeInTheDocument();
+  });
+
   it('uses specific icons for common document artifact formats', async () => {
     render(
       <ChatMessage

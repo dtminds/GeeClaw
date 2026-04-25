@@ -405,6 +405,18 @@ export const ChatMessage = memo(function ChatMessage({
   const text = isUser ? userText : (assistantText || emptyAssistantFallbackText);
   const hasText = text.length > 0;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
+  const assistantPreviewOnlyImages = useMemo(
+    () => isUser
+      ? EMPTY_ATTACHMENTS
+      : attachedFiles.filter((file) => (
+          file.exists !== false
+          && file.mimeType.startsWith('image/')
+          && Boolean(file.preview)
+          && !file.filePath
+          && !file.url
+        )),
+    [attachedFiles, isUser],
+  );
 
   if (isToolResult && !shouldRenderStandaloneToolResult(message, { showToolCalls })) return null;
   if (shouldHideInternalMessage) return null;
@@ -554,6 +566,21 @@ export const ChatMessage = memo(function ChatMessage({
                 />
               );
             })}
+          </div>
+        )}
+
+        {/* Preview-only image artifacts from tool results — assistant messages */}
+        {!isUser && assistantPreviewOnlyImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {assistantPreviewOnlyImages.map((file, i) => (
+              <ImagePreviewCard
+                key={`preview-only-${i}`}
+                src={file.preview!}
+                fileName={file.fileName}
+                mimeType={file.mimeType}
+                onPreview={() => setLightboxImg({ src: file.preview!, fileName: file.fileName, mimeType: file.mimeType })}
+              />
+            ))}
           </div>
         )}
 
