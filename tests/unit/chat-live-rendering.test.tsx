@@ -146,6 +146,26 @@ describe('chat live rendering', () => {
     expect(markdownBlocks).toHaveLength(2);
   });
 
+  it('renders assistant markdown bubbles at the reduced body size', () => {
+    const { container } = render(
+      <ChatMessage
+        message={{
+          role: 'assistant',
+          id: 'assistant-markdown-size',
+          timestamp: currentTs(),
+          content: '这是正文段落\n\n- 列表项',
+        }}
+        showThinking
+        showToolCalls
+      />,
+    );
+
+    const markdownPanel = container.querySelector('.chat-markdown');
+    expect(markdownPanel).not.toBeNull();
+    expect(markdownPanel?.className).toContain('text-[15px]');
+    expect(markdownPanel?.className).toContain('leading-6');
+  });
+
   it('keeps a frozen assistant text segment between the surrounding tool cards', () => {
     const firstToolMessage: RawMessage = {
       role: 'assistant',
@@ -881,6 +901,10 @@ describe('chat live rendering', () => {
         />,
       );
 
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
       expect(container.querySelector('[data-tool-group-state="collapsing"]')).not.toBeNull();
       expect(screen.getByText(/pwd/)).toBeInTheDocument();
       expect(screen.getByText(/https:\/\/example\.com\/search\?q=xxxx/)).toBeInTheDocument();
@@ -1318,9 +1342,18 @@ describe('chat live rendering', () => {
     expect(container.textContent || '').toContain('提案将在');
     expect(container.textContent || '').toContain('失效');
 
+    const titleBadge = screen.getByText('Agent 请求自我进化').closest('div');
+    expect(titleBadge?.className).toContain('text-[13px]');
+
+    const description = screen.getByText('基于工具调用失败的教训，固化一套资讯搜索回退策略');
+    expect(description.className).toContain('text-[15px]');
+    expect(description.className).toContain('leading-6');
+
     const markdownPanel = container.querySelector('.chat-markdown');
     expect(markdownPanel?.className).toContain('max-h-[22rem]');
     expect(markdownPanel?.className).toContain('overflow-y-auto');
+    expect(markdownPanel?.className).toContain('text-[14px]');
+    expect(markdownPanel?.className).toContain('leading-6');
   });
 
   it('sends rejection commands from evolution proposal cards', async () => {
@@ -2091,7 +2124,7 @@ describe('chat live rendering', () => {
   });
 
   it('renders cleaned user bubble text instead of raw gateway metadata', () => {
-    render(
+    const { container } = render(
       <ChatMessage
         message={{
           role: 'user',
@@ -2107,5 +2140,10 @@ describe('chat live rendering', () => {
     expect(screen.getByText('hello')).toBeInTheDocument();
     expect(screen.queryByText(/\[Fri 2026-03-13 17:11 GMT\+8\]/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\[media attached:/)).not.toBeInTheDocument();
+
+    const userText = screen.getByText('hello');
+    expect(userText.parentElement?.className).toContain('text-[15px]');
+    expect(userText.parentElement?.className).toContain('leading-6');
+    expect(container.textContent || '').not.toContain('[media attached:');
   });
 });

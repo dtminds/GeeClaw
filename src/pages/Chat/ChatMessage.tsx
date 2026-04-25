@@ -937,7 +937,7 @@ function MessageBubble({
       )}
     >
       {isUser ? (
-        <div className="whitespace-pre-wrap break-words break-all text-base">
+        <div className="whitespace-pre-wrap break-words break-all text-[15px] leading-6">
           {skillSegments.length > 0 ? (
             skillSegments.map((segment, index) => {
               if (segment.type === 'text') {
@@ -959,7 +959,7 @@ function MessageBubble({
           )}
         </div>
       ) : (
-        <div className="chat-markdown prose dark:prose-invert max-w-none [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
+        <div className="chat-markdown prose dark:prose-invert max-w-none text-[15px] leading-6 [&_pre]:my-2 [&_code]:text-xs [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:list-outside [&_ol]:list-outside [&_ul]:ps-6 [&_ol]:ps-7 [&_ul>li]:ps-0 [&_ol>li]:ps-0 [&_li]:my-0">
           <Streamdown
             mode={isStreaming ? undefined : 'static'}
             // animated={isStreaming ? STREAMDOWN_ANIMATION : undefined}
@@ -1219,7 +1219,7 @@ function ImageLightbox({
 
 function EvolutionProposalMarkdown({ content }: { content: string }) {
   return (
-    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[15px] leading-7 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1.1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[1rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.95rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.9rem] [&_h4]:font-semibold [&_h4]:leading-6 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.85rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.8rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
+    <div className="chat-markdown prose max-h-[22rem] max-w-none overflow-y-auto pr-2 text-[14px] leading-6 text-[#5f5753] [scrollbar-gutter:stable] [&_code]:rounded-[4px] [&_code]:bg-[#f3eeea] [&_code]:px-1 [&_h1]:my-0 [&_h1]:text-[1rem] [&_h1]:font-semibold [&_h1]:leading-6 [&_h1+*]:mt-2.5 [&_h2]:my-0 [&_h2]:text-[0.95rem] [&_h2]:font-semibold [&_h2]:leading-6 [&_h2+*]:mt-2 [&_h3]:my-0 [&_h3]:text-[0.9rem] [&_h3]:font-semibold [&_h3]:leading-6 [&_h3+*]:mt-2 [&_h4]:my-0 [&_h4]:text-[0.85rem] [&_h4]:font-semibold [&_h4]:leading-5 [&_h4+*]:mt-1.5 [&_h5]:my-0 [&_h5]:text-[0.8rem] [&_h5]:font-semibold [&_h5]:leading-5 [&_h5+*]:mt-1.5 [&_h6]:my-0 [&_h6]:text-[0.75rem] [&_h6]:font-semibold [&_h6]:leading-5 [&_h6+*]:mt-1.5 [&_ol]:my-2 [&_ol]:ps-5 [&_ol>li]:ps-1 [&_p]:m-0 [&_p+p]:mt-2.5 [&_pre]:rounded-[12px] [&_pre]:border [&_pre]:border-[#ebe2dc] [&_pre]:bg-[#f8f4f1] [&_pre]:px-3.5 [&_pre]:py-3 [&_ul]:my-2 [&_ul]:ps-4 [&_ul>li]:ps-1">
       <Streamdown
         mode="static"
         plugins={STREAMDOWN_PLUGINS}
@@ -1315,6 +1315,7 @@ function ToolGroupCard({
     [part.collapsed, part.items],
   );
   const previousGroupStateKeyRef = useRef(groupStateKey);
+  const transitionSyncTimerRef = useRef<number | null>(null);
   const transitionStartTimerRef = useRef<number | null>(null);
   const transitionFinishTimerRef = useRef<number | null>(null);
   const [childrenMounted, setChildrenMounted] = useState(() => !part.collapsed);
@@ -1322,6 +1323,10 @@ function ToolGroupCard({
   const [transitionMode, setTransitionMode] = useState<ToolGroupTransitionMode>('idle');
 
   const clearTransitionTimers = useCallback(() => {
+    if (transitionSyncTimerRef.current !== null) {
+      window.clearTimeout(transitionSyncTimerRef.current);
+      transitionSyncTimerRef.current = null;
+    }
     if (transitionStartTimerRef.current !== null) {
       window.clearTimeout(transitionStartTimerRef.current);
       transitionStartTimerRef.current = null;
@@ -1330,6 +1335,18 @@ function ToolGroupCard({
       window.clearTimeout(transitionFinishTimerRef.current);
       transitionFinishTimerRef.current = null;
     }
+  }, []);
+
+  const syncExpandedTransitionState = useCallback(() => {
+    setTransitionMode('idle');
+    setChildrenMounted(true);
+    setChildrenExpanded(true);
+  }, []);
+
+  const syncCollapsedTransitionState = useCallback(() => {
+    setTransitionMode('idle');
+    setChildrenMounted(false);
+    setChildrenExpanded(false);
   }, []);
 
   const startCollapseTransition = useCallback((mode: 'manual-collapsing' | 'auto-collapsing') => {
@@ -1369,24 +1386,33 @@ function ToolGroupCard({
 
     if (!part.collapsed) {
       clearTransitionTimers();
-      setTransitionMode('idle');
-      setChildrenMounted(true);
-      setChildrenExpanded(true);
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        syncExpandedTransitionState();
+      }, 0);
       return;
     }
 
     if (!wasCollapsed) {
-      startCollapseTransition('auto-collapsing');
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        startCollapseTransition('auto-collapsing');
+      }, 0);
       return;
     }
 
     if (previousGroupStateKey !== groupStateKey) {
       clearTransitionTimers();
-      setTransitionMode('idle');
-      setChildrenMounted(false);
-      setChildrenExpanded(false);
+      transitionSyncTimerRef.current = window.setTimeout(() => {
+        syncCollapsedTransitionState();
+      }, 0);
     }
-  }, [clearTransitionTimers, groupStateKey, part.collapsed, startCollapseTransition]);
+  }, [
+    clearTransitionTimers,
+    groupStateKey,
+    part.collapsed,
+    startCollapseTransition,
+    syncCollapsedTransitionState,
+    syncExpandedTransitionState,
+  ]);
 
   useEffect(() => clearTransitionTimers, [clearTransitionTimers]);
 

@@ -513,4 +513,120 @@ describe('buildAssistantDisplayModel', () => {
       }),
     ]);
   });
+
+  it('keeps untimestamped live tools in their original arrival order', () => {
+    const display = buildAssistantDisplayModel(null, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: true,
+      liveToolMessages: [
+        {
+          role: 'assistant',
+          id: 'live-tool-1',
+          toolCallId: 'tool-1',
+          toolName: 'read',
+          content: [
+            { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { filePath: '/tmp/a.ts' } },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-1',
+              toolCallId: 'tool-1',
+              name: 'read',
+              status: 'completed',
+              updatedAt: 1,
+              input: { filePath: '/tmp/a.ts' },
+            },
+          ],
+        } as RawMessage,
+        {
+          role: 'assistant',
+          id: 'live-tool-2',
+          toolCallId: 'tool-2',
+          toolName: 'fetch',
+          content: [
+            { type: 'toolCall', id: 'tool-2', name: 'fetch', arguments: { url: 'https://example.com' } },
+          ],
+          _toolStatuses: [
+            {
+              id: 'tool-2',
+              toolCallId: 'tool-2',
+              name: 'fetch',
+              status: 'completed',
+              updatedAt: 2,
+              input: { url: 'https://example.com' },
+            },
+          ],
+        } as RawMessage,
+      ],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        items: [
+          expect.objectContaining({ id: 'tool-1', name: 'read' }),
+          expect.objectContaining({ id: 'tool-2', name: 'fetch' }),
+        ],
+      }),
+    ]);
+  });
+
+  it('collapses a tool group once any later assistant part appears during streaming', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { filePath: '/tmp/a.ts' } },
+        {
+          type: 'toolCall',
+          id: 'tool-evo',
+          name: 'evolution_proposal',
+          arguments: {
+            proposalId: 'evo-1',
+            description: 'Split the fallback loader into a separate helper',
+            tabs: [{ kind: 'tool', label: 'Policy', content: '...' }],
+          },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'read',
+          status: 'completed',
+          updatedAt: 1,
+          input: { filePath: '/tmp/a.ts' },
+        },
+        {
+          id: 'tool-evo',
+          toolCallId: 'tool-evo',
+          name: 'evolution_proposal',
+          status: 'completed',
+          result: '{"ok":true,"proposalId":"evo-1","deliveryMode":"card","channel":"desktop"}',
+          updatedAt: 2,
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: true,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        collapsed: true,
+        items: [expect.objectContaining({ id: 'tool-1', name: 'read' })],
+      }),
+      expect.objectContaining({
+        type: 'tool_item',
+        item: expect.objectContaining({ id: 'tool-evo', name: 'evolution_proposal' }),
+      }),
+    ]);
+  });
 });

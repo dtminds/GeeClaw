@@ -987,7 +987,8 @@ function extractLiveAssistantDisplayParts(
         toolStatus,
         typeof message.timestamp === 'number' ? message.timestamp : undefined,
       ),
-      timestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.MAX_SAFE_INTEGER - index,
+      timestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.MAX_SAFE_INTEGER,
+      order: index,
     });
   });
 
@@ -1163,14 +1164,24 @@ function resolveToolGroupCollapseState(
   parts: AssistantDisplayPart[],
   isStreaming: boolean,
 ): AssistantDisplayPart[] {
+  const hasLaterAssistantContent = (part: AssistantDisplayPart): boolean => {
+    if (part.type === 'text' || part.type === 'thinking') {
+      return part.text.trim().length > 0;
+    }
+
+    if (part.type === 'tool_item') {
+      return true;
+    }
+
+    return false;
+  };
+
   return parts.map((part, index) => {
     if (part.type !== 'tool_group') {
       return part;
     }
 
-    const hasLaterAssistantText = parts.slice(index + 1).some((candidate) => (
-      candidate.type === 'text' && candidate.text.trim().length > 0
-    ));
+    const hasLaterAssistantText = parts.slice(index + 1).some(hasLaterAssistantContent);
 
     return {
       ...part,

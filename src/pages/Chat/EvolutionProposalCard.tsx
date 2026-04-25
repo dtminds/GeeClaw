@@ -126,7 +126,7 @@ export function EvolutionProposalCard({
           <div className="flex items-center justify-between gap-3 px-1">
             <div
               className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold',
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-semibold leading-5',
                 isResolved
                   ? 'border border-[#e6e6e6] bg-white text-[#fb6a33]'
                   : 'border border-[#f1ddd2] bg-white/86 text-[#bc6952]',
@@ -148,7 +148,7 @@ export function EvolutionProposalCard({
             ) : null}
           </div>
           {proposal.description ? (
-            <p className="mt-3 max-w-[46rem] px-2 text-[16px] font-medium text-[#3d3734]">
+            <p className="mt-3 max-w-[46rem] px-2 text-[15px] font-medium leading-6 text-[#3d3734]">
               {proposal.description}
             </p>
           ) : null}
