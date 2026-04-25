@@ -4,10 +4,8 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
-import { AppError } from '@/lib/error-model';
 import { hostApiFetch } from '@/lib/host-api';
 import {
-  cleanUserMessageText,
   renderSkillMarkersAsPlainText,
 } from '@/lib/chat-message-text';
 import type { CronAgentRunSummary } from '@/types/cron';
@@ -39,7 +37,7 @@ import {
   createConversationResetState,
   createEmptyToolRuntimeState,
 } from './chat/state';
-import type { ChatMessageAttachmentInput, ChatState, ChatViewMode } from './chat/state';
+import type { ChatMessageAttachmentInput, ChatState } from './chat/state';
 import {
   buildCronRunSessionKey,
   buildDefaultMainSessionKey,
@@ -78,16 +76,24 @@ import {
 import {
   extractTextFromRuntimeMessage,
   extractToolOutputText,
-  getLatestMessagePreview,
   getMessageText,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
-  hasPersistedOptimisticUserCopy,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
   toSessionPreview,
   toMs,
 } from './chat/utils';
+import {
+  appendPendingOptimisticUserMessage,
+  buildDesktopSessionMetadataSync,
+  CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS,
+  createHistoryRequestSnapshot,
+  getHistoryRequestKey,
+  isHistoryUnavailableDuringGatewayStartup,
+  isSameHistoryRequest,
+} from './chat/history-actions';
+import type { CronRunMessagesResponse } from './chat/history-actions';
 import { useAgentsStore } from './agents';
 import { useGatewayStore } from './gateway';
 
@@ -115,10 +121,6 @@ export {
   stripRenderedPrefixFromStreamingText,
 } from './chat/utils';
 
-type CronRunMessagesResponse = {
-  messages?: RawMessage[];
-};
-
 // Module-level timestamp tracking the last chat event received.
 // Used by the safety timeout to avoid false-positive "no response" errors
 // during tool-use conversations where the current live text may be empty while
@@ -136,9 +138,6 @@ let _historyStartupRetryState: { requestKey: string; attempt: number; mode: 'def
 // error (e.g. "terminated"), it may retry internally and recover. We wait
 // before committing the error to give the recovery path a chance.
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
-const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
@@ -183,59 +182,6 @@ function clearHistoryStartupRetryTimer(): void {
 function clearHistoryStartupRetry(): void {
   clearHistoryStartupRetryTimer();
   _historyStartupRetryState = null;
-}
-
-function getHistoryStartupErrorCode(error: unknown): string | undefined {
-  if (error instanceof AppError) {
-    const code = error.details?.gatewayErrorCode;
-    return typeof code === 'string' ? code : undefined;
-  }
-  if (error && typeof error === 'object') {
-    const code = (error as { gatewayErrorCode?: unknown }).gatewayErrorCode;
-    if (typeof code === 'string') {
-      return code;
-    }
-    const detailsCode = (error as { details?: { gatewayErrorCode?: unknown } }).details?.gatewayErrorCode;
-    return typeof detailsCode === 'string' ? detailsCode : undefined;
-  }
-  return undefined;
-}
-
-function isHistoryUnavailableDuringGatewayStartup(error: unknown): boolean {
-  const structuredCode = getHistoryStartupErrorCode(error);
-  if (structuredCode === CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE) {
-    return true;
-  }
-  return String(error).toLowerCase().includes('chat.history unavailable during gateway startup');
-}
-
-function getHistoryRequestKey(request: {
-  sessionKey: string;
-  desktopSessionId: string;
-  viewMode: ChatViewMode;
-  cronRunId: string;
-  generation: number;
-}): string {
-  return `${request.sessionKey}::${request.desktopSessionId}::${request.viewMode}::${request.cronRunId}::${request.generation}`;
-}
-
-function isSameHistoryRequest(
-  request: {
-    sessionKey: string;
-    desktopSessionId: string;
-    viewMode: ChatViewMode;
-    cronRunId: string;
-    generation: number;
-  },
-  state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentViewMode' | 'selectedCronRun' | 'historyRequestGeneration'>,
-): boolean {
-  return (
-    state.currentSessionKey === request.sessionKey
-    && state.currentDesktopSessionId === request.desktopSessionId
-    && state.currentViewMode === request.viewMode
-    && (state.selectedCronRun?.id ?? '') === request.cronRunId
-    && state.historyRequestGeneration === request.generation
-  );
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
@@ -710,7 +656,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadHistory: async (quiet = false, mode = 'default') => {
     const startedAt = Date.now();
     clearHistoryStartupRetryTimer();
-    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun, historyRequestGeneration } = get();
+    const { currentSessionKey, currentDesktopSessionId, currentViewMode, selectedCronRun } = get();
     logChatTrace('loadHistory:start', {
       quiet,
       requestSessionKey: currentSessionKey,
@@ -729,13 +675,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!quiet) set({ loading: false });
       return;
     }
-    const request = {
-      sessionKey: currentSessionKey,
-      desktopSessionId: currentDesktopSessionId,
-      viewMode: currentViewMode,
-      cronRunId: selectedCronRun?.id ?? '',
-      generation: historyRequestGeneration,
-    };
+    const request = createHistoryRequestSnapshot(get());
     if (!quiet) set({ loading: true, error: null });
 
     if (currentViewMode === 'cron' && selectedCronRun) {
@@ -817,39 +757,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const enrichedMessages = filteredMessages;
         const thinkingLevel = data.thinkingLevel ? String(data.thinkingLevel) : null;
 
-        // Preserve the optimistic user message during an active send.
-        // The Gateway may not include the user's message in chat.history
-        // until the run completes, causing it to flash out of the UI.
-        let finalMessages = enrichedMessages;
-        const userMsgAt = get().lastUserMessageAt;
-        if (get().sending && userMsgAt) {
-          const userMsMs = toMs(userMsgAt);
-          const {
-            messages: currentMsgs,
-            pendingOptimisticUserId,
-            pendingOptimisticUserAnchorAt,
-            pendingOptimisticUserIndex,
-          } = get();
-          const optimistic = pendingOptimisticUserId
-            ? currentMsgs.find((message) => message.id === pendingOptimisticUserId)
-            : [...currentMsgs].reverse().find(
-                (m) => m.role === 'user' && m.timestamp && Math.abs(toMs(m.timestamp) - userMsMs) < 5000,
-              );
-          const optimisticCurrentIndex = optimistic ? currentMsgs.indexOf(optimistic) : -1;
-          const isConversationStart = optimisticCurrentIndex >= 0
-            && !currentMsgs.slice(0, optimisticCurrentIndex).some(
-              (message) => message.role === 'user' || message.role === 'assistant',
-            );
-          if (optimistic && !hasPersistedOptimisticUserCopy(
-            enrichedMessages,
-            optimistic,
-            pendingOptimisticUserAnchorAt,
-            isConversationStart,
-            pendingOptimisticUserIndex ?? (optimisticCurrentIndex >= 0 ? optimisticCurrentIndex : null),
-          )) {
-            finalMessages = [...enrichedMessages, optimistic];
-          }
-        }
+        const finalMessages = appendPendingOptimisticUserMessage(enrichedMessages, get());
 
         if (!isSameHistoryRequest(request, get())) {
           logChatTrace('loadHistory:stale-before-apply', {
@@ -974,42 +882,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
             console.warn('[loadHistory] Failed to hydrate file previews:', error);
           });
 
-        const currentDesktopSession = get().desktopSessions.find((session) => session.id === currentDesktopSessionId);
-        let nextTitle = currentDesktopSession?.title ?? '';
-        const nextLastMessagePreview = getLatestMessagePreview(finalMessages);
-        const firstUserMsg = finalMessages.find((m) => m.role === 'user');
-        if (firstUserMsg && !nextTitle.trim()) {
-          const labelText = renderSkillMarkersAsPlainText(cleanUserMessageText(getMessageText(firstUserMsg.content)));
-          if (labelText) {
-            nextTitle = labelText.length > 50 ? `${labelText.slice(0, 50)}…` : labelText;
-          }
-        }
-
-        const lastMsg = finalMessages[finalMessages.length - 1];
-        const lastAt = lastMsg?.timestamp ? toMs(lastMsg.timestamp) : undefined;
-        if (currentDesktopSessionId && currentDesktopSession) {
-          const needsTitleUpdate = nextTitle !== currentDesktopSession.title;
-          const needsPreviewUpdate = nextLastMessagePreview !== currentDesktopSession.lastMessagePreview;
-          const needsUpdatedAt = typeof lastAt === 'number' && lastAt !== currentDesktopSession.updatedAt;
-          if (needsTitleUpdate || needsPreviewUpdate || needsUpdatedAt) {
+        if (currentDesktopSessionId) {
+          const currentDesktopSession = get().desktopSessions.find((session) => session.id === currentDesktopSessionId);
+          const metadataSync = buildDesktopSessionMetadataSync(currentDesktopSession, finalMessages);
+          if (metadataSync) {
             set((s) => ({
               desktopSessions: s.desktopSessions.map((session) => (
                 session.id === currentDesktopSessionId
-                  ? {
-                      ...session,
-                      title: nextTitle,
-                      lastMessagePreview: nextLastMessagePreview,
-                      updatedAt: typeof lastAt === 'number' ? lastAt : session.updatedAt,
-                    }
+                  ? metadataSync.session
                   : session
               )),
             }));
 
-            void updateDesktopSessionRequest(currentDesktopSessionId, {
-              ...(needsTitleUpdate ? { title: nextTitle } : {}),
-              ...(needsPreviewUpdate ? { lastMessagePreview: nextLastMessagePreview } : {}),
-              ...(needsUpdatedAt && typeof lastAt === 'number' ? { updatedAt: lastAt } : {}),
-            }).catch((error) => {
+            void updateDesktopSessionRequest(currentDesktopSessionId, metadataSync.patch).catch((error) => {
               console.warn(`Failed to sync desktop session ${currentDesktopSessionId}:`, error);
             });
           }
