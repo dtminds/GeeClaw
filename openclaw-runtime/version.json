@@ -1,26 +1,26 @@
 {
   "enabled": true,
   "repo": "dtminds/GeeClaw",
-  "version": "2026.4.22-r1",
-  "releaseTag": "openclaw-sidecar-v2026.4.22-r1",
+  "version": "2026.4.23-r1",
+  "releaseTag": "openclaw-sidecar-v2026.4.23-r1",
   "assets": {
     "darwin-arm64": {
-      "name": "openclaw-sidecar-2026.4.22-r1-darwin-arm64.tar.gz",
-      "sha256": "21d72f9c375d0f6f8838748af0b32ef64e8fd3a19d156f3e3ee2e47e5e28aef1",
-      "size": 54935696,
-      "openclawVersion": "2026.4.22"
+      "name": "openclaw-sidecar-2026.4.23-r1-darwin-arm64.tar.gz",
+      "sha256": "b3e7c7817ec9b829588ddb55432249c961f53971e2e8cf69551a7360f2f1dc38",
+      "size": 55344556,
+      "openclawVersion": "2026.4.23"
     },
     "darwin-x64": {
-      "name": "openclaw-sidecar-2026.4.22-r1-darwin-x64.tar.gz",
-      "sha256": "ec1e3ef2650ab42804cb622930886ab55f87e87ce20edcbb4188278f6d8dd4cb",
-      "size": 57385600,
-      "openclawVersion": "2026.4.22"
+      "name": "openclaw-sidecar-2026.4.23-r1-darwin-x64.tar.gz",
+      "sha256": "96b085aa8c234dd1661b05d0b277e40e694a88f9a92036302bcbbdb24af38b66",
+      "size": 57784050,
+      "openclawVersion": "2026.4.23"
     },
     "win32-x64": {
-      "name": "openclaw-sidecar-2026.4.22-r1-win32-x64.tar.gz",
-      "sha256": "b2b95b22d3d05d2726ba9d923327fd73010288f32f8110411f624e5582cddf81",
-      "size": 60159704,
-      "openclawVersion": "2026.4.22"
+      "name": "openclaw-sidecar-2026.4.23-r1-win32-x64.tar.gz",
+      "sha256": "1e7e6bc92739917a508aa9799094065a0c15d93783d48a289bddd0c539e50c3e",
+      "size": 60509112,
+      "openclawVersion": "2026.4.23"
     }
   }
 }
