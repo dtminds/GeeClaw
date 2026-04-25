@@ -121,7 +121,7 @@ describe('buildAssistantDisplayModel', () => {
     ]);
   });
 
-  it('keeps inline errored tool results marked as error even when they include text or an error payload', () => {
+  it('keeps inline errored tool results marked as error even when they include text, an error payload, or a failed status', () => {
     const message = {
       role: 'assistant',
       content: [
@@ -129,6 +129,8 @@ describe('buildAssistantDisplayModel', () => {
         { type: 'toolResult', id: 'tool-1', name: 'exec', text: 'cat: missing.txt: No such file or directory', status: 'error' },
         { type: 'toolCall', id: 'tool-2', name: 'exec', arguments: { command: 'ls /missing' } },
         { type: 'toolResult', id: 'tool-2', name: 'exec', error: 'ls: /missing: No such file or directory' },
+        { type: 'toolCall', id: 'tool-3', name: 'exec', arguments: { command: 'python broken.py' } },
+        { type: 'toolResult', id: 'tool-3', name: 'exec', text: 'Traceback: boom', status: 'failed' },
       ],
       _toolStatuses: [
         {
@@ -146,6 +148,14 @@ describe('buildAssistantDisplayModel', () => {
           status: 'running',
           updatedAt: 2,
           input: { command: 'ls /missing' },
+        },
+        {
+          id: 'tool-3',
+          toolCallId: 'tool-3',
+          name: 'exec',
+          status: 'running',
+          updatedAt: 3,
+          input: { command: 'python broken.py' },
         },
       ],
     } as unknown as RawMessage;
@@ -171,6 +181,11 @@ describe('buildAssistantDisplayModel', () => {
             id: 'tool-2',
             status: 'error',
             result: 'ls: /missing: No such file or directory',
+          }),
+          expect.objectContaining({
+            id: 'tool-3',
+            status: 'error',
+            result: 'Traceback: boom',
           }),
         ],
       }),
@@ -225,6 +240,71 @@ describe('buildAssistantDisplayModel', () => {
             name: 'fetch',
             status: 'completed',
           }),
+        ],
+      }),
+    ]);
+  });
+
+  it('keeps distinct top-level tool_calls with the same tool name when ids differ', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'I fetched two pages for comparison.' },
+      ],
+      tool_calls: [
+        {
+          id: 'tool-1',
+          function: {
+            name: 'fetch',
+            arguments: JSON.stringify({ url: 'https://example.com/a' }),
+          },
+        },
+        {
+          id: 'tool-2',
+          function: {
+            name: 'fetch',
+            arguments: JSON.stringify({ url: 'https://example.com/b' }),
+          },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'fetch',
+          status: 'completed',
+          result: 'ok',
+          updatedAt: 1,
+          input: { url: 'https://example.com/a' },
+        },
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'fetch',
+          status: 'completed',
+          result: 'ok',
+          updatedAt: 2,
+          input: { url: 'https://example.com/b' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: false,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({ type: 'text', text: 'I fetched two pages for comparison.' }),
+      expect.objectContaining({
+        type: 'tool_group',
+        summary: 'Made 2 web requests',
+        items: [
+          expect.objectContaining({ id: 'tool-1', name: 'fetch' }),
+          expect.objectContaining({ id: 'tool-2', name: 'fetch' }),
         ],
       }),
     ]);
