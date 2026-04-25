@@ -668,6 +668,62 @@ describe('buildAssistantDisplayModel', () => {
     ]);
   });
 
+  it('counts file_path inputs without treating cwd as a file path', () => {
+    const message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'toolCall',
+          id: 'tool-1',
+          name: 'read',
+          arguments: { filePath: '/tmp/a.ts' },
+        },
+        {
+          type: 'toolCall',
+          id: 'tool-2',
+          name: 'read',
+          arguments: { file_path: '/tmp/a.ts', cwd: '/tmp' },
+        },
+      ],
+      _toolStatuses: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'read',
+          status: 'completed',
+          updatedAt: 1,
+          input: { filePath: '/tmp/a.ts' },
+        },
+        {
+          id: 'tool-2',
+          toolCallId: 'tool-2',
+          name: 'read',
+          status: 'completed',
+          updatedAt: 2,
+          input: { file_path: '/tmp/a.ts', cwd: '/tmp' },
+        },
+      ],
+    } as unknown as RawMessage;
+
+    const display = buildAssistantDisplayModel(message, {
+      showThinking: false,
+      showToolCalls: true,
+      isStreaming: false,
+      liveToolMessages: [],
+      liveStreamSegments: [],
+    });
+
+    expect(display.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool_group',
+        summary: 'Read 1 file',
+        summaryParts: [
+          expect.objectContaining({ category: 'read_files', count: 1 }),
+        ],
+      }),
+    ]);
+  });
+
   it('collapses a tool group once any later assistant part appears during streaming', () => {
     const message = {
       role: 'assistant',

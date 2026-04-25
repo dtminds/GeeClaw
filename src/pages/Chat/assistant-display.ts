@@ -1038,11 +1038,11 @@ function extractToolFilePaths(input: unknown): string[] {
   const record = input as Record<string, unknown>;
   const candidates = [
     record.filePath,
+    record.file_path,
     record.path,
     record.targetFile,
     record.target_file,
     record.relativePath,
-    record.cwd,
     record.paths,
     record.files,
   ];
