@@ -3,7 +3,6 @@ import {
   cleanUserMessageText,
   renderSkillMarkersAsPlainText,
 } from '@/lib/chat-message-text';
-import type { CronAgentRunSummary } from '@/types/cron';
 import type { DesktopSessionSummary, RawMessage } from './model';
 import type { ChatState, ChatViewMode } from './state';
 import {
@@ -15,6 +14,8 @@ import {
 
 export const CHAT_HISTORY_STARTUP_UNAVAILABLE_CODE = 'CHAT_HISTORY_STARTUP_UNAVAILABLE';
 export const CHAT_HISTORY_STARTUP_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+const OPTIMISTIC_MATCH_THRESHOLD_MS = 5000;
+const MAX_SESSION_TITLE_LENGTH = 50;
 
 export type HistoryRequestSnapshot = {
   sessionKey: string;
@@ -103,23 +104,33 @@ export function isHistoryUnavailableDuringGatewayStartup(error: unknown): boolea
   return String(error).toLowerCase().includes('chat.history unavailable during gateway startup');
 }
 
+function findRecentOptimisticUserMessage(messages: RawMessage[], userMsgAtMs: number): RawMessage | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (
+      message.role === 'user'
+      && message.timestamp != null
+      && Math.abs(toMs(message.timestamp) - userMsgAtMs) < OPTIMISTIC_MATCH_THRESHOLD_MS
+    ) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
 export function appendPendingOptimisticUserMessage(
   historyMessages: RawMessage[],
   state: OptimisticUserState,
 ): RawMessage[] {
   const userMsgAt = state.lastUserMessageAt;
-  if (!state.sending || !userMsgAt) {
+  if (!state.sending || userMsgAt == null) {
     return historyMessages;
   }
 
   const userMsMs = toMs(userMsgAt);
   const optimistic = state.pendingOptimisticUserId
     ? state.messages.find((message) => message.id === state.pendingOptimisticUserId)
-    : [...state.messages].reverse().find(
-        (message) => message.role === 'user'
-          && message.timestamp
-          && Math.abs(toMs(message.timestamp) - userMsMs) < 5000,
-      );
+    : findRecentOptimisticUserMessage(state.messages, userMsMs);
   const optimisticCurrentIndex = optimistic ? state.messages.indexOf(optimistic) : -1;
   const isConversationStart = optimisticCurrentIndex >= 0
     && !state.messages.slice(0, optimisticCurrentIndex).some(
@@ -153,12 +164,14 @@ export function buildDesktopSessionMetadataSync(
   if (firstUserMsg && !nextTitle.trim()) {
     const labelText = renderSkillMarkersAsPlainText(cleanUserMessageText(getMessageText(firstUserMsg.content)));
     if (labelText) {
-      nextTitle = labelText.length > 50 ? `${labelText.slice(0, 50)}…` : labelText;
+      nextTitle = labelText.length > MAX_SESSION_TITLE_LENGTH
+        ? `${labelText.slice(0, MAX_SESSION_TITLE_LENGTH)}…`
+        : labelText;
     }
   }
 
   const lastMsg = messages[messages.length - 1];
-  const lastAt = lastMsg?.timestamp ? toMs(lastMsg.timestamp) : undefined;
+  const lastAt = lastMsg?.timestamp != null ? toMs(lastMsg.timestamp) : undefined;
   const needsTitleUpdate = nextTitle !== session.title;
   const needsPreviewUpdate = nextLastMessagePreview !== session.lastMessagePreview;
   const needsUpdatedAt = typeof lastAt === 'number' && lastAt !== session.updatedAt;
@@ -187,5 +200,3 @@ export function buildDesktopSessionMetadataSync(
 export type CronRunMessagesResponse = {
   messages?: RawMessage[];
 };
-
-export type CronRunHistoryTarget = Pick<CronAgentRunSummary, 'id' | 'jobId' | 'sessionKey'>;

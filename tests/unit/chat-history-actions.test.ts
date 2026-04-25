@@ -116,6 +116,30 @@ describe('chat history action helpers', () => {
     })).toEqual([persisted]);
   });
 
+  it('finds the most recent matching optimistic user message without relying on truthy timestamps', () => {
+    const older: RawMessage = {
+      id: 'older-user',
+      role: 'user',
+      content: 'older',
+      timestamp: 0,
+    };
+    const latest: RawMessage = {
+      id: 'latest-user',
+      role: 'user',
+      content: 'latest',
+      timestamp: 0,
+    };
+
+    expect(appendPendingOptimisticUserMessage([], {
+      sending: true,
+      lastUserMessageAt: 0,
+      pendingOptimisticUserId: null,
+      pendingOptimisticUserAnchorAt: null,
+      pendingOptimisticUserIndex: null,
+      messages: [older, latest],
+    })).toEqual([latest]);
+  });
+
   it('builds desktop session title, preview, and timestamp metadata from messages', () => {
     const messages: RawMessage[] = [
       {
