@@ -32,12 +32,28 @@ import type {
   DesktopSessionSummary,
   ProposalDecisionEntry,
   RawMessage,
-  SessionTokenInfo,
   ToolStatus,
-  ToolStreamEntry,
 } from './chat/model';
 import {
-  collectToolUpdates,
+  createChatInitialState,
+  createConversationResetState,
+  createEmptyToolRuntimeState,
+} from './chat/state';
+import type { ChatMessageAttachmentInput, ChatState, ChatViewMode } from './chat/state';
+import {
+  buildCronRunSessionKey,
+  buildDefaultMainSessionKey,
+  buildTemporarySessionKey,
+  getAgentIdFromSessionKey,
+} from './chat/session-keys';
+import {
+  createDesktopSessionRequest,
+  deleteDesktopSessionRequest,
+  fetchDesktopSessions,
+  fetchSessionTokenInfoByKey,
+  updateDesktopSessionRequest,
+} from './chat/api';
+import {
   hasNonToolAssistantContent,
   isErroredToolResult,
   isToolOnlyMessage,
@@ -47,6 +63,18 @@ import {
   parseDurationMs,
   upsertToolStatuses,
 } from './chat/tool-status';
+import {
+  buildOrderedLiveAssistantContentBlocks,
+  buildToolStreamMessage,
+  collectLiveToolStatuses,
+  hasRunningLiveToolMessages,
+  mergeHistoryToolStatusesIntoMessages,
+  mergeToolStatusesIntoEquivalentAssistantMessage,
+  normalizeFinalAssistantContentBlocks,
+  patchToolRuntimeWithHistory,
+  reconcileToolRuntimeWithHistory,
+  syncToolMessages,
+} from './chat/live-runtime';
 import {
   extractTextFromRuntimeMessage,
   extractToolOutputText,
@@ -87,90 +115,9 @@ export {
   stripRenderedPrefixFromStreamingText,
 } from './chat/utils';
 
-interface PendingComposerSeed {
-  text: string;
-  nonce: number;
-  tokenizableSkillSlugs?: string[];
-}
-
-type ChatViewMode = 'session' | 'cron';
-
 type CronRunMessagesResponse = {
   messages?: RawMessage[];
 };
-
-interface ChatState {
-  // Messages
-  messages: RawMessage[];
-  loading: boolean;
-  error: string | null;
-
-  // Streaming
-  sending: boolean;
-  activeRunId: string | null;
-  streamingText: string;
-  streamingTextStartedAt: number | null;
-  streamingTextLastEventAt: number | null;
-  streamSegments: Array<{ text: string; ts: number }>;
-  toolStreamById: Map<string, ToolStreamEntry>;
-  toolStreamOrder: string[];
-  toolMessages: RawMessage[];
-  toolResultHistoryReloadedIds: Set<string>;
-  pendingFinal: boolean;
-  lastUserMessageAt: number | null;
-  pendingOptimisticUserId: string | null;
-  pendingOptimisticUserAnchorAt: number | null;
-  pendingOptimisticUserIndex: number | null;
-  historyRequestGeneration: number;
-  /** Images collected from tool results, attached to the next assistant message */
-  pendingToolImages: AttachedFileMeta[];
-  pendingToolHiddenCount: number;
-
-  // Sessions
-  desktopSessions: DesktopSessionSummary[];
-  isDraftSession: boolean;
-  currentDesktopSessionId: string;
-  currentSessionKey: string;
-  currentAgentId: string;
-  currentViewMode: ChatViewMode;
-  selectedCronRun: CronAgentRunSummary | null;
-  sessionTokenInfoByKey: Record<string, SessionTokenInfo>;
-  pendingComposerSeed: PendingComposerSeed | null;
-
-  // Thinking
-  showThinking: boolean;
-  showToolCalls: boolean;
-  thinkingLevel: string | null;
-
-  // Actions
-  loadSessions: () => Promise<void>;
-  loadDesktopSessionSummaries: () => Promise<void>;
-  openAgentMainSession: (agentId: string) => Promise<void>;
-  switchSession: (key: string) => void;
-  openCronRun: (run: CronAgentRunSummary) => Promise<void>;
-  newSession: () => Promise<void>;
-  newTemporarySession: (agentId?: string) => Promise<void>;
-  deleteSession: (key: string) => Promise<void>;
-  renameSession: (desktopSessionId: string, title: string) => Promise<void>;
-  cleanupEmptySession: () => Promise<void>;
-  loadHistory: (quiet?: boolean, mode?: 'default' | 'tool_patch') => Promise<void>;
-  sendMessage: (
-    text: string,
-    attachments?: Array<{ fileName: string; mimeType: string; fileSize: number; stagedPath: string; preview: string | null }>,
-    targetAgentId?: string | null,
-  ) => Promise<void>;
-  abortRun: () => Promise<void>;
-  handleChatEvent: (event: Record<string, unknown>) => void;
-  handleAgentEvent: (event: Record<string, unknown>) => void;
-  handleAgentDeleted: (agentId: string) => Promise<void>;
-  toggleThinking: () => void;
-  toggleToolCalls: () => void;
-  refresh: () => Promise<void>;
-  clearError: () => void;
-  queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => void;
-  consumePendingComposerSeed: () => void;
-  setEvolutionProposalDecision: (proposalId: string, decision: 'approved' | 'rejected') => Promise<void>;
-}
 
 // Module-level timestamp tracking the last chat event received.
 // Used by the safety timeout to avoid false-positive "no response" errors
@@ -207,69 +154,9 @@ function summarizeChatSelection(
   };
 }
 
-function createEmptyToolRuntimeState() {
-  return {
-    streamingText: '',
-    streamingTextStartedAt: null,
-    streamingTextLastEventAt: null,
-    streamSegments: [] as Array<{ text: string; ts: number }>,
-    toolStreamById: new Map<string, ToolStreamEntry>(),
-    toolStreamOrder: [] as string[],
-    toolMessages: [] as RawMessage[],
-    toolResultHistoryReloadedIds: new Set<string>(),
-  };
-}
-
-function asOptionalNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function extractSessionTokenInfo(session: Record<string, unknown>): SessionTokenInfo | null {
-  const info: SessionTokenInfo = {
-    inputTokens: asOptionalNumber(session.inputTokens),
-    outputTokens: asOptionalNumber(session.outputTokens),
-    totalTokens: asOptionalNumber(session.totalTokens),
-    contextTokens: asOptionalNumber(session.contextTokens),
-    totalTokensFresh: typeof session.totalTokensFresh === 'boolean' ? session.totalTokensFresh : undefined,
-  };
-
-  return Object.values(info).some((value) => value !== undefined) ? info : null;
-}
-
-async function fetchSessionTokenInfoByKey(): Promise<Record<string, SessionTokenInfo>> {
-  const gatewayData = await useGatewayStore.getState().rpc<Record<string, unknown>>('sessions.list', {});
-  const rawGatewaySessions = Array.isArray(gatewayData.sessions) ? gatewayData.sessions : [];
-  return Object.fromEntries(
-    rawGatewaySessions.flatMap((session) => {
-      const record = session as Record<string, unknown>;
-      const key = typeof record.key === 'string' ? record.key : '';
-      const tokenInfo = extractSessionTokenInfo(record);
-      return key && tokenInfo ? [[key, tokenInfo]] : [];
-    }),
-  );
-}
-
-function getAgentIdFromSessionKey(sessionKey: string): string {
-  if (!sessionKey.startsWith('agent:')) return 'main';
-  const parts = sessionKey.split(':');
-  return parts[1] || 'main';
-}
-
-function buildCronRunSessionKey(run: Pick<CronAgentRunSummary, 'agentId' | 'jobId' | 'id' | 'sessionKey'>): string {
-  return run.sessionKey || `agent:${run.agentId || 'main'}:cron:${run.jobId}:run:${run.id}`;
-}
-
-function buildDefaultMainSessionKey(agentId: string): string {
-  return `agent:${agentId}:geeclaw_main`;
-}
-
 function isMainSessionKey(sessionKey: string): boolean {
   const agentId = getAgentIdFromSessionKey(sessionKey);
   return sessionKey === resolveMainSessionKeyForAgent(agentId);
-}
-
-function buildTemporarySessionKey(agentId: string): string {
-  return `agent:${agentId}:geeclaw_tmp_${crypto.randomUUID()}`;
 }
 
 function clearErrorRecoveryTimer(): void {
@@ -349,57 +236,6 @@ function isSameHistoryRequest(
     && (state.selectedCronRun?.id ?? '') === request.cronRunId
     && state.historyRequestGeneration === request.generation
   );
-}
-
-const DESKTOP_SESSIONS_API = '/api/desktop-sessions';
-
-type DesktopSessionsListResponse = {
-  sessions?: DesktopSessionSummary[];
-};
-
-type DesktopSessionResponse = {
-  success: boolean;
-  session?: DesktopSessionSummary;
-  error?: string;
-};
-
-async function fetchDesktopSessions(): Promise<DesktopSessionSummary[]> {
-  const response = await hostApiFetch<DesktopSessionsListResponse>(DESKTOP_SESSIONS_API);
-  return Array.isArray(response.sessions) ? response.sessions : [];
-}
-
-async function createDesktopSessionRequest(title = '', gatewaySessionKey?: string): Promise<DesktopSessionSummary> {
-  const response = await hostApiFetch<DesktopSessionResponse>(DESKTOP_SESSIONS_API, {
-    method: 'POST',
-    body: JSON.stringify({ title, gatewaySessionKey, lastMessagePreview: '' }),
-  });
-  if (!response.success || !response.session) {
-    throw new Error(response.error || 'Failed to create desktop session');
-  }
-  return response.session;
-}
-
-async function updateDesktopSessionRequest(
-  id: string,
-  patch: {
-    title?: string;
-    updatedAt?: number;
-    gatewaySessionKey?: string;
-    lastMessagePreview?: string;
-    proposalStateEntries?: ProposalDecisionEntry[];
-  },
-): Promise<DesktopSessionSummary> {
-  const response = await hostApiFetch<DesktopSessionResponse>(
-    `${DESKTOP_SESSIONS_API}/${encodeURIComponent(id)}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    },
-  );
-  if (!response.success || !response.session) {
-    throw new Error(response.error || `Failed to update desktop session: ${id}`);
-  }
-  return response.session;
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
@@ -516,530 +352,10 @@ async function fetchReconciledDesktopSessions(options: {
   };
 }
 
-async function deleteDesktopSessionRequest(id: string): Promise<DesktopSessionSummary> {
-  const response = await hostApiFetch<DesktopSessionResponse>(
-    `${DESKTOP_SESSIONS_API}/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  );
-  if (!response.success || !response.session) {
-    throw new Error(response.error || `Failed to delete desktop session: ${id}`);
-  }
-  return response.session;
-}
-
-function buildToolStreamMessage(entry: ToolStreamEntry): RawMessage {
-  const content: ContentBlock[] = [
-    {
-      type: 'toolCall',
-      id: entry.toolCallId,
-      name: entry.name,
-      arguments: entry.args ?? {},
-    },
-  ];
-
-  if (entry.output) {
-    content.push({
-      type: 'toolResult',
-      id: entry.toolCallId,
-      name: entry.name,
-      text: entry.output,
-      status: entry.status,
-      isError: entry.status === 'error',
-    });
-  }
-
-  return {
-    role: 'assistant',
-    id: `live-tool:${entry.toolCallId}`,
-    toolCallId: entry.toolCallId,
-    toolName: entry.name,
-    timestamp: entry.startedAt,
-    content,
-    _toolStatuses: [
-      {
-        id: entry.toolCallId,
-        toolCallId: entry.toolCallId,
-        name: entry.name,
-        status: entry.status,
-        durationMs: entry.durationMs,
-        result: entry.output,
-        updatedAt: entry.updatedAt,
-        input: entry.args,
-      },
-    ],
-  };
-}
-
-function syncToolMessages(
-  toolStreamOrder: string[],
-  toolStreamById: Map<string, ToolStreamEntry>,
-): RawMessage[] {
-  return toolStreamOrder
-    .map((id) => toolStreamById.get(id)?.message)
-    .filter((message): message is RawMessage => Boolean(message));
-}
-
-function collectPersistedToolCallIds(messages: RawMessage[]): Set<string> {
-  const persisted = new Set<string>();
-
-  for (const message of messages) {
-    if (!message) continue;
-
-    if (isToolResultRole(message.role) && message.toolCallId) {
-      persisted.add(message.toolCallId);
-    }
-
-    for (const status of message._toolStatuses || []) {
-      const toolCallId = status.toolCallId || status.id;
-      if (!toolCallId) continue;
-      if (status.status !== 'running' || typeof status.result === 'string') {
-        persisted.add(toolCallId);
-      }
-    }
-  }
-
-  return persisted;
-}
-
-function reconcileToolRuntimeWithHistory(
-  toolStreamOrder: string[],
-  toolStreamById: Map<string, ToolStreamEntry>,
-  toolResultHistoryReloadedIds: Set<string>,
-  messages: RawMessage[],
-): {
-  toolStreamOrder: string[];
-  toolStreamById: Map<string, ToolStreamEntry>;
-  toolMessages: RawMessage[];
-  toolResultHistoryReloadedIds: Set<string>;
-} {
-  const persistedToolCallIds = collectPersistedToolCallIds(messages);
-  if (persistedToolCallIds.size === 0) {
-    return {
-      toolStreamOrder,
-      toolStreamById,
-      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
-      toolResultHistoryReloadedIds,
-    };
-  }
-
-  let changed = false;
-  const nextToolStreamOrder = toolStreamOrder.filter((toolCallId) => {
-    const keep = !persistedToolCallIds.has(toolCallId);
-    if (!keep) changed = true;
-    return keep;
-  });
-
-  if (!changed) {
-    return {
-      toolStreamOrder,
-      toolStreamById,
-      toolMessages: syncToolMessages(toolStreamOrder, toolStreamById),
-      toolResultHistoryReloadedIds,
-    };
-  }
-
-  const nextToolStreamById = new Map(toolStreamById);
-  const nextReloadedIds = new Set(toolResultHistoryReloadedIds);
-  for (const toolCallId of persistedToolCallIds) {
-    nextToolStreamById.delete(toolCallId);
-    nextReloadedIds.delete(toolCallId);
-  }
-
-  return {
-    toolStreamOrder: nextToolStreamOrder,
-    toolStreamById: nextToolStreamById,
-    toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
-    toolResultHistoryReloadedIds: nextReloadedIds,
-  };
-}
-
-function collectHistoryToolResultUpdates(message: RawMessage): ToolStatus[] {
-  const updates: ToolStatus[] = [];
-
-  if (isToolResultRole(message.role)) {
-    for (const update of collectToolUpdates(message, 'final')) {
-      if (!update.toolCallId) continue;
-      if (update.result === undefined && update.status === 'running') continue;
-      updates.push(update);
-    }
-  }
-
-  for (const status of message._toolStatuses || []) {
-    if (!status.toolCallId) continue;
-    if (status.result === undefined && status.status === 'running') continue;
-    updates.push(status);
-  }
-
-  return updates;
-}
-
-function collectMessageToolCallIds(message: RawMessage): Set<string> {
-  const toolCallIds = new Set<string>();
-
-  for (const update of collectToolUpdates(message, 'delta')) {
-    const toolCallId = update.toolCallId || update.id;
-    if (toolCallId) {
-      toolCallIds.add(toolCallId);
-    }
-  }
-
-  for (const status of message._toolStatuses || []) {
-    const toolCallId = status.toolCallId || status.id;
-    if (toolCallId) {
-      toolCallIds.add(toolCallId);
-    }
-  }
-
-  return toolCallIds;
-}
-
-function mergeHistoryToolStatusesIntoMessages(
-  currentMessages: RawMessage[],
-  historyMessages: RawMessage[],
-): RawMessage[] {
-  const updatesByToolCallId = new Map<string, ToolStatus[]>();
-
-  for (const historyMessage of historyMessages) {
-    for (const update of collectHistoryToolResultUpdates(historyMessage)) {
-      if (!update.toolCallId) continue;
-      const existing = updatesByToolCallId.get(update.toolCallId) || [];
-      existing.push(update);
-      updatesByToolCallId.set(update.toolCallId, existing);
-    }
-  }
-
-  if (updatesByToolCallId.size === 0) {
-    return currentMessages;
-  }
-
-  return currentMessages.map((message) => {
-    if (message.role !== 'assistant') {
-      return message;
-    }
-
-    const updates: ToolStatus[] = [];
-    for (const toolCallId of collectMessageToolCallIds(message)) {
-      const matching = updatesByToolCallId.get(toolCallId);
-      if (matching) {
-        updates.push(...matching);
-      }
-    }
-
-    if (updates.length === 0) {
-      return message;
-    }
-
-    return {
-      ...message,
-      _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
-    };
-  });
-}
-
-function collectLiveToolStatuses(toolMessages: RawMessage[]): ToolStatus[] {
-  let next: ToolStatus[] = [];
-
-  for (const message of toolMessages) {
-    if (!message?._toolStatuses?.length) continue;
-    next = upsertToolStatuses(next, message._toolStatuses);
-  }
-
-  return next;
-}
-
-function hasRunningLiveToolMessages(toolMessages: RawMessage[]): boolean {
-  return toolMessages.some((message) => (
-    (message._toolStatuses || []).some((status) => status.status === 'running')
-  ));
-}
-
-type OrderedLiveAssistantContentItem = {
-  sortTimestamp: number;
-  sourceIndex: number;
-  blocks: ContentBlock[];
-};
-
-function normalizeLiveToolMessageContentBlocks(message: RawMessage): ContentBlock[] {
-  if (!Array.isArray(message.content)) {
-    return [];
-  }
-
-  const blocks: ContentBlock[] = [];
-  const seenToolCallIds = new Set<string>();
-
-  for (const block of message.content) {
-    if (!block || typeof block !== 'object') continue;
-    if (block.type !== 'toolCall' && block.type !== 'toolResult' && block.type !== 'tool_use' && block.type !== 'tool_result') {
-      continue;
-    }
-
-    const normalizedType = block.type === 'tool_use'
-      ? 'toolCall'
-      : block.type === 'tool_result'
-        ? 'toolResult'
-        : block.type;
-    const identity = `${normalizedType}:${block.id || block.name || ''}`;
-    if (seenToolCallIds.has(identity)) {
-      continue;
-    }
-    seenToolCallIds.add(identity);
-    blocks.push({
-      ...block,
-      type: normalizedType,
-    });
-  }
-
-  return blocks;
-}
-
-function buildOrderedLiveAssistantContentBlocks(
-  streamSegments: Array<{ text: string; ts: number }>,
-  toolMessages: RawMessage[],
-): ContentBlock[] {
-  const items: OrderedLiveAssistantContentItem[] = [];
-
-  streamSegments.forEach((segment, index) => {
-    if (!segment.text.trim()) {
-      return;
-    }
-
-    items.push({
-      sortTimestamp: segment.ts,
-      sourceIndex: index,
-      blocks: [{ type: 'text', text: segment.text }],
-    });
-  });
-
-  toolMessages.forEach((message, index) => {
-    const blocks = normalizeLiveToolMessageContentBlocks(message);
-    if (blocks.length === 0) {
-      return;
-    }
-
-    items.push({
-      sortTimestamp: typeof message.timestamp === 'number' ? message.timestamp : Number.POSITIVE_INFINITY,
-      sourceIndex: streamSegments.length + index,
-      blocks,
-    });
-  });
-
-  items.sort((left, right) => {
-    if (left.sortTimestamp !== right.sortTimestamp) {
-      return left.sortTimestamp - right.sortTimestamp;
-    }
-
-    return left.sourceIndex - right.sourceIndex;
-  });
-
-  return items.flatMap((item) => item.blocks);
-}
-
-function normalizeFinalAssistantContentBlocks(
-  content: RawMessage['content'],
-  streamSegments: Array<{ text: string; ts: number }>,
-): ContentBlock[] {
-  const normalizeVisibleText = (text: string): string => text.trimStart();
-
-  if (typeof content === 'string') {
-    const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(content, streamSegments));
-    return visibleText.trim() ? [{ type: 'text', text: visibleText }] : [];
-  }
-
-  if (!Array.isArray(content)) {
-    return [];
-  }
-
-  const visibleBlocks = content.filter((block): block is ContentBlock => {
-    if (!block || typeof block !== 'object') return false;
-    return block.type !== 'toolCall'
-      && block.type !== 'toolResult'
-      && block.type !== 'tool_use'
-      && block.type !== 'tool_result';
-  });
-
-  const fullText = getMessageText(visibleBlocks);
-  if (!fullText) {
-    return visibleBlocks;
-  }
-
-  const normalizedFullText = normalizeVisibleText(fullText);
-  const visibleText = normalizeVisibleText(stripRenderedPrefixFromStreamingText(fullText, streamSegments));
-  let prefixToRemove = normalizedFullText.endsWith(visibleText)
-    ? normalizedFullText.slice(0, normalizedFullText.length - visibleText.length)
-    : '';
-  const normalizedBlocks: ContentBlock[] = [];
-  let sawTextBlock = false;
-  let emittedVisibleText = false;
-
-  for (const block of visibleBlocks) {
-    if (block.type !== 'text') {
-      normalizedBlocks.push(block);
-      continue;
-    }
-
-    let nextText = block.text ?? '';
-
-    if (sawTextBlock && prefixToRemove.startsWith('\n')) {
-      prefixToRemove = prefixToRemove.slice(1);
-    }
-    sawTextBlock = true;
-
-    if (prefixToRemove && nextText) {
-      const consumeLength = Math.min(prefixToRemove.length, nextText.length);
-      nextText = nextText.slice(consumeLength);
-      prefixToRemove = prefixToRemove.slice(consumeLength);
-    }
-
-    if (!emittedVisibleText) {
-      nextText = normalizeVisibleText(nextText);
-    }
-
-    if (!nextText) {
-      continue;
-    }
-
-    normalizedBlocks.push({
-      ...block,
-      text: nextText,
-    });
-    emittedVisibleText = true;
-  }
-
-  return normalizedBlocks;
-}
-
-function mergeToolStatusesIntoEquivalentAssistantMessage(
-  messages: RawMessage[],
-  candidate: RawMessage,
-  updates: ToolStatus[],
-): RawMessage[] {
-  if (updates.length === 0) {
-    return messages;
-  }
-
-  const candidateId = candidate.id;
-  const candidateText = getMessageText(candidate.content).trim();
-  const candidateTs = typeof candidate.timestamp === 'number' ? toMs(candidate.timestamp) : null;
-  let matched = false;
-
-  return messages.map((message) => {
-    if (matched || message.role !== 'assistant') {
-      return message;
-    }
-
-    const sameId = !!candidateId && message.id === candidateId;
-    const sameText = candidateText
-      && getMessageText(message.content).trim() === candidateText
-      && (
-        candidateTs == null
-        || typeof message.timestamp !== 'number'
-        || Math.abs(toMs(message.timestamp) - candidateTs) < 5000
-      );
-
-    if (!sameId && !sameText) {
-      return message;
-    }
-
-    matched = true;
-    return {
-      ...message,
-      content: candidate.content,
-      _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
-    };
-  });
-}
-
-function patchToolRuntimeWithHistory(
-  toolStreamOrder: string[],
-  toolStreamById: Map<string, ToolStreamEntry>,
-  toolResultHistoryReloadedIds: Set<string>,
-  messages: RawMessage[],
-  minTimestampMs: number,
-): {
-  toolStreamOrder: string[];
-  toolStreamById: Map<string, ToolStreamEntry>;
-  toolMessages: RawMessage[];
-  toolResultHistoryReloadedIds: Set<string>;
-} {
-  const nextToolStreamById = new Map(toolStreamById);
-  const nextToolStreamOrder = [...toolStreamOrder];
-  const nextReloadedIds = new Set(toolResultHistoryReloadedIds);
-
-  for (const message of messages) {
-    const messageTimestampMs = typeof message.timestamp === 'number' ? toMs(message.timestamp) : 0;
-    if (minTimestampMs > 0 && messageTimestampMs > 0 && messageTimestampMs < minTimestampMs) {
-      continue;
-    }
-
-    for (const update of collectHistoryToolResultUpdates(message)) {
-      const toolCallId = update.toolCallId;
-      if (!toolCallId) continue;
-
-      const existing = nextToolStreamById.get(toolCallId);
-      if (!existing) continue;
-
-      const entry: ToolStreamEntry = {
-        ...existing,
-        name: update.name || existing.name,
-        output: update.result ?? existing.output,
-        status: mergeToolStatus(existing.status, update.status),
-        durationMs: update.durationMs ?? existing.durationMs,
-        updatedAt: update.updatedAt || Date.now(),
-      };
-      entry.message = buildToolStreamMessage(entry);
-      nextToolStreamById.set(toolCallId, entry);
-      nextReloadedIds.add(toolCallId);
-    }
-  }
-
-  return {
-    toolStreamOrder: nextToolStreamOrder,
-    toolStreamById: nextToolStreamById,
-    toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
-    toolResultHistoryReloadedIds: nextReloadedIds,
-  };
-}
-
-/** Extract media file refs from [media attached: <path> (<mime>) | ...] patterns */
 // ── Store ────────────────────────────────────────────────────────
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  messages: [],
-  loading: false,
-  error: null,
-
-  sending: false,
-  activeRunId: null,
-  streamingText: '',
-  streamingTextStartedAt: null,
-  streamingTextLastEventAt: null,
-  streamSegments: [],
-  toolStreamById: new Map<string, ToolStreamEntry>(),
-  toolStreamOrder: [],
-  toolMessages: [],
-  toolResultHistoryReloadedIds: new Set<string>(),
-  pendingFinal: false,
-  lastUserMessageAt: null,
-  pendingOptimisticUserId: null,
-  pendingOptimisticUserAnchorAt: null,
-  pendingOptimisticUserIndex: null,
-  historyRequestGeneration: 0,
-  pendingToolImages: [],
-  pendingToolHiddenCount: 0,
-
-  desktopSessions: [],
-  isDraftSession: false,
-  currentDesktopSessionId: '',
-  currentSessionKey: '',
-  currentAgentId: 'main',
-  currentViewMode: 'session',
-  selectedCronRun: null,
-  sessionTokenInfoByKey: {},
-  pendingComposerSeed: null,
-
-  showThinking: false,
-  showToolCalls: true,
-  thinkingLevel: null,
+  ...createChatInitialState(),
 
   // ── Load desktop sessions ──
 
@@ -1174,17 +490,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentViewMode: 'session',
         selectedCronRun: null,
         loading: true,
-        messages: [],
-        ...createEmptyToolRuntimeState(),
-        activeRunId: null,
-        error: null,
-        pendingFinal: false,
-        lastUserMessageAt: null,
-        pendingOptimisticUserId: null,
-        pendingOptimisticUserAnchorAt: null,
-        pendingOptimisticUserIndex: null,
-        pendingToolImages: [],
-        pendingToolHiddenCount: 0,
+        ...createConversationResetState(),
       });
       logChatTrace('openAgentMainSession:reuse-existing', {
         durationMs: Date.now() - startedAt,
@@ -1207,17 +513,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentViewMode: 'session',
         selectedCronRun: null,
         loading: true,
-        messages: [],
-        ...createEmptyToolRuntimeState(),
-        activeRunId: null,
-        error: null,
-        pendingFinal: false,
-        lastUserMessageAt: null,
-        pendingOptimisticUserId: null,
-        pendingOptimisticUserAnchorAt: null,
-        pendingOptimisticUserIndex: null,
-        pendingToolImages: [],
-        pendingToolHiddenCount: 0,
+        ...createConversationResetState(),
       }));
       logChatTrace('openAgentMainSession:created', {
         durationMs: Date.now() - startedAt,
@@ -1253,17 +549,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentAgentId: getAgentIdFromSessionKey(target.gatewaySessionKey),
       currentViewMode: 'session',
       selectedCronRun: null,
-      messages: [],
-      ...createEmptyToolRuntimeState(),
-      activeRunId: null,
-      error: null,
-      pendingFinal: false,
-      lastUserMessageAt: null,
-      pendingOptimisticUserId: null,
-      pendingOptimisticUserAnchorAt: null,
-      pendingOptimisticUserIndex: null,
-      pendingToolImages: [],
-      pendingToolHiddenCount: 0,
+      ...createConversationResetState(),
     });
     logChatTrace('switchSession:selected', {
       targetSessionId: target.id,
@@ -1282,17 +568,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentAgentId: run.agentId || get().currentAgentId || 'main',
       currentViewMode: 'cron',
       selectedCronRun: run,
-      messages: [],
-      ...createEmptyToolRuntimeState(),
-      activeRunId: null,
-      error: null,
-      pendingFinal: false,
-      lastUserMessageAt: null,
-      pendingOptimisticUserId: null,
-      pendingOptimisticUserAnchorAt: null,
-      pendingOptimisticUserIndex: null,
-      pendingToolImages: [],
-      pendingToolHiddenCount: 0,
+      ...createConversationResetState(),
       thinkingLevel: null,
     });
     await get().loadHistory();
@@ -1334,6 +610,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ?? sameAgentRemaining.find((session) => session.gatewaySessionKey === preferredMainSessionKey)
       ?? sameAgentRemaining[0]
       ?? remaining[0];
+    const conversationState = createConversationResetState();
+    if (currentDesktopSessionId !== desktopSessionId) {
+      conversationState.messages = get().messages;
+    }
 
     set({
       desktopSessions: remaining,
@@ -1343,17 +623,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentAgentId: next?.gatewaySessionKey ? getAgentIdFromSessionKey(next.gatewaySessionKey) : 'main',
       currentViewMode: 'session',
       selectedCronRun: null,
-      messages: currentDesktopSessionId === desktopSessionId ? [] : get().messages,
-      ...createEmptyToolRuntimeState(),
-      activeRunId: null,
-      error: null,
-      pendingFinal: false,
-      lastUserMessageAt: null,
-      pendingOptimisticUserId: null,
-      pendingOptimisticUserAnchorAt: null,
-      pendingOptimisticUserIndex: null,
-      pendingToolImages: [],
-      pendingToolHiddenCount: 0,
+      ...conversationState,
     });
     logChatTrace('deleteSession:done', {
       deletedSessionId: desktopSessionId,
@@ -1411,18 +681,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentViewMode: 'session',
       selectedCronRun: null,
       loading: false,
-      messages: [],
-      ...createEmptyToolRuntimeState(),
-      activeRunId: null,
-      error: null,
-      pendingFinal: false,
-      lastUserMessageAt: null,
-      pendingOptimisticUserId: null,
-      pendingOptimisticUserAnchorAt: null,
-      pendingOptimisticUserIndex: null,
+      ...createConversationResetState(),
       historyRequestGeneration: state.historyRequestGeneration + 1,
-      pendingToolImages: [],
-      pendingToolHiddenCount: 0,
     }));
     logChatTrace('newTemporarySession:selected', summarizeChatSelection(get()));
   },
@@ -1900,7 +1160,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   sendMessage: async (
     text: string,
-    attachments?: Array<{ fileName: string; mimeType: string; fileSize: number; stagedPath: string; preview: string | null }>,
+    attachments?: ChatMessageAttachmentInput[],
     targetAgentId?: string | null,
   ) => {
     const trimmed = text.trim();
@@ -1926,17 +1186,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           currentAgentId: getAgentIdFromSessionKey(existingTargetSession.gatewaySessionKey),
           currentViewMode: 'session',
           selectedCronRun: null,
-          messages: [],
-          ...createEmptyToolRuntimeState(),
-          activeRunId: null,
-          error: null,
-          pendingFinal: false,
-          lastUserMessageAt: null,
-          pendingOptimisticUserId: null,
-          pendingOptimisticUserAnchorAt: null,
-          pendingOptimisticUserIndex: null,
-          pendingToolImages: [],
-          pendingToolHiddenCount: 0,
+          ...createConversationResetState(),
         });
         currentSessionKey = existingTargetSession.gatewaySessionKey;
         currentDesktopSessionId = existingTargetSession.id;
@@ -1956,17 +1206,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           currentAgentId: getAgentIdFromSessionKey(createdTargetSession.gatewaySessionKey),
           currentViewMode: 'session',
           selectedCronRun: null,
-          messages: [],
-          ...createEmptyToolRuntimeState(),
-          activeRunId: null,
-          error: null,
-          pendingFinal: false,
-          lastUserMessageAt: null,
-          pendingOptimisticUserId: null,
-          pendingOptimisticUserAnchorAt: null,
-          pendingOptimisticUserIndex: null,
-          pendingToolImages: [],
-          pendingToolHiddenCount: 0,
+          ...createConversationResetState(),
         }));
         currentSessionKey = createdTargetSession.gatewaySessionKey;
         currentDesktopSessionId = createdTargetSession.id;
