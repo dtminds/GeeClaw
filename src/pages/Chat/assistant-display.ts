@@ -843,7 +843,6 @@ function extractFinalizedAssistantDisplayParts(
       parts.push(toAssistantToolGroupItem(tool.name, tool.id, tool.input, toolStatus));
     }
   }
-
   return { parts, markdownImages: display.markdownImages };
 }
 

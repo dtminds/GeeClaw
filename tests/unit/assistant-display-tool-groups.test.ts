@@ -120,6 +120,7 @@ describe('buildAssistantDisplayModel', () => {
       }),
     ]);
   });
+<<<<<<< HEAD
 
   it('keeps inline errored tool results marked as error even when they include text, an error payload, or a failed status', () => {
     const message = {
