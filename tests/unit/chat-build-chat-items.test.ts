@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildChatItems } from '@/pages/Chat/build-chat-items';
 import type { RawMessage } from '@/stores/chat';
 
@@ -12,7 +12,11 @@ function assistantMessage(id: string, content: unknown, timestamp: number): RawM
 }
 
 describe('buildChatItems', () => {
-  it('interleaves stream segments and tool messages in order', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('emits a single live assistant row for runtime content', () => {
     const history: RawMessage[] = [
       assistantMessage('history-1', 'history', 1),
     ];
@@ -44,18 +48,20 @@ describe('buildChatItems', () => {
       sessionKey: 'agent:main:main',
     });
 
-    expect(items.map((item) => item.message.id)).toEqual([
-      'history-1',
-      'stream-seg:agent:main:main:0',
-      'tool-1',
-      'stream-seg:agent:main:main:1',
-      'tool-2',
-      'stream:agent:main:main:6',
-    ]);
-    expect(items.at(-1)?.isStreaming).toBe(true);
+    expect(items).toHaveLength(2);
+    expect(items[0]?.message.id).toBe('history-1');
+    expect(items[1]).toMatchObject({
+      key: 'stream:agent:main:main:6',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:6',
+        timestamp: 6,
+      },
+    });
   });
 
-  it('keeps a frozen stream segment between the surrounding tool calls', () => {
+  it('uses the latest runtime timestamp when streamingTextStartedAt is missing', () => {
     const toolMessages: RawMessage[] = [
       {
         role: 'assistant',
@@ -84,11 +90,16 @@ describe('buildChatItems', () => {
       sessionKey: 'agent:main:main',
     });
 
-    expect(items.map((item) => item.message.id)).toEqual([
-      'tool-1',
-      'stream-seg:agent:main:main:0',
-      'tool-2',
-    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'stream:agent:main:main:3',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:3',
+        timestamp: 3,
+      },
+    });
   });
 
   it('filters process-only history and tool messages before rendering', () => {
@@ -124,13 +135,20 @@ describe('buildChatItems', () => {
       sessionKey: 'agent:main:main',
     });
 
-    expect(items.map((item) => item.message.id)).toEqual([
-      'history-1',
-      'tool-bash',
-    ]);
+    expect(items).toHaveLength(2);
+    expect(items[0]?.message.id).toBe('history-1');
+    expect(items[1]).toMatchObject({
+      key: 'stream:agent:main:main:4',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:4',
+        timestamp: 4,
+      },
+    });
   });
 
-  it('keeps chronological order when hidden process tool messages are skipped', () => {
+  it('uses the latest stream segment timestamp when hidden process tool messages are skipped', () => {
     const items = buildChatItems({
       messages: [],
       toolMessages: [
@@ -158,11 +176,16 @@ describe('buildChatItems', () => {
       sessionKey: 'agent:main:main',
     });
 
-    expect(items.map((item) => item.message.id)).toEqual([
-      'tool-bash',
-      'stream-seg:agent:main:main:0',
-      'stream-seg:agent:main:main:1',
-    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'stream:agent:main:main:20',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:20',
+        timestamp: 20,
+      },
+    });
   });
 
   it('filters process-only standalone toolresult messages backed by toolResult blocks', () => {
@@ -215,5 +238,37 @@ describe('buildChatItems', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]?.key).toBe('msg:assistant:2:1');
+  });
+
+  it('falls back to the current time when runtime content has no timestamp', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-25T12:00:00Z'));
+
+    const items = buildChatItems({
+      messages: [],
+      toolMessages: [
+        {
+          role: 'assistant',
+          id: 'tool-bash',
+          toolCallId: 'tool-bash',
+          content: [{ type: 'toolCall', id: 'tool-bash', name: 'bash', arguments: { command: 'pwd' } }],
+        } as RawMessage,
+      ],
+      streamSegments: [],
+      streamingText: '',
+      streamingTextStartedAt: null,
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'stream:agent:main:main:1777118400',
+      isStreaming: true,
+      message: {
+        role: 'assistant',
+        id: 'stream:agent:main:main:1777118400',
+        timestamp: 1777118400,
+      },
+    });
   });
 });

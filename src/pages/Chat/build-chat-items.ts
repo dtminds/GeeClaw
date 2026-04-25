@@ -7,11 +7,6 @@ export type ChatRenderItem = {
   isStreaming: boolean;
 };
 
-type RuntimeRenderItem = ChatRenderItem & {
-  sortTimestamp: number;
-  sourceIndex: number;
-};
-
 type BuildChatItemsOptions = {
   messages: RawMessage[];
   toolMessages: RawMessage[];
@@ -72,50 +67,49 @@ function isHiddenToolOnlyMessage(message: RawMessage): boolean {
   return sawHiddenToolBlock;
 }
 
-function buildRuntimeRenderItems(
+function hasVisibleRuntimeContent(
   toolMessages: RawMessage[],
   streamSegments: Array<{ text: string; ts: number }>,
-  sessionKey: string,
-  historyCount: number,
-): RuntimeRenderItem[] {
-  const runtimeItems: RuntimeRenderItem[] = [];
+): boolean {
+  if (streamSegments.some((segment) => segment.text.trim())) {
+    return true;
+  }
 
-  streamSegments.forEach((segment, index) => {
+  return toolMessages.some((toolMessage) => !isHiddenToolOnlyMessage(toolMessage));
+}
+
+function getLiveAssistantTimestamp(
+  streamingTextStartedAt: number | null,
+  toolMessages: RawMessage[],
+  streamSegments: Array<{ text: string; ts: number }>,
+): number {
+  if (typeof streamingTextStartedAt === 'number') {
+    return streamingTextStartedAt;
+  }
+
+  let latestRuntimeTimestamp: number | null = null;
+
+  for (const toolMessage of toolMessages) {
+    if (isHiddenToolOnlyMessage(toolMessage) || typeof toolMessage.timestamp !== 'number') {
+      continue;
+    }
+
+    latestRuntimeTimestamp = latestRuntimeTimestamp === null
+      ? toolMessage.timestamp
+      : Math.max(latestRuntimeTimestamp, toolMessage.timestamp);
+  }
+
+  for (const segment of streamSegments) {
     if (!segment.text.trim()) {
-      return;
+      continue;
     }
 
-    runtimeItems.push({
-      key: `stream-seg:${sessionKey}:${index}`,
-      message: makeAssistantTextMessage(segment.text, segment.ts, `stream-seg:${sessionKey}:${index}`),
-      isStreaming: false,
-      sortTimestamp: segment.ts,
-      sourceIndex: index,
-    });
-  });
+    latestRuntimeTimestamp = latestRuntimeTimestamp === null
+      ? segment.ts
+      : Math.max(latestRuntimeTimestamp, segment.ts);
+  }
 
-  toolMessages.forEach((toolMessage, index) => {
-    if (isHiddenToolOnlyMessage(toolMessage)) {
-      return;
-    }
-
-    runtimeItems.push({
-      key: messageKey(toolMessage, historyCount + index),
-      message: toolMessage,
-      isStreaming: false,
-      sortTimestamp: typeof toolMessage.timestamp === 'number' ? toolMessage.timestamp : Number.POSITIVE_INFINITY,
-      sourceIndex: streamSegments.length + index,
-    });
-  });
-
-  runtimeItems.sort((left, right) => {
-    if (left.sortTimestamp !== right.sortTimestamp) {
-      return left.sortTimestamp - right.sortTimestamp;
-    }
-    return left.sourceIndex - right.sourceIndex;
-  });
-
-  return runtimeItems;
+  return latestRuntimeTimestamp ?? Date.now() / 1000;
 }
 
 export function buildChatItems({
@@ -139,13 +133,12 @@ export function buildChatItems({
     });
   });
 
-  items.push(...buildRuntimeRenderItems(toolMessages, streamSegments, sessionKey, messages.length));
-
-  if (streamingText.trim()) {
-    const timestamp = streamingTextStartedAt ?? Date.now() / 1000;
+  if (streamingText.trim() || hasVisibleRuntimeContent(toolMessages, streamSegments)) {
+    const timestamp = getLiveAssistantTimestamp(streamingTextStartedAt, toolMessages, streamSegments);
+    const streamId = `stream:${sessionKey}:${timestamp}`;
     items.push({
-      key: `stream:${sessionKey}:${timestamp}`,
-      message: makeAssistantTextMessage(streamingText, timestamp, `stream:${sessionKey}:${timestamp}`),
+      key: streamId,
+      message: makeAssistantTextMessage(streamingText, timestamp, streamId),
       isStreaming: true,
     });
   }
