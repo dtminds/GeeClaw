@@ -128,8 +128,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@tencent-weixin/openclaw-weixin':
-        specifier: 2.1.9
-        version: 2.1.9
+        specifier: 2.1.10
+        version: 2.1.10
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -2726,8 +2726,8 @@ packages:
   '@telegraf/types@7.1.0':
     resolution: {integrity: sha512-kGevOIbpMcIlCDeorKGpwZmdH7kHbqlk/Yj6dEpJMKEQw5lk0KVQY0OLXaCswy8GqlIVLd5625OB+rAntP9xVw==}
 
-  '@tencent-weixin/openclaw-weixin@2.1.9':
-    resolution: {integrity: sha512-5dLvKCFebSMRNQ2l0Lqx78gyuL0Msdg1NVmcN6fuxtZiaQiOx4IkIl8+9WPN+e26jR8XM5qIfW2sgf7pe7M1ew==}
+  '@tencent-weixin/openclaw-weixin@2.1.10':
+    resolution: {integrity: sha512-cEG6Iw5g2qqlA+8/TcmV+E8aFUEX0ruxF0+a5LgVy5wv56/qP07KoapfRa7YTRPzhRW5UDaz6zsZQArt/4ZNnA==}
     engines: {node: '>=22'}
 
   '@testing-library/dom@10.4.1':
@@ -10859,7 +10859,7 @@ snapshots:
   '@telegraf/types@7.1.0':
     optional: true
 
-  '@tencent-weixin/openclaw-weixin@2.1.9':
+  '@tencent-weixin/openclaw-weixin@2.1.10':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6
