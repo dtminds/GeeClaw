@@ -235,6 +235,89 @@ describe('Sidebar settings menu trigger', () => {
     });
   });
 
+  it('keeps the default agent first and sorts other agents by latest main session update', async () => {
+    agentsState.agents = [
+      {
+        id: 'default-agent',
+        name: 'Default',
+        isDefault: true,
+        mainSessionKey: 'agent:default-agent:geeclaw_main',
+      },
+      {
+        id: 'alpha',
+        name: 'Alpha',
+        isDefault: false,
+        mainSessionKey: 'agent:alpha:geeclaw_main',
+      },
+      {
+        id: 'zeta',
+        name: 'Zeta',
+        isDefault: false,
+        mainSessionKey: 'agent:zeta:geeclaw_main',
+      },
+      {
+        id: 'unused',
+        name: 'Unused',
+        isDefault: false,
+        mainSessionKey: 'agent:unused:geeclaw_main',
+      },
+    ];
+    chatState.desktopSessions = [
+      {
+        id: 'default-session',
+        gatewaySessionKey: 'agent:default-agent:geeclaw_main',
+        title: '',
+        lastMessagePreview: 'Default preview',
+        createdAt: 1,
+        updatedAt: 1_000,
+      },
+      {
+        id: 'alpha-session',
+        gatewaySessionKey: 'agent:alpha:geeclaw_main',
+        title: '',
+        lastMessagePreview: 'Older preview',
+        createdAt: 1,
+        updatedAt: 2_000,
+      },
+      {
+        id: 'zeta-session',
+        gatewaySessionKey: 'agent:zeta:geeclaw_main',
+        title: '',
+        lastMessagePreview: 'Newer preview',
+        createdAt: 1,
+        updatedAt: 3_000,
+      },
+    ];
+
+    try {
+      const { Sidebar } = await import('@/components/layout/Sidebar');
+
+      render(
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <Sidebar />
+        </MemoryRouter>,
+      );
+
+      const getAgentButton = (name: string): HTMLButtonElement => {
+        const button = screen.getByText(name).closest('button');
+        expect(button).not.toBeNull();
+        return button as HTMLButtonElement;
+      };
+
+      const defaultButton = getAgentButton('Default');
+      const zetaButton = getAgentButton('Zeta');
+      const alphaButton = getAgentButton('Alpha');
+      const unusedButton = getAgentButton('Unused');
+
+      expect(defaultButton.compareDocumentPosition(zetaButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(zetaButton.compareDocumentPosition(alphaButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(alphaButton.compareDocumentPosition(unusedButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    } finally {
+      agentsState.agents = [];
+      chatState.desktopSessions = [];
+    }
+  });
+
   it('navigates to chat immediately with the requested agent instead of waiting for main session loading', async () => {
     agentsState.agents = [
       {

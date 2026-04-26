@@ -176,9 +176,6 @@ export function Sidebar() {
     </span>
   );
 
-  const sortedAgents = [...agents].sort(
-    (left, right) => Number(right.isDefault) - Number(left.isDefault) || left.name.localeCompare(right.name),
-  );
   const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
   const agentMainSessions = desktopSessions.reduce((map, session) => {
     const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
@@ -193,6 +190,15 @@ export function Sidebar() {
     }
     return map;
   }, new Map<string, (typeof desktopSessions)[number]>());
+  const sortedAgents = [...agents].sort((left, right) => {
+    const defaultSort = Number(right.isDefault) - Number(left.isDefault);
+    if (defaultSort !== 0) {
+      return defaultSort;
+    }
+
+    const updatedAtSort = (agentMainSessions.get(right.id)?.updatedAt ?? 0) - (agentMainSessions.get(left.id)?.updatedAt ?? 0);
+    return updatedAtSort || left.name.localeCompare(right.name);
+  });
 
   const navItems = [
     { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard'), testId: 'sidebar-nav-dashboard' },
