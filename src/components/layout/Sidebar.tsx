@@ -3,7 +3,7 @@
  * Navigation sidebar with menu items.
  * No longer fixed - sits inside the flex layout below the title bar.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
@@ -176,29 +176,36 @@ export function Sidebar() {
     </span>
   );
 
-  const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
-  const agentMainSessions = desktopSessions.reduce((map, session) => {
-    const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
-    const mainSessionKey = mainSessionKeyByAgentId.get(agentId) ?? `agent:${agentId}:geeclaw_main`;
-    if (session.gatewaySessionKey !== mainSessionKey) {
+  const { agentMainSessions, sortedAgents } = useMemo(() => {
+    const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
+    const nextAgentMainSessions = desktopSessions.reduce((map, session) => {
+      const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
+      const mainSessionKey = mainSessionKeyByAgentId.get(agentId) ?? `agent:${agentId}:geeclaw_main`;
+      if (session.gatewaySessionKey !== mainSessionKey) {
+        return map;
+      }
+
+      const current = map.get(agentId);
+      if (!current || session.updatedAt > current.updatedAt) {
+        map.set(agentId, session);
+      }
       return map;
-    }
+    }, new Map<string, (typeof desktopSessions)[number]>());
+    const nextSortedAgents = [...agents].sort((left, right) => {
+      const defaultSort = Number(right.isDefault) - Number(left.isDefault);
+      if (defaultSort !== 0) {
+        return defaultSort;
+      }
 
-    const current = map.get(agentId);
-    if (!current || session.updatedAt > current.updatedAt) {
-      map.set(agentId, session);
-    }
-    return map;
-  }, new Map<string, (typeof desktopSessions)[number]>());
-  const sortedAgents = [...agents].sort((left, right) => {
-    const defaultSort = Number(right.isDefault) - Number(left.isDefault);
-    if (defaultSort !== 0) {
-      return defaultSort;
-    }
+      const updatedAtSort = (nextAgentMainSessions.get(right.id)?.updatedAt ?? 0) - (nextAgentMainSessions.get(left.id)?.updatedAt ?? 0);
+      return updatedAtSort || left.name.localeCompare(right.name);
+    });
 
-    const updatedAtSort = (agentMainSessions.get(right.id)?.updatedAt ?? 0) - (agentMainSessions.get(left.id)?.updatedAt ?? 0);
-    return updatedAtSort || left.name.localeCompare(right.name);
-  });
+    return {
+      agentMainSessions: nextAgentMainSessions,
+      sortedAgents: nextSortedAgents,
+    };
+  }, [agents, desktopSessions]);
 
   const navItems = [
     { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard'), testId: 'sidebar-nav-dashboard' },
