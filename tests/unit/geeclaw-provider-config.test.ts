@@ -5,7 +5,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 const originalFetch = global.fetch;
+const originalConfigPathEnv = process.env.GEECLAW_PROVIDER_CONFIG_PATH;
 const originalConfigUrlEnv = process.env.GEECLAW_PROVIDER_CONFIG_URL;
+const electronAppMock = {
+  isPackaged: false,
+};
+
+vi.mock('electron', () => ({
+  app: electronAppMock,
+}));
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -36,6 +44,12 @@ afterEach(() => {
   } else {
     process.env.GEECLAW_PROVIDER_CONFIG_URL = originalConfigUrlEnv;
   }
+  if (originalConfigPathEnv === undefined) {
+    delete process.env.GEECLAW_PROVIDER_CONFIG_PATH;
+  } else {
+    process.env.GEECLAW_PROVIDER_CONFIG_PATH = originalConfigPathEnv;
+  }
+  electronAppMock.isPackaged = false;
   vi.useRealTimers();
 });
 
@@ -84,6 +98,29 @@ describe('GeeClaw provider config loader', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it('loads an ignored local development config before the CDN when present', async () => {
+    const root = createTempRoot('geeclaw-provider-config-dev-');
+    vi.spyOn(process, 'cwd').mockReturnValue(root);
+    writeFileSync(
+      join(root, 'geeclaw-provider-config.json.local'),
+      JSON.stringify({
+        version: 1,
+        upstreamBaseUrl: 'https://dev-proxy.example.com/v1',
+        autoModels: ['qwen3.6-plus'],
+        allowedModels: ['qwen3.6-plus'],
+      }, null, 2),
+      'utf8',
+    );
+    global.fetch = vi.fn() as typeof fetch;
+
+    const { loadGeeClawProviderConfig } = await import('@electron/utils/geeclaw-provider-config');
+
+    await expect(loadGeeClawProviderConfig()).resolves.toEqual(expect.objectContaining({
+      upstreamBaseUrl: 'https://dev-proxy.example.com/v1',
+    }));
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('prefers an explicit remote override URL', async () => {

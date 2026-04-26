@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { app } from 'electron';
 import {
   getDefaultProviderModelEntries,
 } from '../shared/providers/config-models';
@@ -6,13 +8,19 @@ import {
   getProviderBackendConfig,
   getProviderDefinition,
 } from '../shared/providers/registry';
-import { getGeeClawProviderConfigUrl } from './paths';
+import {
+  expandPath,
+  getGeeClawProviderConfigLocalPath,
+  getGeeClawProviderConfigUrl,
+} from './paths';
 import { logger } from './logger';
 
 const GEECLAW_PROVIDER_CONFIG_FETCH_TIMEOUT_MS = 15000;
 export const GEECLAW_PROVIDER_CONFIG_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 export const GEECLAW_MODEL_UNAVAILABLE_MESSAGE = '当前模型暂不可用，请切换模型或稍后重试';
 const SAFE_FALLBACK_UPSTREAM_BASE_URL = 'https://geeclaw-provider-config.invalid/v1';
+const GEECLAW_PROVIDER_CONFIG_PATH_ENV = 'GEECLAW_PROVIDER_CONFIG_PATH';
+const GEECLAW_PROVIDER_CONFIG_URL_ENV = 'GEECLAW_PROVIDER_CONFIG_URL';
 
 export interface GeeClawProviderConfig {
   version: 1;
@@ -175,16 +183,35 @@ async function loadGeeClawProviderConfigFromRemote(configUrl: string): Promise<G
 }
 
 function resolveGeeClawProviderConfigRemoteUrl(): string | null {
-  const overrideUrl = process.env.GEECLAW_PROVIDER_CONFIG_URL?.trim();
+  const overrideUrl = process.env[GEECLAW_PROVIDER_CONFIG_URL_ENV]?.trim();
   if (overrideUrl) {
     return overrideUrl;
   }
   return getGeeClawProviderConfigUrl();
 }
 
+function resolveGeeClawProviderConfigLocalPath(): string | null {
+  const overridePath = process.env[GEECLAW_PROVIDER_CONFIG_PATH_ENV]?.trim();
+  if (overridePath) {
+    return expandPath(overridePath);
+  }
+
+  if (app.isPackaged) {
+    return null;
+  }
+
+  const developmentPath = getGeeClawProviderConfigLocalPath();
+  return existsSync(developmentPath) ? developmentPath : null;
+}
+
 export async function loadGeeClawProviderConfig(configPath?: string): Promise<GeeClawProviderConfig> {
   if (configPath) {
     return parseGeeClawProviderConfig(await readFile(configPath, 'utf8'));
+  }
+
+  const localPath = resolveGeeClawProviderConfigLocalPath();
+  if (localPath) {
+    return parseGeeClawProviderConfig(await readFile(localPath, 'utf8'));
   }
 
   const remoteUrl = resolveGeeClawProviderConfigRemoteUrl();

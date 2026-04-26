@@ -120,6 +120,32 @@ function getValidationProfile(
   }
 }
 
+function isGeeClawPlaceholderBaseUrl(baseUrl?: string): boolean {
+  return !baseUrl || baseUrl.includes('geeclaw-provider-config.invalid');
+}
+
+async function resolveGeeClawValidationBaseUrl(): Promise<string> {
+  try {
+    return (await loadGeeClawProviderConfig()).upstreamBaseUrl;
+  } catch (error) {
+    const activeBaseUrl = getActiveGeeClawProviderConfig().upstreamBaseUrl;
+    if (!isGeeClawPlaceholderBaseUrl(activeBaseUrl)) {
+      return activeBaseUrl;
+    }
+    throw error;
+  }
+}
+
+async function resolveValidationBaseUrl(
+  providerType: string,
+  options?: { baseUrl?: string },
+): Promise<string | undefined> {
+  if (providerType === 'geeclaw') {
+    return await resolveGeeClawValidationBaseUrl();
+  }
+  return options?.baseUrl || getProviderConfig(providerType)?.baseUrl;
+}
+
 async function performProviderValidationRequest(
   providerLabel: string,
   url: string,
@@ -350,13 +376,6 @@ export async function validateApiKeyWithProvider(
   options?: { baseUrl?: string; apiProtocol?: string },
 ): Promise<ValidationResult> {
   const profile = getValidationProfile(providerType, options);
-  const resolvedBaseUrl = options?.baseUrl || (
-    providerType === 'geeclaw'
-      ? await loadGeeClawProviderConfig()
-        .then((config) => config.upstreamBaseUrl)
-        .catch(() => getActiveGeeClawProviderConfig().upstreamBaseUrl)
-      : getProviderConfig(providerType)?.baseUrl
-  );
   if (profile === 'none') {
     return { valid: true };
   }
@@ -367,6 +386,7 @@ export async function validateApiKeyWithProvider(
   }
 
   try {
+    const resolvedBaseUrl = await resolveValidationBaseUrl(providerType, options);
     switch (profile) {
       case 'openai-completions':
         return await validateOpenAiCompatibleKey(

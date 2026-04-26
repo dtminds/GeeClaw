@@ -131,6 +131,15 @@ export function getAgentMarketplaceCatalogUrl(): string {
 }
 
 /**
+ * Get the optional local GeeClaw provider proxy config path used during development.
+ *
+ * The file name ends in .local so it stays out of git via the repo ignore rules.
+ */
+export function getGeeClawProviderConfigLocalPath(): string {
+  return join(process.cwd(), 'geeclaw-provider-config.json.local');
+}
+
+/**
  * Get the hosted GeeClaw provider proxy config URL.
  * This file is uploaded manually instead of deployed from site/res so the
  * upstream service URL is not stored in the source repository.
