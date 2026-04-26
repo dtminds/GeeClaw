@@ -6,13 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 const originalFetch = global.fetch;
 const originalConfigUrlEnv = process.env.GEECLAW_PROVIDER_CONFIG_URL;
-const electronAppMock = {
-  isPackaged: false,
-};
-
-vi.mock('electron', () => ({
-  app: electronAppMock,
-}));
 
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -33,7 +26,6 @@ afterEach(() => {
   }
   vi.restoreAllMocks();
   vi.resetModules();
-  electronAppMock.isPackaged = false;
   if (originalFetch) {
     global.fetch = originalFetch;
   } else {
@@ -67,8 +59,8 @@ describe('GeeClaw provider config loader', () => {
     });
   });
 
-  it('loads packaged config from the hosted CDN URL', async () => {
-    electronAppMock.isPackaged = true;
+  it('loads the default config from the manual CDN URL with a cache-busting timestamp', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1770000000123);
     global.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -87,7 +79,7 @@ describe('GeeClaw provider config loader', () => {
       autoModels: ['future-model', 'qwen3.6-plus'],
     }));
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://www.geeclaw.cn/res/geeclaw-provider-config.json',
+      'https://b0.dtminds.com/geeclaw/geeclaw-provider-config.json?ts=1770000000123',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
       }),
@@ -95,7 +87,8 @@ describe('GeeClaw provider config loader', () => {
   });
 
   it('prefers an explicit remote override URL', async () => {
-    process.env.GEECLAW_PROVIDER_CONFIG_URL = 'https://cdn.example.com/geeclaw-provider-config.json';
+    vi.spyOn(Date, 'now').mockReturnValue(1770000000456);
+    process.env.GEECLAW_PROVIDER_CONFIG_URL = 'https://cdn.example.com/geeclaw-provider-config.json?env=dev';
     global.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -115,7 +108,7 @@ describe('GeeClaw provider config loader', () => {
       allowedModels: ['mimo-v2.5'],
     }));
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://cdn.example.com/geeclaw-provider-config.json',
+      'https://cdn.example.com/geeclaw-provider-config.json?env=dev&ts=1770000000456',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
       }),

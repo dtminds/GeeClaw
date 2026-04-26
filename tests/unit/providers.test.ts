@@ -108,7 +108,7 @@ describe('provider metadata', () => {
     expect(BUILTIN_PROVIDER_TYPES).toContain('geeclaw');
     expect(getProviderEnvVar('geeclaw')).toBe('GEECLAW_API_KEY');
     expect(getProviderConfig('geeclaw')).toEqual(expect.objectContaining({
-      baseUrl: 'https://geekai.co/api/v1',
+      baseUrl: 'https://geeclaw-provider-config.invalid/v1',
       api: 'openai-completions',
       apiKeyEnv: 'GEECLAW_API_KEY',
     }));

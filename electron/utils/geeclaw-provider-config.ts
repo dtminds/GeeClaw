@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { app } from 'electron';
 import {
   getDefaultProviderModelEntries,
 } from '../shared/providers/config-models';
@@ -7,12 +6,13 @@ import {
   getProviderBackendConfig,
   getProviderDefinition,
 } from '../shared/providers/registry';
-import { getGeeClawProviderConfigPath, getGeeClawProviderConfigUrl } from './paths';
+import { getGeeClawProviderConfigUrl } from './paths';
 import { logger } from './logger';
 
 const GEECLAW_PROVIDER_CONFIG_FETCH_TIMEOUT_MS = 15000;
 export const GEECLAW_PROVIDER_CONFIG_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 export const GEECLAW_MODEL_UNAVAILABLE_MESSAGE = '当前模型暂不可用，请切换模型或稍后重试';
+const SAFE_FALLBACK_UPSTREAM_BASE_URL = 'https://geeclaw-provider-config.invalid/v1';
 
 export interface GeeClawProviderConfig {
   version: 1;
@@ -114,7 +114,7 @@ export function createDefaultGeeClawProviderConfig(): GeeClawProviderConfig {
   const autoModel = allowedModels[0] ?? 'qwen3.6-plus';
   return {
     version: 1,
-    upstreamBaseUrl: getProviderBackendConfig('geeclaw')?.baseUrl ?? 'https://geekai.co/api/v1',
+    upstreamBaseUrl: getProviderBackendConfig('geeclaw')?.baseUrl ?? SAFE_FALLBACK_UPSTREAM_BASE_URL,
     autoModels: [autoModel],
     allowedModels: allowedModels.length > 0 ? allowedModels : [autoModel],
   };
@@ -144,20 +144,27 @@ export function parseGeeClawProviderConfig(content: string): GeeClawProviderConf
   };
 }
 
+function appendCacheBustingTimestamp(configUrl: string): string {
+  const url = new URL(configUrl);
+  url.searchParams.set('ts', String(Date.now()));
+  return url.toString();
+}
+
 async function loadGeeClawProviderConfigFromRemote(configUrl: string): Promise<GeeClawProviderConfig> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), GEECLAW_PROVIDER_CONFIG_FETCH_TIMEOUT_MS);
+  const fetchUrl = appendCacheBustingTimestamp(configUrl);
 
   try {
-    const response = await fetch(configUrl, { signal: controller.signal });
+    const response = await fetch(fetchUrl, { signal: controller.signal });
     if (!response.ok) {
-      throw new Error(`[geeclaw-provider-config] Failed to fetch config from ${configUrl}: HTTP ${response.status}`);
+      throw new Error(`[geeclaw-provider-config] Failed to fetch config from ${fetchUrl}: HTTP ${response.status}`);
     }
     return parseGeeClawProviderConfig(await response.text());
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError') {
       throw new Error(
-        `[geeclaw-provider-config] Timed out fetching config from ${configUrl} after ${GEECLAW_PROVIDER_CONFIG_FETCH_TIMEOUT_MS}ms`,
+        `[geeclaw-provider-config] Timed out fetching config from ${fetchUrl} after ${GEECLAW_PROVIDER_CONFIG_FETCH_TIMEOUT_MS}ms`,
         { cause: error },
       );
     }
@@ -172,10 +179,7 @@ function resolveGeeClawProviderConfigRemoteUrl(): string | null {
   if (overrideUrl) {
     return overrideUrl;
   }
-  if (app.isPackaged) {
-    return getGeeClawProviderConfigUrl();
-  }
-  return null;
+  return getGeeClawProviderConfigUrl();
 }
 
 export async function loadGeeClawProviderConfig(configPath?: string): Promise<GeeClawProviderConfig> {
@@ -188,7 +192,7 @@ export async function loadGeeClawProviderConfig(configPath?: string): Promise<Ge
     return await loadGeeClawProviderConfigFromRemote(remoteUrl);
   }
 
-  return parseGeeClawProviderConfig(await readFile(getGeeClawProviderConfigPath(), 'utf8'));
+  return createDefaultGeeClawProviderConfig();
 }
 
 export function getActiveGeeClawProviderConfig(): GeeClawProviderConfig {

@@ -51,7 +51,7 @@ function createGeeClawCompatibleProvider(
     ...(options.modelIdPlaceholder !== undefined ? { modelIdPlaceholder: options.modelIdPlaceholder } : {}),
     ...(options.hidden !== undefined ? { hidden: options.hidden } : {}),
     providerConfig: {
-      baseUrl: 'https://geekai.co/api/v1',
+      baseUrl: 'https://geeclaw-provider-config.invalid/v1',
       api: 'openai-completions',
       apiKeyEnv: options.envVar,
     },

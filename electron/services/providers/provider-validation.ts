@@ -1,5 +1,9 @@
 import { proxyAwareFetch } from '../../utils/proxy-fetch';
 import { getProviderConfig } from '../../utils/provider-registry';
+import {
+  getActiveGeeClawProviderConfig,
+  loadGeeClawProviderConfig,
+} from '../../utils/geeclaw-provider-config';
 
 type ValidationProfile =
   | 'openai-completions'
@@ -346,7 +350,13 @@ export async function validateApiKeyWithProvider(
   options?: { baseUrl?: string; apiProtocol?: string },
 ): Promise<ValidationResult> {
   const profile = getValidationProfile(providerType, options);
-  const resolvedBaseUrl = options?.baseUrl || getProviderConfig(providerType)?.baseUrl;
+  const resolvedBaseUrl = options?.baseUrl || (
+    providerType === 'geeclaw'
+      ? await loadGeeClawProviderConfig()
+        .then((config) => config.upstreamBaseUrl)
+        .catch(() => getActiveGeeClawProviderConfig().upstreamBaseUrl)
+      : getProviderConfig(providerType)?.baseUrl
+  );
   if (profile === 'none') {
     return { valid: true };
   }
