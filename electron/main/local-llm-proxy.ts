@@ -9,6 +9,7 @@ import {
   getActiveGeeClawProviderConfig,
   isGeeClawRegisteredModelId,
   normalizeModelId,
+  redactGeeClawProviderUrlsForLog,
   startGeeClawProviderConfigRefresh,
   stopGeeClawProviderConfigRefresh,
 } from '../utils/geeclaw-provider-config';
@@ -209,6 +210,13 @@ function isAbortLikeError(error: unknown): boolean {
     || message.includes('abort');
 }
 
+function formatProxyErrorForLog(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${redactGeeClawProviderUrlsForLog(error.message)}`;
+  }
+  return redactGeeClawProviderUrlsForLog(String(error));
+}
+
 export class LocalLlmProxyManager {
   private server: Server | null = null;
   private port: number | null = null;
@@ -388,7 +396,7 @@ export class LocalLlmProxyManager {
         return;
       }
 
-      logger.warn('Local LLM proxy request failed:', error);
+      logger.warn('Local LLM proxy request failed:', formatProxyErrorForLog(error));
       if (res.destroyed) {
         return;
       }

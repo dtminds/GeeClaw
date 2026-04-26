@@ -22,6 +22,7 @@ const SAFE_FALLBACK_UPSTREAM_BASE_URL = 'https://geeclaw-provider-config.invalid
 const GEECLAW_PROVIDER_CONFIG_PATH_ENV = 'GEECLAW_PROVIDER_CONFIG_PATH';
 const GEECLAW_PROVIDER_CONFIG_URL_ENV = 'GEECLAW_PROVIDER_CONFIG_URL';
 type GeeClawProviderConfigErrorCode = 'EMPTY_MODEL_LIST' | 'INVALID_MODEL_ENTRY';
+const LOG_URL_PATTERN = /\bhttps?:\/\/[^\s"'<>`]+/gi;
 
 export interface GeeClawProviderConfig {
   version: 1;
@@ -59,6 +60,10 @@ function requireNonEmptyString(value: unknown, field: string): string {
 export function normalizeModelId(value: string): string {
   const trimmed = value.trim();
   return trimmed.startsWith('geeclaw/') ? trimmed.slice('geeclaw/'.length) : trimmed;
+}
+
+export function redactGeeClawProviderUrlsForLog(value: string): string {
+  return value.replace(LOG_URL_PATTERN, '<redacted-url>');
 }
 
 function normalizeUpstreamBaseUrl(value: unknown): string {
@@ -243,7 +248,7 @@ export async function refreshGeeClawProviderConfig(): Promise<GeeClawProviderCon
   try {
     activeConfig = await loadGeeClawProviderConfig();
     logger.info(
-      `[geeclaw-provider-config] Refreshed config: upstream=${activeConfig.upstreamBaseUrl}, auto=${activeConfig.autoModels.join(',')}`,
+      `[geeclaw-provider-config] Refreshed config: upstream=<redacted>, auto=${activeConfig.autoModels.join(',')}`,
     );
   } catch (error) {
     logger.warn('[geeclaw-provider-config] Failed to refresh config; keeping current config:', error);

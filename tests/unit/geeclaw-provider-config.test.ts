@@ -15,6 +15,17 @@ vi.mock('electron', () => ({
   app: electronAppMock,
 }));
 
+vi.mock('@electron/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+import { logger } from '@electron/utils/logger';
+
 function createTempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(root);
@@ -150,6 +161,28 @@ describe('GeeClaw provider config loader', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it('does not log the configured upstream service URL when refreshing', async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        version: 1,
+        upstreamBaseUrl: 'https://secret-upstream.example.com/private/v1',
+        autoModels: ['qwen3.6-plus'],
+        allowedModels: ['qwen3.6-plus'],
+      }),
+    })) as typeof fetch;
+
+    const { refreshGeeClawProviderConfig } = await import('@electron/utils/geeclaw-provider-config');
+
+    await refreshGeeClawProviderConfig();
+
+    const logged = vi.mocked(logger.info).mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('upstream=<redacted>');
+    expect(logged).not.toContain('secret-upstream.example.com');
+    expect(logged).not.toContain('/private/v1');
   });
 
   it('rejects an empty auto model candidate list', async () => {

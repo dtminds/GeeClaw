@@ -3,6 +3,7 @@ import { getProviderConfig } from '../../utils/provider-registry';
 import {
   getActiveGeeClawProviderConfig,
   loadGeeClawProviderConfig,
+  redactGeeClawProviderUrlsForLog,
 } from '../../utils/geeclaw-provider-config';
 
 type ValidationProfile =
@@ -25,7 +26,11 @@ function maskSecret(secret: string): string {
   return `${secret.slice(0, 4)}***${secret.slice(-4)}`;
 }
 
-function sanitizeValidationUrl(rawUrl: string): string {
+function sanitizeValidationUrl(provider: string, rawUrl: string): string {
+  if (provider === 'geeclaw') {
+    return redactGeeClawProviderUrlsForLog(rawUrl).replace('<redacted-url>', '<geeclaw-upstream>');
+  }
+
   try {
     const url = new URL(rawUrl);
     const key = url.searchParams.get('key');
@@ -85,7 +90,7 @@ function logValidationRequest(
   headers: Record<string, string>,
 ): void {
   console.log(
-    `[geeclaw-validate] ${provider} request ${method} ${sanitizeValidationUrl(url)} headers=${JSON.stringify(sanitizeHeaders(headers))}`,
+    `[geeclaw-validate] ${provider} request ${method} ${sanitizeValidationUrl(provider, url)} headers=${JSON.stringify(sanitizeHeaders(headers))}`,
   );
 }
 

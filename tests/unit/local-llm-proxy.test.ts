@@ -350,4 +350,31 @@ describe('LocalLlmProxyManager', () => {
     expect(upstreamSignal?.aborted).toBe(true);
     expect(logger.warn).not.toHaveBeenCalled();
   });
+
+  it('does not log the upstream service URL when a proxy request fails', async () => {
+    const manager = new LocalLlmProxyManager({
+      startPort: 19170,
+      maxPort: 19172,
+      upstreamBaseUrl: 'https://secret-upstream.example.com/private/v1',
+      fetchImpl: async () => {
+        throw new Error('connect ECONNREFUSED https://secret-upstream.example.com/private/v1/chat/completions');
+      },
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const response = await fetch(`http://127.0.0.1:${port}/proxy/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'qwen3.6-plus', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+
+    expect(response.status).toBe(502);
+    const logged = vi.mocked(logger.warn).mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('<redacted-url>');
+    expect(logged).not.toContain('secret-upstream.example.com');
+    expect(logged).not.toContain('/private/v1');
+  });
 });

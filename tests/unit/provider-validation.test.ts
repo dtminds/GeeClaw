@@ -17,6 +17,7 @@ vi.mock('@electron/utils/geeclaw-provider-config', () => ({
     autoModels: ['qwen3.6-plus'],
     allowedModels: ['qwen3.6-plus'],
   })),
+  redactGeeClawProviderUrlsForLog: vi.fn((value: string) => value.replace(/\bhttps?:\/\/[^\s"'<>`]+/gi, '<redacted-url>')),
 }));
 
 import { proxyAwareFetch } from '@electron/utils/proxy-fetch';
@@ -110,6 +111,22 @@ describe('validateApiKeyWithProvider', () => {
         }),
       }),
     );
+  });
+
+  it('does not log the GeeClaw upstream service URL during validation', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'geeclaw-chat' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await validateApiKeyWithProvider('geeclaw', 'sk-geeclaw-test');
+
+    const logged = consoleLog.mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('<geeclaw-upstream>');
+    expect(logged).not.toContain('geeclaw-validation.example');
   });
 
   it('ignores caller-supplied GeeClaw registry base URL during validation', async () => {
