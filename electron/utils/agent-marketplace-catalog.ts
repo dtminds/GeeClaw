@@ -65,19 +65,8 @@ function requireNonEmptyString(value: unknown, field: string, index?: number): s
   return value.trim();
 }
 
-function assertSupportedKeys(
-  record: Record<string, unknown>,
-  field: string,
-  index: number,
-): void {
-  const unsupportedKeys = Object.keys(record).filter((key) => !RECOGNIZED_CATALOG_ENTRY_KEYS.has(key));
-  if (unsupportedKeys.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `[agent-marketplace] Entry at index ${index} ${field} has unsupported keys: ${unsupportedKeys.join(', ')}`,
-  );
+function getUnsupportedCatalogEntryKeys(record: Record<string, unknown>): string[] {
+  return Object.keys(record).filter((key) => !RECOGNIZED_CATALOG_ENTRY_KEYS.has(key));
 }
 
 function validateCatalogAgentId(agentId: string, index: number): string {
@@ -168,7 +157,6 @@ function normalizeAgentsMdMode(value: unknown, index: number): AgentMarketplaceA
 
 function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCatalogEntry {
   const record = requirePlainObject(entry, 'catalog entry', index);
-  assertSupportedKeys(record, 'catalog entry', index);
 
   const agentId = validateCatalogAgentId(requireNonEmptyString(record.agentId, 'agentId', index), index);
   const downloadUrl = requireNonEmptyString(record.downloadUrl, 'downloadUrl', index);
@@ -235,7 +223,14 @@ function parseAgentMarketplaceCatalog(content: string): AgentMarketplaceCatalog 
     throw new Error('[agent-marketplace] Catalog file must contain an array');
   }
 
-  const catalog = parsed.map((entry, index) => validateCatalogEntry(entry, index));
+  const catalog = parsed.flatMap((entry, index) => {
+    const record = requirePlainObject(entry, 'catalog entry', index);
+    if (getUnsupportedCatalogEntryKeys(record).length > 0) {
+      return [];
+    }
+
+    return [validateCatalogEntry(record, index)];
+  });
   const seenAgentIds = new Set<string>();
 
   for (const entry of catalog) {
