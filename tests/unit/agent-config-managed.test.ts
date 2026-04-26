@@ -660,6 +660,39 @@ describe('managed agent config domain', () => {
     expect(management.stockexpert.installedAt).toBe(management.stockexpert.updatedAt);
   });
 
+  it('preserves default skill scope when installing marketplace agents without preset skill restrictions', async () => {
+    const { agentConfig, configDir, storeState } = await setupManagedPresetFixture({
+      marketplacePackage: {
+        meta: {
+          agent: {
+            skillScope: { mode: 'default' },
+          },
+        },
+      },
+    });
+    const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
+    const alwaysEnabledSkillKeys = getAlwaysEnabledSkillKeys();
+
+    const result = await agentConfig.installMarketplaceAgent('stockexpert');
+    const installedAgent = result.agents.find((agent) => agent.id === 'stockexpert');
+    const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
+      agents?: { list?: Array<{ id?: string; skills?: string[] }> };
+    };
+    const runtimeSkills = config.agents?.list?.find((agent) => agent.id === 'stockexpert')?.skills ?? [];
+
+    expect(installedAgent).toMatchObject({
+      skillScope: { mode: 'default' },
+      presetSkills: [],
+      canUseDefaultSkillScope: true,
+    });
+    expect(runtimeSkills.filter((skill) => alwaysEnabledSkillKeys.includes(skill))).toEqual([]);
+    expect(storeState.management).toMatchObject({
+      stockexpert: {
+        presetSkills: [],
+      },
+    });
+  });
+
   it('normalizes legacy managed metadata without source before building snapshots', async () => {
     const { agentConfig, storeState } = await setupManagedPresetFixture();
 

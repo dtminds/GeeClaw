@@ -469,12 +469,16 @@ function appendAlwaysEnabledSkillKeys(skills: string[]): string[] {
 
 function normalizePresetAgentSkillScope(scope: unknown): AgentSkillScope {
   const normalized = normalizeSkillScope(scope);
-  const skills = normalized.mode === 'specified' ? normalized.skills : [];
-  const mergedSkills = appendAlwaysEnabledSkillKeys(skills);
+  if (normalized.mode === 'default') {
+    return normalized;
+  }
 
-  return mergedSkills.length === 0
-    ? { mode: 'default' }
-    : { mode: 'specified', skills: mergedSkills };
+  const mergedSkills = appendAlwaysEnabledSkillKeys(normalized.skills);
+  if (mergedSkills.length === 0) {
+    throw new Error('Specified skill scope must contain at least 1 skill');
+  }
+
+  return { mode: 'specified', skills: mergedSkills };
 }
 
 function normalizeManualSkillList(skills: unknown): string[] {
