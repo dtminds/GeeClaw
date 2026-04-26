@@ -133,7 +133,7 @@ pnpm dev
 如果你想在开发模式下验证线上智能体广场 catalog，可以这样启动：
 
 ```bash
-GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketplace-catalog.json pnpm dev
+GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketplace-catalog-v2.json pnpm dev
 ```
 
 ### 首次启动
@@ -392,7 +392,7 @@ pnpm dev
 ```
 
 - `pnpm dev` 和 `openclaw-runtime:prepare` 使用的是仓库内的 `openclaw-runtime/` 安装结果，默认不会下载 sidecar。
-- 设置 `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` 可以让开发模式优先从远程 URL 加载智能体广场 catalog，而不是读取 `site/res/agent-marketplace-catalog.json`。
+- 设置 `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` 可以让开发模式优先从远程 URL 加载智能体广场 catalog，而不是读取 `site/res/agent-marketplace-catalog-v2.json`。
 - 当你修改了 `openclaw-runtime/package.json`、需要干净重装，或者想明确刷新本地 runtime 时，再执行 `pnpm run openclaw-runtime:install`。
 - sidecar 应该被视为 release 产物，而不是默认的开发输入。
 

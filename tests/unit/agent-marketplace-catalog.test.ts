@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe('agent marketplace catalog loader', () => {
-  it('loads the development catalog from site/res/agent-marketplace-catalog.json', async () => {
+  it('loads the development catalog from site/res/agent-marketplace-catalog-v2.json', async () => {
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
 
     const catalog = await loadAgentMarketplaceCatalog();
@@ -71,7 +71,7 @@ describe('agent marketplace catalog loader', () => {
     }
   });
 
-  it('loads the packaged catalog from https://www.geeclaw.cn/res/agent-marketplace-catalog.json', async () => {
+  it('loads the packaged catalog from https://www.geeclaw.cn/res/agent-marketplace-catalog-v2.json', async () => {
     electronAppMock.isPackaged = true;
     global.fetch = vi.fn(async () => ({
       ok: true,
@@ -98,7 +98,7 @@ describe('agent marketplace catalog loader', () => {
       }),
     ]);
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://www.geeclaw.cn/res/agent-marketplace-catalog.json',
+      'https://www.geeclaw.cn/res/agent-marketplace-catalog-v2.json',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
       }),
