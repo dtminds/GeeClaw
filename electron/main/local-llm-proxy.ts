@@ -122,11 +122,10 @@ type RequestBodyResolution = {
 };
 
 function resolveGeeClawAutoModel(config: GeeClawProviderConfig): string | null {
-  const allowedModels = new Set(config.allowedModels.map(normalizeModelId));
+  const allowedModels = new Set(config.allowedModels);
   for (const candidate of config.autoModels) {
-    const modelId = normalizeModelId(candidate);
-    if (allowedModels.has(modelId) && isGeeClawRegisteredModelId(modelId)) {
-      return modelId;
+    if (allowedModels.has(candidate) && isGeeClawRegisteredModelId(candidate)) {
+      return candidate;
     }
   }
   return null;
@@ -157,7 +156,7 @@ function resolveRequestBodyForGeeClawConfig(
   }
 
   const requestedModel = normalizeModelId(record.model);
-  const allowedModels = new Set(config.allowedModels.map(normalizeModelId));
+  const allowedModels = new Set(config.allowedModels);
   const shouldUseAuto = requestedModel === 'auto'
     || !allowedModels.has(requestedModel)
     || !isGeeClawRegisteredModelId(requestedModel);

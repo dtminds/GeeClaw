@@ -21,6 +21,7 @@ export const GEECLAW_MODEL_UNAVAILABLE_MESSAGE = '当前模型暂不可用，请
 const SAFE_FALLBACK_UPSTREAM_BASE_URL = 'https://geeclaw-provider-config.invalid/v1';
 const GEECLAW_PROVIDER_CONFIG_PATH_ENV = 'GEECLAW_PROVIDER_CONFIG_PATH';
 const GEECLAW_PROVIDER_CONFIG_URL_ENV = 'GEECLAW_PROVIDER_CONFIG_URL';
+type GeeClawProviderConfigErrorCode = 'EMPTY_MODEL_LIST' | 'INVALID_MODEL_ENTRY';
 
 export interface GeeClawProviderConfig {
   version: 1;
@@ -29,8 +30,17 @@ export interface GeeClawProviderConfig {
   allowedModels: string[];
 }
 
+let cachedRegisteredModelIds: string[] | null = null;
+let cachedRegisteredModelIdSet: Set<string> | null = null;
 let activeConfig: GeeClawProviderConfig = createDefaultGeeClawProviderConfig();
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+function createGeeClawProviderConfigError(
+  message: string,
+  code: GeeClawProviderConfigErrorCode,
+): Error & { code: GeeClawProviderConfigErrorCode } {
+  return Object.assign(new Error(message), { code });
+}
 
 function requirePlainObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -65,9 +75,12 @@ function normalizeUpstreamBaseUrl(value: unknown): string {
   return raw;
 }
 
-function normalizeAllowedModels(value: unknown): string[] {
+function normalizeModelList(value: unknown, field: string): string[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new Error('[geeclaw-provider-config] allowedModels must be a non-empty array');
+    throw createGeeClawProviderConfigError(
+      `[geeclaw-provider-config] ${field} must be a non-empty array`,
+      'EMPTY_MODEL_LIST',
+    );
   }
 
   const seen = new Set<string>();
@@ -75,7 +88,10 @@ function normalizeAllowedModels(value: unknown): string[] {
   for (const entry of value) {
     const model = typeof entry === 'string' ? normalizeModelId(entry) : '';
     if (!model) {
-      throw new Error('[geeclaw-provider-config] allowedModels is invalid');
+      throw createGeeClawProviderConfigError(
+        `[geeclaw-provider-config] ${field} is invalid`,
+        'INVALID_MODEL_ENTRY',
+      );
     }
     if (seen.has(model)) {
       continue;
@@ -84,36 +100,33 @@ function normalizeAllowedModels(value: unknown): string[] {
     models.push(model);
   }
   return models;
+}
+
+function normalizeAllowedModels(value: unknown): string[] {
+  return normalizeModelList(value, 'allowedModels');
 }
 
 function normalizeAutoModels(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error('[geeclaw-provider-config] autoModels must be a non-empty array');
-  }
+  return normalizeModelList(value, 'autoModels');
+}
 
-  const seen = new Set<string>();
-  const models: string[] = [];
-  for (const entry of value) {
-    const model = typeof entry === 'string' ? normalizeModelId(entry) : '';
-    if (!model) {
-      throw new Error('[geeclaw-provider-config] autoModels is invalid');
-    }
-    if (seen.has(model)) {
-      continue;
-    }
-    seen.add(model);
-    models.push(model);
+function ensureRegisteredModelCache(): void {
+  if (cachedRegisteredModelIds && cachedRegisteredModelIdSet) {
+    return;
   }
-  return models;
+  cachedRegisteredModelIds = getDefaultProviderModelEntries(getProviderDefinition('geeclaw'))
+    .map((model) => model.id);
+  cachedRegisteredModelIdSet = new Set(cachedRegisteredModelIds);
 }
 
 export function getGeeClawRegisteredModelIds(): string[] {
-  return getDefaultProviderModelEntries(getProviderDefinition('geeclaw')).map((model) => model.id);
+  ensureRegisteredModelCache();
+  return [...cachedRegisteredModelIds!];
 }
 
 export function isGeeClawRegisteredModelId(modelId: string): boolean {
-  const normalized = normalizeModelId(modelId);
-  return getGeeClawRegisteredModelIds().includes(normalized);
+  ensureRegisteredModelCache();
+  return cachedRegisteredModelIdSet!.has(normalizeModelId(modelId));
 }
 
 export function createDefaultGeeClawProviderConfig(): GeeClawProviderConfig {

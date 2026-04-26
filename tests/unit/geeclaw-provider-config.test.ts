@@ -164,5 +164,25 @@ describe('GeeClaw provider config loader', () => {
     const { loadGeeClawProviderConfig } = await import('@electron/utils/geeclaw-provider-config');
 
     await expect(loadGeeClawProviderConfig(configPath)).rejects.toThrow('autoModels must be a non-empty array');
+    await expect(loadGeeClawProviderConfig(configPath)).rejects.toMatchObject({
+      code: 'EMPTY_MODEL_LIST',
+    });
+  });
+
+  it('rejects invalid model entries with a structured error code', async () => {
+    const root = createTempRoot('geeclaw-provider-config-invalid-entry-');
+    const configPath = writeConfig(root, {
+      version: 1,
+      upstreamBaseUrl: 'https://proxy.example.com/v1',
+      autoModels: ['qwen3.6-plus'],
+      allowedModels: ['qwen3.6-plus', ''],
+    });
+
+    const { loadGeeClawProviderConfig } = await import('@electron/utils/geeclaw-provider-config');
+
+    await expect(loadGeeClawProviderConfig(configPath)).rejects.toThrow('allowedModels is invalid');
+    await expect(loadGeeClawProviderConfig(configPath)).rejects.toMatchObject({
+      code: 'INVALID_MODEL_ENTRY',
+    });
   });
 });
