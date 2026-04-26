@@ -110,6 +110,18 @@ function getAgentIdFromSessionKey(sessionKey: string): string {
   return parts[1] || 'main';
 }
 
+function getSessionUpdatedAtMs(session?: { updatedAt?: unknown }): number {
+  const updatedAt = session?.updatedAt;
+  if (typeof updatedAt === 'number') {
+    return Number.isFinite(updatedAt) ? updatedAt : 0;
+  }
+  if (typeof updatedAt === 'string') {
+    const parsed = Date.parse(updatedAt);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
@@ -186,7 +198,7 @@ export function Sidebar() {
       }
 
       const current = map.get(agentId);
-      if (!current || session.updatedAt > current.updatedAt) {
+      if (!current || getSessionUpdatedAtMs(session) > getSessionUpdatedAtMs(current)) {
         map.set(agentId, session);
       }
       return map;
@@ -197,7 +209,8 @@ export function Sidebar() {
         return defaultSort;
       }
 
-      const updatedAtSort = (nextAgentMainSessions.get(right.id)?.updatedAt ?? 0) - (nextAgentMainSessions.get(left.id)?.updatedAt ?? 0);
+      const updatedAtSort = getSessionUpdatedAtMs(nextAgentMainSessions.get(right.id))
+        - getSessionUpdatedAtMs(nextAgentMainSessions.get(left.id));
       return updatedAtSort || left.name.localeCompare(right.name);
     });
 

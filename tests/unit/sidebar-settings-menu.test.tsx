@@ -269,7 +269,7 @@ describe('Sidebar settings menu trigger', () => {
         title: '',
         lastMessagePreview: 'Default preview',
         createdAt: 1,
-        updatedAt: 1_000,
+        updatedAt: '2026-03-31T08:00:00.000Z',
       },
       {
         id: 'alpha-session',
@@ -277,7 +277,7 @@ describe('Sidebar settings menu trigger', () => {
         title: '',
         lastMessagePreview: 'Older preview',
         createdAt: 1,
-        updatedAt: 2_000,
+        updatedAt: '2026-04-01T08:00:00.000Z',
       },
       {
         id: 'zeta-session',
@@ -285,7 +285,7 @@ describe('Sidebar settings menu trigger', () => {
         title: '',
         lastMessagePreview: 'Newer preview',
         createdAt: 1,
-        updatedAt: 3_000,
+        updatedAt: '2026-04-02T08:00:00.000Z',
       },
     ];
 
