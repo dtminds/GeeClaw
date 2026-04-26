@@ -449,7 +449,7 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
     tooManyError: 'Specified skill scope must not contain more than 20 skills',
   });
 
-  return { mode: 'specified', skills: normalized };
+  return { mode: 'specified', skills: appendAlwaysEnabledSkillKeys(normalized) };
 }
 
 function appendAlwaysEnabledSkillKeys(skills: string[]): string[] {
@@ -467,20 +467,6 @@ function appendAlwaysEnabledSkillKeys(skills: string[]): string[] {
   return merged;
 }
 
-function normalizePresetAgentSkillScope(scope: unknown): AgentSkillScope {
-  const normalized = normalizeSkillScope(scope);
-  if (normalized.mode === 'default') {
-    return normalized;
-  }
-
-  const mergedSkills = appendAlwaysEnabledSkillKeys(normalized.skills);
-  if (mergedSkills.length === 0) {
-    throw new Error('Specified skill scope must contain at least 1 skill');
-  }
-
-  return { mode: 'specified', skills: mergedSkills };
-}
-
 function normalizeManualSkillList(skills: unknown): string[] {
   const list = Array.isArray(skills) ? skills : [];
   if (list.some((value) => typeof value !== 'string' || !value.trim())) {
@@ -495,7 +481,7 @@ function normalizeManualSkillList(skills: unknown): string[] {
     throw new Error('Manual skills must not contain duplicate skills');
   }
 
-  return normalized.sort((left, right) => left.localeCompare(right));
+  return appendAlwaysEnabledSkillKeys(normalized).sort((left, right) => left.localeCompare(right));
 }
 
 function normalizeToolDenyList(tools: unknown): string[] {
@@ -2015,7 +2001,7 @@ async function installMarketplaceAgentFromPreparedPackage(
     }
 
     const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
-    const nextScope = normalizePresetAgentSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
     const lockedFields = preparedPackage.package.meta.managedPolicy?.lockedFields
       ? [...preparedPackage.package.meta.managedPolicy.lockedFields]
       : ['id', 'workspace', 'persona'];
@@ -2114,7 +2100,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
       throw new Error(`Agent "${normalizedAgentId}" not found`);
     }
 
-    const nextScope = normalizePresetAgentSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
     const currentEntry = entries[index];
     let nextEntry = applyAgentSkillScope({
       ...currentEntry,
