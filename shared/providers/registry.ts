@@ -51,6 +51,7 @@ function createGeeClawCompatibleProvider(
     ...(options.modelIdPlaceholder !== undefined ? { modelIdPlaceholder: options.modelIdPlaceholder } : {}),
     ...(options.hidden !== undefined ? { hidden: options.hidden } : {}),
     providerConfig: {
+      // Development override: run `GEECLAW_PROVIDER_CONFIG_PATH=/absolute/path/to/geeclaw-provider-config.json pnpm dev`; this baseUrl is only a safe placeholder.
       baseUrl: 'https://geeclaw-provider-config.invalid/v1',
       api: 'openai-completions',
       apiKeyEnv: options.envVar,
