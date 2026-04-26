@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "@whiskeysockets/baileys": "7.0.0-rc.9",
-        "openclaw": "2026.4.23"
+        "openclaw": "2026.4.24"
     },
     "overrides": {
         "https-proxy-agent": "7.0.6"
