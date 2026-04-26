@@ -12,6 +12,7 @@ export const ALWAYS_ENABLED_SKILL_KEYS = [
   'weather',
   'mcporter',
   'skill-creator',
+  'geeclaw-cron',
   'geeclaw-env',
   'geeclaw-openclaw',
 ] as const;
