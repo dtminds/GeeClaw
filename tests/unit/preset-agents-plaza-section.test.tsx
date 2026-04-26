@@ -6,6 +6,7 @@ import {
   useAgentsStore,
 } from '@/stores/agents';
 import { useGatewayStore } from '@/stores/gateway';
+import { AppError } from '@/lib/error-model';
 import type { AgentMarketplaceCompletion, AgentPresetSummary, AgentSummary, AgentsSnapshot } from '@/types/agent';
 
 const hostApiFetchMock = vi.hoisted(() => vi.fn());
@@ -28,6 +29,7 @@ const translations: Record<string, string> = {
   'marketplace.goSend': '去发送',
   'marketplace.goChat': '去聊聊',
   'marketplace.openingChat': '正在打开',
+  'marketplace.openChatErrors.gateway': 'Gateway 服务不可用，请稍后重试',
   'marketplace.dismiss': '稍后',
   'marketplace.postInstallTitle': '安装成功',
   'marketplace.postUpdateTitle': '更新成功',
@@ -300,12 +302,15 @@ vi.mock('react-i18next', () => ({
     init: () => undefined,
   },
   useTranslation: () => ({
-    t: (key: string, options?: { platforms?: string; progress?: number }) => {
+    t: (key: string, options?: { platforms?: string; progress?: number; reason?: string }) => {
       if (key === 'marketplace.availableOn') {
         return `支持平台：${options?.platforms ?? ''}`;
       }
       if (key === 'marketplace.installProgress') {
         return `${options?.progress ?? 0}%`;
+      }
+      if (key === 'marketplace.openChatFailed') {
+        return `打开会话失败：${options?.reason ?? ''}`;
       }
       if (key === 'marketplace.requirements.missingBin' || key === 'marketplace.requirements.missingBins') {
         return `缺少依赖：${(options as { items?: string })?.items ?? ''}`;
@@ -1023,6 +1028,83 @@ describe('PresetAgentsPlazaSection', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/chat');
     expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
+  });
+
+  it('surfaces structured errors when the success dialog cannot open chat', async () => {
+    openAgentMainSessionMock.mockRejectedValueOnce(
+      new AppError('GATEWAY', 'gateway startup failed while opening chat'),
+    );
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/update' && init?.method === 'POST') {
+        return {
+          ...baseSnapshot,
+          agents: [{
+            ...installedTrendFinderAgent,
+            packageVersion: '1.1.0',
+          }],
+          completion: {
+            operation: 'update',
+            agentId: 'trendfinder',
+          },
+        };
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('趋势助手'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '更新' }));
+      await flushPromises();
+    });
+
+    const confirmDialog = screen.getByRole('dialog', { name: '确认更新' });
+    await act(async () => {
+      fireEvent.click(within(confirmDialog).getByRole('button', { name: '确认更新' }));
+      await flushPromises();
+    });
+
+    for (const step of [
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+    ]) {
+      await act(async () => {
+        vi.advanceTimersByTime(step);
+        await flushPromises();
+      });
+    }
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '去聊聊' }));
+      await flushPromises();
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('打开会话失败：Gateway 服务不可用，请稍后重试');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('gateway startup failed');
+    expect(screen.getByRole('button', { name: '去聊聊' })).toBeEnabled();
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(useAgentsStore.getState().marketplaceCompletion).toMatchObject({
+      operation: 'update',
+      agentId: 'trendfinder',
+    });
   });
 
   it('shows install CTA when catalog-backed summaries omit requirements and preset skills', async () => {

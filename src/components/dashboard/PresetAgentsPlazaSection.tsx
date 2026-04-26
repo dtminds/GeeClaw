@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { normalizeAppError, type AppErrorCode } from '@/lib/error-model';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,18 @@ import { MarketplacePresetDetailDialog } from '@/pages/Agents/MarketplacePresetD
 const PRESET_CATEGORY_TRANSLATION_KEYS: Record<string, string> = {
   finance: 'finance',
   research: 'research',
+};
+
+const OPEN_CHAT_ERROR_KEYS: Record<AppErrorCode, string> = {
+  AUTH_INVALID: 'authInvalid',
+  TIMEOUT: 'timeout',
+  RATE_LIMIT: 'rateLimit',
+  PERMISSION: 'permission',
+  CHANNEL_UNAVAILABLE: 'channelUnavailable',
+  NETWORK: 'network',
+  CONFIG: 'config',
+  GATEWAY: 'gateway',
+  UNKNOWN: 'unknown',
 };
 
 export function PresetAgentsPlazaSection() {
@@ -48,6 +61,7 @@ export function PresetAgentsPlazaSection() {
   const [pendingUpdateAgentId, setPendingUpdateAgentId] = useState<string | null>(null);
   const [activeMarketplaceActionAgentId, setActiveMarketplaceActionAgentId] = useState<string | null>(null);
   const [successActionPending, setSuccessActionPending] = useState(false);
+  const [successActionError, setSuccessActionError] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchPresets()]);
@@ -133,6 +147,7 @@ export function PresetAgentsPlazaSection() {
     }
 
     setSuccessActionPending(true);
+    setSuccessActionError(null);
     try {
       await openAgentMainSession(marketplaceCompletion.agentId);
       if (marketplaceCompletion.promptText) {
@@ -141,11 +156,21 @@ export function PresetAgentsPlazaSection() {
       setActiveAgentId(null);
       setPendingUpdateAgentId(null);
       setActiveMarketplaceActionAgentId(null);
+      setSuccessActionPending(false);
+      setSuccessActionError(null);
       clearError();
       clearMarketplaceCompletion();
       navigate('/chat');
-    } catch {
+    } catch (error) {
+      const appError = normalizeAppError(error, {
+        source: 'preset-plaza',
+        operation: 'open-agent-main-session',
+      });
+      const reason = appError.code === 'UNKNOWN'
+        ? (appError.message || tAgents('marketplace.openChatErrors.unknown'))
+        : tAgents(`marketplace.openChatErrors.${OPEN_CHAT_ERROR_KEYS[appError.code]}`);
       setSuccessActionPending(false);
+      setSuccessActionError(tAgents('marketplace.openChatFailed', { reason }));
     }
   };
 
@@ -158,6 +183,7 @@ export function PresetAgentsPlazaSection() {
     setPendingUpdateAgentId(null);
     setActiveMarketplaceActionAgentId(null);
     setSuccessActionPending(false);
+    setSuccessActionError(null);
     clearError();
     clearMarketplaceCompletion();
   };
@@ -325,6 +351,14 @@ export function PresetAgentsPlazaSection() {
                     <p className="mt-3 whitespace-pre-wrap break-words text-[14px] leading-6 text-foreground/84">
                       {marketplaceCompletion.promptText}
                     </p>
+                  </div>
+                )}
+                {successActionError && (
+                  <div
+                    role="alert"
+                    className="mt-5 w-full rounded-[16px] border border-destructive/30 bg-destructive/8 px-4 py-3 text-left text-[13px] leading-5 text-destructive"
+                  >
+                    {successActionError}
                   </div>
                 )}
               </DialogHeader>
