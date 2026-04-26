@@ -209,6 +209,44 @@ describe('agent marketplace catalog loader', () => {
     ]);
   });
 
+  it('filters catalog entries with unknown fields for forward compatibility', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-forward-compatible-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'nebula-boss-assistant',
+        name: 'Nebula Boss Assistant',
+        description: 'desc',
+        emoji: '🌌',
+        category: 'custom',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/nebula-boss-assistant.zip',
+        checksum: 'sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        futureInstallPolicy: {
+          mode: 'locked',
+          unlockType: 'local-code',
+        },
+      },
+      {
+        agentId: 'public-growth-assistant',
+        name: 'Public Growth Assistant',
+        description: 'desc',
+        emoji: '📈',
+        category: 'marketing',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/public-growth-assistant.zip',
+        checksum: 'sha256-1111111111111111111111111111111111111111111111111111111111111111',
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).resolves.toEqual([
+      expect.objectContaining({
+        agentId: 'public-growth-assistant',
+      }),
+    ]);
+  });
+
   it('rejects duplicate agentIds in a catalog file', async () => {
     const root = createTempRoot('agent-marketplace-catalog-');
     const catalogPath = writeCatalog(root, [
