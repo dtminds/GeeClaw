@@ -1,812 +1,5 @@
 [
   {
-    "agentId": "marketing-bilibili-strategist",
-    "name": "B站内容策略师",
-    "description": "专注B站（哔哩哔哩）平台的中长视频内容策略专家，精通UP主运营、弹幕文化、社区生态、品牌合作、推荐算法，以及通过优质内容实现长期粉丝增长与商业变现。",
-    "emoji": "📺",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-bilibili-strategist/1.0.0.zip",
-    "checksum": "sha256-ca9ad501a9f8bad81df91b6c2357ddf7b8420cc047a66560f3abb2c7c0449f65",
-    "size": 5930
-  },
-  {
-    "agentId": "marketing-china-ecommerce-operator",
-    "name": "电商运营专家",
-    "description": "覆盖淘宝、天猫、拼多多、京东生态的全平台电商运营专家，深耕商品上架优化、直播带货、店铺运营、618/双11大促及跨平台策略。",
-    "emoji": "🛒",
-    "category": "电商运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-china-ecommerce-operator/1.0.0.zip",
-    "checksum": "sha256-3c199de30204c1908afd4443aa97e514a81fa7c361fe55f505c8727f01ed3648",
-    "size": 8134
-  },
-  {
-    "agentId": "hotspot-intel-assistant",
-    "name": "热点情报助手",
-    "description": "跨平台追踪热榜、热点、问答、社区讨论与科技资讯，适合快速判断一个话题正在被哪些中文平台放大。",
-    "emoji": "🔥",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
-    "checksum": "sha256-e4d0701e7794489dd60245301f8b4cfffc158a289c00cd59a4cf4f115cdb1b6d",
-    "size": 2978
-  },
-  {
-    "agentId": "marketing-baidu-seo-specialist",
-    "name": "百度 SEO 专家",
-    "description": "专注百度搜索生态的SEO优化专家，精通百度算法规则、百度生态产品矩阵（百科、知道、贴吧、文库）、中文关键词研究、ICP备案规范、以及移动端搜索优化策略。",
-    "emoji": "🔎",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-baidu-seo-specialist/1.0.0.zip",
-    "checksum": "sha256-39b37807773cfa652265cec979b3b195a704123f9daed964254aa125c8c00077",
-    "size": 6005
-  },
-  {
-    "agentId": "marketing-china-market-localization-strategist",
-    "name": "中国市场本地化策略师",
-    "description": "全栈中国市场本地化专家，将实时趋势信号转化为可执行的上市策略，覆盖抖音、小红书、微信、B站等全平台",
-    "emoji": "🧭",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-china-market-localization-strategist/1.0.0.zip",
-    "checksum": "sha256-637162d8b995c245d93e832bfdb86843030f14c84f77b3290e546a397f873d29",
-    "size": 8939
-  },
-  {
-    "agentId": "marketing-content-creator",
-    "name": "内容创作大师",
-    "description": "擅长多平台内容策划与创作的内容专家，能在不同渠道用不同语言讲同一个好故事，让每一篇内容都带来可衡量的价值。",
-    "emoji": "✍️",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-content-creator/1.0.0.zip",
-    "checksum": "sha256-659460abf099781ca2ed8cf3f3bfc4766eb28e8f347a225e4aed969761fd735d",
-    "size": 4720
-  },
-  {
-    "agentId": "marketing-douyin-strategist",
-    "name": "抖音策略师",
-    "description": "专注抖音平台的短视频营销专家，精通算法推荐机制、爆款视频策划、直播带货流程、以及通过内容矩阵实现品牌在抖音生态的全链路增长。",
-    "emoji": "🎬",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-douyin-strategist/1.0.0.zip",
-    "checksum": "sha256-aecee45b96f747c0388f5f17ceeeb9f60fa99dde8b610c2ba7dd84ea09e03053",
-    "size": 4933
-  },
-  {
-    "agentId": "marketing-growth-assistant",
-    "name": "营销增长助手",
-    "description": "覆盖 SEO 机会、内容打磨、增长实验、EDM与线索转化，擅长营销增长工作",
-    "emoji": "🚀",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-growth-assistant/1.0.0.zip",
-    "checksum": "sha256-8dc92cda1544ff7f9fd29bea521771690beb68ecaa1039ba22d4f7391d5e67ec",
-    "size": 194552,
-    "presetSkills": [
-      "sales-pipeline",
-      "cold-outbound-optimizer",
-      "expert-panel",
-      "growth-engine",
-      "seo-ops"
-    ]
-  },
-  {
-    "agentId": "marketing-kuaishou-strategist",
-    "name": "快手策略师",
-    "description": "专注快手平台的短视频与直播电商策略专家，精通下沉市场用户运营、老铁社区文化、直播带货方法论、私域信任构建，以及快手与抖音的差异化打法。",
-    "emoji": "🎥",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-kuaishou-strategist/1.0.0.zip",
-    "checksum": "sha256-fd19f780646db7797852e4aa2315ae88fbdff41aa2e6e354f01e438e0dd3674e",
-    "size": 6073
-  },
-  {
-    "agentId": "marketing-livestream-commerce-coach",
-    "name": "直播电商主播教练",
-    "description": "专注直播电商全链路的主播培训与直播间运营专家，精通抖音/快手/淘宝直播/视频号四大平台的直播话术设计、选品排品策略、付费流与自然流的流量配比、转化逼单技巧，以及基于实时数据的直播间调优方法论。",
-    "emoji": "🎙️",
-    "category": "电商运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-livestream-commerce-coach/1.0.0.zip",
-    "checksum": "sha256-684340621a897f8be800c0cf075132cf3fe9685b1e29f5a3020080471c937d9a",
-    "size": 9188
-  },
-  {
-    "agentId": "marketing-private-domain-operator",
-    "name": "私域流量运营师",
-    "description": "专注企业微信私域体系搭建的运营专家，精通企微SCRM、社群精细化运营、小程序商城集成、用户生命周期管理和全链路转化漏斗优化。",
-    "emoji": "🔒",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-private-domain-operator/1.0.0.zip",
-    "checksum": "sha256-4ee2e797dde93e899b8a47e24becbe7e42a8b5d8a2f21d859ccfe03fd4657b00",
-    "size": 8281
-  },
-  {
-    "agentId": "interactive-presentation-master",
-    "name": "交互式 Presentation 大师",
-    "description": "3 到 30 分钟，你能 ship 一段产品发布动画、一个能点击的 App 原型、一套能编辑的 PPT、一份印刷级的信息图",
-    "emoji": "📊",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/interactive-presentation-master/1.0.0.zip",
-    "checksum": "sha256-def0c4f5e22fca4d855369b43705e84b3293e7ea0947a317a2b13f7c9150c831",
-    "size": 31436204,
-    "presetSkills": [
-      "huashu-design"
-    ]
-  },
-  {
-    "agentId": "marketing-social-media-strategist",
-    "name": "社交媒体策略师",
-    "description": "跨平台社交媒体策略专家，专注 LinkedIn、Twitter 等职业社交平台的品牌建设、社区运营和整合营销。",
-    "emoji": "🌐",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-social-media-strategist/1.0.0.zip",
-    "checksum": "sha256-b6073baaadf7f455e4c9acc954f16309637b0fd8cab4123d25e8c0dda91384e0",
-    "size": 3997
-  },
-  {
-    "agentId": "marketing-tiktok-strategist",
-    "name": "TikTok 策略师",
-    "description": "TikTok 营销专家，适合出海营销场景。擅长病毒式内容创作、算法优化和社区运营，精通 TikTok 独特的文化生态和玩法。",
-    "emoji": "🎵",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-tiktok-strategist/1.0.0.zip",
-    "checksum": "sha256-65071a8fc9ad262abe969281e9aa96cd745918ab01913d742389579b9475f51e",
-    "size": 4488
-  },
-  {
-    "agentId": "marketing-wechat-operator",
-    "name": "微信公众号运营",
-    "description": "专注微信生态的内容运营专家，精通公众号内容策略、社群运营、裂变增长、私域流量搭建和微信小程序运营。",
-    "emoji": "📝",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-wechat-operator/1.0.0.zip",
-    "checksum": "sha256-99d5873d67a68961e3e41b22999be95545fb42a5df9085eae13d6fb3ebde0974",
-    "size": 4846
-  },
-  {
-    "agentId": "marketing-weibo-strategist",
-    "name": "微博运营策略师",
-    "description": "专注新浪微博平台的全域运营专家，精通热搜机制、超话运营、舆情管理、粉丝经济与微博广告投放，助力品牌在微博生态实现声量爆发与长效增长。",
-    "emoji": "📣",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-weibo-strategist/1.0.0.zip",
-    "checksum": "sha256-5f9ae641811a324aedb7e500dc8079e2d999cd57dbec2f66a285e529ec6e5a34",
-    "size": 8078
-  },
-  {
-    "agentId": "marketing-weixin-channels-strategist",
-    "name": "微信视频号运营策略师",
-    "description": "专注微信视频号生态的内容策略与增长运营专家，精通社交推荐机制、公众号/朋友圈/小程序/企微生态联动、视频号直播带货、短视频内容策划、私域引流闭环和创作者数据分析。",
-    "emoji": "📹",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-weixin-channels-strategist/1.0.0.zip",
-    "checksum": "sha256-32fdd6be8e495f4475c865110a3efdef6425ffb67af5a7609d8f52d4cabd328d",
-    "size": 8535
-  },
-  {
-    "agentId": "marketing-xiaohongshu-operator",
-    "name": "小红书运营专家",
-    "description": "专注小红书平台的内容运营专家，擅长种草笔记创作、达人合作策略、爆款内容公式、以及通过数据驱动实现品牌在小红书的高效获客和口碑建设。",
-    "emoji": "📕",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-xiaohongshu-operator/1.0.0.zip",
-    "checksum": "sha256-a04637b4b8b356ae38f13b155ae1f09ed1127c9f5d29020e9b07cfe6c9184151",
-    "size": 4842
-  },
-  {
-    "agentId": "marketing-zhihu-strategist",
-    "name": "知乎策略师",
-    "description": "知乎营销专家，擅长思想领袖建设、社区公信力打造和知识驱动型互动，通过高质量问答和专栏建立品牌权威。",
-    "emoji": "💡",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-zhihu-strategist/1.0.0.zip",
-    "checksum": "sha256-58c3690df178c214a625318a7cf492c617fb9b5758c911722550187257d43c09",
-    "size": 5854
-  },
-  {
-    "agentId": "marketing-cross-border-ecommerce",
-    "name": "跨境电商运营专家",
-    "description": "专注跨境电商全链路运营的策略专家，精通Amazon/Shopee/Lazada/AliExpress/Temu/TikTok Shop等海外平台运营、国际物流与海外仓、跨境合规税务、多语言Listing优化、品牌出海及DTC独立站建设。",
-    "emoji": "🌍",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-cross-border-ecommerce/1.0.0.zip",
-    "checksum": "sha256-87bbfcefc9d139cb8096fed65089f5bc3a4a86347a527dc6bf9e959d1137d456",
-    "size": 9411
-  },
-  {
-    "agentId": "paid-media-auditor",
-    "name": "付费媒体审计师",
-    "description": "系统化评估 Google Ads、Microsoft Ads 和 Meta 广告账户的全方位审计专家，覆盖账户结构、追踪、出价、创意、受众和竞争定位等 200+ 检查点，输出可执行的审计报告。",
-    "emoji": "🧪",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-auditor/1.0.0.zip",
-    "checksum": "sha256-ffa8daab027aa06252ffd582d4b0644aaaf45fa26b4def683ba810523d2f35c7",
-    "size": 5023
-  },
-  {
-    "agentId": "paid-media-creative-strategist",
-    "name": "广告创意策略师",
-    "description": "专注广告文案、RSA 优化、素材组设计和创意测试的付费媒体创意专家，横跨 Google、Meta、Microsoft 和程序化平台，用数据驱动说服力。",
-    "emoji": "🎯",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-creative-strategist/1.0.0.zip",
-    "checksum": "sha256-e8ee3fc3ea75bd02564c3eafbcd4316d543e868047533a58a80b00cd635b55e3",
-    "size": 4785
-  },
-  {
-    "agentId": "paid-media-paid-social-strategist",
-    "name": "社交广告策略师",
-    "description": "跨平台社交广告专家，覆盖 Meta（Facebook/Instagram）、LinkedIn、TikTok（抖音海外版）、Pinterest、X 和 Snapchat，设计从拉新到再营销的全链路社交广告体系。",
-    "emoji": "📲",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-paid-social-strategist/1.0.0.zip",
-    "checksum": "sha256-91a5c04b30a9c42362a10a0aa2ae042905e0e2e7d9d262e6fa593f794bed0d4a",
-    "size": 5055
-  },
-  {
-    "agentId": "paid-media-ppc-strategist",
-    "name": "PPC 竞价策略师",
-    "description": "资深付费搜索策略专家，擅长 Google Ads、Microsoft Advertising 和 Amazon Ads 的大规模账户架构、预算分配和出价策略，能驾驭月花 1 万到 1000 万的账户。",
-    "emoji": "💸",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-ppc-strategist/1.0.0.zip",
-    "checksum": "sha256-16e705bfe2b3026bcb33766b7fc466ce60e86276d3f6b4f61a8d350b34698b17",
-    "size": 4966
-  },
-  {
-    "agentId": "paid-media-programmatic-buyer",
-    "name": "程序化广告采买专家",
-    "description": "展示广告与程序化媒介采买专家，覆盖 Google Display Network、DV360、The Trade Desk 等 DSP 平台、合作媒体采买及 ABM 展示广告策略。",
-    "emoji": "🛰️",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-programmatic-buyer/1.0.0.zip",
-    "checksum": "sha256-35bca42865eb6c95f4a99aa91abcb46a748338d505be824bcde141e4fc8d1c6d",
-    "size": 4732
-  },
-  {
-    "agentId": "paid-media-search-query-analyst",
-    "name": "搜索词分析师",
-    "description": "搜索词分析、否定关键词架构和查询意图映射专家，从海量搜索词报告中挖掘优化方向，消灭浪费、放大高意向流量。",
-    "emoji": "🔍",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-search-query-analyst/1.0.0.zip",
-    "checksum": "sha256-2a7ccb03927ba2c55d25d2bda3ffd2fc74f5018f6d84bd465608a1037d62a4d3",
-    "size": 4806
-  },
-  {
-    "agentId": "paid-media-tracking-specialist",
-    "name": "追踪与归因专家",
-    "description": "转化追踪架构、代码管理和归因模型专家，精通 GTM、GA4、Google Ads、Meta CAPI、LinkedIn Insight Tag 及服务端追踪实施，确保每一个转化都被正确计数。",
-    "emoji": "📈",
-    "category": "出海增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-tracking-specialist/1.0.0.zip",
-    "checksum": "sha256-f55c935d4e19983d747f958724414f819cd36f8b4c35a1c3d544db44c43804f1",
-    "size": 5005
-  },
-  {
-    "agentId": "strategy-planning",
-    "name": "战略规划官",
-    "description": "覆盖产品战略、商业模式、PRD、OKR 与路线规划，适合把研究结论收敛成可执行方向。",
-    "emoji": "🧭",
-    "category": "产品规划",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/strategy-planning/1.0.0.zip",
-    "checksum": "sha256-7010384819bd3ca4817b5a31451d95f2ca806a46a237d46d0e2ce0b36646b6ae",
-    "size": 48251,
-    "presetSkills": [
-      "ansoff-matrix",
-      "business-model",
-      "brainstorm-okrs",
-      "create-prd",
-      "lean-canvas",
-      "monetization-strategy",
-      "outcome-roadmap",
-      "pestle-analysis",
-      "porters-five-forces",
-      "pre-mortem",
-      "pricing-strategy",
-      "prioritization-frameworks",
-      "product-strategy",
-      "product-vision",
-      "stakeholder-map",
-      "startup-canvas",
-      "swot-analysis",
-      "value-proposition"
-    ]
-  },
-  {
-    "agentId": "wechat-creator-assistant",
-    "name": "公众号创作助手",
-    "description": "帮助公众号作者完成选题发现、爆文拆解、文章成稿、排版预览和草稿箱交付，适合持续更新与内容复盘。",
-    "emoji": "📝",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/wechat-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-3f6096d2572587d6961cdb8db50d5bdd0240e06db3d48886736b68797d0797df",
-    "size": 166379,
-    "presetSkills": [
-      "wewrite",
-      "md2wechat"
-    ]
-  },
-  {
-    "agentId": "xhs-creator-assistant",
-    "name": "小红书创作助手",
-    "description": "聚焦小红书的选题搜索、评论观察、内容采集、笔记发布与创作者后台数据，适合做单平台深度运营。",
-    "emoji": "📕",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/xhs-creator-assistant/1.0.0.zip",
-    "checksum": "sha256-ec97997771bc57e0075ed9e046b185b14b56a0d385c1d7619b5b1356e2210dd1",
-    "size": 342977,
-    "presetSkills": [
-      "baoyu-xhs-images",
-      "baoyu-infographic",
-      "baoyu-cover-image",
-      "baoyu-url-to-markdown",
-      "baoyu-image-gen"
-    ]
-  },
-  {
-    "agentId": "office-ima-knowledge-search",
-    "name": "ima知识库检索专家",
-    "description": "我是你的IMA知识库搜索引擎，帮你在知识库里精准找到需要的信息。不用翻文件夹、不用记文档名，用自然语言说你要找什么，我帮你定位到具体段落。存的知识终于能用起来了。",
-    "emoji": "🔎",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-ima-knowledge-search/1.0.0.zip",
-    "checksum": "sha256-06e371473d2ce1513b57d31d2fe21b0e43ef1fcebb739f126bddbd198c872eb9",
-    "size": 58786,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "ima-skill"
-    ]
-  },
-  {
-    "agentId": "office-tencent-meeting-assistant",
-    "name": "腾讯会议助理",
-    "description": "我是你的会议纪要速记员，帮你搞定会议全流程——会前预约议程，会后自动输出结构化纪要、提取待办事项分配到人。再也不用边开会边疯狂记笔记了。",
-    "emoji": "📹",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-tencent-meeting-assistant/1.0.0.zip",
-    "checksum": "sha256-88b655da9a77cc8c7ee203e0f4bc3c99e56539b322c63983aeaa27b108c8ec26",
-    "size": 27402,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "tencent-meeting-mcp"
-    ]
-  },
-  {
-    "agentId": "office-qq-mail-assistant",
-    "name": "QQ邮箱管理专家",
-    "description": "我是你的QQ邮箱智能管家，帮你搞定QQ邮箱的日常管理——自动分类、提炼重点、草拟回复。特别适合用QQ邮箱处理工作和学习邮件的你。",
-    "emoji": "📧",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-qq-mail-assistant/1.0.0.zip",
-    "checksum": "sha256-4278f3422431721c9392af8e34de219780d52c2eec5aa6a234fc76198b348512",
-    "size": 2294116,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "email-skill",
-      "imap-smtp-email"
-    ]
-  },
-  {
-    "agentId": "admin-compliance-document-writer",
-    "name": "制度文件撰写专家",
-    "description": "我是制度文件撰写专家，帮你起草和审查各类制度文件。从隐私政策到数据安全制度，确保企业制度合规完善。",
-    "emoji": "📜",
-    "category": "人事行政",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/admin-compliance-document-writer/1.0.0.zip",
-    "checksum": "sha256-d3842776cf1c4ea86fd2dc4d8cf6e749b14127573740141da49ba675147d4d42",
-    "size": 11245,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "data-compliance-doc-expert"
-    ]
-  },
-  {
-    "agentId": "admin-recruitment-expert",
-    "name": "招聘专家",
-    "description": "我是招聘专家，帮你高效完成人才招聘全流程。从JD撰写到简历筛选，从面试设计到背景调查，快速找到合适的人才。",
-    "emoji": "🧑‍💼",
-    "category": "人事行政",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/admin-recruitment-expert/1.0.0.zip",
-    "checksum": "sha256-7acf854dd5abd4cfeac223546a1519dd7ae543acf064958144d0958f03eb98cf",
-    "size": 10328,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "recruitment-expert"
-    ]
-  },
-  {
-    "agentId": "lifestyle-goal-decomposer",
-    "name": "目标拆解教练",
-    "description": "帮你把宏大目标拆解成可执行的每日任务，设定打卡机制，追踪进度，定期复盘调整。",
-    "emoji": "🎯",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-goal-decomposer/1.0.0.zip",
-    "checksum": "sha256-d0802fa865e64c89cc16e65180b1aba839a7bf5e85ddb6e86a49ab303923773e",
-    "size": 11470,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "goal-decomposer"
-    ]
-  },
-  {
-    "agentId": "lifestyle-car-maintenance-manager",
-    "name": "车辆保养管家",
-    "description": "帮你制定全年保养计划、记录费用明细、到期自动提醒，再也不担心忘记保养。",
-    "emoji": "🚗",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-car-maintenance-manager/1.0.0.zip",
-    "checksum": "sha256-0d67e8eba3634baade56feb70cdf3f71968d47dce1f878cbfec10a78a038a221",
-    "size": 11556,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "car-maintenance-mgr"
-    ]
-  },
-  {
-    "agentId": "office-senior-project-manager",
-    "name": "高级项目经理",
-    "description": "我是高级项目经理，帮你掌控项目从启动到交付的全过程。从进度规划到风险管理，从团队协调到汇报展示，确保项目按时高质量交付。",
-    "emoji": "📋",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-senior-project-manager/1.0.0.zip",
-    "checksum": "sha256-7a2c8b72379dd1aa1e35d9af357f80b4e49341eecb35c84cc660f5333f84cf1f",
-    "size": 7012,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "manager-senior"
-    ]
-  },
-  {
-    "agentId": "office-meeting-efficiency-expert",
-    "name": "会议效率专家",
-    "description": "我是会议效率专家，帮你提升每一场会议的效率。从议程设计到会议纪要自动生成，从todo分配到跟进提醒，让会议不再低效。",
-    "emoji": "⏱️",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-meeting-efficiency-expert/1.0.0.zip",
-    "checksum": "sha256-be2410488fec28d568122e24c6d4b602119dc7784997f2e97b113b0ba2bec57f",
-    "size": 277528,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "tencent-docs"
-    ]
-  },
-  {
-    "agentId": "admin-contract-review-expert",
-    "name": "合同审查专家",
-    "description": "我是合同审查专家，帮你审查合同中的法律风险。从条款合规性到风险点识别，从修改建议到签约注意事项，确保合同安全可靠。",
-    "emoji": "⚖️",
-    "category": "人事行政",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/admin-contract-review-expert/1.0.0.zip",
-    "checksum": "sha256-2f2982b566b3eb85cbc9a7a6a31b511967466133a7d3a33bf00c935c9a1ae7ad",
-    "size": 10285,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "contract-review-expert"
-    ]
-  },
-  {
-    "agentId": "admin-performance-management-expert",
-    "name": "绩效管理专家",
-    "description": "我是绩效管理专家，帮你设计和优化绩效管理体系。从OKR/KPI制定到绩效评估，从361分布到晋升答辩，激发团队最大潜能。",
-    "emoji": "🏅",
-    "category": "人事行政",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/admin-performance-management-expert/1.0.0.zip",
-    "checksum": "sha256-49a67a909366fe6b79d2bc77cc4b502ae34dc1ea2478aba0b730f8e3ecb19ca9",
-    "size": 9762,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "performance-reviewer"
-    ]
-  },
-  {
-    "agentId": "lifestyle-fitness-adjuster",
-    "name": "锻炼计划调节器",
-    "description": "根据训练反馈、身体状态和疲劳程度，智能调整下一次训练的内容和强度，避免过度训练也不让你偷懒。",
-    "emoji": "🏋️",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-fitness-adjuster/1.0.0.zip",
-    "checksum": "sha256-c8a604e4198a8657b2a3b1fec74251dbc9148839750a67dcdf96cd8e2922e7fc",
-    "size": 11393,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "fitness-adjuster"
-    ]
-  },
-  {
-    "agentId": "office-tencent-survey-designer",
-    "name": "腾讯问卷设计专家",
-    "description": "我是你的问卷设计大师，帮你从0到1搞定用户调研。告诉我你想了解什么，我帮你设计问卷结构、编写题目、设置逻辑跳转，还能分析回收数据。不用学方法论，说清目的就行。",
-    "emoji": "📮",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-tencent-survey-designer/1.0.0.zip",
-    "checksum": "sha256-14375c453e74d1973ce44a61d0b62eb660849556271a85ffc8e9b9608cba1976",
-    "size": 37190,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "tencent-survey"
-    ]
-  },
-  {
-    "agentId": "lifestyle-bazi-advisor",
-    "name": "生辰命理大师",
-    "description": "输入你的出生日期、时间和地点，为你排出完整的八字命盘，用轻松有趣的方式解读传统命理文化。包括天干地支分析、五行属性、十神关系、大运流年等内容，支持真太阳时校正确保排盘准确。不是封建迷信，而是把中国传统命理文化当作了解自己的趣味工具——帮你从另一个维度认识自己的性格特质和人生节奏。",
-    "emoji": "🔮",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-bazi-advisor/1.0.0.zip",
-    "checksum": "sha256-d7cfde4f5eaee05ec7a3b53656dd19ea7c6857b91a289728207890b27fd246ac",
-    "size": 11717,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "cantian-bazi"
-    ]
-  },
-  {
-    "agentId": "lifestyle-mbti-matcher",
-    "name": "MBTI 配对师",
-    "description": "输入双方的MBTI类型，深度分析两人的性格契合度。从认知功能栈出发，解读双方在沟通风格、决策方式、情感需求、冲突处理等维度的匹配和差异。支持爱情、友情、职场合作等多种关系类型分析，每次解读都给出具体的相处建议和需要注意的雷区，让你在关系中少踩坑、多默契。",
-    "emoji": "💬",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-mbti-matcher/1.0.0.zip",
-    "checksum": "sha256-aa93c97b95ab53df46ee7199690bd6d26556eb0befed35ae134e35c185eb4b4a",
-    "size": 10717,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "mbti-matcher"
-    ]
-  },
-  {
-    "agentId": "office-bi-report-analyst",
-    "name": "高级数据分析师",
-    "description": "我是你的BI报表生成器，帮你把枯燥的数据变成一眼能看懂的可视化图表。不需要会SQL、不需要学Tableau，告诉我你想看什么指标和维度，我帮你自动出专业的数据看板。",
-    "emoji": "📈",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-bi-report-analyst/1.0.0.zip",
-    "checksum": "sha256-2a4a76569adeb7bf92f084e1b45f83974009d3c7ddf7ace8e0049bba8baea617",
-    "size": 10700,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "bi-report-auto"
-    ]
-  },
-  {
-    "agentId": "office-data-analyst",
-    "name": "数据分析师",
-    "description": "我是数据分析师，帮你从数据中挖掘有价值的洞察。从数据清洗到可视化，从统计分析到趋势预测，用数据驱动业务决策。",
-    "emoji": "📉",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-data-analyst/1.0.0.zip",
-    "checksum": "sha256-3b8bd28c253823103124fda13f942f2763cd721f64ba7bf8b049b497208c7fcd",
-    "size": 10004,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "support-analytics-reporter"
-    ]
-  },
-  {
-    "agentId": "lifestyle-fitness-coach",
-    "name": "私人健身教练",
-    "description": "根据你的身体状况和目标定制运动计划，每天帮你规划明日训练内容，动态调整强度。",
-    "emoji": "💪",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-fitness-coach/1.0.0.zip",
-    "checksum": "sha256-ecb3ff79b9ec745192a5b879916f5b2ce9194c9ef0ac94e6168b65ee49eb3430",
-    "size": 11163,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "fitness-planner"
-    ]
-  },
-  {
-    "agentId": "lifestyle-nutrition-advisor",
-    "name": "吃货参谋",
-    "description": "专治选择困难症，告诉我口味偏好、预算和心情，推荐今天吃什么，还有餐厅建议和食谱方案。",
-    "emoji": "🥗",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-nutrition-advisor/1.0.0.zip",
-    "checksum": "sha256-644262e940244704f09d3048bdd444549d9f6f4529d7b4e0614784122a8194d2",
-    "size": 9071,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "nutritionist"
-    ]
-  },
-  {
-    "agentId": "office-file-diff-analyst",
-    "name": "文件对比专家",
-    "description": "我是你的文件差异侦探，专治\"这个文件改了什么\"的问题。扔给我两个版本的文件，我帮你逐行对比、高亮标注变更、生成变更摘要。合同修改、方案迭代、代码Review都能用。",
-    "emoji": "🔍",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-file-diff-analyst/1.0.0.zip",
-    "checksum": "sha256-ee747ce8f01dd095b09b47f5aa2a50820eab547fd890aac1765c83009123ada2",
-    "size": 10679,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "file-diff-checker"
-    ]
-  },
-  {
-    "agentId": "lifestyle-travel-planner",
-    "name": "懒人出游规划师",
-    "description": "根据你的实时位置和目的地天气情况，自动定制专属短途出游方案。先查天气再推荐，确保出行不踩雷。推荐车程1小时内的多类型目的地（海边、山林、文艺），每个方案包含车程时间、景点特色、适合人群、具体时间安排，还准备下雨天备用方案。从\"去哪玩\"到\"几点出发几点回\"，一句话全搞定。",
-    "emoji": "🧳",
-    "category": "生活娱乐",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/lifestyle-travel-planner/1.0.0.zip",
-    "checksum": "sha256-ae32f773c5d6e4d628e74496536ab83b1bbe361fbf2701343d6aa8ccdd6abdc1",
-    "size": 11959,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "travel-planner"
-    ]
-  },
-  {
-    "agentId": "office-tencent-docs-expert",
-    "name": "腾讯文档专家",
-    "description": "我是你的腾讯文档万能助手，覆盖文档、表格、PPT、思维导图、流程图、知识库全品类。告诉我你要做什么，我直接帮你创建、编辑、整理，不用你手动打开腾讯文档操作。",
-    "emoji": "📘",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/office-tencent-docs-expert/1.0.0.zip",
-    "checksum": "sha256-37edc8d8916b4333194938c51d8a6d8c38a5635ce10ea34a42176389fc6f8adf",
-    "size": 136567,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "tencent-docs"
-    ]
-  },
-  {
-    "agentId": "marketing-ai-citation-strategist",
-    "name": "AI引文策略师",
-    "description": "我是AI引文策略师，帮你优化内容在AI搜索引擎中的可见性。从AEO到GEO，确保你的内容被AI搜索准确引用。",
-    "emoji": "🔗",
-    "category": "营销增长",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-ai-citation-strategist/1.0.0.zip",
-    "checksum": "sha256-c0e957aa5dc23d617befb3ef66668cbb838c067ceb3715930c84da6e9616679d",
-    "size": 8301,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "ai-citation-strategist"
-    ]
-  },
-  {
-    "agentId": "content-performance-analyst",
-    "name": "自媒体数据分析专家",
-    "description": "我是社媒数据分析专家——不堆数字，堆洞见。能帮你从原始数据中提炼出「哪些内容在涨」「哪些选题该砍」「下周该往哪个方向发力」的明确结论。支持日报/周报自动生成、爆款因子拆解、历史趋势对比，所有分析结果都是结构化的可执行建议，不是空洞的数据罗列。",
-    "emoji": "📊",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/content-performance-analyst/1.0.0.zip",
-    "checksum": "sha256-cc945ca69fcd990c257056b3b2937c1b4b1f4b7e13af849c0f5ae1cc2d3e1c23",
-    "size": 10422,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "content-performance-analysis"
-    ]
-  },
-  {
-    "agentId": "social-media-scheduler",
-    "name": "社媒排期官",
-    "description": "我是你的社媒排期官，帮你统筹多平台内容发布。告诉我你的平台和主题方向，我来规划发布日历、编写平台适配文案，让你告别手忙脚乱的多账号运营。",
-    "emoji": "📅",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/social-media-scheduler/1.0.0.zip",
-    "checksum": "sha256-db8bc3c238d48da60a5390efb89013750163bcdc2ced3540900952f1f4185148",
-    "size": 7720,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "social-media-scheduler"
-    ]
-  },
-  {
-    "agentId": "viral-content-repurposer",
-    "name": "爆款拆解复刻师",
-    "description": "我是爆款拆解复刻师，专门帮你把长文章、视频内容拆解成适合不同平台的短内容。提取金句要点，生成推文、帖子、短视频文案，还能管理你的内容素材库，让一篇内容发挥最大价值。",
-    "emoji": "♻️",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/viral-content-repurposer/1.0.0.zip",
-    "checksum": "sha256-df4ace6d1ca426b3ef5daff420b602df410debc6a8183df617f2fe146162a928",
-    "size": 10730,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "content-repurposer"
-    ]
-  },
-  {
-    "agentId": "market-research-analyst",
-    "name": "高级市场研究员",
-    "description": "我是你的创业军师，帮你在动手之前想清楚——这个想法靠不靠谱、市场多大、竞品怎么样、用户痛点是什么。用数据和逻辑帮你验证方向，比拍脑袋靠谱得多。",
-    "emoji": "🎯",
-    "category": "产品规划",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/market-research-analyst/1.0.0.zip",
-    "checksum": "sha256-869630fa95b5e38df5d277a18c131dcf135006e6e194e5cf9a323e1ab4000d78",
-    "size": 10997,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "market-pain-finder"
-    ]
-  },
-  {
-    "agentId": "feedback-analyst",
-    "name": "反馈分析师",
-    "description": "我是反馈分析师，帮你从海量用户反馈中提炼有价值的洞察。NPS分析、VOC挖掘、情感分析，让你真正听懂用户在说什么。",
-    "emoji": "💬",
-    "category": "电商运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/feedback-analyst/1.0.0.zip",
-    "checksum": "sha256-4e34e348dd809ea6536fd06418c5c4da5aff0a436cf9fb98b435e44ba9403ce7",
-    "size": 7683,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "feedback-analyst"
-    ]
-  },
-  {
-    "agentId": "technical-translator",
-    "name": "技术翻译专家",
-    "description": "我是技术翻译专家，精通IT/AI领域的中英双向翻译。从技术文档到API说明，从论文到产品文案，确保专业术语准确、表达地道。",
-    "emoji": "🌐",
-    "category": "办公协同",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/technical-translator/1.0.0.zip",
-    "checksum": "sha256-c979b4af483a8a1d2bb8d6110cda6950ab81b778b11753b9136bcefee721bca9",
-    "size": 7477,
-    "agentsMdMode": "replace",
-    "presetSkills": [
-      "technical-translation-expert"
-    ]
-  },
-  {
     "agentId": "delivery-execution",
     "name": "交付执行官",
     "description": "覆盖 sprint 计划、需求拆解、会议纪要、测试场景与发布说明，适合把规划推进成实际交付。",
@@ -886,6 +79,377 @@
       "product-name",
       "sql-queries",
       "value-prop-statements"
+    ]
+  },
+  {
+    "agentId": "hotspot-intel-assistant",
+    "name": "热点情报助手",
+    "description": "跨平台追踪热榜、热点、问答、社区讨论与科技资讯，适合快速判断一个话题正在被哪些中文平台放大。",
+    "emoji": "🔥",
+    "category": "营销增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/hotspot-intel-assistant/1.0.0.zip",
+    "checksum": "sha256-e4d0701e7794489dd60245301f8b4cfffc158a289c00cd59a4cf4f115cdb1b6d",
+    "size": 2978
+  },
+  {
+    "agentId": "marketing-baidu-seo-specialist",
+    "name": "百度 SEO 专家",
+    "description": "专注百度搜索生态的SEO优化专家，精通百度算法规则、百度生态产品矩阵（百科、知道、贴吧、文库）、中文关键词研究、ICP备案规范、以及移动端搜索优化策略。",
+    "emoji": "🔎",
+    "category": "营销增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-baidu-seo-specialist/1.0.0.zip",
+    "checksum": "sha256-39b37807773cfa652265cec979b3b195a704123f9daed964254aa125c8c00077",
+    "size": 6005
+  },
+  {
+    "agentId": "marketing-bilibili-strategist",
+    "name": "B站内容策略师",
+    "description": "专注B站（哔哩哔哩）平台的中长视频内容策略专家，精通UP主运营、弹幕文化、社区生态、品牌合作、推荐算法，以及通过优质内容实现长期粉丝增长与商业变现。",
+    "emoji": "📺",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-bilibili-strategist/1.0.0.zip",
+    "checksum": "sha256-ca9ad501a9f8bad81df91b6c2357ddf7b8420cc047a66560f3abb2c7c0449f65",
+    "size": 5930
+  },
+  {
+    "agentId": "marketing-china-ecommerce-operator",
+    "name": "电商运营专家",
+    "description": "覆盖淘宝、天猫、拼多多、京东生态的全平台电商运营专家，深耕商品上架优化、直播带货、店铺运营、618/双11大促及跨平台策略。",
+    "emoji": "🛒",
+    "category": "电商运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-china-ecommerce-operator/1.0.0.zip",
+    "checksum": "sha256-b19f2e6eb55f7c512ec2564e172e1602783e21667e041cf587d96324d50d17f4",
+    "size": 8143
+  },
+  {
+    "agentId": "marketing-china-market-localization-strategist",
+    "name": "中国市场本地化策略师",
+    "description": "全栈中国市场本地化专家，将实时趋势信号转化为可执行的上市策略，覆盖抖音、小红书、微信、B站等全平台",
+    "emoji": "🧭",
+    "category": "营销增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-china-market-localization-strategist/1.0.0.zip",
+    "checksum": "sha256-637162d8b995c245d93e832bfdb86843030f14c84f77b3290e546a397f873d29",
+    "size": 8939
+  },
+  {
+    "agentId": "marketing-content-creator",
+    "name": "内容创作大师",
+    "description": "擅长多平台内容策划与创作的内容专家，能在不同渠道用不同语言讲同一个好故事，让每一篇内容都带来可衡量的价值。",
+    "emoji": "✍️",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-content-creator/1.0.0.zip",
+    "checksum": "sha256-b71570ab3a6b557927ab62f7b44b688743d544bbc906a1756b762e4e4ded3342",
+    "size": 4707
+  },
+  {
+    "agentId": "marketing-cross-border-ecommerce",
+    "name": "跨境电商运营专家",
+    "description": "专注跨境电商全链路运营的策略专家，精通Amazon/Shopee/Lazada/AliExpress/Temu/TikTok Shop等海外平台运营、国际物流与海外仓、跨境合规税务、多语言Listing优化、品牌出海及DTC独立站建设。",
+    "emoji": "🌍",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-cross-border-ecommerce/1.0.0.zip",
+    "checksum": "sha256-87bbfcefc9d139cb8096fed65089f5bc3a4a86347a527dc6bf9e959d1137d456",
+    "size": 9411
+  },
+  {
+    "agentId": "marketing-douyin-strategist",
+    "name": "抖音策略师",
+    "description": "专注抖音平台的短视频营销专家，精通算法推荐机制、爆款视频策划、直播带货流程、以及通过内容矩阵实现品牌在抖音生态的全链路增长。",
+    "emoji": "🎬",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-douyin-strategist/1.0.0.zip",
+    "checksum": "sha256-aecee45b96f747c0388f5f17ceeeb9f60fa99dde8b610c2ba7dd84ea09e03053",
+    "size": 4933
+  },
+  {
+    "agentId": "marketing-growth-assistant",
+    "name": "营销增长助手",
+    "description": "覆盖 SEO 机会、内容打磨、增长实验、EDM与线索转化，擅长营销增长工作",
+    "emoji": "🚀",
+    "category": "营销增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-growth-assistant/1.0.0.zip",
+    "checksum": "sha256-8dc92cda1544ff7f9fd29bea521771690beb68ecaa1039ba22d4f7391d5e67ec",
+    "size": 194552,
+    "presetSkills": [
+      "sales-pipeline",
+      "cold-outbound-optimizer",
+      "expert-panel",
+      "growth-engine",
+      "seo-ops"
+    ]
+  },
+  {
+    "agentId": "marketing-kuaishou-strategist",
+    "name": "快手策略师",
+    "description": "专注快手平台的短视频与直播电商策略专家，精通下沉市场用户运营、老铁社区文化、直播带货方法论、私域信任构建，以及快手与抖音的差异化打法。",
+    "emoji": "🎥",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-kuaishou-strategist/1.0.0.zip",
+    "checksum": "sha256-fd19f780646db7797852e4aa2315ae88fbdff41aa2e6e354f01e438e0dd3674e",
+    "size": 6073
+  },
+  {
+    "agentId": "marketing-livestream-commerce-coach",
+    "name": "直播电商主播教练",
+    "description": "专注直播电商全链路的主播培训与直播间运营专家，精通抖音/快手/淘宝直播/视频号四大平台的直播话术设计、选品排品策略、付费流与自然流的流量配比、转化逼单技巧，以及基于实时数据的直播间调优方法论。",
+    "emoji": "🎙️",
+    "category": "电商运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-livestream-commerce-coach/1.0.0.zip",
+    "checksum": "sha256-684340621a897f8be800c0cf075132cf3fe9685b1e29f5a3020080471c937d9a",
+    "size": 9188
+  },
+  {
+    "agentId": "marketing-private-domain-operator",
+    "name": "私域流量运营师",
+    "description": "专注企业微信私域体系搭建的运营专家，精通企微SCRM、社群精细化运营、小程序商城集成、用户生命周期管理和全链路转化漏斗优化。",
+    "emoji": "🔒",
+    "category": "营销增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-private-domain-operator/1.0.0.zip",
+    "checksum": "sha256-4ee2e797dde93e899b8a47e24becbe7e42a8b5d8a2f21d859ccfe03fd4657b00",
+    "size": 8281
+  },
+  {
+    "agentId": "marketing-social-media-strategist",
+    "name": "社交媒体策略师",
+    "description": "跨平台社交媒体策略专家，专注 LinkedIn、Twitter 等职业社交平台的品牌建设、社区运营和整合营销。",
+    "emoji": "🌐",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-social-media-strategist/1.0.0.zip",
+    "checksum": "sha256-cc87150737bbb15556ab2c97ea91e314ac754cd8da23365de8bc435c1027b956",
+    "size": 3992
+  },
+  {
+    "agentId": "marketing-tiktok-strategist",
+    "name": "TikTok 策略师",
+    "description": "TikTok 营销专家，适合出海营销场景。擅长病毒式内容创作、算法优化和社区运营，精通 TikTok 独特的文化生态和玩法。",
+    "emoji": "🎵",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-tiktok-strategist/1.0.0.zip",
+    "checksum": "sha256-65071a8fc9ad262abe969281e9aa96cd745918ab01913d742389579b9475f51e",
+    "size": 4488
+  },
+  {
+    "agentId": "marketing-wechat-operator",
+    "name": "微信公众号运营",
+    "description": "专注微信生态的内容运营专家，精通公众号内容策略、社群运营、裂变增长、私域流量搭建和微信小程序运营。",
+    "emoji": "📝",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-wechat-operator/1.0.0.zip",
+    "checksum": "sha256-99d5873d67a68961e3e41b22999be95545fb42a5df9085eae13d6fb3ebde0974",
+    "size": 4846
+  },
+  {
+    "agentId": "marketing-weibo-strategist",
+    "name": "微博运营策略师",
+    "description": "专注新浪微博平台的全域运营专家，精通热搜机制、超话运营、舆情管理、粉丝经济与微博广告投放，助力品牌在微博生态实现声量爆发与长效增长。",
+    "emoji": "📣",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-weibo-strategist/1.0.0.zip",
+    "checksum": "sha256-5f9ae641811a324aedb7e500dc8079e2d999cd57dbec2f66a285e529ec6e5a34",
+    "size": 8078
+  },
+  {
+    "agentId": "marketing-weixin-channels-strategist",
+    "name": "微信视频号运营策略师",
+    "description": "专注微信视频号生态的内容策略与增长运营专家，精通社交推荐机制、公众号/朋友圈/小程序/企微生态联动、视频号直播带货、短视频内容策划、私域引流闭环和创作者数据分析。",
+    "emoji": "📹",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-weixin-channels-strategist/1.0.0.zip",
+    "checksum": "sha256-32fdd6be8e495f4475c865110a3efdef6425ffb67af5a7609d8f52d4cabd328d",
+    "size": 8535
+  },
+  {
+    "agentId": "marketing-xiaohongshu-operator",
+    "name": "小红书运营专家",
+    "description": "专注小红书平台的内容运营专家，擅长种草笔记创作、达人合作策略、爆款内容公式、以及通过数据驱动实现品牌在小红书的高效获客和口碑建设。",
+    "emoji": "📕",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-xiaohongshu-operator/1.0.0.zip",
+    "checksum": "sha256-a04637b4b8b356ae38f13b155ae1f09ed1127c9f5d29020e9b07cfe6c9184151",
+    "size": 4842
+  },
+  {
+    "agentId": "marketing-zhihu-strategist",
+    "name": "知乎策略师",
+    "description": "知乎营销专家，擅长思想领袖建设、社区公信力打造和知识驱动型互动，通过高质量问答和专栏建立品牌权威。",
+    "emoji": "💡",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/marketing-zhihu-strategist/1.0.0.zip",
+    "checksum": "sha256-58c3690df178c214a625318a7cf492c617fb9b5758c911722550187257d43c09",
+    "size": 5854
+  },
+  {
+    "agentId": "paid-media-auditor",
+    "name": "付费媒体审计师",
+    "description": "系统化评估 Google Ads、Microsoft Ads 和 Meta 广告账户的全方位审计专家，覆盖账户结构、追踪、出价、创意、受众和竞争定位等 200+ 检查点，输出可执行的审计报告。",
+    "emoji": "🧪",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-auditor/1.0.0.zip",
+    "checksum": "sha256-d21713704c15d3c5a8de784d578bfeec74f19fde4766a9d0fdcbee1d9a2f412a",
+    "size": 5019
+  },
+  {
+    "agentId": "paid-media-creative-strategist",
+    "name": "广告创意策略师",
+    "description": "专注广告文案、RSA 优化、素材组设计和创意测试的付费媒体创意专家，横跨 Google、Meta、Microsoft 和程序化平台，用数据驱动说服力。",
+    "emoji": "🎯",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-creative-strategist/1.0.0.zip",
+    "checksum": "sha256-c5294411b82b4bbe92f63c660af7d9c951149225dbd770e018158d50b64add51",
+    "size": 4778
+  },
+  {
+    "agentId": "paid-media-paid-social-strategist",
+    "name": "社交广告策略师",
+    "description": "跨平台社交广告专家，覆盖 Meta（Facebook/Instagram）、LinkedIn、TikTok（抖音海外版）、Pinterest、X 和 Snapchat，设计从拉新到再营销的全链路社交广告体系。",
+    "emoji": "📲",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-paid-social-strategist/1.0.0.zip",
+    "checksum": "sha256-8933860b36242f4712b84f9d0c7500f4dde2de910af8589bc7f8fa3501d866ac",
+    "size": 5051
+  },
+  {
+    "agentId": "paid-media-ppc-strategist",
+    "name": "PPC 竞价策略师",
+    "description": "资深付费搜索策略专家，擅长 Google Ads、Microsoft Advertising 和 Amazon Ads 的大规模账户架构、预算分配和出价策略，能驾驭月花 1 万到 1000 万的账户。",
+    "emoji": "💸",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-ppc-strategist/1.0.0.zip",
+    "checksum": "sha256-3ea2046a5515a8e9cb32908a45b48fa796f22f00cd4c4a30c245d6bab437ce78",
+    "size": 4969
+  },
+  {
+    "agentId": "paid-media-programmatic-buyer",
+    "name": "程序化广告采买专家",
+    "description": "展示广告与程序化媒介采买专家，覆盖 Google Display Network、DV360、The Trade Desk 等 DSP 平台、合作媒体采买及 ABM 展示广告策略。",
+    "emoji": "🛰️",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-programmatic-buyer/1.0.0.zip",
+    "checksum": "sha256-d8c16d80e092ee9ecf6be4cc879ccb1888a8b22e8354b3ce7f4cb8db6f2332a4",
+    "size": 4729
+  },
+  {
+    "agentId": "paid-media-search-query-analyst",
+    "name": "搜索词分析师",
+    "description": "搜索词分析、否定关键词架构和查询意图映射专家，从海量搜索词报告中挖掘优化方向，消灭浪费、放大高意向流量。",
+    "emoji": "🔍",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-search-query-analyst/1.0.0.zip",
+    "checksum": "sha256-82b5011cacf0165ae73e1500edc959c96d11a77d501860ecb1887c3bb68b2d76",
+    "size": 4805
+  },
+  {
+    "agentId": "paid-media-tracking-specialist",
+    "name": "追踪与归因专家",
+    "description": "转化追踪架构、代码管理和归因模型专家，精通 GTM、GA4、Google Ads、Meta CAPI、LinkedIn Insight Tag 及服务端追踪实施，确保每一个转化都被正确计数。",
+    "emoji": "📈",
+    "category": "出海增长",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/paid-media-tracking-specialist/1.0.0.zip",
+    "checksum": "sha256-d0b5fb809c17b755883de2328e359da0d0cfab7e27bb36503a8a7df34de69a65",
+    "size": 5004
+  },
+  {
+    "agentId": "strategy-planning",
+    "name": "战略规划官",
+    "description": "覆盖产品战略、商业模式、PRD、OKR 与路线规划，适合把研究结论收敛成可执行方向。",
+    "emoji": "🧭",
+    "category": "产品规划",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/strategy-planning/1.0.0.zip",
+    "checksum": "sha256-7010384819bd3ca4817b5a31451d95f2ca806a46a237d46d0e2ce0b36646b6ae",
+    "size": 48251,
+    "presetSkills": [
+      "ansoff-matrix",
+      "business-model",
+      "brainstorm-okrs",
+      "create-prd",
+      "lean-canvas",
+      "monetization-strategy",
+      "outcome-roadmap",
+      "pestle-analysis",
+      "porters-five-forces",
+      "pre-mortem",
+      "pricing-strategy",
+      "prioritization-frameworks",
+      "product-strategy",
+      "product-vision",
+      "stakeholder-map",
+      "startup-canvas",
+      "swot-analysis",
+      "value-proposition"
+    ]
+  },
+  {
+    "agentId": "wechat-creator-assistant",
+    "name": "公众号创作助手",
+    "description": "帮助公众号作者完成选题发现、爆文拆解、文章成稿、排版预览和草稿箱交付，适合持续更新与内容复盘。",
+    "emoji": "📝",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/wechat-creator-assistant/1.0.0.zip",
+    "checksum": "sha256-3f6096d2572587d6961cdb8db50d5bdd0240e06db3d48886736b68797d0797df",
+    "size": 166379,
+    "presetSkills": [
+      "wewrite",
+      "md2wechat"
+    ]
+  },
+  {
+    "agentId": "xhs-creator-assistant",
+    "name": "小红书创作助手",
+    "description": "聚焦小红书的选题搜索、评论观察、内容采集、笔记发布与创作者后台数据，适合做单平台深度运营。",
+    "emoji": "📕",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/xhs-creator-assistant/1.0.0.zip",
+    "checksum": "sha256-0f664ad870a6ebcd888f3e09e8fda9b9b276b7bfa3ab0347613d5f0acd3bd7c8",
+    "size": 259744,
+    "presetSkills": [
+      "baoyu-xhs-images",
+      "baoyu-infographic",
+      "baoyu-cover-image",
+      "baoyu-url-to-markdown",
+      "baoyu-image-gen"
+    ]
+  },
+  {
+    "agentId": "interactive-presentation-master",
+    "name": "交互式 Presentation 大师",
+    "description": "3 到 30 分钟，你能 ship 一段产品发布动画、一个能点击的 App 原型、一套能编辑的 PPT、一份印刷级的信息图",
+    "emoji": "📊",
+    "category": "内容运营",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/interactive-presentation-master/1.0.0.zip",
+    "checksum": "sha256-97843abe29341dd62d6e07bd373d1cd2299b519fce9ccd5e8d64ce9309d77231",
+    "size": 31429177,
+    "presetSkills": [
+      "huashu-design"
     ]
   },
   {
