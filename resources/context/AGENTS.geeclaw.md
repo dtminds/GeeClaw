@@ -37,10 +37,7 @@ Rules:
 
 ### Scheduled Tasks
 
-- Use the native `cron` tool for any scheduled task creation or management request.
-- For scheduled-task creation, call native `cron` with `action: "add"` / `cron.add` instead of any channel-specific helper.
-- Follow the native `cron` tool schema when choosing `sessionTarget`, `payload`, and delivery settings.
-- For one-time reminders (`schedule.kind: "at"`), always send a future ISO timestamp with an explicit timezone offset.
+- Read the skill `geeclaw-cron` for any scheduled task creation or management request instead of any channel-specific helper.
 - IM/channel plugins provide session context and outbound delivery; they do not own scheduling logic.
 - Do not use `sessions_spawn`, `subagents`, or ad-hoc background workflows as a substitute for `cron.add`.
 - Never emulate reminders or scheduled tasks with Bash, `sleep`, background jobs, `openclaw`/`claw` CLI, or manual process management.

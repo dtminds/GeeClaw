@@ -10,6 +10,15 @@
       "hidden": true
     },
     {
+      "slug": "geeclaw-cron",
+      "repo": "lsave/gc-bundle-skills",
+      "repoPath": "geeclaw-cron",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true,
+      "hidden": true
+    },
+    {
       "slug": "geeclaw-env",
       "repo": "lsave/gc-bundle-skills",
       "repoPath": "geeclaw-env",
