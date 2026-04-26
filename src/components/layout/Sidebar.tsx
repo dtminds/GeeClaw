@@ -3,7 +3,7 @@
  * Navigation sidebar with menu items.
  * No longer fixed - sits inside the flex layout below the title bar.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
@@ -110,6 +110,18 @@ function getAgentIdFromSessionKey(sessionKey: string): string {
   return parts[1] || 'main';
 }
 
+function getSessionUpdatedAtMs(session?: { updatedAt?: unknown }): number {
+  const updatedAt = session?.updatedAt;
+  if (typeof updatedAt === 'number') {
+    return Number.isFinite(updatedAt) ? updatedAt : 0;
+  }
+  if (typeof updatedAt === 'string') {
+    const parsed = Date.parse(updatedAt);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 export function Sidebar() {
   const sidebarCollapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
@@ -176,23 +188,38 @@ export function Sidebar() {
     </span>
   );
 
-  const sortedAgents = [...agents].sort(
-    (left, right) => Number(right.isDefault) - Number(left.isDefault) || left.name.localeCompare(right.name),
-  );
-  const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
-  const agentMainSessions = desktopSessions.reduce((map, session) => {
-    const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
-    const mainSessionKey = mainSessionKeyByAgentId.get(agentId) ?? `agent:${agentId}:geeclaw_main`;
-    if (session.gatewaySessionKey !== mainSessionKey) {
-      return map;
-    }
+  const { agentMainSessions, sortedAgents } = useMemo(() => {
+    const mainSessionKeyByAgentId = new Map(agents.map((agent) => [agent.id, agent.mainSessionKey]));
+    const nextAgentMainSessions = desktopSessions.reduce((map, session) => {
+      const agentId = getAgentIdFromSessionKey(session.gatewaySessionKey);
+      const mainSessionKey = mainSessionKeyByAgentId.get(agentId) ?? `agent:${agentId}:geeclaw_main`;
+      if (session.gatewaySessionKey !== mainSessionKey) {
+        return map;
+      }
 
-    const current = map.get(agentId);
-    if (!current || session.updatedAt > current.updatedAt) {
-      map.set(agentId, session);
-    }
-    return map;
-  }, new Map<string, (typeof desktopSessions)[number]>());
+      const updatedAtMs = getSessionUpdatedAtMs(session);
+      const current = map.get(agentId);
+      if (!current || updatedAtMs > current.updatedAtMs) {
+        map.set(agentId, { session, updatedAtMs });
+      }
+      return map;
+    }, new Map<string, { session: (typeof desktopSessions)[number]; updatedAtMs: number }>());
+    const nextSortedAgents = [...agents].sort((left, right) => {
+      const defaultSort = Number(right.isDefault) - Number(left.isDefault);
+      if (defaultSort !== 0) {
+        return defaultSort;
+      }
+
+      const updatedAtSort = (nextAgentMainSessions.get(right.id)?.updatedAtMs ?? 0)
+        - (nextAgentMainSessions.get(left.id)?.updatedAtMs ?? 0);
+      return updatedAtSort || left.name.localeCompare(right.name);
+    });
+
+    return {
+      agentMainSessions: nextAgentMainSessions,
+      sortedAgents: nextSortedAgents,
+    };
+  }, [agents, desktopSessions]);
 
   const navItems = [
     { to: '/dashboard', icon: <SidebarGlyph icon={AiInnovation02Icon} />, label: t('sidebar.dashboard'), testId: 'sidebar-nav-dashboard' },
@@ -267,7 +294,7 @@ export function Sidebar() {
         )}>
           <div className={cn(sidebarCollapsed ? 'flex flex-col items-center gap-2' : 'space-y-1')}>
             {sortedAgents.map((agent) => {
-              const mainSession = agentMainSessions.get(agent.id);
+              const mainSession = agentMainSessions.get(agent.id)?.session;
               const preview = renderSkillMarkersAsPlainText(mainSession?.lastMessagePreview || '').trim();
               const subtitle = preview || t('sidebar.agentMainSessionHint', '点击进入会话');
               const updatedAt = mainSession?.updatedAt ? formatShortDateTime(mainSession.updatedAt) : '';
