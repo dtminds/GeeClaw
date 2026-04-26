@@ -134,7 +134,135 @@ describe('LocalLlmProxyManager', () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(seenUrl).toBe('/api/v1/chat/completions?stream=true');
     expect(seenMethod).toBe('POST');
-    expect(seenBody).toContain('"model":"geeclaw/qwen3.6-plus"');
+    expect(JSON.parse(seenBody).model).toBe('qwen3.6-plus');
+  });
+
+  it('replaces auto model requests with the configured registered auto target', async () => {
+    let seenBody = '';
+
+    const upstream = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      seenBody = Buffer.concat(chunks).toString('utf8');
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ ok: true }));
+    });
+    serversToClose.add(upstream);
+    const upstreamPort = await listen(upstream);
+
+    const manager = new LocalLlmProxyManager({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/api/v1`,
+      startPort: 19140,
+      maxPort: 19142,
+      getConfig: () => ({
+        version: 1,
+        upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/api/v1`,
+        autoModels: ['future-model', 'qwen3.6-plus'],
+        allowedModels: ['future-model', 'qwen3.6-plus'],
+      }),
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const response = await fetch(`http://127.0.0.1:${port}/proxy/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'geeclaw/auto', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(seenBody)).toEqual({
+      model: 'qwen3.6-plus',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+  });
+
+  it('falls back to auto when the requested model is not allowed by config', async () => {
+    let seenBody = '';
+
+    const upstream = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      seenBody = Buffer.concat(chunks).toString('utf8');
+      res.statusCode = 200;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ ok: true }));
+    });
+    serversToClose.add(upstream);
+    const upstreamPort = await listen(upstream);
+
+    const manager = new LocalLlmProxyManager({
+      startPort: 19150,
+      maxPort: 19152,
+      getConfig: () => ({
+        version: 1,
+        upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/api/v1`,
+        autoModels: ['future-model', 'qwen3.6-plus'],
+        allowedModels: ['qwen3.6-plus'],
+      }),
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const response = await fetch(`http://127.0.0.1:${port}/proxy/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'deepseek-v4-pro', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(seenBody).model).toBe('qwen3.6-plus');
+  });
+
+  it('returns a model unavailable error when the configured auto target is not registered', async () => {
+    let upstreamHit = false;
+    const upstream = createServer((_req, res) => {
+      upstreamHit = true;
+      res.statusCode = 200;
+      res.end('ok');
+    });
+    serversToClose.add(upstream);
+    const upstreamPort = await listen(upstream);
+
+    const manager = new LocalLlmProxyManager({
+      startPort: 19160,
+      maxPort: 19162,
+      getConfig: () => ({
+        version: 1,
+        upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}/api/v1`,
+        autoModels: ['not-yet-registered-model'],
+        allowedModels: ['not-yet-registered-model'],
+      }),
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const response = await fetch(`http://127.0.0.1:${port}/proxy/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'geeclaw/auto', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'geeclaw_model_unavailable',
+        message: '当前模型暂不可用，请切换模型或稍后重试',
+        type: 'model_unavailable',
+      },
+    });
+    expect(upstreamHit).toBe(false);
   });
 
   it('passes through streaming upstream responses', async () => {
@@ -221,5 +349,32 @@ describe('LocalLlmProxyManager', () => {
     await waitFor(() => upstreamSignal?.aborted ? true : undefined);
     expect(upstreamSignal?.aborted).toBe(true);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not log the upstream service URL when a proxy request fails', async () => {
+    const manager = new LocalLlmProxyManager({
+      startPort: 19170,
+      maxPort: 19172,
+      upstreamBaseUrl: 'https://secret-upstream.example.com/private/v1',
+      fetchImpl: async () => {
+        throw new Error('connect ECONNREFUSED https://secret-upstream.example.com/private/v1/chat/completions');
+      },
+    });
+    managersToStop.add(manager);
+    const { port } = await manager.start();
+
+    const response = await fetch(`http://127.0.0.1:${port}/proxy/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'qwen3.6-plus', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+
+    expect(response.status).toBe(502);
+    const logged = vi.mocked(logger.warn).mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('<redacted-url>');
+    expect(logged).not.toContain('secret-upstream.example.com');
+    expect(logged).not.toContain('/private/v1');
   });
 });

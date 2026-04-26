@@ -4,6 +4,22 @@ vi.mock('@electron/utils/proxy-fetch', () => ({
   proxyAwareFetch: vi.fn(),
 }));
 
+vi.mock('@electron/utils/geeclaw-provider-config', () => ({
+  getActiveGeeClawProviderConfig: vi.fn(() => ({
+    version: 1,
+    upstreamBaseUrl: 'https://geeclaw-validation.example/v1',
+    autoModels: ['qwen3.6-plus'],
+    allowedModels: ['qwen3.6-plus'],
+  })),
+  loadGeeClawProviderConfig: vi.fn(async () => ({
+    version: 1,
+    upstreamBaseUrl: 'https://geeclaw-validation.example/v1',
+    autoModels: ['qwen3.6-plus'],
+    allowedModels: ['qwen3.6-plus'],
+  })),
+  redactGeeClawProviderUrlsForLog: vi.fn((value: string) => value.replace(/\bhttps?:\/\/[^\s"'<>`]+/gi, '<redacted-url>')),
+}));
+
 import { proxyAwareFetch } from '@electron/utils/proxy-fetch';
 import { validateApiKeyWithProvider } from '@electron/services/providers/provider-validation';
 
@@ -76,7 +92,7 @@ describe('validateApiKeyWithProvider', () => {
     );
   });
 
-  it('uses GeeClaw registry config for OpenAI-compatible validation', async () => {
+  it('uses GeeClaw provider config for OpenAI-compatible validation', async () => {
     vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ data: [{ id: 'geeclaw-chat' }] }), {
         status: 200,
@@ -88,7 +104,47 @@ describe('validateApiKeyWithProvider', () => {
 
     expect(result).toMatchObject({ valid: true });
     expect(proxyAwareFetch).toHaveBeenCalledWith(
-      'https://geekai.co/api/v1/models?limit=1',
+      'https://geeclaw-validation.example/v1/models?limit=1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-geeclaw-test',
+        }),
+      }),
+    );
+  });
+
+  it('does not log the GeeClaw upstream service URL during validation', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'geeclaw-chat' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await validateApiKeyWithProvider('geeclaw', 'sk-geeclaw-test');
+
+    const logged = consoleLog.mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('<geeclaw-upstream>');
+    expect(logged).not.toContain('geeclaw-validation.example');
+  });
+
+  it('ignores caller-supplied GeeClaw registry base URL during validation', async () => {
+    vi.mocked(proxyAwareFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'geeclaw-chat' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const result = await validateApiKeyWithProvider('geeclaw', 'sk-geeclaw-test', {
+      baseUrl: 'https://geeclaw-provider-config.invalid/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    expect(result).toMatchObject({ valid: true });
+    expect(proxyAwareFetch).toHaveBeenCalledWith(
+      'https://geeclaw-validation.example/v1/models?limit=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer sk-geeclaw-test',

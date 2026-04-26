@@ -39,7 +39,7 @@ vi.mock('@electron/utils/provider-registry', () => ({
   getProviderConfig: vi.fn((provider: string) => {
     if (provider === 'geeclaw') {
       return {
-        baseUrl: 'https://geekai.co/api/v1',
+        baseUrl: 'https://geeclaw-provider-config.invalid/v1',
         api: 'openai-completions',
         apiKeyEnv: 'GEECLAW_API_KEY',
       };

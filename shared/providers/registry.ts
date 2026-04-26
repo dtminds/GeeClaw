@@ -51,7 +51,8 @@ function createGeeClawCompatibleProvider(
     ...(options.modelIdPlaceholder !== undefined ? { modelIdPlaceholder: options.modelIdPlaceholder } : {}),
     ...(options.hidden !== undefined ? { hidden: options.hidden } : {}),
     providerConfig: {
-      baseUrl: 'https://geekai.co/api/v1',
+      // Development override: run `GEECLAW_PROVIDER_CONFIG_PATH=/absolute/path/to/geeclaw-provider-config.json pnpm dev`; this baseUrl is only a safe placeholder.
+      baseUrl: 'https://geeclaw-provider-config.invalid/v1',
       api: 'openai-completions',
       apiKeyEnv: options.envVar,
     },
@@ -66,7 +67,9 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     showBaseUrl: false,
     showModelId: true,
     modelCatalogMode: 'builtin-only',
+    defaultModelId: 'auto',
     defaultModels: [
+      createDefaultProviderModel('auto', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('qwen3.6-plus', { supportsImage: true, contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('hunyuan-3.0-preview', { contextWindow: 256000, maxTokens: 8192 }),
       createDefaultProviderModel('deepseek-v4-pro', { contextWindow: 256000, maxTokens: 8192 }),
