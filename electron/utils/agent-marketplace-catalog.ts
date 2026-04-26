@@ -155,9 +155,7 @@ function normalizeAgentsMdMode(value: unknown, index: number): AgentMarketplaceA
   return 'replace';
 }
 
-function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCatalogEntry {
-  const record = requirePlainObject(entry, 'catalog entry', index);
-
+function validateCatalogEntry(record: Record<string, unknown>, index: number): AgentMarketplaceCatalogEntry {
   const agentId = validateCatalogAgentId(requireNonEmptyString(record.agentId, 'agentId', index), index);
   const downloadUrl = requireNonEmptyString(record.downloadUrl, 'downloadUrl', index);
 
@@ -225,6 +223,8 @@ function parseAgentMarketplaceCatalog(content: string): AgentMarketplaceCatalog 
 
   const catalog = parsed.flatMap((entry, index) => {
     const record = requirePlainObject(entry, 'catalog entry', index);
+    // Unknown fields may describe install semantics this version cannot honor.
+    // Filter the whole entry instead of showing an agent that may install incorrectly.
     if (getUnsupportedCatalogEntryKeys(record).length > 0) {
       return [];
     }
