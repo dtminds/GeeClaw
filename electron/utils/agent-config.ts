@@ -818,6 +818,7 @@ async function seedPresetFilesIntoWorkspace(
   options?: {
     overwriteExisting?: boolean;
     overwriteManagedFiles?: Iterable<string>;
+    agentsMdMode?: 'replace';
   },
 ): Promise<void> {
   await ensureDir(workspace);
@@ -826,7 +827,12 @@ async function seedPresetFilesIntoWorkspace(
   for (const [fileName, content] of Object.entries(files)) {
     const destination = join(workspace, fileName);
     const allowOverwrite = options?.overwriteExisting || overwriteManagedFiles.has(fileName);
-    if (fileName === 'AGENTS.md' && allowOverwrite && await fileExists(destination)) {
+    if (
+      fileName === 'AGENTS.md'
+      && options?.agentsMdMode !== 'replace'
+      && allowOverwrite
+      && await fileExists(destination)
+    ) {
       const existing = await readFile(destination, 'utf-8');
       const merged = mergeManagedMarkdownSection(
         existing,
@@ -2010,7 +2016,7 @@ async function installMarketplaceAgentFromPreparedPackage(
     await seedPresetFilesIntoWorkspace(
       workspace,
       preparedPackage.package.files,
-      { overwriteExisting: true },
+      { overwriteExisting: true, agentsMdMode: catalogEntry.agentsMdMode },
     );
     await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills);
     await persistAgentConfigAndPatchRuntime(config, activeEvolutionMap);
@@ -2117,6 +2123,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
     );
     await seedPresetFilesIntoWorkspace(workspace, preparedPackage.package.files, {
       overwriteManagedFiles: previousManagedFiles,
+      agentsMdMode: catalogEntry.agentsMdMode,
     });
     await seedPresetSkillsIntoWorkspace(workspace, preparedPackage.package.skills, {
       overwriteManagedSkills: previousManagedSkills,

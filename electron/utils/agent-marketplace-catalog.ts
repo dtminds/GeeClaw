@@ -18,9 +18,12 @@ const RECOGNIZED_CATALOG_ENTRY_KEYS = new Set([
   'minAppVersion',
   'platforms',
   'presetSkills',
+  'agentsMdMode',
 ]);
 const RECOGNIZED_PLATFORM_VALUES = new Set(['darwin', 'win32', 'linux']);
 const AGENT_MARKETPLACE_CATALOG_FETCH_TIMEOUT_MS = 15000;
+
+export type AgentMarketplaceAgentsMdMode = 'replace';
 
 export interface AgentMarketplaceCatalogEntry {
   agentId: string;
@@ -35,6 +38,7 @@ export interface AgentMarketplaceCatalogEntry {
   minAppVersion?: string;
   platforms?: Array<'darwin' | 'win32' | 'linux'>;
   presetSkills?: string[];
+  agentsMdMode?: AgentMarketplaceAgentsMdMode;
 }
 
 export type AgentMarketplaceCatalog = AgentMarketplaceCatalogEntry[];
@@ -150,6 +154,18 @@ function normalizeOptionalStringList(
   return normalized;
 }
 
+function normalizeAgentsMdMode(value: unknown, index: number): AgentMarketplaceAgentsMdMode | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || value.trim() !== 'replace') {
+    throw new Error(`[agent-marketplace] Entry at index ${index} agentsMdMode is invalid`);
+  }
+
+  return 'replace';
+}
+
 function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCatalogEntry {
   const record = requirePlainObject(entry, 'catalog entry', index);
   assertSupportedKeys(record, 'catalog entry', index);
@@ -197,6 +213,11 @@ function validateCatalogEntry(entry: unknown, index: number): AgentMarketplaceCa
   const presetSkills = normalizeOptionalStringList(record.presetSkills, 'presetSkills', index);
   if (presetSkills) {
     validated.presetSkills = presetSkills;
+  }
+
+  const agentsMdMode = normalizeAgentsMdMode(record.agentsMdMode, index);
+  if (agentsMdMode) {
+    validated.agentsMdMode = agentsMdMode;
   }
 
   return validated;

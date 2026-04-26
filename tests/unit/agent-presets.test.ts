@@ -110,6 +110,20 @@ describe('agent preset package loader', () => {
     ]);
   });
 
+  it('allows marketplace packages to manage TOOLS.md files', async () => {
+    const root = createTempRoot('agent-presets-tools-file-');
+    const packageDir = join(root, 'extracted-package');
+    writeExtractedPresetPackage(packageDir, createPresetMeta('stock-expert'), {
+      'AGENTS.md': '# Stock Expert\n',
+      'TOOLS.md': '# Tool rules\n',
+    });
+
+    const { loadAgentPresetPackageFromDir } = await import('@electron/utils/agent-presets');
+    const preset = await loadAgentPresetPackageFromDir(packageDir);
+
+    expect(preset.files['TOOLS.md']).toBe('# Tool rules\n');
+  });
+
   it('loads bundled skills and validates the optional skill manifest', async () => {
     const root = createTempRoot('agent-presets-skill-manifest-');
     const packageDir = join(root, 'extracted-package');
