@@ -12,6 +12,7 @@ const RECOGNIZED_MANAGED_FILES = new Set([
   'USER.md',
   'SOUL.md',
   'MEMORY.md',
+  'TOOLS.md',
 ]);
 const RECOGNIZED_META_KEYS = new Set([
   'presetId',

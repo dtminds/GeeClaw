@@ -27,6 +27,7 @@ const translations: Record<string, string> = {
   'marketplace.update': '更新',
   'marketplace.goSend': '去发送',
   'marketplace.goChat': '去聊聊',
+  'marketplace.openingChat': '正在打开',
   'marketplace.dismiss': '稍后',
   'marketplace.postInstallTitle': '安装成功',
   'marketplace.postUpdateTitle': '更新成功',
@@ -934,6 +935,92 @@ describe('PresetAgentsPlazaSection', () => {
 
     expect(openAgentMainSessionMock).toHaveBeenCalledWith('trendfinder');
     expect(queueComposerSeedMock).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/chat');
+    expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
+  });
+
+  it('shows a pending state after the success dialog starts opening chat', async () => {
+    const deferredOpen = createDeferred<void>();
+    openAgentMainSessionMock.mockReturnValueOnce(deferredOpen.promise);
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        return { success: true, presets: marketplacePresets };
+      }
+      if (path === '/api/agents/marketplace/update' && init?.method === 'POST') {
+        return {
+          ...baseSnapshot,
+          agents: [{
+            ...installedTrendFinderAgent,
+            packageVersion: '1.1.0',
+          }],
+          completion: {
+            operation: 'update',
+            agentId: 'trendfinder',
+          },
+        };
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('趋势助手'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '更新' }));
+      await flushPromises();
+    });
+
+    const confirmDialog = screen.getByRole('dialog', { name: '确认更新' });
+    await act(async () => {
+      fireEvent.click(within(confirmDialog).getByRole('button', { name: '确认更新' }));
+      await flushPromises();
+    });
+
+    for (const step of [
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_STAGE_VISIBLE_MS,
+      PRESET_INSTALL_GATEWAY_SETTLE_GRACE_MS,
+    ]) {
+      await act(async () => {
+        vi.advanceTimersByTime(step);
+        await flushPromises();
+      });
+    }
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '去聊聊' }));
+    });
+
+    const pendingButton = screen.getByRole('button', { name: '正在打开' });
+    expect(pendingButton).toBeDisabled();
+    expect(openAgentMainSessionMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(pendingButton);
+      await flushPromises();
+    });
+
+    expect(openAgentMainSessionMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      deferredOpen.resolve();
+      await flushPromises();
+    });
+
     expect(navigateMock).toHaveBeenCalledWith('/chat');
     expect(useAgentsStore.getState().marketplaceCompletion).toBeNull();
   });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
@@ -47,6 +47,7 @@ export function PresetAgentsPlazaSection() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [pendingUpdateAgentId, setPendingUpdateAgentId] = useState<string | null>(null);
   const [activeMarketplaceActionAgentId, setActiveMarketplaceActionAgentId] = useState<string | null>(null);
+  const [successActionPending, setSuccessActionPending] = useState(false);
 
   useEffect(() => {
     void Promise.all([fetchAgents(), fetchPresets()]);
@@ -127,26 +128,36 @@ export function PresetAgentsPlazaSection() {
   };
 
   const handleSuccessAction = async () => {
-    if (!marketplaceCompletion) {
+    if (!marketplaceCompletion || successActionPending) {
       return;
     }
 
-    await openAgentMainSession(marketplaceCompletion.agentId);
-    if (marketplaceCompletion.promptText) {
-      queueComposerSeed(marketplaceCompletion.promptText);
+    setSuccessActionPending(true);
+    try {
+      await openAgentMainSession(marketplaceCompletion.agentId);
+      if (marketplaceCompletion.promptText) {
+        queueComposerSeed(marketplaceCompletion.promptText);
+      }
+      setActiveAgentId(null);
+      setPendingUpdateAgentId(null);
+      setActiveMarketplaceActionAgentId(null);
+      clearError();
+      clearMarketplaceCompletion();
+      navigate('/chat');
+    } catch {
+      setSuccessActionPending(false);
     }
-    setActiveAgentId(null);
-    setPendingUpdateAgentId(null);
-    setActiveMarketplaceActionAgentId(null);
-    clearError();
-    clearMarketplaceCompletion();
-    navigate('/chat');
   };
 
   const handleMarketplaceCompletionDismiss = () => {
+    if (successActionPending) {
+      return;
+    }
+
     setActiveAgentId(null);
     setPendingUpdateAgentId(null);
     setActiveMarketplaceActionAgentId(null);
+    setSuccessActionPending(false);
     clearError();
     clearMarketplaceCompletion();
   };
@@ -268,7 +279,14 @@ export function PresetAgentsPlazaSection() {
         onConfirm={() => void handleUpdateConfirm()}
       />
 
-      <Dialog open={!!marketplaceCompletion} onOpenChange={(open) => !open && handleMarketplaceCompletionDismiss()}>
+      <Dialog
+        open={!!marketplaceCompletion}
+        onOpenChange={(open) => {
+          if (!open && !successActionPending) {
+            handleMarketplaceCompletionDismiss();
+          }
+        }}
+      >
         <DialogContent
           hideCloseButton
           className="modal-card-surface w-[min(560px,calc(100vw-2rem))] max-w-[560px] overflow-hidden rounded-[28px] border bg-[var(--app-sidebar)] p-0 shadow-none"
@@ -278,7 +296,8 @@ export function PresetAgentsPlazaSection() {
               <button
                 type="button"
                 onClick={handleMarketplaceCompletionDismiss}
-                className="modal-close-button absolute right-6 top-6"
+                disabled={successActionPending}
+                className="modal-close-button absolute right-6 top-6 disabled:opacity-50"
                 aria-label={t('presetPlaza.close')}
               >
                 <X className="h-5 w-5" />
@@ -314,17 +333,22 @@ export function PresetAgentsPlazaSection() {
                 <Button
                   variant="outline"
                   className="modal-secondary-button"
+                  disabled={successActionPending}
                   onClick={handleMarketplaceCompletionDismiss}
                 >
                   {tAgents('marketplace.dismiss')}
                 </Button>
                 <Button
                   className="modal-primary-button"
+                  disabled={successActionPending}
                   onClick={() => void handleSuccessAction()}
                 >
-                  {marketplaceCompletion.promptText
-                    ? tAgents('marketplace.goSend')
-                    : tAgents('marketplace.goChat')}
+                  {successActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {successActionPending
+                    ? tAgents('marketplace.openingChat')
+                    : marketplaceCompletion.promptText
+                      ? tAgents('marketplace.goSend')
+                      : tAgents('marketplace.goChat')}
                 </Button>
               </div>
             </div>

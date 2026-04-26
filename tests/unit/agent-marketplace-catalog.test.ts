@@ -183,6 +183,32 @@ describe('agent marketplace catalog loader', () => {
     ]);
   });
 
+  it('loads optional AGENTS.md install mode metadata from catalog entries', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-agents-md-mode-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'office-notion-expert',
+        name: 'Notion Expert',
+        description: 'desc',
+        emoji: '📝',
+        category: 'office',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/office-notion-expert.zip',
+        checksum: 'sha256-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        agentsMdMode: 'replace',
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).resolves.toEqual([
+      expect.objectContaining({
+        agentId: 'office-notion-expert',
+        agentsMdMode: 'replace',
+      }),
+    ]);
+  });
+
   it('rejects duplicate agentIds in a catalog file', async () => {
     const root = createTempRoot('agent-marketplace-catalog-');
     const catalogPath = writeCatalog(root, [
@@ -335,5 +361,26 @@ describe('agent marketplace catalog loader', () => {
     const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
 
     await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('presetSkills must not be empty');
+  });
+
+  it('rejects catalog entries with invalid AGENTS.md install modes', async () => {
+    const root = createTempRoot('agent-marketplace-catalog-agents-md-mode-invalid-');
+    const catalogPath = writeCatalog(root, [
+      {
+        agentId: 'office-notion-expert',
+        name: 'Notion Expert',
+        description: 'desc',
+        emoji: '📝',
+        category: 'office',
+        version: '1.0.0',
+        downloadUrl: 'https://example.com/office-notion-expert.zip',
+        checksum: 'sha256-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        agentsMdMode: 'append',
+      },
+    ]);
+
+    const { loadAgentMarketplaceCatalog } = await import('@electron/utils/agent-marketplace-catalog');
+
+    await expect(loadAgentMarketplaceCatalog(catalogPath)).rejects.toThrow('agentsMdMode is invalid');
   });
 });

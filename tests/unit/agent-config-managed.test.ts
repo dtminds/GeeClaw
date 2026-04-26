@@ -68,6 +68,7 @@ async function setupManagedPresetFixture(options?: {
       version?: string;
       downloadUrl?: string;
       checksum?: string;
+      agentsMdMode?: 'replace';
       platforms?: Array<'darwin' | 'win32' | 'linux'>;
     };
     meta?: {
@@ -822,6 +823,30 @@ describe('managed agent config domain', () => {
     expect(content).toContain('<!-- preset_agent_instruction:end -->');
     expect(content).not.toContain('<!-- geeclaw:begin -->');
     expect(content.indexOf('Main instructions')).toBeLessThan(content.indexOf('Preset instructions'));
+  });
+
+  it('replaces copied workspace AGENTS.md when the marketplace catalog requests replace mode', async () => {
+    const { homeDir, agentConfig } = await setupManagedPresetFixture({
+      marketplacePackage: {
+        catalogEntry: {
+          agentsMdMode: 'replace',
+        },
+        files: {
+          'AGENTS.md': '# full preset agent\n\nFull replacement instructions\n',
+        },
+      },
+      mainWorkspaceFiles: {
+        'AGENTS.md': '# main agent\n\nMain instructions\n',
+      },
+    });
+
+    await agentConfig.installMarketplaceAgent('stockexpert');
+
+    const content = readFileSync(join(homeDir, 'geeclaw', 'workspace-stockexpert', 'AGENTS.md'), 'utf8');
+    expect(content).toBe('# full preset agent\n\nFull replacement instructions\n');
+    expect(content).not.toContain('Main instructions');
+    expect(content).not.toContain('<!-- preset_agent_instruction:begin -->');
+    expect(content).not.toContain('<!-- preset_agent_instruction:end -->');
   });
 
   it('installs marketplace agents even when direct access probes on the workspace root fail', async () => {
