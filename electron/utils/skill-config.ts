@@ -137,6 +137,37 @@ function removeLegacySkillEnabledFields(skillEntries: Record<string, SkillEntry>
     return cleaned;
 }
 
+function mergeAlwaysEnabledSkillsIntoExplicitAgentSkills(
+    currentValue: unknown,
+    policyKeys: string[],
+): { skills: string[]; changed: boolean } | null {
+    if (!Array.isArray(currentValue)) {
+        return null;
+    }
+
+    const seen = new Set<string>();
+    const skills: string[] = [];
+
+    for (const skill of [...currentValue, ...policyKeys]) {
+        if (typeof skill !== 'string') {
+            continue;
+        }
+
+        const normalized = skill.trim();
+        if (!normalized || seen.has(normalized)) {
+            continue;
+        }
+
+        seen.add(normalized);
+        skills.push(normalized);
+    }
+
+    const changed = currentValue.length !== skills.length
+        || currentValue.some((skill, index) => skill !== skills[index]);
+
+    return { skills, changed };
+}
+
 function isManagedPreinstalledSkillExtraDir(pathEntry: string): boolean {
     const normalized = pathEntry.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
     return (
@@ -717,6 +748,23 @@ export async function ensureAlwaysEnabledSkillsConfigured(): Promise<{
             }
 
             const nextUpdated: string[] = [];
+            let agentSkillsUpdated = false;
+
+            const agentEntries = Array.isArray(skillConfig.agents?.list)
+                ? skillConfig.agents.list.filter((entry): entry is OpenClawAgentListEntry => (
+                    Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)
+                ))
+                : [];
+            for (const entry of agentEntries) {
+                const merged = mergeAlwaysEnabledSkillsIntoExplicitAgentSkills(entry.skills, policyKeys);
+                if (!merged?.changed) {
+                    continue;
+                }
+
+                entry.skills = merged.skills;
+                agentSkillsUpdated = true;
+            }
+
             for (const skillKey of policyKeys) {
                 const entry = skillConfig.skills.entries[skillKey] || {};
                 if ('enabled' in entry) {
@@ -743,7 +791,7 @@ export async function ensureAlwaysEnabledSkillsConfigured(): Promise<{
             }
 
             return {
-                changed: nextUpdated.length > 0,
+                changed: nextUpdated.length > 0 || agentSkillsUpdated,
                 result: nextUpdated,
             };
         });

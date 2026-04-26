@@ -10,11 +10,8 @@
  */
 export const ALWAYS_ENABLED_SKILL_KEYS = [
   'weather',
-  'healthcheck',
   'mcporter',
-  'nano-pdf',
   'skill-creator',
-  'summarize',
   'geeclaw-env',
   'geeclaw-openclaw',
 ] as const;

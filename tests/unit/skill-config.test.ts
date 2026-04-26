@@ -364,6 +364,90 @@ describe('skill config sync', () => {
     expect(config.skills?.entries?.['disabled-skill']).toEqual({ enabled: false });
   });
 
+  it('adds always-enabled skills to explicit agent skill lists on startup', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
+    tempDirs.push(homeDir);
+    vi.resetModules();
+
+    vi.doMock('electron', () => ({
+      app: {
+        isPackaged: false,
+        getPath: () => homeDir,
+        getAppPath: () => '/tmp/geeclaw-test-app',
+        getName: () => 'GeeClaw',
+        getVersion: () => '0.0.1-test',
+      },
+    }));
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+
+    vi.doMock('@electron/utils/paths', async () => {
+      const actual = await vi.importActual<typeof import('@electron/utils/paths')>('@electron/utils/paths');
+      return {
+        ...actual,
+        getOpenClawConfigDir: () => join(homeDir, '.openclaw-geeclaw'),
+      };
+    });
+
+    vi.doMock('@electron/utils/skills-policy', () => ({
+      getAlwaysEnabledSkillKeys: () => ['weather', 'geeclaw-env'],
+      isAlwaysEnabledSkillKey: (skillKey: string) => ['weather', 'geeclaw-env'].includes(skillKey),
+    }));
+
+    const configDir = join(homeDir, '.openclaw-geeclaw');
+    const configPath = join(configDir, 'openclaw.json');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        list: [
+          { id: 'main', skills: ['pdf', 'weather'] },
+          { id: 'stockexpert', skills: ['stock-analyzer'] },
+          { id: 'default-scope-agent' },
+        ],
+      },
+      skills: {
+        entries: {
+          weather: { enabled: false },
+          'geeclaw-env': { enabled: false, apiKey: 'keep' },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const { ensureAlwaysEnabledSkillsConfigured } = await import('@electron/utils/skill-config');
+    const result = await ensureAlwaysEnabledSkillsConfigured();
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      agents?: {
+        list?: Array<{ id?: string; skills?: string[] }>;
+      };
+      skills?: {
+        entries?: Record<string, { enabled?: boolean; apiKey?: string }>;
+      };
+    };
+
+    expect(result).toEqual({
+      success: true,
+      updated: ['weather', 'geeclaw-env'],
+    });
+    expect(config.agents?.list?.find((entry) => entry.id === 'main')?.skills).toEqual([
+      'pdf',
+      'weather',
+      'geeclaw-env',
+    ]);
+    expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')?.skills).toEqual([
+      'stock-analyzer',
+      'weather',
+      'geeclaw-env',
+    ]);
+    expect(config.agents?.list?.find((entry) => entry.id === 'default-scope-agent')).not.toHaveProperty('skills');
+    expect(config.skills?.entries?.weather).toBeUndefined();
+    expect(config.skills?.entries?.['geeclaw-env']).toEqual({ apiKey: 'keep' });
+  });
+
   it('cleans stale explicit skill toggles instead of replaying them once all agents have explicit skills', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'skill-config-'));
     tempDirs.push(homeDir);

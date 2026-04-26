@@ -48,6 +48,7 @@ import {
   prepareAgentMarketplacePackage,
 } from './agent-marketplace-installer';
 import { loadAgentMarketplaceCatalog } from './agent-marketplace-catalog';
+import { getAlwaysEnabledSkillKeys } from './skills-policy';
 import * as logger from './logger';
 
 const MAIN_AGENT_ID = 'main';
@@ -449,6 +450,31 @@ function normalizeSkillScope(scope: unknown): AgentSkillScope {
   });
 
   return { mode: 'specified', skills: normalized };
+}
+
+function appendAlwaysEnabledSkillKeys(skills: string[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const skill of [...skills, ...getAlwaysEnabledSkillKeys()]) {
+    if (seen.has(skill)) {
+      continue;
+    }
+    seen.add(skill);
+    merged.push(skill);
+  }
+
+  return merged;
+}
+
+function normalizePresetAgentSkillScope(scope: unknown): AgentSkillScope {
+  const normalized = normalizeSkillScope(scope);
+  const skills = normalized.mode === 'specified' ? normalized.skills : [];
+  const mergedSkills = appendAlwaysEnabledSkillKeys(skills);
+
+  return mergedSkills.length === 0
+    ? { mode: 'default' }
+    : { mode: 'specified', skills: mergedSkills };
 }
 
 function normalizeManualSkillList(skills: unknown): string[] {
@@ -1985,7 +2011,7 @@ async function installMarketplaceAgentFromPreparedPackage(
     }
 
     const nextEntries = syntheticMain ? [createImplicitMainEntry(config), ...entries.slice(1)] : [...entries];
-    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const nextScope = normalizePresetAgentSkillScope(preparedPackage.package.meta.agent.skillScope);
     const lockedFields = preparedPackage.package.meta.managedPolicy?.lockedFields
       ? [...preparedPackage.package.meta.managedPolicy.lockedFields]
       : ['id', 'workspace', 'persona'];
@@ -2084,7 +2110,7 @@ async function updateMarketplaceAgentFromPreparedPackage(
       throw new Error(`Agent "${normalizedAgentId}" not found`);
     }
 
-    const nextScope = normalizeSkillScope(preparedPackage.package.meta.agent.skillScope);
+    const nextScope = normalizePresetAgentSkillScope(preparedPackage.package.meta.agent.skillScope);
     const currentEntry = entries[index];
     let nextEntry = applyAgentSkillScope({
       ...currentEntry,

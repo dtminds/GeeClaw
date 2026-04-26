@@ -570,6 +570,14 @@ describe('managed agent config domain', () => {
 
   it('installs a marketplace agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/skills', async () => {
     const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
+    const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
+    const expectedPresetSkills = [
+      'stock-analyzer',
+      'stock-announcements',
+      'stock-explorer',
+      'web-search',
+      ...getAlwaysEnabledSkillKeys(),
+    ];
     const snapshot = await agentConfig.installMarketplaceAgent('stockexpert');
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
@@ -579,16 +587,13 @@ describe('managed agent config domain', () => {
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: true,
       source: 'marketplace',
-      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
-      presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+      manualSkills: expectedPresetSkills,
+      presetSkills: expectedPresetSkills,
       managedFiles: ['AGENTS.md', 'SOUL.md'],
       canUseDefaultSkillScope: false,
     });
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')?.skills).toEqual([
-      'stock-analyzer',
-      'stock-announcements',
-      'stock-explorer',
-      'web-search',
+      ...expectedPresetSkills,
       'hermes-evolution',
     ]);
     expect(config.agents?.list?.find((agent) => agent.id === 'stockexpert')).not.toHaveProperty('agentDir');
@@ -605,6 +610,14 @@ describe('managed agent config domain', () => {
 
   it('installs a marketplace agent, returns completion metadata, and persists managed package metadata', async () => {
     const { agentConfig, storeState } = await setupManagedPresetFixture();
+    const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
+    const expectedPresetSkills = [
+      'stock-analyzer',
+      'stock-announcements',
+      'stock-explorer',
+      'web-search',
+      ...getAlwaysEnabledSkillKeys(),
+    ];
 
     const result = await agentConfig.installMarketplaceAgent('stockexpert');
 
@@ -619,7 +632,7 @@ describe('managed agent config domain', () => {
           id: 'stockexpert',
           managed: true,
           managedFiles: ['AGENTS.md', 'SOUL.md'],
-          presetSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search'],
+          presetSkills: expectedPresetSkills,
           avatarPresetId: 'gradient-sunset',
           avatarSource: 'default',
         }),
@@ -633,6 +646,7 @@ describe('managed agent config domain', () => {
         managed: true,
         packageVersion: '1.2.3',
         sourceDownloadUrl: 'https://example.com/stockexpert-1.2.3.zip',
+        presetSkills: expectedPresetSkills,
         managedFiles: ['AGENTS.md', 'SOUL.md'],
         managedSkills: ['stock-analyzer', 'web-search'],
         installedAt: expect.any(String),
@@ -734,6 +748,9 @@ describe('managed agent config domain', () => {
       },
     };
 
+    const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
+    const expectedPresetSkills = ['trend-scan', 'web-search', ...getAlwaysEnabledSkillKeys()];
+
     const result = await agentConfig.updateMarketplaceAgent('stockexpert');
 
     expect(result).toMatchObject({
@@ -746,7 +763,7 @@ describe('managed agent config domain', () => {
         expect.objectContaining({
           id: 'stockexpert',
           workspace: customWorkspaceDir,
-          presetSkills: ['trend-scan', 'web-search'],
+          presetSkills: expectedPresetSkills,
           managedFiles: ['AGENTS.md', 'MEMORY.md'],
         }),
       ]),
@@ -757,7 +774,7 @@ describe('managed agent config domain', () => {
     };
     expect(updatedConfig.agents?.list?.find((entry) => entry.id === 'stockexpert')).toMatchObject({
       workspace: customWorkspaceDir,
-      skills: ['trend-scan', 'web-search', 'hermes-evolution'],
+      skills: [...expectedPresetSkills, 'hermes-evolution'],
     });
     expect(readFileSync(join(customWorkspaceDir, 'AGENTS.md'), 'utf8')).toContain('Updated instructions');
     expect(readFileSync(join(customWorkspaceDir, 'MEMORY.md'), 'utf8')).toBe('# official memory\n');
@@ -771,6 +788,7 @@ describe('managed agent config domain', () => {
       stockexpert: {
         packageVersion: '1.2.4',
         sourceDownloadUrl: 'https://example.com/stockexpert-1.2.4.zip',
+        presetSkills: expectedPresetSkills,
         managedFiles: ['AGENTS.md', 'MEMORY.md'],
         managedSkills: ['trend-scan', 'web-search'],
       },
@@ -1386,13 +1404,21 @@ describe('managed agent config domain', () => {
 
   it('clears active managed restrictions after unmanage', async () => {
     const { agentConfig, homeDir } = await setupManagedPresetFixture();
+    const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
     await agentConfig.installMarketplaceAgent('stockexpert');
 
     const snapshot = await agentConfig.unmanageAgent('stockexpert');
 
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: false,
-      manualSkills: ['stock-analyzer', 'stock-announcements', 'stock-explorer', 'web-search', 'hermes-evolution'],
+      manualSkills: [
+        'stock-analyzer',
+        'stock-announcements',
+        'stock-explorer',
+        'web-search',
+        ...getAlwaysEnabledSkillKeys(),
+        'hermes-evolution',
+      ],
       presetSkills: [],
       managedFiles: [],
       canUseDefaultSkillScope: true,
