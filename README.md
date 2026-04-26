@@ -136,12 +136,6 @@ To validate the hosted agent marketplace catalog during development, start the a
 GEECLAW_AGENT_MARKETPLACE_CATALOG_URL=https://www.geeclaw.cn/res/agent-marketplace-catalog.json pnpm dev
 ```
 
-To validate the hosted GeeClaw provider proxy config during development, start the app with:
-
-```bash
-GEECLAW_PROVIDER_CONFIG_URL=https://b0.dtminds.com/geeclaw/geeclaw-provider-config.json pnpm dev
-```
-
 ### First Launch
 
 When you launch GeeClaw for the first time, the app completes these steps through a streamlined flow:
@@ -155,7 +149,6 @@ Model setup is now handled inside the main app:
 
 - Open **Settings → Model Providers** to add providers and their model catalogs.
 - Open **Settings → Model Config** to choose the default chat model and optional image/video-generation model slots.
-- GeeClaw's built-in provider includes an `auto` model. The local transparent proxy refreshes the manually uploaded provider config at `https://b0.dtminds.com/geeclaw/geeclaw-provider-config.json` every 30 minutes to choose the upstream URL, enforce the allowed model list, and resolve `auto` from the first `autoModels` entry that this app version already has in the provider registry. Remote config requests append a timestamp query parameter to bypass CDN cache. This proxy config does not publish new UI models or rewrite OpenClaw runtime config; new visible models still require updating the provider registry in the app.
 
 - If no provider models exist, the chat composer stays disabled and links you to **Model Providers**.
 - If provider models exist but no default chat model is configured, the chat composer links you to **Model Config** instead.
@@ -379,7 +372,6 @@ pnpm dev
 
 - `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. They do not download a sidecar by default.
 - Set `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` to force development builds to load the agent marketplace catalog from a remote URL instead of `site/res/agent-marketplace-catalog.json`.
-- Set `GEECLAW_PROVIDER_CONFIG_URL` to override the GeeClaw provider proxy config URL during development. Remote config requests append a `ts` query parameter automatically.
 - Use `pnpm run openclaw-runtime:install` when you change `openclaw-runtime/package.json`, need a clean reinstall, or want to refresh the local runtime explicitly.
 
 ### GitHub Pages Landing Page
