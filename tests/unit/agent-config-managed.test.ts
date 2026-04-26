@@ -575,13 +575,13 @@ describe('managed agent config domain', () => {
   it('installs a marketplace agent, seeds managed files, writes skills into agents.list, and copies preset skills into workspace/skills', async () => {
     const { homeDir, configDir, agentConfig } = await setupManagedPresetFixture();
     const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
-    const expectedPresetSkills = [
+    const expectedPresetSkills = sortSkillIds([
       'stock-analyzer',
       'stock-announcements',
       'stock-explorer',
       'web-search',
       ...getAlwaysEnabledSkillKeys(),
-    ];
+    ]);
     const snapshot = await agentConfig.installMarketplaceAgent('stockexpert');
 
     const config = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf8')) as {
@@ -615,13 +615,13 @@ describe('managed agent config domain', () => {
   it('installs a marketplace agent, returns completion metadata, and persists managed package metadata', async () => {
     const { agentConfig, storeState } = await setupManagedPresetFixture();
     const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
-    const expectedPresetSkills = [
+    const expectedPresetSkills = sortSkillIds([
       'stock-analyzer',
       'stock-announcements',
       'stock-explorer',
       'web-search',
       ...getAlwaysEnabledSkillKeys(),
-    ];
+    ]);
 
     const result = await agentConfig.installMarketplaceAgent('stockexpert');
 
@@ -786,7 +786,7 @@ describe('managed agent config domain', () => {
     };
 
     const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
-    const expectedPresetSkills = ['trend-scan', 'web-search', ...getAlwaysEnabledSkillKeys()];
+    const expectedPresetSkills = sortSkillIds(['trend-scan', 'web-search', ...getAlwaysEnabledSkillKeys()]);
 
     const result = await agentConfig.updateMarketplaceAgent('stockexpert');
 
@@ -1449,11 +1449,13 @@ describe('managed agent config domain', () => {
     expect(snapshot.agents.find((agent) => agent.id === 'stockexpert')).toMatchObject({
       managed: false,
       manualSkills: [
-        'stock-analyzer',
-        'stock-announcements',
-        'stock-explorer',
-        'web-search',
-        ...getAlwaysEnabledSkillKeys(),
+        ...sortSkillIds([
+          'stock-analyzer',
+          'stock-announcements',
+          'stock-explorer',
+          'web-search',
+          ...getAlwaysEnabledSkillKeys(),
+        ]),
         'hermes-evolution',
       ],
       presetSkills: [],
@@ -1519,7 +1521,7 @@ describe('managed agent config domain', () => {
   it('adds always-enabled skills when updating specified skill scopes', async () => {
     const { agentConfig, configDir } = await setupManagedPresetFixture();
     const { getAlwaysEnabledSkillKeys } = await import('@electron/utils/skills-policy');
-    const expectedScopeSkills = ['pdf', ...getAlwaysEnabledSkillKeys()];
+    const expectedScopeSkills = sortSkillIds(['pdf', ...getAlwaysEnabledSkillKeys()]);
 
     await agentConfig.createAgent('Research Helper', 'research-helper');
     const snapshot = await agentConfig.updateAgentSettings('research-helper', {

@@ -464,7 +464,7 @@ function appendAlwaysEnabledSkillKeys(skills: string[]): string[] {
     merged.push(skill);
   }
 
-  return merged;
+  return merged.sort((left, right) => left.localeCompare(right));
 }
 
 function normalizeManualSkillList(skills: unknown): string[] {
@@ -481,7 +481,7 @@ function normalizeManualSkillList(skills: unknown): string[] {
     throw new Error('Manual skills must not contain duplicate skills');
   }
 
-  return appendAlwaysEnabledSkillKeys(normalized).sort((left, right) => left.localeCompare(right));
+  return appendAlwaysEnabledSkillKeys(normalized);
 }
 
 function normalizeToolDenyList(tools: unknown): string[] {

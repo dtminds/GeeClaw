@@ -162,6 +162,8 @@ function mergeAlwaysEnabledSkillsIntoExplicitAgentSkills(
         skills.push(normalized);
     }
 
+    skills.sort((left, right) => left.localeCompare(right));
+
     const changed = currentValue.length !== skills.length
         || currentValue.some((skill, index) => skill !== skills[index]);
 

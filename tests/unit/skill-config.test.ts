@@ -434,14 +434,14 @@ describe('skill config sync', () => {
       updated: ['weather', 'geeclaw-env'],
     });
     expect(config.agents?.list?.find((entry) => entry.id === 'main')?.skills).toEqual([
+      'geeclaw-env',
       'pdf',
       'weather',
-      'geeclaw-env',
     ]);
     expect(config.agents?.list?.find((entry) => entry.id === 'stockexpert')?.skills).toEqual([
+      'geeclaw-env',
       'stock-analyzer',
       'weather',
-      'geeclaw-env',
     ]);
     expect(config.agents?.list?.find((entry) => entry.id === 'default-scope-agent')).not.toHaveProperty('skills');
     expect(config.skills?.entries?.weather).toBeUndefined();
