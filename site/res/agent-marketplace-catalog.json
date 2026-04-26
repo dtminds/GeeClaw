@@ -128,6 +128,20 @@
     "size": 8281
   },
   {
+    "agentId": "interactive-presentation-master",
+    "name": "交互式 Presentation 大师",
+    "description": "3 到 30 分钟，你能 ship 一段产品发布动画、一个能点击的 App 原型、一套能编辑的 PPT、一份印刷级的信息图",
+    "emoji": "📊",
+    "category": "办公协同",
+    "version": "1.0.0",
+    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/interactive-presentation-master/1.0.0.zip",
+    "checksum": "sha256-def0c4f5e22fca4d855369b43705e84b3293e7ea0947a317a2b13f7c9150c831",
+    "size": 31436204,
+    "presetSkills": [
+      "huashu-design"
+    ]
+  },
+  {
     "agentId": "marketing-social-media-strategist",
     "name": "社交媒体策略师",
     "description": "跨平台社交媒体策略专家，专注 LinkedIn、Twitter 等职业社交平台的品牌建设、社区运营和整合营销。",
@@ -354,20 +368,6 @@
       "baoyu-cover-image",
       "baoyu-url-to-markdown",
       "baoyu-image-gen"
-    ]
-  },
-  {
-    "agentId": "interactive-presentation-master",
-    "name": "交互式 Presentation 大师",
-    "description": "3 到 30 分钟，你能 ship 一段产品发布动画、一个能点击的 App 原型、一套能编辑的 PPT、一份印刷级的信息图",
-    "emoji": "📊",
-    "category": "内容运营",
-    "version": "1.0.0",
-    "downloadUrl": "https://b0.dtminds.com/0-agent-marketplace/interactive-presentation-master/1.0.0.zip",
-    "checksum": "sha256-4d40cbef738e8184d5606b68b2b272e79b8a5f80a67a9ff6e545770a44fd63d7",
-    "size": 31436199,
-    "presetSkills": [
-      "huashu-design"
     ]
   },
   {
