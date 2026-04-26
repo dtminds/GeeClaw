@@ -197,20 +197,21 @@ export function Sidebar() {
         return map;
       }
 
+      const updatedAtMs = getSessionUpdatedAtMs(session);
       const current = map.get(agentId);
-      if (!current || getSessionUpdatedAtMs(session) > getSessionUpdatedAtMs(current)) {
-        map.set(agentId, session);
+      if (!current || updatedAtMs > current.updatedAtMs) {
+        map.set(agentId, { session, updatedAtMs });
       }
       return map;
-    }, new Map<string, (typeof desktopSessions)[number]>());
+    }, new Map<string, { session: (typeof desktopSessions)[number]; updatedAtMs: number }>());
     const nextSortedAgents = [...agents].sort((left, right) => {
       const defaultSort = Number(right.isDefault) - Number(left.isDefault);
       if (defaultSort !== 0) {
         return defaultSort;
       }
 
-      const updatedAtSort = getSessionUpdatedAtMs(nextAgentMainSessions.get(right.id))
-        - getSessionUpdatedAtMs(nextAgentMainSessions.get(left.id));
+      const updatedAtSort = (nextAgentMainSessions.get(right.id)?.updatedAtMs ?? 0)
+        - (nextAgentMainSessions.get(left.id)?.updatedAtMs ?? 0);
       return updatedAtSort || left.name.localeCompare(right.name);
     });
 
@@ -293,7 +294,7 @@ export function Sidebar() {
         )}>
           <div className={cn(sidebarCollapsed ? 'flex flex-col items-center gap-2' : 'space-y-1')}>
             {sortedAgents.map((agent) => {
-              const mainSession = agentMainSessions.get(agent.id);
+              const mainSession = agentMainSessions.get(agent.id)?.session;
               const preview = renderSkillMarkersAsPlainText(mainSession?.lastMessagePreview || '').trim();
               const subtitle = preview || t('sidebar.agentMainSessionHint', '点击进入会话');
               const updatedAt = mainSession?.updatedAt ? formatShortDateTime(mainSession.updatedAt) : '';
