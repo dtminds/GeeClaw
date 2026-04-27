@@ -146,6 +146,11 @@ describe('provider metadata', () => {
       modelIdPlaceholder: 'gemini-3-flash-preview',
       apiKeyUrl: 'https://aistudio.google.com/app/apikey',
     });
+    expect(getProviderConfig('google')).toEqual({
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      api: 'google-generative-ai',
+      apiKeyEnv: 'GEMINI_API_KEY',
+    });
   });
 
   it('uses a single canonical env key for moonshot provider', () => {
