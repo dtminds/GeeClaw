@@ -240,6 +240,29 @@ function normalizeWeekdayValue(dayOfWeek: string): number | null {
   return value === 7 ? 0 : value;
 }
 
+type SessionCandidate = { sessionKey: string; label: string; channel: string; to: string; accountId: string; chatType?: string };
+
+function dedupeSessionCandidates(sessions: SessionCandidate[]): SessionCandidate[] {
+  const byTarget = new Map<string, SessionCandidate>();
+  for (const session of sessions) {
+    const key = `${session.channel}\0${session.accountId}\0${session.to}`;
+    if (!byTarget.has(key)) {
+      byTarget.set(key, session);
+    }
+  }
+  return Array.from(byTarget.values());
+}
+
+function getDeliveryChannelIcon(channel: string): string {
+  return channel === 'last' ? '↩' : (CHANNEL_ICONS[channel as ChannelType] || '');
+}
+
+function getDeliveryChannelLabel(channel: string, fallback: string, t: TFunction<'cron'>): string {
+  return channel === 'last'
+    ? t('dialog.deliveryChannelLast')
+    : (CHANNEL_NAMES[channel as ChannelType] || fallback);
+}
+
 // Create/Edit Task Dialog
 interface TaskDialogProps {
   job?: CronJob;
@@ -254,7 +277,6 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const { agents, defaultAgentId, fetchAgents } = useAgentsStore();
   const deliveryChannelOptions = getCronDeliveryChannelOptions(channels);
 
-  type SessionCandidate = { sessionKey: string; label: string; channel: string; to: string; accountId: string; chatType?: string };
   const [sessions, setSessions] = useState<SessionCandidate[]>([]);
 
   const [name, setName] = useState(job?.name || '');
@@ -297,7 +319,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   useEffect(() => {
     if (!agentId || deliveryMode !== 'announce') { setSessions([]); return; }
     hostApiFetch<{ success: boolean; sessions: SessionCandidate[] }>(`/api/agents/${encodeURIComponent(agentId)}/sessions`)
-      .then((res) => setSessions(res.sessions ?? []))
+      .then((res) => setSessions(dedupeSessionCandidates(res.sessions ?? [])))
       .catch(() => setSessions([]));
   }, [agentId, deliveryMode]);
 
@@ -479,7 +501,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                         <option value="">{t('dialog.deliveryChannelPlaceholder')}</option>
                         {deliveryChannelOptions.map((ch) => (
                           <option key={ch.id} value={ch.type} disabled={ch.disabled}>
-                            {CHANNEL_ICONS[ch.type]} {CHANNEL_NAMES[ch.type] || ch.name}
+                            {getDeliveryChannelIcon(ch.type)} {getDeliveryChannelLabel(ch.type, ch.name, t)}
                           </option>
                         ))}
                       </select>
@@ -514,13 +536,14 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           onFocus={() => setShowToSuggestions(true)}
                           className="modal-field-surface field-focus-ring w-full h-[44px] rounded-xl border border-input px-3 font-mono text-[13px] text-foreground shadow-sm transition-all placeholder:text-foreground/40 focus:outline-none"
                         />
-                        {showToSuggestions && (() => {
+                        {showToSuggestions && deliveryChannel !== 'last' && (() => {
                           const filtered = filterCronSessionSuggestions(sessions, {
                             deliveryChannel,
                             deliveryAccountId,
                             query: deliveryTo,
                           });
-                          return filtered.length > 0 ? (
+                          if (filtered.length > 0) {
+                            return (
                             <div className="absolute z-20 w-full mt-1 bg-popover border border-input rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                               {filtered.map((s) => (
                                 <button
@@ -533,7 +556,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                                   }}
                                   className="flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-accent"
                                 >
-                                  <span className="shrink-0">{CHANNEL_ICONS[s.channel as ChannelType] || ''}</span>
+                                  <span className="shrink-0">{getDeliveryChannelIcon(s.channel)}</span>
                                   <span className="min-w-0 flex-1 truncate font-mono text-foreground" title={s.to}>
                                     {s.to}
                                   </span>
@@ -545,6 +568,13 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                                   </span>
                                 </button>
                               ))}
+                            </div>
+                            );
+                          }
+
+                          return deliveryChannel ? (
+                            <div className="absolute z-20 w-full mt-1 bg-popover border border-input rounded-xl shadow-lg px-3 py-3 text-[13px] text-muted-foreground">
+                              {t('dialog.deliveryToEmptyHint')}
                             </div>
                           ) : null;
                         })()}

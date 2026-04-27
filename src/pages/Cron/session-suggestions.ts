@@ -20,10 +20,14 @@ export function filterCronSessionSuggestions(
     query: string;
   },
 ): SessionCandidate[] {
+  if (!params.deliveryChannel || params.deliveryChannel === 'last') {
+    return [];
+  }
+
   const keyword = params.query.trim();
 
   return sessions.filter((session) => {
-    if (params.deliveryChannel && session.channel !== params.deliveryChannel) {
+    if (session.channel !== params.deliveryChannel) {
       return false;
     }
     if (params.deliveryAccountId && session.accountId !== params.deliveryAccountId) {

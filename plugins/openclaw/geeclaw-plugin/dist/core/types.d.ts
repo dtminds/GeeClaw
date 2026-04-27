@@ -275,6 +275,8 @@ export interface GeeClawContext {
         stateDir: string;
         version: string;
         config: RuntimeConfig;
+        /** 获取 OpenClaw 最新运行时配置；未提供时可回退到 config 快照。 */
+        getConfig?: () => RuntimeConfig;
     };
     /** 获取其他 package 的公开 API（跨 package 通讯） */
     getPackageApi<T = unknown>(packageId: string): T | undefined;
