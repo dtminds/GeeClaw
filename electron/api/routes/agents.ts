@@ -93,6 +93,13 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function isInvalidPathSegment(value: string): boolean {
+  return value.includes('..')
+    || value.includes('/')
+    || value.includes('\\')
+    || isAbsolute(value);
+}
+
 function parseJsonObject(value: string): Record<string, unknown> | undefined {
   try {
     const parsed = JSON.parse(value);
@@ -595,6 +602,10 @@ export async function handleAgentRoutes(
 
     if (parts.length === 2 && parts[1] === 'sessions') {
       const agentId = decodeURIComponent(parts[0]);
+      if (isInvalidPathSegment(agentId)) {
+        sendJson(res, 400, { success: false, error: 'Invalid agent ID', code: 'INVALID_AGENT_ID' });
+        return true;
+      }
       try {
         // channel-defaults.json is currently the source of truth for cron
         // delivery suggestions. Keep buildAgentSessionSuggestions() available

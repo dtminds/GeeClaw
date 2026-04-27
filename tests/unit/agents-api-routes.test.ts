@@ -608,6 +608,31 @@ describe('agent API routes', () => {
     }
   });
 
+  it('rejects path-like agent ids on the sessions route', async () => {
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+    const res = {} as never;
+
+    const handled = await handleAgentRoutes(
+      { method: 'GET' } as never,
+      res,
+      new URL('http://127.0.0.1/api/agents/..%2Fsecret/sessions'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'stopped' }),
+          debouncedReload: vi.fn(),
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(sendJson).toHaveBeenCalledWith(res, 400, {
+      success: false,
+      error: 'Invalid agent ID',
+      code: 'INVALID_AGENT_ID',
+    });
+    expect(getOpenClawConfigDir).not.toHaveBeenCalled();
+  });
+
   it('unmanages preset agents through the dedicated route', async () => {
     const { handleAgentRoutes } = await import('@electron/api/routes/agents');
 
