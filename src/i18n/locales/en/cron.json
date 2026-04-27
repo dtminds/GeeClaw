@@ -98,9 +98,11 @@
         "deliveryMode_none": "No delivery",
         "deliveryMode_announce": "Send to channel",
         "deliveryChannel": "Target Channel",
+        "deliveryChannelLast": "Last channel",
         "deliveryChannelPlaceholder": "Select a channel",
         "deliveryTo": "Recipient / Chat ID",
         "deliveryToPlaceholder": "e.g., user ID, group ID (optional)",
+        "deliveryToEmptyHint": "Send a message to the agent from an account on this channel first",
         "enableImmediately": "Enable immediately",
         "enableImmediatelyDesc": "Start running this task after creation",
         "saveChanges": "Save Changes"

@@ -16,6 +16,7 @@ const channelsStoreState = {
   channels: [] as Array<{
     type: string;
     name?: string;
+    defaultAccountId?: string;
     accounts?: Array<{
       accountId: string;
       enabled: boolean;
@@ -63,9 +64,11 @@ const translations: Record<string, string> = {
   'dialog.deliveryMode': 'Result Delivery',
   'dialog.deliveryMode_none': 'No delivery',
   'dialog.deliveryMode_announce': 'Send to channel',
+  'dialog.deliveryChannelLast': 'Last channel',
   'dialog.deliveryChannelPlaceholder': 'Select a channel',
   'dialog.deliveryTo': 'Recipient / Chat ID',
   'dialog.deliveryToPlaceholder': 'e.g., user ID, group ID (optional)',
+  'dialog.deliveryToEmptyHint': 'Send a message to the agent from an account on this channel first',
   'dialog.scheduleModeEvery': 'Every',
   'dialog.scheduleModeFixed': 'Fixed Time',
   'dialog.scheduleModeCron': 'Cron',
@@ -323,6 +326,105 @@ describe('Cron schedule editor integration', () => {
     expect(spans[1]?.className).toContain('truncate');
     expect(spans[2]?.className).toContain('shrink-0');
     expect(spans[2]?.className).toContain('truncate');
+  });
+
+  it('shows an empty hint when the selected channel has no recipient defaults', async () => {
+    channelsStoreState.channels = [{
+      id: 'channel-wecom',
+      type: 'wecom',
+      name: 'WeCom',
+      defaultAccountId: 'bot-default',
+      accounts: [{
+        accountId: 'bot-default',
+        enabled: true,
+        isDefault: true,
+        name: 'bot-default',
+      }],
+    }];
+    agentsStoreState.defaultAgentId = 'agent-1';
+    agentsStoreState.agents = [
+      { id: 'agent-1', name: 'Selected agent' },
+      { id: 'main', name: 'Main agent' },
+    ];
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/agents/agent-1/sessions') {
+        return { success: true, sessions: [] };
+      }
+      return { success: true, sessions: [] };
+    });
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to channel' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/agent-1/sessions');
+    });
+    expect(hostApiFetchMock).not.toHaveBeenCalledWith('/api/agents/main/sessions');
+
+    fireEvent.change(screen.getByDisplayValue('Select a channel'), {
+      target: { value: 'wecom' },
+    });
+    fireEvent.focus(screen.getByPlaceholderText('e.g., user ID, group ID (optional)'));
+
+    expect(await screen.findByText('Send a message to the agent from an account on this channel first')).toBeInTheDocument();
+  });
+
+  it('shows the special last delivery channel when editing an existing task', async () => {
+    cronStoreState.jobs = [{
+      id: 'job-last',
+      name: 'Reply in last channel',
+      message: 'Send a follow-up',
+      schedule: { kind: 'cron', expr: '0 9 * * *' },
+      enabled: true,
+      delivery: {
+        mode: 'announce',
+        channel: 'last',
+      },
+      createdAt: '2026-04-08T00:00:00.000Z',
+      updatedAt: '2026-04-08T00:00:00.000Z',
+    }];
+    agentsStoreState.defaultAgentId = 'main';
+    agentsStoreState.agents = [{ id: 'main', name: 'Main agent' }];
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/main/sessions');
+    });
+    expect(screen.getByDisplayValue(/Last channel/)).toBeInTheDocument();
+  });
+
+  it('does not show recipient suggestions when the last delivery channel is selected', async () => {
+    agentsStoreState.defaultAgentId = 'main';
+    agentsStoreState.agents = [{ id: 'main', name: 'Main agent' }];
+    hostApiFetchMock.mockResolvedValue({
+      success: true,
+      sessions: [
+        { sessionKey: 'last-recipient', label: 'Last Recipient', channel: 'last', to: 'last-target', accountId: 'default' },
+      ],
+    });
+
+    render(<Cron />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to channel' }));
+
+    await waitFor(() => {
+      expect(hostApiFetchMock).toHaveBeenCalledWith('/api/agents/main/sessions');
+    });
+
+    fireEvent.change(screen.getByDisplayValue('Select a channel'), {
+      target: { value: 'last' },
+    });
+    fireEvent.focus(screen.getByPlaceholderText('e.g., user ID, group ID (optional)'));
+
+    expect(screen.queryByText('last-target')).not.toBeInTheDocument();
+    expect(screen.queryByText('Last Recipient')).not.toBeInTheDocument();
+    expect(screen.queryByText('Send a message to the agent from an account on this channel first')).not.toBeInTheDocument();
   });
 
   it('renders structured schedules with human-readable labels in task cards', async () => {

@@ -98,9 +98,11 @@
         "deliveryMode_none": "不投递",
         "deliveryMode_announce": "发送到频道",
         "deliveryChannel": "目标频道",
+        "deliveryChannelLast": "上次频道",
         "deliveryChannelPlaceholder": "选择频道",
         "deliveryTo": "接收人 / Chat ID",
         "deliveryToPlaceholder": "例如：用户ID、群组ID（可选）",
+        "deliveryToEmptyHint": "未匹配到收件人，请先在该渠道下给Agent发送一条消息",
         "enableImmediately": "启用",
         "enableImmediatelyDesc": "创建后立即启用此任务",
         "saveChanges": "保存更改"

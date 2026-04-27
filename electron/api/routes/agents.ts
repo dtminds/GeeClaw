@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { exec } from 'child_process';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join } from 'path';
 import { promisify } from 'util';
 import {
   assignChannelToAgent,
@@ -26,12 +26,255 @@ import { getOpenClawConfigDir } from '../../utils/paths';
 
 const execAsync = promisify(exec);
 
+type AgentSessionRecord = {
+  deliveryContext?: { channel?: string; to?: string; accountId?: string };
+  origin?: { label?: string; to?: string; accountId?: string };
+  chatType?: string;
+  sessionFile?: string;
+  file?: string;
+  fileName?: string;
+  path?: string;
+  sessionId?: string;
+  id?: string;
+  lastChannel?: string;
+  lastTo?: string;
+  lastAccountId?: string;
+  channel?: string;
+};
+
+type AgentSessionSuggestion = {
+  sessionKey: string;
+  label: string;
+  channel: string;
+  to: string;
+  accountId: string;
+  chatType?: string;
+};
+
+type SenderMetadataSuggestion = {
+  to: string;
+  label: string;
+};
+
+type ChannelDefaultRecord = {
+  to?: unknown;
+};
+
+type ChannelDefaultsFile = Record<string, Record<string, ChannelDefaultRecord>>;
+
+const SENDER_METADATA_RE = /Sender \(untrusted metadata\):\s*```json\s*([\s\S]*?)\s*```/;
+const CONVERSATION_METADATA_RE = /Conversation info \(untrusted metadata\):\s*```json\s*([\s\S]*?)\s*```/;
+
 function scheduleGatewayReload(ctx: HostApiContext, reason: string): void {
   if (ctx.gatewayManager.getStatus().state !== 'stopped') {
     ctx.gatewayManager.debouncedReload();
     return;
   }
   void reason;
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const candidate = readString(value);
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractTextContent(message: Record<string, unknown>): string {
+  const content = message.content;
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return '';
+      }
+      return readString((item as Record<string, unknown>).text) ?? '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function extractSenderMetadataSuggestionFromText(text: string): SenderMetadataSuggestion | undefined {
+  const senderMatch = text.match(SENDER_METADATA_RE);
+  if (!senderMatch?.[1]) {
+    return undefined;
+  }
+
+  const sender = parseJsonObject(senderMatch[1]);
+  if (!sender) {
+    return undefined;
+  }
+
+  const conversationMatch = text.match(CONVERSATION_METADATA_RE);
+  const conversation = conversationMatch?.[1]
+    ? parseJsonObject(conversationMatch[1])
+    : undefined;
+  const to = firstString(
+    sender.id,
+    sender.senderId,
+    sender.sender_id,
+    sender.userId,
+    sender.user_id,
+    sender.openId,
+    sender.open_id,
+    conversation?.sender_id,
+    conversation?.sender,
+  );
+
+  if (!to || to === 'gateway-client') {
+    return undefined;
+  }
+
+  return {
+    to,
+    label: firstString(sender.label, sender.name, sender.username, conversation?.sender) ?? to,
+  };
+}
+
+async function readSenderMetadataSuggestion(sessionFile: string | undefined): Promise<SenderMetadataSuggestion | undefined> {
+  if (!sessionFile) {
+    return undefined;
+  }
+
+  try {
+    const raw = await readFile(sessionFile, 'utf-8');
+    let latest: SenderMetadataSuggestion | undefined;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.includes('Sender (untrusted metadata):')) {
+        continue;
+      }
+      const outer = parseJsonObject(line);
+      const maybeMessage = outer?.message;
+      const message = maybeMessage && typeof maybeMessage === 'object' && !Array.isArray(maybeMessage)
+        ? maybeMessage as Record<string, unknown>
+        : outer;
+      if (!message || readString(message.role) !== 'user') {
+        continue;
+      }
+      const suggestion = extractSenderMetadataSuggestionFromText(extractTextContent(message));
+      if (suggestion) {
+        latest = suggestion;
+      }
+    }
+    return latest;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveSessionFile(sessionsDir: string, record: AgentSessionRecord): string | undefined {
+  const explicitPath = firstString(record.sessionFile, record.file, record.fileName, record.path);
+  if (explicitPath) {
+    return isAbsolute(explicitPath) ? explicitPath : join(sessionsDir, explicitPath);
+  }
+
+  const sessionId = firstString(record.sessionId, record.id);
+  if (!sessionId) {
+    return undefined;
+  }
+
+  return join(sessionsDir, sessionId.endsWith('.jsonl') ? sessionId : `${sessionId}.jsonl`);
+}
+
+async function buildChannelDefaultSuggestions(agentId: string): Promise<AgentSessionSuggestion[]> {
+  const defaultsPath = join(getOpenClawConfigDir(), 'channel-defaults.json');
+  let data: ChannelDefaultsFile;
+  try {
+    data = JSON.parse(await readFile(defaultsPath, 'utf-8')) as ChannelDefaultsFile;
+  } catch {
+    return [];
+  }
+
+  const agentDefaults = data && typeof data === 'object' && !Array.isArray(data)
+    ? data[agentId]
+    : undefined;
+  if (!agentDefaults || typeof agentDefaults !== 'object' || Array.isArray(agentDefaults)) {
+    return [];
+  }
+
+  return Object.entries(agentDefaults)
+    .map(([channel, entry]) => {
+      const to = readString(entry?.to);
+      if (!to) {
+        return null;
+      }
+      return {
+        sessionKey: `agent:${agentId}:${channel}:default`,
+        label: to,
+        channel,
+        to,
+        accountId: 'default',
+        chatType: 'direct',
+      } satisfies AgentSessionSuggestion;
+    })
+    .filter((entry): entry is AgentSessionSuggestion => entry !== null);
+}
+
+export async function buildAgentSessionSuggestions(agentId: string): Promise<AgentSessionSuggestion[]> {
+  const sessionsDir = join(getOpenClawConfigDir(), 'agents', agentId, 'sessions');
+  const sessionsPath = join(sessionsDir, 'sessions.json');
+  const raw = await readFile(sessionsPath, 'utf-8');
+  const data = JSON.parse(raw) as Record<string, AgentSessionRecord>;
+  const suggestions: AgentSessionSuggestion[] = [];
+
+  for (const [sessionKey, record] of Object.entries(data)) {
+    if (!record || typeof record !== 'object') {
+      continue;
+    }
+
+    const channel = firstString(record.deliveryContext?.channel, record.lastChannel, record.channel);
+    if (!channel) {
+      continue;
+    }
+
+    const senderSuggestion = (!record.deliveryContext?.to && !record.lastTo && !record.origin?.to)
+      ? await readSenderMetadataSuggestion(resolveSessionFile(sessionsDir, record))
+      : undefined;
+    const to = firstString(record.deliveryContext?.to, record.lastTo, record.origin?.to, senderSuggestion?.to);
+    if (!to) {
+      continue;
+    }
+
+    suggestions.push({
+      sessionKey,
+      label: firstString(senderSuggestion?.label, record.origin?.label) ?? sessionKey,
+      channel,
+      to,
+      accountId: firstString(record.deliveryContext?.accountId, record.lastAccountId, record.origin?.accountId) ?? 'default',
+      chatType: record.chatType,
+    });
+  }
+
+  return suggestions;
 }
 
 /**
@@ -318,24 +561,12 @@ export async function handleAgentRoutes(
     if (parts.length === 2 && parts[1] === 'sessions') {
       const agentId = decodeURIComponent(parts[0]);
       try {
-        const sessionsPath = join(getOpenClawConfigDir(), 'agents', agentId, 'sessions', 'sessions.json');
-        const raw = await readFile(sessionsPath, 'utf-8');
-        const data = JSON.parse(raw) as Record<string, {
-          deliveryContext?: { channel?: string; to?: string; accountId?: string };
-          origin?: { label?: string };
-          chatType?: string;
-        }>;
-        const sessions = Object.entries(data)
-          .filter(([, v]) => v.deliveryContext?.channel && v.deliveryContext?.to)
-          .map(([sessionKey, v]) => ({
-            sessionKey,
-            label: v.origin?.label || sessionKey,
-            channel: v.deliveryContext!.channel!,
-            to: v.deliveryContext!.to!,
-            accountId: v.deliveryContext?.accountId || 'default',
-            chatType: v.chatType,
-          }));
-        sendJson(res, 200, { success: true, sessions });
+        // channel-defaults.json is currently the source of truth for cron
+        // delivery suggestions. Keep buildAgentSessionSuggestions() available
+        // above so we can restore or merge the sessions.json/history fallback
+        // later if needed.
+        // const sessions = await buildAgentSessionSuggestions(agentId);
+        sendJson(res, 200, { success: true, sessions: await buildChannelDefaultSuggestions(agentId) });
       } catch {
         sendJson(res, 200, { success: true, sessions: [] });
       }

@@ -13,10 +13,61 @@ describe('cron session suggestions', () => {
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: 'openclaw-weixin',
       deliveryAccountId: 'bot-a',
+      deliveryDefaultAccountId: 'bot-a',
       query: 'ops',
     })).toEqual([
       { sessionKey: '1', label: 'Ops Room', channel: 'openclaw-weixin', to: 'wechat:ops', accountId: 'bot-a' },
     ]);
+  });
+
+  it('does not show suggestions before a delivery channel is selected', () => {
+    const sessions = [
+      { sessionKey: '1', label: 'Ops Room', channel: 'openclaw-weixin', to: 'wechat:ops', accountId: 'bot-a' },
+      { sessionKey: '2', label: 'WeCom Group', channel: 'wecom', to: 'wecom:group', accountId: 'bot-b' },
+    ];
+
+    expect(filterCronSessionSuggestions(sessions, {
+      deliveryChannel: '',
+      deliveryAccountId: '',
+      deliveryDefaultAccountId: '',
+      query: '',
+    })).toEqual([]);
+  });
+
+  it('does not show suggestions for the special last delivery channel', () => {
+    const sessions = [
+      { sessionKey: '1', label: 'Last Room', channel: 'last', to: 'last-target', accountId: 'default' },
+    ];
+
+    expect(filterCronSessionSuggestions(sessions, {
+      deliveryChannel: 'last',
+      deliveryAccountId: '',
+      deliveryDefaultAccountId: '',
+      query: '',
+    })).toEqual([]);
+  });
+
+  it('keeps legacy default-account suggestions only for the selected channel default account', () => {
+    const sessions = [
+      { sessionKey: '1', label: 'Legacy Room', channel: 'wecom', to: 'wecom:legacy', accountId: 'default' },
+      { sessionKey: '2', label: 'Other Bot Room', channel: 'wecom', to: 'wecom:other', accountId: 'bot-b' },
+    ];
+
+    expect(filterCronSessionSuggestions(sessions, {
+      deliveryChannel: 'wecom',
+      deliveryAccountId: 'bot-default',
+      deliveryDefaultAccountId: 'bot-default',
+      query: '',
+    })).toEqual([
+      { sessionKey: '1', label: 'Legacy Room', channel: 'wecom', to: 'wecom:legacy', accountId: 'default' },
+    ]);
+
+    expect(filterCronSessionSuggestions(sessions, {
+      deliveryChannel: 'wecom',
+      deliveryAccountId: 'bot-a',
+      deliveryDefaultAccountId: 'bot-default',
+      query: '',
+    })).toEqual([]);
   });
 
   it('prefers the selected account, otherwise falls back to the default or first enabled account', () => {

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const parseJsonBody = vi.fn();
 const sendJson = vi.fn();
+const getOpenClawConfigDir = vi.fn(() => '/tmp');
 
 const {
   assignChannelToAgent,
@@ -127,12 +131,13 @@ vi.mock('@electron/api/route-utils', () => ({
 }));
 
 vi.mock('@electron/utils/paths', () => ({
-  getOpenClawConfigDir: vi.fn(() => '/tmp'),
+  getOpenClawConfigDir: () => getOpenClawConfigDir(),
 }));
 
 describe('agent API routes', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    getOpenClawConfigDir.mockReturnValue('/tmp');
   });
 
   it('serves marketplace summaries but does not expose the removed preset install POST route', async () => {
@@ -425,6 +430,124 @@ describe('agent API routes', () => {
 
     expect(handled).toBe(true);
     expect(createAgent).toHaveBeenCalledWith('Research Helper', 'research-helper', 'gradient-sky');
+  });
+
+  it('builds agent session suggestions from channel defaults instead of session history', async () => {
+    const openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-agent-sessions-'));
+    getOpenClawConfigDir.mockReturnValue(openclawConfigDir);
+
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(openclawConfigDir, 'channel-defaults.json'), JSON.stringify({
+      main: {
+        wecom: { to: 'T48250041A' },
+      },
+      'agent-sales': {
+        wecom: { to: 'TSALES001' },
+      },
+    }), 'utf-8');
+    writeFileSync(join(sessionsDir, 'sessions.json'), JSON.stringify({
+      'agent:main:wecom:direct:jiajie.yu': {
+        sessionId: 'history-session',
+        chatType: 'direct',
+        deliveryContext: { channel: 'wecom', accountId: 'bot-a' },
+        origin: { label: 'WeCom DM', accountId: 'bot-a' },
+        sessionFile: join(sessionsDir, 'history-session.jsonl'),
+      },
+    }), 'utf-8');
+    writeFileSync(join(sessionsDir, 'history-session.jsonl'), `${JSON.stringify({
+      type: 'message',
+      message: {
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: [
+            'Sender (untrusted metadata):',
+            '```json',
+            JSON.stringify({ label: 'Jiajie Yu', id: 'jiajie.yu' }, null, 2),
+            '```',
+            '',
+            '[WeCom 2026-04-27 12:00] hello',
+          ].join('\n'),
+        }],
+      },
+    })}\n`, 'utf-8');
+
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+    const res = {} as never;
+
+    try {
+      const handled = await handleAgentRoutes(
+        { method: 'GET' } as never,
+        res,
+        new URL('http://127.0.0.1/api/agents/main/sessions'),
+        {
+          gatewayManager: {
+            getStatus: () => ({ state: 'stopped' }),
+            debouncedReload: vi.fn(),
+          },
+        } as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(sendJson).toHaveBeenCalledWith(res, 200, {
+        success: true,
+        sessions: [{
+          sessionKey: 'agent:main:wecom:default',
+          label: 'T48250041A',
+          channel: 'wecom',
+          to: 'T48250041A',
+          accountId: 'default',
+          chatType: 'direct',
+        }],
+      });
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns no session suggestions when channel defaults have no entry for the requested agent', async () => {
+    const openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-agent-defaults-'));
+    getOpenClawConfigDir.mockReturnValue(openclawConfigDir);
+
+    const sessionsDir = join(openclawConfigDir, 'agents', 'agent-sales', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(openclawConfigDir, 'channel-defaults.json'), JSON.stringify({
+      main: {
+        wecom: { to: 'T48250041A' },
+      },
+    }), 'utf-8');
+    writeFileSync(join(sessionsDir, 'sessions.json'), JSON.stringify({
+      'agent:agent-sales:wecom:direct:sales': {
+        sessionId: 'history-session',
+        deliveryContext: { channel: 'wecom', to: 'SHOULD_NOT_USE', accountId: 'bot-a' },
+      },
+    }), 'utf-8');
+
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+    const res = {} as never;
+
+    try {
+      const handled = await handleAgentRoutes(
+        { method: 'GET' } as never,
+        res,
+        new URL('http://127.0.0.1/api/agents/agent-sales/sessions'),
+        {
+          gatewayManager: {
+            getStatus: () => ({ state: 'stopped' }),
+            debouncedReload: vi.fn(),
+          },
+        } as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(sendJson).toHaveBeenCalledWith(res, 200, {
+        success: true,
+        sessions: [],
+      });
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+    }
   });
 
   it('unmanages preset agents through the dedicated route', async () => {

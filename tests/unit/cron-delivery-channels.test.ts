@@ -44,6 +44,12 @@ describe('getCronDeliveryChannelOptions', () => {
 
     expect(getCronDeliveryChannelOptions(channels)).toEqual([
       {
+        id: 'last',
+        type: 'last',
+        name: 'last',
+        disabled: false,
+      },
+      {
         id: 'openclaw-weixin',
         type: 'openclaw-weixin',
         name: '微信',
@@ -79,6 +85,13 @@ describe('getCronDeliveryChannelOptions', () => {
       },
     ];
 
-    expect(getCronDeliveryChannelOptions(channels)).toEqual([]);
+    expect(getCronDeliveryChannelOptions(channels)).toEqual([
+      {
+        id: 'last',
+        type: 'last',
+        name: 'last',
+        disabled: false,
+      },
+    ]);
   });
 });

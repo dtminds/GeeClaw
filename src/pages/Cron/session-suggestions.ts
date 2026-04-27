@@ -17,16 +17,25 @@ export function filterCronSessionSuggestions(
   params: {
     deliveryChannel: string;
     deliveryAccountId: string;
+    deliveryDefaultAccountId: string;
     query: string;
   },
 ): SessionCandidate[] {
+  if (!params.deliveryChannel || params.deliveryChannel === 'last') {
+    return [];
+  }
+
   const keyword = params.query.trim();
 
   return sessions.filter((session) => {
-    if (params.deliveryChannel && session.channel !== params.deliveryChannel) {
+    if (session.channel !== params.deliveryChannel) {
       return false;
     }
-    if (params.deliveryAccountId && session.accountId !== params.deliveryAccountId) {
+    if (
+      params.deliveryAccountId
+      && session.accountId !== params.deliveryAccountId
+      && !(session.accountId === 'default' && params.deliveryAccountId === params.deliveryDefaultAccountId)
+    ) {
       return false;
     }
     if (!keyword) {
