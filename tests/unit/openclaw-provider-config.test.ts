@@ -330,12 +330,16 @@ describe('removeProviderFromOpenClaw', () => {
       baseUrl?: string;
       api?: string;
       models?: Array<Record<string, unknown>>;
+      request?: { allowPrivateNetwork?: boolean };
     }>;
 
     expect(providers.openrouter).toMatchObject({
       baseUrl: 'https://openrouter.ai/api/v1',
       api: 'openai-completions',
       apiKey: '${OPENROUTER_API_KEY}',
+      request: {
+        allowPrivateNetwork: true,
+      },
     });
     expect(providers.openrouter?.models).toEqual([
       {

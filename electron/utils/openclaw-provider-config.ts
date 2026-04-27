@@ -305,12 +305,21 @@ function upsertOpenClawProviderEntry(
     ? ((getProviderConfig(provider)?.models ?? []).map((m) => withDefaultModelFlags({ ...m })) as Array<Record<string, unknown>>)
     : [];
   const runtimeModels = normalizeRuntimeProviderModels(options.models).map((model) => withDefaultModelFlags(model));
+  const existingRequest = (
+    existingProvider.request && typeof existingProvider.request === 'object' && !Array.isArray(existingProvider.request)
+      ? (existingProvider.request as Record<string, unknown>)
+      : {}
+  );
 
   const nextProvider: Record<string, unknown> = {
     ...existingProvider,
     baseUrl: options.baseUrl,
     api: options.api,
     models: mergeProviderModels(registryModels, existingModels, runtimeModels),
+    request: {
+      ...existingRequest,
+      allowPrivateNetwork: true,
+    },
   };
   if (options.apiKeyEnv) {
     nextProvider.apiKey = formatProviderApiKeyReference(provider, options.apiKeyEnv);
