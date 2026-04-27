@@ -24,6 +24,7 @@ const translations: Record<string, string> = {
   'presetPlaza.summaryTitle': '预设摘要',
   'presetPlaza.skillsTitle': '预置技能',
   'presetPlaza.platformsTitle': '支持平台',
+  'presetPlaza.empty': '暂无内容',
   'marketplace.install': '一键雇佣',
   'marketplace.update': '更新',
   'marketplace.goSend': '去发送',
@@ -460,6 +461,29 @@ describe('PresetAgentsPlazaSection', () => {
     expect(screen.queryByText('股票助手')).not.toBeInTheDocument();
     expect(screen.getByText('趋势助手')).toBeInTheDocument();
     expect(screen.getByText('Alpha Researcher')).toBeInTheDocument();
+  });
+
+  it('shows an empty plaza without an error when the marketplace catalog fails', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/agents') {
+        return baseSnapshot;
+      }
+      if (path === '/api/agents/presets') {
+        throw new Error('Failed to load marketplace catalog');
+      }
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    const { PresetAgentsPlazaSection } = await import('@/components/dashboard/PresetAgentsPlazaSection');
+    render(<PresetAgentsPlazaSection />);
+
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(screen.getByText('暂无内容')).toBeInTheDocument();
+    expect(screen.queryByText('Failed to load marketplace catalog')).not.toBeInTheDocument();
+    expect(screen.queryByText('股票助手')).not.toBeInTheDocument();
   });
 
   it('stores marketplace-backed preset summaries for the plaza', async () => {
