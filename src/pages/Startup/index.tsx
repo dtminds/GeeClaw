@@ -20,6 +20,7 @@ const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
   warming_gateway_services: 82,
   ready: 100,
 };
+const GATEWAY_SERVICE_WARMUP_MAX_SECONDS = 7;
 
 interface OpenClawSidecarStatus {
   stage: 'idle' | 'extracting' | 'ready' | 'error';
@@ -58,7 +59,10 @@ export function Startup() {
     || phase === 'preparing'
     || phase === 'warming_gateway_services';
   const serviceWarmupRemainingSeconds = phase === 'warming_gateway_services' && serviceWarmupDeadlineAt
-    ? Math.max(0, Math.ceil((serviceWarmupDeadlineAt - serviceWarmupNow) / 1000))
+    ? Math.min(
+      GATEWAY_SERVICE_WARMUP_MAX_SECONDS,
+      Math.max(0, Math.ceil((serviceWarmupDeadlineAt - serviceWarmupNow) / 1000)),
+    )
     : 0;
 
   useEffect(() => {
@@ -78,7 +82,6 @@ export function Startup() {
       return undefined;
     }
 
-    setServiceWarmupNow(Date.now());
     const timer = window.setInterval(() => {
       setServiceWarmupNow(Date.now());
     }, 250);
