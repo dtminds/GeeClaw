@@ -255,12 +255,11 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   fetchPresets: async () => {
-    set({ error: null });
     try {
       const result = await hostApiFetch<unknown>('/api/agents/presets');
       set({ presets: requireAgentPresetSummaries(result, 'Fetching presets') });
     } catch {
-      set({ presets: [], error: null });
+      set({ presets: [] });
     }
   },
 

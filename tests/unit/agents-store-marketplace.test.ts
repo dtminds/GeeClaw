@@ -102,6 +102,19 @@ describe('agents store marketplace install', () => {
     expect(useAgentsStore.getState().error).toBeNull();
   });
 
+  it('does not clear an existing agent error while refreshing marketplace presets', async () => {
+    useAgentsStore.setState({ error: 'Error: agent snapshot failed' });
+    hostApiFetchMock.mockResolvedValueOnce({
+      success: true,
+      presets: [],
+    });
+
+    await useAgentsStore.getState().fetchPresets();
+
+    expect(useAgentsStore.getState().presets).toEqual([]);
+    expect(useAgentsStore.getState().error).toBe('Error: agent snapshot failed');
+  });
+
   it('surfaces invalid marketplace install responses instead of crashing on missing snapshot fields', async () => {
     hostApiFetchMock.mockResolvedValueOnce({
       success: false,
