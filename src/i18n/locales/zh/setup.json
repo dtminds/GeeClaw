@@ -155,6 +155,10 @@
             "openclawUpdatingTitle": "正在更新 OpenClaw 到 {{version}}",
             "openclawUpdatingCaption": "正在替换内置运行时，请保持窗口打开"
         },
+        "gatewayHealth": {
+            "title": "正在预热 OpenClaw",
+            "caption": "已连接，正在等待服务完成预热（{{seconds}}s）"
+        },
         "needsProvider": {
             "title": "连接您的 AI 服务",
             "body": "选择一个 AI 提供商后即可开始聊天"

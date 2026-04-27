@@ -292,8 +292,8 @@ export class GatewayClient {
   /**
    * Get Gateway health status
    */
-  async getHealth(): Promise<{ status: string; uptime: number; version?: string }> {
-    return this.manager.rpc<{ status: string; uptime: number; version?: string }>('system.health');
+  async getHealth(): Promise<{ uptime?: number; uptimeMs?: number; version?: string }> {
+    return this.manager.rpc<{ uptime?: number; uptimeMs?: number; version?: string }>('health', { probe: false });
   }
 
   /**

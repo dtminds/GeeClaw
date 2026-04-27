@@ -155,6 +155,7 @@ export class GatewayManager extends EventEmitter {
     const message = error instanceof Error ? error.message : String(error);
     return /unknown method:\s*shutdown/i.test(message);
   }
+
   /**
    * Get current Gateway status
    */
@@ -696,18 +697,31 @@ export class GatewayManager extends EventEmitter {
   }
 
   /**
-   * Check Gateway health via WebSocket ping
-   * OpenClaw Gateway doesn't have an HTTP /health endpoint
+   * Check Gateway semantic health via RPC.
+   * OpenClaw Gateway doesn't have an HTTP /health endpoint.
    */
-  async checkHealth(): Promise<{ ok: boolean; error?: string; uptime?: number }> {
+  async checkHealth(): Promise<{ ok: boolean; error?: string; uptime?: number; version?: string }> {
     try {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        const uptime = this.status.connectedAt
-          ? Math.floor((Date.now() - this.status.connectedAt) / 1000)
-          : undefined;
-        return { ok: true, uptime };
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return { ok: false, error: 'WebSocket not connected' };
       }
-      return { ok: false, error: 'WebSocket not connected' };
+
+      const result = await this.rpc<{ uptime?: number; uptimeMs?: number; version?: string }>(
+        'health',
+        { probe: false },
+        5000,
+      );
+
+      const fallbackUptime = this.status.connectedAt
+        ? Math.floor((Date.now() - this.status.connectedAt) / 1000)
+        : undefined;
+      return {
+        ok: true,
+        uptime: typeof result?.uptime === 'number'
+          ? result.uptime
+          : (typeof result?.uptimeMs === 'number' ? Math.floor(result.uptimeMs / 1000) : fallbackUptime),
+        version: result?.version,
+      };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
