@@ -16,9 +16,11 @@ import geeclawIcon from '@/assets/logo.svg';
 const phaseProgress: Partial<Record<BootstrapPhase, number>> = {
   idle: 10,
   checking_session: 22,
-  preparing: 72,
+  preparing: 50,
+  warming_gateway_services: 82,
   ready: 100,
 };
+const GATEWAY_SERVICE_WARMUP_MAX_SECONDS = 7;
 
 interface OpenClawSidecarStatus {
   stage: 'idle' | 'extracting' | 'ready' | 'error';
@@ -41,6 +43,7 @@ export function Startup() {
   const { t } = useTranslation('setup');
   const phase = useBootstrapStore((state) => state.phase);
   const error = useBootstrapStore((state) => state.error);
+  const serviceWarmupDeadlineAt = useBootstrapStore((state) => state.serviceWarmupDeadlineAt);
   const loginAndContinue = useBootstrapStore((state) => state.loginAndContinue);
   const retry = useBootstrapStore((state) => state.retry);
   // const account = useSessionStore((state) => state.account);
@@ -48,9 +51,19 @@ export function Startup() {
 
   const [sidecarStatus, setSidecarStatus] = useState<OpenClawSidecarStatus | null>(null);
   const [managedPluginStatus, setManagedPluginStatus] = useState<ManagedPluginStatus | null>(null);
+  const [serviceWarmupNow, setServiceWarmupNow] = useState(() => Date.now());
 
   const progress = phaseProgress[phase] ?? 12;
-  const isLoadingPhase = phase === 'idle' || phase === 'checking_session' || phase === 'preparing';
+  const isLoadingPhase = phase === 'idle'
+    || phase === 'checking_session'
+    || phase === 'preparing'
+    || phase === 'warming_gateway_services';
+  const serviceWarmupRemainingSeconds = phase === 'warming_gateway_services' && serviceWarmupDeadlineAt
+    ? Math.min(
+      GATEWAY_SERVICE_WARMUP_MAX_SECONDS,
+      Math.max(0, Math.ceil((serviceWarmupDeadlineAt - serviceWarmupNow) / 1000)),
+    )
+    : 0;
 
   useEffect(() => {
     return subscribeHostEvent<OpenClawSidecarStatus>('openclaw:sidecar-status', (payload) => {
@@ -64,7 +77,28 @@ export function Startup() {
     });
   }, []);
 
+  useEffect(() => {
+    if (phase !== 'warming_gateway_services' || !serviceWarmupDeadlineAt) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setServiceWarmupNow(Date.now());
+    }, 250);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [phase, serviceWarmupDeadlineAt]);
+
   const loadingCopy = useMemo(() => {
+    if (phase === 'warming_gateway_services') {
+      return {
+        title: t('startup.gatewayHealth.title'),
+        caption: t('startup.gatewayHealth.caption', { seconds: serviceWarmupRemainingSeconds }),
+      };
+    }
+
     if (phase === 'preparing') {
       const isSidecarExtracting = sidecarStatus?.stage === 'extracting';
       const isOpenClawUpgrade = Boolean(
@@ -107,7 +141,7 @@ export function Startup() {
       title: t('startup.checkingSession.title'),
       caption: t('startup.checkingSession.caption'),
     };
-  }, [managedPluginStatus, phase, setupComplete, sidecarStatus, t]);
+  }, [managedPluginStatus, phase, serviceWarmupRemainingSeconds, setupComplete, sidecarStatus, t]);
 
   const managedPluginFailure = phase === 'error' && managedPluginStatus?.stage === 'failed'
     ? managedPluginStatus

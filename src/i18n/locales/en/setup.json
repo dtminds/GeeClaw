@@ -155,6 +155,10 @@
             "openclawUpdatingTitle": "Updating OpenClaw to {{version}}",
             "openclawUpdatingCaption": "Replacing the bundled runtime. Please keep this window open."
         },
+        "gatewayHealth": {
+            "title": "Warming Up OpenClaw",
+            "caption": "Connected, warming up ({{seconds}}s)"
+        },
         "needsProvider": {
             "title": "Connect your AI service",
             "body": "Choose an AI provider to start chatting."

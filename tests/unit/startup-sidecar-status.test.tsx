@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 type BootstrapState = {
   phase: string;
   error: string | null;
+  serviceWarmupDeadlineAt: number | null;
   loginAndContinue: ReturnType<typeof vi.fn>;
   logoutToLogin: ReturnType<typeof vi.fn>;
   retry: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ type ManagedPluginStatus = {
 const bootstrapState: BootstrapState = {
   phase: 'preparing',
   error: null,
+  serviceWarmupDeadlineAt: null,
   loginAndContinue: vi.fn(),
   logoutToLogin: vi.fn(),
   retry: vi.fn(),
@@ -51,6 +53,8 @@ const translations: Record<string, string> = {
   'startup.preparing.openclawUpdatingTitle': '正在更新 OpenClaw 到 {{version}}',
   'startup.preparing.openclawUpdatingCaption': '正在替换内置运行时，请保持窗口打开。',
   'startup.preparing.managedPluginCaption': '正在为本次启动准备 {{plugin}}，请保持窗口打开。',
+  'startup.gatewayHealth.title': '正在预热 OpenClaw',
+  'startup.gatewayHealth.caption': '已连接，正在等待服务完成预热（{{seconds}}s）',
   'startup.status.default': '我们正在为您准备一个稳定、顺滑的 AI 使用体验。',
   'startup.error.title': '启动失败',
   'startup.error.body': 'GeeClaw 在准备环境时遇到了问题。',
@@ -64,12 +68,12 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string, options?: Record<string, string>) => {
+      t: (key: string, options?: Record<string, string | number>) => {
         const template = translations[key] ?? key;
         if (!options) {
           return template;
         }
-        return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) => options[token] ?? '');
+        return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) => String(options[token] ?? ''));
       },
     }),
   };
@@ -132,6 +136,7 @@ describe('Startup OpenClaw sidecar feedback', () => {
   beforeEach(() => {
     bootstrapState.phase = 'preparing';
     bootstrapState.error = null;
+    bootstrapState.serviceWarmupDeadlineAt = null;
     settingsState.setupComplete = false;
     sidecarStatusHandler = null;
     managedPluginStatusHandler = null;
@@ -181,6 +186,29 @@ describe('Startup OpenClaw sidecar feedback', () => {
 
     expect(screen.getByText('正在安装 lossless-claw 插件…')).toBeInTheDocument();
     expect(screen.getByText('正在为本次启动准备 lossless-claw，请保持窗口打开。')).toBeInTheDocument();
+  });
+
+  it('shows the gateway service warmup countdown while waiting', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-27T00:00:00Z'));
+    bootstrapState.phase = 'warming_gateway_services';
+    bootstrapState.serviceWarmupDeadlineAt = Date.now() + 7000;
+
+    try {
+      const { Startup } = await import('@/pages/Startup');
+      const { unmount } = render(<Startup />);
+
+      expect(screen.getByText('已连接，正在等待服务完成预热（7s）')).toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+
+      expect(screen.getByText('已连接，正在等待服务完成预热（6s）')).toBeInTheDocument();
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows managed plugin failure copy during startup error state', async () => {
