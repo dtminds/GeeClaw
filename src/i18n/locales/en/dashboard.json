@@ -43,6 +43,7 @@
         "description": "Browse preset agents to jump into research, analysis, and execution workflows.",
         "all": "All Agents",
         "close": "Close",
+        "empty": "No content yet",
         "summaryTitle": "Preset Summary",
         "skillsTitle": "Preset Skills",
         "platformsTitle": "Supported Platforms",

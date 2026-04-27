@@ -230,41 +230,47 @@ export function PresetAgentsPlazaSection() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredPresets.map((preset) => {
-            return (
-              <button
-                key={preset.agentId}
-                type="button"
-                onClick={() => openPresetDetail(preset.agentId)}
-                className={cn(
-                  'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
-                  'bg-muted/20 p-5 shadow-none transition-all duration-200',
-                  'hover:-translate-y-0.5 hover:border-black/[0.09]',
-                  'dark:border-white/[0.08]',
-                  'dark:hover:border-white/[0.12]',
-                )}
-              >
-                <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-sky-200/60 to-transparent opacity-80" />
+        {filteredPresets.length === 0 ? (
+          <div className="flex min-h-[176px] items-center justify-center rounded-[20px] border border-dashed border-black/[0.08] bg-muted/15 px-6 py-10 text-sm text-muted-foreground dark:border-white/[0.1]">
+            {t('presetPlaza.empty')}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredPresets.map((preset) => {
+              return (
+                <button
+                  key={preset.agentId}
+                  type="button"
+                  onClick={() => openPresetDetail(preset.agentId)}
+                  className={cn(
+                    'group relative min-h-[176px] overflow-hidden rounded-[20px] border border-black/[0.06] text-left',
+                    'bg-muted/20 p-5 shadow-none transition-all duration-200',
+                    'hover:-translate-y-0.5 hover:border-black/[0.09]',
+                    'dark:border-white/[0.08]',
+                    'dark:hover:border-white/[0.12]',
+                  )}
+                >
+                  <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-sky-200/60 to-transparent opacity-80" />
 
-                <div className="mb-5 flex h-12 w-12 items-center justify-center text-[40px]">
-                  <span aria-hidden="true">{preset.emoji}</span>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <h3 className="min-h-[1.4em] line-clamp-1 text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
-                      {preset.name}
-                    </h3>
-                    <p className="min-h-8 line-clamp-2 text-[12px] leading-4 text-foreground/45 dark:text-foreground/56">
-                      {preset.description}
-                    </p>
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center text-[40px]">
+                    <span aria-hidden="true">{preset.emoji}</span>
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <h3 className="min-h-[1.4em] line-clamp-1 text-[16px] font-semibold leading-[1.4] tracking-[-0.02em] text-foreground">
+                        {preset.name}
+                      </h3>
+                      <p className="min-h-8 line-clamp-2 text-[12px] leading-4 text-foreground/45 dark:text-foreground/56">
+                        {preset.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <MarketplacePresetDetailDialog

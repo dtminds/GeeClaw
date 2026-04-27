@@ -108,6 +108,14 @@ function applySnapshot(snapshot: AgentsSnapshot | undefined, context: string) {
   };
 }
 
+function requireAgentPresetSummaries(result: unknown, context: string): AgentPresetSummary[] {
+  if (result && typeof result === 'object' && Array.isArray((result as { presets?: unknown }).presets)) {
+    return (result as { presets: AgentPresetSummary[] }).presets;
+  }
+
+  throw resolveSnapshotError(result, `[agentsStore] ${context} returned an invalid preset catalog`);
+}
+
 function applyMarketplacePresetMutation(
   presets: AgentPresetSummary[],
   snapshot: AgentsSnapshot | undefined,
@@ -249,11 +257,10 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   fetchPresets: async () => {
     set({ error: null });
     try {
-      const result = await hostApiFetch<{ success: boolean; presets: AgentPresetSummary[] }>('/api/agents/presets');
-      set({ presets: result.presets });
-    } catch (error) {
-      set({ error: String(error) });
-      throw error;
+      const result = await hostApiFetch<unknown>('/api/agents/presets');
+      set({ presets: requireAgentPresetSummaries(result, 'Fetching presets') });
+    } catch {
+      set({ presets: [], error: null });
     }
   },
 

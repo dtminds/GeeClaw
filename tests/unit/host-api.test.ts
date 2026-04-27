@@ -90,6 +90,20 @@ describe('host-api', () => {
     await expect(hostApiFetch('/api/test')).rejects.toThrow('Invalid Authentication');
   });
 
+  it('throws message from unified non-ok envelope', async () => {
+    invokeIpcMock.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        status: 500,
+        ok: false,
+        json: { success: false, error: 'Failed to load marketplace catalog' },
+      },
+    });
+
+    const { hostApiFetch } = await import('@/lib/host-api');
+    await expect(hostApiFetch('/api/agents/presets')).rejects.toThrow('Failed to load marketplace catalog');
+  });
+
   it('falls back to browser fetch only when IPC channel is unavailable', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

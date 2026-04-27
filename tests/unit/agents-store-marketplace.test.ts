@@ -90,6 +90,18 @@ describe('agents store marketplace install', () => {
     vi.useRealTimers();
   });
 
+  it('treats invalid marketplace preset responses as an empty catalog', async () => {
+    hostApiFetchMock.mockResolvedValueOnce({
+      success: false,
+      error: 'catalog unavailable',
+    });
+
+    await expect(useAgentsStore.getState().fetchPresets()).resolves.toBeUndefined();
+
+    expect(useAgentsStore.getState().presets).toEqual([]);
+    expect(useAgentsStore.getState().error).toBeNull();
+  });
+
   it('surfaces invalid marketplace install responses instead of crashing on missing snapshot fields', async () => {
     hostApiFetchMock.mockResolvedValueOnce({
       success: false,
