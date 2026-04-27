@@ -70,6 +70,7 @@ export function createGeeClawContext(options) {
             stateDir: api.runtime?.stateDir ?? '',
             version: api.runtime?.version ?? '',
             config: api.runtime?.getConfig?.() ?? {},
+            getConfig: () => api.runtime?.getConfig?.() ?? {},
         },
         getPackageApi(targetPackageId) {
             return getPackageApi(targetPackageId);

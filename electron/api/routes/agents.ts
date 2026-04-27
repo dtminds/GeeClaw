@@ -56,11 +56,13 @@ type SenderMetadataSuggestion = {
   label: string;
 };
 
-type ChannelDefaultRecord = {
+type ChannelDefaultEntry = {
   to?: unknown;
 };
 
-type ChannelDefaultsFile = Record<string, Record<string, ChannelDefaultRecord>>;
+type ChannelAccountDefaults = Record<string, ChannelDefaultEntry>;
+type ChannelDefaultValue = ChannelDefaultEntry | ChannelAccountDefaults;
+type ChannelDefaultsFile = Record<string, Record<string, ChannelDefaultValue>>;
 
 const SENDER_METADATA_RE = /Sender \(untrusted metadata\):\s*```json\s*([\s\S]*?)\s*```/;
 const CONVERSATION_METADATA_RE = /Conversation info \(untrusted metadata\):\s*```json\s*([\s\S]*?)\s*```/;
@@ -100,6 +102,14 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isChannelDefaultEntry(value: unknown): value is ChannelDefaultEntry {
+  return isRecord(value) && Boolean(readString(value.to));
 }
 
 function extractTextContent(message: Record<string, unknown>): string {
@@ -221,22 +231,47 @@ async function buildChannelDefaultSuggestions(agentId: string): Promise<AgentSes
     return [];
   }
 
-  return Object.entries(agentDefaults)
-    .map(([channel, entry]) => {
-      const to = readString(entry?.to);
-      if (!to) {
-        return null;
+  const suggestions: AgentSessionSuggestion[] = [];
+  for (const [channel, value] of Object.entries(agentDefaults)) {
+    if (isChannelDefaultEntry(value)) {
+      const to = readString(value.to);
+      if (to) {
+        suggestions.push({
+          sessionKey: `agent:${agentId}:${channel}:default`,
+          label: to,
+          channel,
+          to,
+          accountId: 'default',
+          chatType: 'direct',
+        });
       }
-      return {
-        sessionKey: `agent:${agentId}:${channel}:default`,
+      continue;
+    }
+
+    if (!isRecord(value)) {
+      continue;
+    }
+
+    for (const [accountId, entry] of Object.entries(value)) {
+      if (!isChannelDefaultEntry(entry)) {
+        continue;
+      }
+      const to = readString(entry.to);
+      if (!to) {
+        continue;
+      }
+      suggestions.push({
+        sessionKey: `agent:${agentId}:${channel}:${accountId}`,
         label: to,
         channel,
         to,
-        accountId: 'default',
+        accountId,
         chatType: 'direct',
-      } satisfies AgentSessionSuggestion;
-    })
-    .filter((entry): entry is AgentSessionSuggestion => entry !== null);
+      });
+    }
+  }
+
+  return suggestions;
 }
 
 export async function buildAgentSessionSuggestions(agentId: string): Promise<AgentSessionSuggestion[]> {

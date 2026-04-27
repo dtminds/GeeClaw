@@ -13,7 +13,6 @@ describe('cron session suggestions', () => {
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: 'openclaw-weixin',
       deliveryAccountId: 'bot-a',
-      deliveryDefaultAccountId: 'bot-a',
       query: 'ops',
     })).toEqual([
       { sessionKey: '1', label: 'Ops Room', channel: 'openclaw-weixin', to: 'wechat:ops', accountId: 'bot-a' },
@@ -29,7 +28,6 @@ describe('cron session suggestions', () => {
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: '',
       deliveryAccountId: '',
-      deliveryDefaultAccountId: '',
       query: '',
     })).toEqual([]);
   });
@@ -42,32 +40,29 @@ describe('cron session suggestions', () => {
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: 'last',
       deliveryAccountId: '',
-      deliveryDefaultAccountId: '',
       query: '',
     })).toEqual([]);
   });
 
-  it('keeps legacy default-account suggestions only for the selected channel default account', () => {
+  it('matches account-scoped suggestions by exact account id only', () => {
     const sessions = [
-      { sessionKey: '1', label: 'Legacy Room', channel: 'wecom', to: 'wecom:legacy', accountId: 'default' },
+      { sessionKey: '1', label: 'Default Room', channel: 'wecom', to: 'wecom:default', accountId: 'default' },
       { sessionKey: '2', label: 'Other Bot Room', channel: 'wecom', to: 'wecom:other', accountId: 'bot-b' },
     ];
 
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: 'wecom',
       deliveryAccountId: 'bot-default',
-      deliveryDefaultAccountId: 'bot-default',
       query: '',
-    })).toEqual([
-      { sessionKey: '1', label: 'Legacy Room', channel: 'wecom', to: 'wecom:legacy', accountId: 'default' },
-    ]);
+    })).toEqual([]);
 
     expect(filterCronSessionSuggestions(sessions, {
       deliveryChannel: 'wecom',
-      deliveryAccountId: 'bot-a',
-      deliveryDefaultAccountId: 'bot-default',
+      deliveryAccountId: 'default',
       query: '',
-    })).toEqual([]);
+    })).toEqual([
+      { sessionKey: '1', label: 'Default Room', channel: 'wecom', to: 'wecom:default', accountId: 'default' },
+    ]);
   });
 
   it('prefers the selected account, otherwise falls back to the default or first enabled account', () => {

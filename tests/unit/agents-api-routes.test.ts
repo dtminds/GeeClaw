@@ -440,10 +440,15 @@ describe('agent API routes', () => {
     mkdirSync(sessionsDir, { recursive: true });
     writeFileSync(join(openclawConfigDir, 'channel-defaults.json'), JSON.stringify({
       main: {
-        wecom: { to: 'T48250041A' },
+        wecom: {
+          default: { to: 'T48250041A' },
+          work: { to: 'T9ABCDEFG' },
+        },
       },
       'agent-sales': {
-        wecom: { to: 'TSALES001' },
+        wecom: {
+          default: { to: 'TSALES001' },
+        },
       },
     }), 'utf-8');
     writeFileSync(join(sessionsDir, 'sessions.json'), JSON.stringify({
@@ -492,14 +497,24 @@ describe('agent API routes', () => {
       expect(handled).toBe(true);
       expect(sendJson).toHaveBeenCalledWith(res, 200, {
         success: true,
-        sessions: [{
-          sessionKey: 'agent:main:wecom:default',
-          label: 'T48250041A',
-          channel: 'wecom',
-          to: 'T48250041A',
-          accountId: 'default',
-          chatType: 'direct',
-        }],
+        sessions: [
+          {
+            sessionKey: 'agent:main:wecom:default',
+            label: 'T48250041A',
+            channel: 'wecom',
+            to: 'T48250041A',
+            accountId: 'default',
+            chatType: 'direct',
+          },
+          {
+            sessionKey: 'agent:main:wecom:work',
+            label: 'T9ABCDEFG',
+            channel: 'wecom',
+            to: 'T9ABCDEFG',
+            accountId: 'work',
+            chatType: 'direct',
+          },
+        ],
       });
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });
@@ -544,6 +559,49 @@ describe('agent API routes', () => {
       expect(sendJson).toHaveBeenCalledWith(res, 200, {
         success: true,
         sessions: [],
+      });
+    } finally {
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+    }
+  });
+
+  it('maps legacy channel-level defaults to the default account', async () => {
+    const openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-agent-legacy-defaults-'));
+    getOpenClawConfigDir.mockReturnValue(openclawConfigDir);
+
+    writeFileSync(join(openclawConfigDir, 'channel-defaults.json'), JSON.stringify({
+      main: {
+        wecom: { to: 'T48250041A' },
+      },
+    }), 'utf-8');
+
+    const { handleAgentRoutes } = await import('@electron/api/routes/agents');
+    const res = {} as never;
+
+    try {
+      const handled = await handleAgentRoutes(
+        { method: 'GET' } as never,
+        res,
+        new URL('http://127.0.0.1/api/agents/main/sessions'),
+        {
+          gatewayManager: {
+            getStatus: () => ({ state: 'stopped' }),
+            debouncedReload: vi.fn(),
+          },
+        } as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(sendJson).toHaveBeenCalledWith(res, 200, {
+        success: true,
+        sessions: [{
+          sessionKey: 'agent:main:wecom:default',
+          label: 'T48250041A',
+          channel: 'wecom',
+          to: 'T48250041A',
+          accountId: 'default',
+          chatType: 'direct',
+        }],
       });
     } finally {
       rmSync(openclawConfigDir, { recursive: true, force: true });

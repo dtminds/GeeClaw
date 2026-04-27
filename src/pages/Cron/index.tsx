@@ -540,7 +540,6 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
                           const filtered = filterCronSessionSuggestions(sessions, {
                             deliveryChannel,
                             deliveryAccountId,
-                            deliveryDefaultAccountId: selectedDeliveryChannel?.defaultAccountId ?? '',
                             query: deliveryTo,
                           });
                           if (filtered.length > 0) {

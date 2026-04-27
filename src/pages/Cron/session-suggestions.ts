@@ -17,7 +17,6 @@ export function filterCronSessionSuggestions(
   params: {
     deliveryChannel: string;
     deliveryAccountId: string;
-    deliveryDefaultAccountId: string;
     query: string;
   },
 ): SessionCandidate[] {
@@ -31,11 +30,7 @@ export function filterCronSessionSuggestions(
     if (session.channel !== params.deliveryChannel) {
       return false;
     }
-    if (
-      params.deliveryAccountId
-      && session.accountId !== params.deliveryAccountId
-      && !(session.accountId === 'default' && params.deliveryAccountId === params.deliveryDefaultAccountId)
-    ) {
+    if (params.deliveryAccountId && session.accountId !== params.deliveryAccountId) {
       return false;
     }
     if (!keyword) {
