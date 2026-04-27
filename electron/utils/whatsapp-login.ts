@@ -3,17 +3,10 @@ import { createRequire } from 'module';
 import { EventEmitter } from 'events';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { deflateSync } from 'zlib';
-import { getOpenClawDir, getOpenClawResolvedDir } from './paths';
+import { resolveRuntimePackageJson } from './runtime-package-resolver';
 import { cleanupCancelledWhatsAppLogin, getWhatsAppAccountCredentialsDir } from './whatsapp-credentials';
 
 const require = createRequire(import.meta.url);
-
-type OpenClawPackageContext = {
-    openclawPath: string;
-    openclawResolvedPath: string;
-    openclawRequire: NodeJS.Require;
-    projectRequire: NodeJS.Require;
-};
 
 type QrDependencies = {
     QRCode: new (typeNumber: number, errorCorrectionLevel: unknown) => {
@@ -40,56 +33,15 @@ type BaileysRuntime = {
     fetchLatestBaileysVersion: () => Promise<{ version: number[] }>;
 };
 
-let openclawPackageContext: OpenClawPackageContext | null = null;
 let qrDependencies: QrDependencies | null = null;
 let baileysRuntime: BaileysRuntime | null = null;
-
-function getOpenClawPackageContext(): OpenClawPackageContext {
-    if (openclawPackageContext) {
-        return openclawPackageContext;
-    }
-
-    const openclawPath = getOpenClawDir();
-    const openclawResolvedPath = getOpenClawResolvedDir();
-    openclawPackageContext = {
-        openclawPath,
-        openclawResolvedPath,
-        openclawRequire: createRequire(join(openclawResolvedPath, 'package.json')),
-        projectRequire: createRequire(join(openclawPath, 'package.json')),
-    };
-
-    return openclawPackageContext;
-}
-
-function resolveOpenClawPackageJson(packageName: string): string {
-    const { openclawPath, openclawResolvedPath, openclawRequire, projectRequire } = getOpenClawPackageContext();
-    const specifier = `${packageName}/package.json`;
-    // 1. Prefer OpenClaw's own dependency graph.
-    try {
-        return openclawRequire.resolve(specifier);
-    } catch {
-        // fall through
-    }
-
-    // 2. Fall back to the app's dependency graph for dev-only runtime helpers.
-    try {
-        return projectRequire.resolve(specifier);
-    } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        throw new Error(
-            `Failed to resolve "${packageName}" from OpenClaw context. ` +
-            `openclawPath=${openclawPath}, resolvedPath=${openclawResolvedPath}. ${reason}`,
-            { cause: err }
-        );
-    }
-}
 
 function getBaileysRuntime(): BaileysRuntime {
     if (baileysRuntime) {
         return baileysRuntime;
     }
 
-    const baileysPath = dirname(resolveOpenClawPackageJson('@whiskeysockets/baileys'));
+    const baileysPath = dirname(resolveRuntimePackageJson('@whiskeysockets/baileys'));
     const loaded = require(baileysPath) as {
         default: BaileysRuntime['makeWASocket'];
         useMultiFileAuthState: BaileysRuntime['initAuth'];
@@ -113,7 +65,7 @@ function getQrDependencies(): QrDependencies {
         return qrDependencies;
     }
 
-    const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
+    const qrcodeTerminalPath = dirname(resolveRuntimePackageJson('qrcode-terminal'));
     qrDependencies = {
         QRCode: require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js')) as QrDependencies['QRCode'],
         QRErrorCorrectLevel: require(join(

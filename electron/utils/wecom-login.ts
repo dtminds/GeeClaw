@@ -3,8 +3,8 @@ import { createRequire } from 'module';
 import { dirname, join } from 'path';
 import { platform } from 'os';
 import { deflateSync } from 'zlib';
-import { getOpenClawResolvedDir } from './paths';
 import { proxyAwareFetch } from './proxy-fetch';
+import { resolveRuntimePackageJson } from './runtime-package-resolver';
 
 const require = createRequire(import.meta.url);
 
@@ -22,18 +22,12 @@ type QrDependencies = {
 
 let qrDependencies: QrDependencies | null = null;
 
-function resolveOpenClawPackageJson(packageName: string): string {
-  const specifier = `${packageName}/package.json`;
-  const openclawRequire = createRequire(join(getOpenClawResolvedDir(), 'package.json'));
-  return openclawRequire.resolve(specifier);
-}
-
 function getQrDependencies(): QrDependencies {
   if (qrDependencies) {
     return qrDependencies;
   }
 
-  const qrcodeTerminalPath = dirname(resolveOpenClawPackageJson('qrcode-terminal'));
+  const qrcodeTerminalPath = dirname(resolveRuntimePackageJson('qrcode-terminal'));
   qrDependencies = {
     QRCode: require(join(qrcodeTerminalPath, 'vendor', 'QRCode', 'index.js')) as QrDependencies['QRCode'],
     QRErrorCorrectLevel: require(join(
