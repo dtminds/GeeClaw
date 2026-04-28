@@ -422,6 +422,7 @@ describe('openclaw memory settings', () => {
 
     expect(changed).toBe(true);
     expect(entries['memory-core']).toEqual({
+      enabled: true,
       config: {
         dreaming: {
           enabled: true,
@@ -440,6 +441,40 @@ describe('openclaw memory settings', () => {
     });
     expect(plugins.slots).toEqual({
       contextEngine: 'lossless-claw',
+    });
+  });
+
+  it('marks memory-core enabled when dreaming is already enabled so bundled runtime deps are staged', async () => {
+    const {
+      initializeMemoryDefaultsOnStartup,
+    } = await import('@electron/utils/openclaw-memory-settings');
+    await writeOpenClawJson({
+      plugins: {
+        entries: {
+          'memory-core': {
+            config: {
+              dreaming: {
+                enabled: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const changed = await initializeMemoryDefaultsOnStartup();
+    const config = await readOpenClawJson();
+    const plugins = config.plugins as Record<string, unknown>;
+    const entries = (plugins.entries ?? {}) as Record<string, unknown>;
+
+    expect(changed).toBe(true);
+    expect(entries['memory-core']).toEqual({
+      enabled: true,
+      config: {
+        dreaming: {
+          enabled: true,
+        },
+      },
     });
   });
 

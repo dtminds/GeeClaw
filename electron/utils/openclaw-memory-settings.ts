@@ -230,13 +230,19 @@ function initializeDreamingDefaults(entries: ConfigRecord): boolean {
   const memoryCoreEntry = ensureRecord(entries, 'memory-core');
   const memoryCoreConfig = ensureRecord(memoryCoreEntry, 'config');
   const dreaming = ensureRecord(memoryCoreConfig, 'dreaming');
+  let changed = false;
 
-  if (dreaming.enabled === false || dreaming.enabled === true) {
-    return false;
+  if (dreaming.enabled !== false && dreaming.enabled !== true) {
+    dreaming.enabled = true;
+    changed = true;
   }
 
-  dreaming.enabled = true;
-  return true;
+  if (dreaming.enabled === true && memoryCoreEntry.enabled !== true && memoryCoreEntry.enabled !== false) {
+    memoryCoreEntry.enabled = true;
+    changed = true;
+  }
+
+  return changed;
 }
 
 function initializeActiveMemoryDefaults(entries: ConfigRecord): boolean {
@@ -372,6 +378,11 @@ export async function applyMemorySettingsPatch(
     const memoryCoreEntry = ensureRecord(entries, 'memory-core');
     const memoryCoreConfig = ensureRecord(memoryCoreEntry, 'config');
     const dreaming = ensureRecord(memoryCoreConfig, 'dreaming');
+
+    if (patch.dreaming.enabled === true && memoryCoreEntry.enabled !== true) {
+      memoryCoreEntry.enabled = true;
+      changed = true;
+    }
 
     if (dreaming.enabled !== patch.dreaming.enabled) {
       dreaming.enabled = patch.dreaming.enabled;

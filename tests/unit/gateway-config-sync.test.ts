@@ -433,6 +433,7 @@ describe('buildGatewayForkEnv', () => {
     expect(forkEnv.OPENCLAW_GATEWAY_TOKEN).toBe('gateway-token');
     expect(forkEnv.OPENCLAW_SKIP_CHANNELS).toBe('1');
     expect(forkEnv.CLAWDBOT_SKIP_CHANNELS).toBe('1');
+    expect(forkEnv.OPENCLAW_HANDSHAKE_TIMEOUT_MS).toBe('60000');
     expect(forkEnv.NODE_OPTIONS).toBeUndefined();
 
     expect(buildManagedOpenClawArgs('setup')).toEqual(['--profile', 'geeclaw', 'setup']);
