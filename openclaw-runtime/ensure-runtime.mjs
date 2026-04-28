@@ -43,17 +43,21 @@ function hasMissingOpenClawDependency(openClawPkg) {
 }
 
 function isRuntimeCurrent() {
-  if (!fs.existsSync(installedOpenClawPkg)) {
+  try {
+    if (!fs.existsSync(installedOpenClawPkg)) {
+      return false;
+    }
+
+    const installedOpenClawPkgJson = readJsonFile(installedOpenClawPkg);
+    const requestedVersion = getRequestedOpenClawVersion();
+    if (requestedVersion && installedOpenClawPkgJson?.version !== requestedVersion) {
+      return false;
+    }
+
+    return !hasMissingOpenClawDependency(installedOpenClawPkgJson);
+  } catch {
     return false;
   }
-
-  const installedOpenClawPkgJson = readJsonFile(installedOpenClawPkg);
-  const requestedVersion = getRequestedOpenClawVersion();
-  if (requestedVersion && installedOpenClawPkgJson?.version !== requestedVersion) {
-    return false;
-  }
-
-  return !hasMissingOpenClawDependency(installedOpenClawPkgJson);
 }
 
 export async function ensureRuntime() {

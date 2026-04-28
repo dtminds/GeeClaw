@@ -32,6 +32,7 @@ type RuntimeFixture = {
   declaredVersion?: string;
   installedVersion?: string | null;
   installedDependencies?: Record<string, string>;
+  malformedInstalledPackage?: boolean;
   presentDependencyPackages?: string[];
 };
 
@@ -43,6 +44,7 @@ function configureRuntimeFixture({
   declaredVersion = '2026.4.25',
   installedVersion = '2026.4.25',
   installedDependencies = {},
+  malformedInstalledPackage = false,
   presentDependencyPackages = [],
 }: RuntimeFixture = {}) {
   const presentDependencyPackageNames = new Set(presentDependencyPackages);
@@ -72,6 +74,9 @@ function configureRuntimeFixture({
     if (normalized.endsWith('/openclaw-runtime/node_modules/openclaw/package.json')) {
       if (installedVersion === null) {
         throw new Error('OpenClaw is not installed');
+      }
+      if (malformedInstalledPackage) {
+        return '{';
       }
 
       return JSON.stringify({
@@ -120,6 +125,16 @@ describe('openclaw-runtime ensure script', () => {
         chokidar: '^5.0.0',
       },
     });
+
+    const { ensureRuntime } = await import('../../openclaw-runtime/ensure-runtime.mjs');
+
+    await ensureRuntime();
+
+    expect(mockInstallRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('installs the runtime when installed OpenClaw metadata is malformed', async () => {
+    configureRuntimeFixture({ malformedInstalledPackage: true });
 
     const { ensureRuntime } = await import('../../openclaw-runtime/ensure-runtime.mjs');
 

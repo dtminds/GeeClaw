@@ -232,12 +232,12 @@ function initializeDreamingDefaults(entries: ConfigRecord): boolean {
   const dreaming = ensureRecord(memoryCoreConfig, 'dreaming');
   let changed = false;
 
-  if (dreaming.enabled !== false && dreaming.enabled !== true) {
+  if (typeof dreaming.enabled !== 'boolean') {
     dreaming.enabled = true;
     changed = true;
   }
 
-  if (dreaming.enabled === true && memoryCoreEntry.enabled !== true && memoryCoreEntry.enabled !== false) {
+  if (dreaming.enabled === true && typeof memoryCoreEntry.enabled !== 'boolean') {
     memoryCoreEntry.enabled = true;
     changed = true;
   }
