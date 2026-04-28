@@ -8,55 +8,29 @@ import {
 } from '../utils/device-identity';
 import { logger } from '../utils/logger';
 
+export const GATEWAY_CONNECT_CHALLENGE_TIMEOUT_MS = 10_000;
+export const GATEWAY_CONNECT_HANDSHAKE_TIMEOUT_MS = 60_000;
+
 export async function probeGatewayReady(
   port: number,
   timeoutMs = 1500,
 ): Promise<boolean> {
-  return await new Promise<boolean>((resolve) => {
-    const testWs = new WebSocket(`ws://localhost:${port}/ws`);
-    let settled = false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
-    const resolveOnce = (value: boolean) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      try {
-        testWs.terminate();
-      } catch {
-        // ignore
-      }
-      resolve(value);
-    };
-
-    const timeout = setTimeout(() => {
-      resolveOnce(false);
-    }, timeoutMs);
-
-    testWs.on('open', () => {
-      // Do not resolve on plain socket open. The gateway can accept the TCP/WebSocket
-      // connection before it is ready to issue protocol challenges, which previously
-      // caused a false "ready" result and then a full connect() stall.
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/readyz`, {
+      method: 'HEAD',
+      signal: controller.signal,
     });
-
-    testWs.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString()) as { type?: string; event?: string };
-        if (message.type === 'event' && message.event === 'connect.challenge') {
-          resolveOnce(true);
-        }
-      } catch {
-        // ignore malformed probe payloads
-      }
-    });
-
-    testWs.on('error', () => {
-      resolveOnce(false);
-    });
-
-    testWs.on('close', () => {
-      resolveOnce(false);
-    });
-  });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function waitForGatewayReady(options: {
@@ -107,7 +81,7 @@ export function buildGatewayConnectFrame(options: {
   const scopes = ['operator.admin'];
   const signedAtMs = Date.now();
   const clientId = 'gateway-client';
-  const clientMode = 'ui';
+  const clientMode = 'backend';
 
   const device = (() => {
     if (!options.deviceIdentity) return undefined;
@@ -172,10 +146,10 @@ export async function connectGatewaySocket(options: {
   onMessage: (message: unknown) => void;
   onCloseAfterHandshake: (code: number) => void;
 }): Promise<WebSocket> {
-  logger.debug(`Connecting Gateway WebSocket (ws://localhost:${options.port}/ws)`);
+  logger.debug(`Connecting Gateway WebSocket (ws://127.0.0.1:${options.port}/ws)`);
 
   return await new Promise<WebSocket>((resolve, reject) => {
-    const wsUrl = `ws://localhost:${options.port}/ws`;
+    const wsUrl = `ws://127.0.0.1:${options.port}/ws`;
     const ws = new WebSocket(wsUrl);
     let handshakeComplete = false;
     let connectId: string | null = null;
@@ -234,7 +208,7 @@ export async function connectGatewaySocket(options: {
           ws.close();
           rejectOnce(new Error('Connect handshake timeout'));
         }
-      }, 10000);
+      }, GATEWAY_CONNECT_HANDSHAKE_TIMEOUT_MS);
       handshakeTimeout = requestTimeout;
 
       options.pendingRequests.set(connectId, {
@@ -258,7 +232,7 @@ export async function connectGatewaySocket(options: {
         ws.close();
         rejectOnce(new Error('Timed out waiting for connect.challenge from Gateway'));
       }
-    }, 10000);
+    }, GATEWAY_CONNECT_CHALLENGE_TIMEOUT_MS);
 
     ws.on('open', () => {
       logger.debug('Gateway WebSocket opened, waiting for connect.challenge...');

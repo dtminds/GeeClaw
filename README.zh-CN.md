@@ -391,9 +391,9 @@ pnpm run openclaw-runtime:prepare
 pnpm dev
 ```
 
-- `pnpm dev` 和 `openclaw-runtime:prepare` 使用的是仓库内的 `openclaw-runtime/` 安装结果，默认不会下载 sidecar。
+- `pnpm dev` 和 `openclaw-runtime:prepare` 使用的是仓库内的 `openclaw-runtime/` 安装结果。当已安装 OpenClaw 版本或直接依赖集合与 `openclaw-runtime/package.json` 不一致时，`prepare` 会自动刷新；默认不会下载 sidecar。
 - 设置 `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` 可以让开发模式优先从远程 URL 加载智能体广场 catalog，而不是读取 `site/res/agent-marketplace-catalog-v2.json`。
-- 当你修改了 `openclaw-runtime/package.json`、需要干净重装，或者想明确刷新本地 runtime 时，再执行 `pnpm run openclaw-runtime:install`。
+- 当你需要干净重装，或者想明确刷新本地 runtime 时，再执行 `pnpm run openclaw-runtime:install`。
 - sidecar 应该被视为 release 产物，而不是默认的开发输入。
 
 要更新 release CI 使用的 sidecar pin 版本，可以这样做：

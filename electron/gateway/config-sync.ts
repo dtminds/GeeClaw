@@ -55,6 +55,7 @@ import { mutateOpenClawConfigDocument } from '../utils/openclaw-config-coordinat
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
 const OPENCLAW_SETUP_SILENCE_WARNING_MS = 30000;
 const OPENCLAW_SETUP_ARTIFACT_POLL_MS = 250;
+const OPENCLAW_HANDSHAKE_TIMEOUT_MS = 60000;
 const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
 const BUILTIN_CHANNEL_EXTENSIONS = ['discord', 'telegram', 'qqbot'];
@@ -219,6 +220,7 @@ export function buildGatewayForkEnv(options: {
     OPENCLAW_STATE_DIR: options.openclawConfigDir,
     OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(options.openclawConfigDir),
     OPENCLAW_GATEWAY_PORT: String(options.gatewayPort),
+    OPENCLAW_HANDSHAKE_TIMEOUT_MS: String(OPENCLAW_HANDSHAKE_TIMEOUT_MS),
     OPENCLAW_NO_RESPAWN: '1',
   };
 }

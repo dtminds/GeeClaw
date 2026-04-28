@@ -1,7 +1,6 @@
 import { app, utilityProcess } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
-import WebSocket from 'ws';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
 import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
 import { getOpenClawConfigDir } from '../utils/paths';
@@ -394,31 +393,27 @@ async function getGatewayRelatedResidualPids(pids: string[]): Promise<string[]> 
   return relatedPids;
 }
 
-async function probeGatewayWebSocket(port: number): Promise<{ port: number; externalToken?: string } | null> {
-  return await new Promise<{ port: number; externalToken?: string } | null>((resolve) => {
-    const testWs = new WebSocket(`ws://localhost:${port}/ws`);
-    const terminateAndResolve = (result: { port: number; externalToken?: string } | null) => {
-      try {
-        testWs.terminate();
-      } catch {
-        // ignore
-      }
-      resolve(result);
-    };
-    const timeout = setTimeout(() => {
-      terminateAndResolve(null);
-    }, 2000);
+async function probeGatewayHttp(pathname: string, port: number, timeoutMs = 2000): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
-    testWs.on('open', () => {
-      clearTimeout(timeout);
-      terminateAndResolve({ port });
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
+      method: 'HEAD',
+      signal: controller.signal,
     });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
-    testWs.on('error', () => {
-      clearTimeout(timeout);
-      resolve(null);
-    });
-  });
+async function probeGatewayHealth(port: number): Promise<{ port: number; externalToken?: string } | null> {
+  return await probeGatewayHttp('/healthz', port) ? { port } : null;
 }
 
 async function terminateOrphanedProcessIds(port: number, pids: string[]): Promise<void> {
@@ -502,7 +497,7 @@ export async function findExistingGatewayProcess(options: {
         return null;
       }
 
-      const existingGateway = await probeGatewayWebSocket(port);
+      const existingGateway = await probeGatewayHealth(port);
       if (existingGateway) {
         if (rejectForeignProcess) {
           throw new Error(
@@ -542,7 +537,7 @@ export async function findExistingGatewayProcess(options: {
       }
     }
 
-    return await probeGatewayWebSocket(port);
+    return await probeGatewayHealth(port);
   } catch (error) {
     if (error instanceof Error && rejectForeignProcess) {
       throw error;

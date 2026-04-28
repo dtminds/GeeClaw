@@ -7,11 +7,13 @@ const {
   mockExec,
   mockExecFile,
   mockCreateServer,
+  mockFetch,
   mockWebSocketState,
 } = vi.hoisted(() => ({
   mockExec: vi.fn(),
   mockExecFile: vi.fn(),
   mockCreateServer: vi.fn(),
+  mockFetch: vi.fn(),
   mockWebSocketState: { mode: 'error' as 'open' | 'error' },
 }));
 
@@ -76,6 +78,8 @@ describe('gateway supervisor process cleanup', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockWebSocketState.mode = 'error';
+    mockFetch.mockResolvedValue({ ok: false });
+    vi.stubGlobal('fetch', mockFetch);
 
     mockExec.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1);
@@ -113,6 +117,7 @@ describe('gateway supervisor process cleanup', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+    vi.unstubAllGlobals();
   });
 
   it('uses taskkill tree strategy for owned process on Windows', async () => {
@@ -354,7 +359,7 @@ describe('gateway supervisor process cleanup', () => {
 
   it('does not reclaim a system-wide openclaw listener when it is not the geeclaw managed profile', async () => {
     setPlatform('darwin');
-    mockWebSocketState.mode = 'open';
+    mockFetch.mockResolvedValue({ ok: true });
     const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
 
     mockExec.mockImplementation((...args: unknown[]) => {
@@ -387,6 +392,10 @@ describe('gateway supervisor process cleanup', () => {
       reclaimLikelyGatewayResidue: true,
     })).rejects.toThrow('already in use by another OpenClaw-compatible process');
 
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:28788/healthz',
+      expect.objectContaining({ method: 'HEAD' }),
+    );
     expect(processKillSpy).not.toHaveBeenCalledWith(4321, 'SIGTERM');
   });
 
@@ -425,7 +434,7 @@ describe('gateway supervisor process cleanup', () => {
 
   it('does not reclaim an active external OpenClaw-compatible gateway', async () => {
     setPlatform('darwin');
-    mockWebSocketState.mode = 'open';
+    mockFetch.mockResolvedValue({ ok: true });
     const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
 
     mockExec.mockImplementation((...args: unknown[]) => {
@@ -448,6 +457,10 @@ describe('gateway supervisor process cleanup', () => {
       reclaimLikelyGatewayResidue: true,
     })).rejects.toThrow('already in use by another OpenClaw-compatible process');
 
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:28788/healthz',
+      expect.objectContaining({ method: 'HEAD' }),
+    );
     expect(processKillSpy).not.toHaveBeenCalledWith(4321, 'SIGTERM');
   });
 });
