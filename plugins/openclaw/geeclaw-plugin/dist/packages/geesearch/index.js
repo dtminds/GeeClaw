@@ -22,10 +22,10 @@ const DEFAULT_GEESEARCH_CONFIG = {
     intent: false,
     contentSize: 'medium',
     timeoutSeconds: 10,
-    maxResults: 5,
 };
 const GEECLAW_API_KEY_ENV_VARS = ['GEECLAW_API_KEY'];
 const GEECLAW_WEB_SEARCH_PATH = '/web_search';
+const DEFAULT_GEESEARCH_COUNT = 5;
 const GEECLAW_MAX_RESULTS = 50;
 const GEESEARCH_PARAMS_SCHEMA = {
     type: 'object',
@@ -65,11 +65,28 @@ function readPositiveInteger(value, fallback) {
     }
     return Math.max(1, Math.floor(value));
 }
+function readOptionalPositiveInteger(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return undefined;
+    }
+    return Math.max(1, Math.floor(value));
+}
 function clampInteger(value, fallback, max) {
     return Math.min(max, readPositiveInteger(value, fallback));
 }
-function clampCount(value, fallback) {
-    return clampInteger(value, fallback, GEECLAW_MAX_RESULTS);
+function resolveSearchCountBounds(searchConfig) {
+    const configuredMaxResults = readOptionalPositiveInteger(searchConfig?.maxResults);
+    if (configuredMaxResults === undefined) {
+        return {
+            defaultCount: DEFAULT_GEESEARCH_COUNT,
+            maxCount: GEECLAW_MAX_RESULTS,
+        };
+    }
+    const maxCount = Math.min(configuredMaxResults, GEECLAW_MAX_RESULTS);
+    return {
+        defaultCount: maxCount,
+        maxCount,
+    };
 }
 function normalizeBaseUrl(value) {
     const raw = readString(value) ?? DEFAULT_GEESEARCH_CONFIG.baseUrl;
@@ -127,7 +144,6 @@ export function parseGeeSearchConfig(raw) {
         intent: config.intent === true,
         contentSize: normalizeContentSize(config.contentSize),
         timeoutSeconds: readPositiveInteger(config.timeoutSeconds, DEFAULT_GEESEARCH_CONFIG.timeoutSeconds),
-        maxResults: clampInteger(config.maxResults, DEFAULT_GEESEARCH_CONFIG.maxResults, GEECLAW_MAX_RESULTS),
     };
 }
 function readQuery(args) {
@@ -330,17 +346,18 @@ export function createGeeSearchProvider(config) {
         setCredentialValue: (_searchConfigTarget, value) => {
             config.apiKey = readString(value);
         },
-        createTool: () => {
+        createTool: (ctx) => {
             if (!config.enabled) {
                 return null;
             }
+            const countBounds = resolveSearchCountBounds(ctx.searchConfig);
             return {
                 description: 'Search the web using GeeSearch. Returns titles, URLs, snippets, site names, and icons from GeeClaw /web_search.',
                 parameters: GEESEARCH_PARAMS_SCHEMA,
                 execute: async (args) => {
                     const startedAt = performance.now();
                     const query = readQuery(args);
-                    const count = clampCount(args.count, config.maxResults);
+                    const count = clampInteger(args.count, countBounds.defaultCount, countBounds.maxCount);
                     const freshness = readString(args.freshness);
                     const sites = readStringArray(args.sites);
                     const remote = await runRemoteGeeSearch({
@@ -409,12 +426,6 @@ const geesearchPkg = {
                 type: 'number',
                 minimum: 1,
                 default: DEFAULT_GEESEARCH_CONFIG.timeoutSeconds,
-            },
-            maxResults: {
-                type: 'number',
-                minimum: 1,
-                maximum: GEECLAW_MAX_RESULTS,
-                default: DEFAULT_GEESEARCH_CONFIG.maxResults,
             },
         },
     },

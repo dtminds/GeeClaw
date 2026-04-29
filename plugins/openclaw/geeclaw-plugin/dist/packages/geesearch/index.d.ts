@@ -16,7 +16,6 @@ export interface GeeSearchConfig {
     intent: boolean;
     contentSize: GeeSearchContentSize;
     timeoutSeconds: number;
-    maxResults: number;
 }
 type GeeSearchErrorCode = 'missing_api_key' | 'invalid_base_url' | 'timeout' | 'api_error' | 'network_error';
 export declare class GeeSearchError extends Error {
