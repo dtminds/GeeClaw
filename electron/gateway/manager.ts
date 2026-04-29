@@ -774,7 +774,11 @@ export class GatewayManager extends EventEmitter {
       onExit: (exitedChild, code) => {
         this.processExitCode = code;
         const exitedOwnedChild = this.process === exitedChild;
-        const unexpectedOwnedExit = exitedOwnedChild && this.ownsProcess && this.shouldReconnect && this.status.state === 'running';
+        const statusAtExit = this.status.state;
+        const unexpectedOwnedExit = exitedOwnedChild
+          && this.ownsProcess
+          && this.shouldReconnect
+          && (statusAtExit === 'running' || statusAtExit === 'starting');
         if (unexpectedOwnedExit) {
           this.managedRespawnAttachUntil = Date.now() + GatewayManager.MANAGED_RESPAWN_ATTACH_GRACE_MS;
           logger.warn(
