@@ -3,6 +3,16 @@
  *
  * 按 GeeClaw /web_search API 发起正式搜索请求。
  */
+export class GeeSearchError extends Error {
+    code;
+    cause;
+    constructor(code, message, options) {
+        super(message);
+        this.name = 'GeeSearchError';
+        this.code = code;
+        this.cause = options?.cause;
+    }
+}
 const DEFAULT_GEESEARCH_CONFIG = {
     enabled: true,
     baseUrl: 'https://geekai.co/api/v1',
@@ -65,6 +75,22 @@ function normalizeBaseUrl(value) {
     const raw = readString(value) ?? DEFAULT_GEESEARCH_CONFIG.baseUrl;
     return raw.replace(/\/+$/, '');
 }
+function resolveGeeClawWebSearchUrl(baseUrl) {
+    let url;
+    try {
+        url = new URL(baseUrl);
+    }
+    catch (err) {
+        throw new GeeSearchError('invalid_base_url', `GeeSearch baseUrl must be a valid absolute URL: ${baseUrl}`, { cause: err });
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new GeeSearchError('invalid_base_url', `GeeSearch baseUrl must use http or https: ${baseUrl}`);
+    }
+    url.pathname = `${url.pathname.replace(/\/+$/, '')}${GEECLAW_WEB_SEARCH_PATH}`;
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+}
 function normalizeAuthType(value) {
     return value === 'bearer' ? 'bearer' : 'api-key';
 }
@@ -114,10 +140,10 @@ function readQuery(args) {
 async function runRemoteGeeSearch(_params) {
     const apiKey = resolveGeeClawApiKey(_params.apiKey);
     if (!apiKey) {
-        throw new Error('GeeSearch requires a GeeClaw API key. Set geesearch.apiKey or GEECLAW_API_KEY.');
+        throw new GeeSearchError('missing_api_key', 'GeeSearch requires a GeeClaw API key. Set geesearch.apiKey or GEECLAW_API_KEY.');
     }
     const response = await postGeeClawWebSearch({
-        url: `${_params.baseUrl}${GEECLAW_WEB_SEARCH_PATH}`,
+        url: resolveGeeClawWebSearchUrl(_params.baseUrl),
         apiKey,
         authType: _params.authType,
         timeoutSeconds: _params.timeoutSeconds,
@@ -188,6 +214,12 @@ function createGeeClawHeaders(params) {
     }
     return headers;
 }
+function formatErrorMessage(err) {
+    if (err instanceof Error && err.message) {
+        return err.message;
+    }
+    return String(err);
+}
 async function postGeeClawWebSearch(params) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), params.timeoutSeconds * 1000);
@@ -201,15 +233,18 @@ async function postGeeClawWebSearch(params) {
         const text = await response.text();
         const payload = parseJsonPayload(text);
         if (!response.ok) {
-            throw new Error(`GeeSearch API error (${response.status}): ${readErrorMessage(payload) ?? response.statusText}`);
+            throw new GeeSearchError('api_error', `GeeSearch API error (${response.status}): ${readErrorMessage(payload) ?? response.statusText}`);
         }
         return payload;
     }
     catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-            throw new Error(`GeeSearch API request timed out after ${params.timeoutSeconds}s.`);
+        if (err instanceof GeeSearchError) {
+            throw err;
         }
-        throw err;
+        if (err instanceof Error && err.name === 'AbortError') {
+            throw new GeeSearchError('timeout', `GeeSearch API request timed out after ${params.timeoutSeconds}s.`, { cause: err });
+        }
+        throw new GeeSearchError('network_error', `GeeSearch network error while calling ${params.url}: ${formatErrorMessage(err)}`, { cause: err });
     }
     finally {
         clearTimeout(timeout);
@@ -303,7 +338,7 @@ export function createGeeSearchProvider(config) {
                 description: 'Search the web using GeeSearch. Returns titles, URLs, snippets, site names, and icons from GeeClaw /web_search.',
                 parameters: GEESEARCH_PARAMS_SCHEMA,
                 execute: async (args) => {
-                    const startedAt = Date.now();
+                    const startedAt = performance.now();
                     const query = readQuery(args);
                     const count = clampCount(args.count, config.maxResults);
                     const freshness = readString(args.freshness);
@@ -327,7 +362,7 @@ export function createGeeSearchProvider(config) {
                         requestId: remote.requestId,
                         created: remote.created,
                         count: remote.results.length,
-                        tookMs: Date.now() - startedAt,
+                        tookMs: Math.round(performance.now() - startedAt),
                         externalContent: {
                             untrusted: true,
                             source: 'web_search',

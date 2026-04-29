@@ -18,6 +18,14 @@ export interface GeeSearchConfig {
     timeoutSeconds: number;
     maxResults: number;
 }
+type GeeSearchErrorCode = 'missing_api_key' | 'invalid_base_url' | 'timeout' | 'api_error' | 'network_error';
+export declare class GeeSearchError extends Error {
+    readonly code: GeeSearchErrorCode;
+    readonly cause?: unknown;
+    constructor(code: GeeSearchErrorCode, message: string, options?: {
+        cause?: unknown;
+    });
+}
 export declare function parseGeeSearchConfig(raw: unknown): GeeSearchConfig;
 export declare function createGeeSearchProvider(config: GeeSearchConfig): WebSearchProviderDefinition;
 declare const geesearchPkg: GeeClawPackage;
