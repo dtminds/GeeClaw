@@ -1378,9 +1378,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (currentSendGeneration !== _sendGeneration) {
         if (returnedRunId) {
           rememberAbortedRunId(returnedRunId);
-          if (!get().sending) {
-            unblockUnknownAbortedRunEvents();
-          }
+        }
+        if (!get().sending) {
+          unblockUnknownAbortedRunEvents();
         }
         return;
       }
@@ -1399,25 +1399,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
         } else {
           clearHistoryPoll();
           set({ error: errorMsg, sending: false, ...createEmptyToolRuntimeState() });
+          unblockUnknownAbortedRunEvents();
         }
-      } else if (returnedRunId && get().sending) {
-        set({ activeRunId: returnedRunId });
+      } else if (get().sending) {
+        if (returnedRunId) {
+          set({ activeRunId: returnedRunId });
+        }
         unblockUnknownAbortedRunEvents();
-        const blockedChatEvents = takeBlockedRunEvents(_blockedChatEvents, returnedRunId);
-        const blockedToolEvents = takeBlockedRunEvents(_blockedToolEvents, returnedRunId);
-        if (blockedChatEvents.length > 0 || blockedToolEvents.length > 0) {
-          queueMicrotask(() => {
-            for (const blockedEvent of blockedChatEvents) {
-              get().handleChatEvent(blockedEvent);
-            }
-            for (const blockedEvent of blockedToolEvents) {
-              get().handleAgentEvent(blockedEvent);
-            }
-          });
+        if (returnedRunId) {
+          const blockedChatEvents = takeBlockedRunEvents(_blockedChatEvents, returnedRunId);
+          const blockedToolEvents = takeBlockedRunEvents(_blockedToolEvents, returnedRunId);
+          if (blockedChatEvents.length > 0 || blockedToolEvents.length > 0) {
+            queueMicrotask(() => {
+              for (const blockedEvent of blockedChatEvents) {
+                get().handleChatEvent(blockedEvent);
+              }
+              for (const blockedEvent of blockedToolEvents) {
+                get().handleAgentEvent(blockedEvent);
+              }
+            });
+          }
         }
       }
     } catch (err) {
       if (currentSendGeneration !== _sendGeneration) {
+        if (!get().sending) {
+          unblockUnknownAbortedRunEvents();
+        }
         return;
       }
       const errStr = String(err);
@@ -1433,6 +1441,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } else {
         clearHistoryPoll();
         set({ error: errStr, sending: false, ...createEmptyToolRuntimeState() });
+        unblockUnknownAbortedRunEvents();
       }
     }
   },

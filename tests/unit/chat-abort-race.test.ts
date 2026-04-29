@@ -262,4 +262,116 @@ describe('chat abort race handling', () => {
       streamingText: 'new response',
     });
   });
+
+  it('unblocks future adopted runs when a stale chat.send returns without a run id after abort', async () => {
+    const sendResult = createDeferred<Record<string, never>>();
+    const rpcMock = vi.fn((method: string) => {
+      if (method === 'chat.send') {
+        return sendResult.promise;
+      }
+      if (method === 'chat.abort') {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`Unexpected RPC method: ${method}`));
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+    });
+
+    const sendPromise = useChatStore.getState().sendMessage('hello');
+    await Promise.resolve();
+    await useChatStore.getState().abortRun();
+
+    sendResult.resolve({});
+    await sendPromise;
+
+    useChatStore.getState().handleChatEvent({
+      state: 'started',
+      runId: 'run-external',
+      sessionKey: 'cron:test',
+    });
+
+    expect(useChatStore.getState()).toMatchObject({
+      sending: true,
+      activeRunId: 'run-external',
+    });
+  });
+
+  it('unblocks future adopted runs when a non-recoverable send error ends the pending run', async () => {
+    const rpcMock = vi.fn((method: string) => {
+      if (method === 'chat.send') {
+        return Promise.reject(new Error('provider failed'));
+      }
+      if (method === 'chat.abort') {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`Unexpected RPC method: ${method}`));
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+    });
+
+    await useChatStore.getState().abortRun();
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      sending: false,
+      activeRunId: null,
+    });
+
+    useChatStore.getState().handleChatEvent({
+      state: 'started',
+      runId: 'run-external',
+      sessionKey: 'cron:test',
+    });
+
+    expect(useChatStore.getState()).toMatchObject({
+      sending: true,
+      activeRunId: 'run-external',
+    });
+  });
+
+  it('unblocks live events when a successful chat.send returns without a run id', async () => {
+    const rpcMock = vi.fn((method: string) => {
+      if (method === 'chat.send') {
+        return Promise.resolve({});
+      }
+      if (method === 'chat.abort') {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`Unexpected RPC method: ${method}`));
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+    });
+
+    await useChatStore.getState().abortRun();
+    await useChatStore.getState().sendMessage('hello');
+
+    useChatStore.getState().handleChatEvent({
+      state: 'delta',
+      runId: 'run-without-returned-id',
+      sessionKey: 'cron:test',
+      message: {
+        role: 'assistant',
+        content: 'live response',
+        timestamp: 1,
+      },
+    });
+
+    expect(useChatStore.getState()).toMatchObject({
+      sending: true,
+      activeRunId: null,
+      streamingText: 'live response',
+    });
+  });
 });
