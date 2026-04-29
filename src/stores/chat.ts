@@ -36,6 +36,7 @@ import {
   createChatInitialState,
   createConversationResetState,
   createEmptyToolRuntimeState,
+  createRunResetState,
 } from './chat/state';
 import type { ChatMessageAttachmentInput, ChatState } from './chat/state';
 import {
@@ -79,6 +80,7 @@ import {
   getMessageText,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
+  isInternalMessage,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
   toSessionPreview,
@@ -1344,17 +1346,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     clearHistoryPoll();
     clearErrorRecoveryTimer();
     const { currentSessionKey } = get();
-    set({
-      sending: false,
-      ...createEmptyToolRuntimeState(),
-      pendingFinal: false,
-      lastUserMessageAt: null,
-      pendingOptimisticUserId: null,
-      pendingOptimisticUserAnchorAt: null,
-      pendingOptimisticUserIndex: null,
-      pendingToolImages: [],
-      pendingToolHiddenCount: 0,
-    });
+    set(createRunResetState());
 
     try {
       await useGatewayStore.getState().rpc(
@@ -1572,7 +1564,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
               };
             });
             break;
-        }
+          }
+
+          if (isInternalMessage(finalMsg)) {
+            clearHistoryPoll();
+            set(createRunResetState());
+            void get().loadHistory(true);
+            break;
+          }
 
           const toolOnly = isToolOnlyMessage(finalMsg);
           const hasOutput = hasNonToolAssistantContent(finalMsg);
@@ -1756,18 +1755,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'aborted': {
         clearHistoryPoll();
         clearErrorRecoveryTimer();
-        set({
-          sending: false,
-          activeRunId: null,
-          ...createEmptyToolRuntimeState(),
-          pendingFinal: false,
-          lastUserMessageAt: null,
-          pendingOptimisticUserId: null,
-          pendingOptimisticUserAnchorAt: null,
-          pendingOptimisticUserIndex: null,
-          pendingToolImages: [],
-          pendingToolHiddenCount: 0,
-        });
+        set(createRunResetState());
         break;
       }
       default: {
