@@ -147,11 +147,13 @@ let _sendGeneration = 0;
 
 const MAX_ABORTED_RUN_IDS = 50;
 const MAX_BLOCKED_RUN_EVENTS = 100;
+type BlockedRunEvent =
+  | { kind: 'chat'; event: Record<string, unknown> }
+  | { kind: 'tool'; event: Record<string, unknown> };
 const _abortedRunIds = new Set<string>();
 const _abortedRunIdOrder: string[] = [];
 let _blockUnknownAbortedRunEvents = false;
-const _blockedChatEvents = new Map<string, Record<string, unknown>[]>();
-const _blockedToolEvents = new Map<string, Record<string, unknown>[]>();
+const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
@@ -204,14 +206,12 @@ function rememberAbortedRunId(runId: string): void {
     _abortedRunIds.add(runId);
     _abortedRunIdOrder.push(runId);
   }
-  _blockedChatEvents.delete(runId);
-  _blockedToolEvents.delete(runId);
+  _blockedRunEvents.delete(runId);
   while (_abortedRunIdOrder.length > MAX_ABORTED_RUN_IDS) {
     const oldest = _abortedRunIdOrder.shift();
     if (oldest) {
       _abortedRunIds.delete(oldest);
-      _blockedChatEvents.delete(oldest);
-      _blockedToolEvents.delete(oldest);
+      _blockedRunEvents.delete(oldest);
     }
   }
 }
@@ -224,25 +224,21 @@ function unblockUnknownAbortedRunEvents(): void {
   _blockUnknownAbortedRunEvents = false;
 }
 
-function queueBlockedRunEvent(
-  queue: Map<string, Record<string, unknown>[]>,
-  runId: string,
-  event: Record<string, unknown>,
-): void {
-  const events = queue.get(runId) ?? [];
-  events.push({ ...event });
+function queueBlockedRunEvent(runId: string, event: BlockedRunEvent): void {
+  const events = _blockedRunEvents.get(runId) ?? [];
+  events.push({
+    kind: event.kind,
+    event: { ...event.event },
+  } as BlockedRunEvent);
   if (events.length > MAX_BLOCKED_RUN_EVENTS) {
     events.shift();
   }
-  queue.set(runId, events);
+  _blockedRunEvents.set(runId, events);
 }
 
-function takeBlockedRunEvents(
-  queue: Map<string, Record<string, unknown>[]>,
-  runId: string,
-): Record<string, unknown>[] {
-  const events = queue.get(runId) ?? [];
-  queue.delete(runId);
+function takeBlockedRunEvents(runId: string): BlockedRunEvent[] {
+  const events = _blockedRunEvents.get(runId) ?? [];
+  _blockedRunEvents.delete(runId);
   return events;
 }
 
@@ -251,8 +247,7 @@ export function __resetChatRuntimeGuardsForTests(): void {
   _abortedRunIds.clear();
   _abortedRunIdOrder.length = 0;
   _blockUnknownAbortedRunEvents = false;
-  _blockedChatEvents.clear();
-  _blockedToolEvents.clear();
+  _blockedRunEvents.clear();
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
@@ -1407,17 +1402,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         unblockUnknownAbortedRunEvents();
         if (returnedRunId) {
-          const blockedChatEvents = takeBlockedRunEvents(_blockedChatEvents, returnedRunId);
-          const blockedToolEvents = takeBlockedRunEvents(_blockedToolEvents, returnedRunId);
-          if (blockedChatEvents.length > 0 || blockedToolEvents.length > 0) {
-            queueMicrotask(() => {
-              for (const blockedEvent of blockedChatEvents) {
-                get().handleChatEvent(blockedEvent);
-              }
-              for (const blockedEvent of blockedToolEvents) {
-                get().handleAgentEvent(blockedEvent);
-              }
-            });
+          const blockedEvents = takeBlockedRunEvents(returnedRunId);
+          for (const blockedEvent of blockedEvents) {
+            if (blockedEvent.kind === 'chat') {
+              get().handleChatEvent(blockedEvent.event);
+            } else {
+              get().handleAgentEvent(blockedEvent.event);
+            }
           }
         }
       }
@@ -1500,7 +1491,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         unblockUnknownAbortedRunEvents();
       } else {
         if (!activeRunId && get().sending) {
-          queueBlockedRunEvent(_blockedChatEvents, runId, event);
+          queueBlockedRunEvent(runId, { kind: 'chat', event });
         }
         return;
       }
@@ -1939,7 +1930,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (_blockUnknownAbortedRunEvents && runId) {
       if (!get().activeRunId && get().sending) {
-        queueBlockedRunEvent(_blockedToolEvents, runId, event);
+        queueBlockedRunEvent(runId, { kind: 'tool', event });
       }
       return;
     }

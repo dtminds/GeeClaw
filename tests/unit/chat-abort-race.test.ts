@@ -263,6 +263,64 @@ describe('chat abort race handling', () => {
     });
   });
 
+  it('replays queued tool and chat events in their original order when the run id arrives', async () => {
+    const sendResult = createDeferred<{ runId: string }>();
+    const rpcMock = vi.fn((method: string) => {
+      if (method === 'chat.send') {
+        return sendResult.promise;
+      }
+      if (method === 'chat.abort') {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`Unexpected RPC method: ${method}`));
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+    });
+
+    await useChatStore.getState().abortRun();
+    const sendPromise = useChatStore.getState().sendMessage('second');
+    await Promise.resolve();
+
+    useChatStore.getState().handleAgentEvent({
+      stream: 'tool',
+      runId: 'run-new',
+      sessionKey: 'cron:test',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'exec',
+        phase: 'start',
+        args: { command: 'pwd' },
+      },
+    });
+
+    useChatStore.getState().handleChatEvent({
+      state: 'final',
+      runId: 'run-new',
+      sessionKey: 'cron:test',
+      message: {
+        role: 'assistant',
+        content: 'final after tool',
+        timestamp: 2,
+      },
+    });
+
+    sendResult.resolve({ runId: 'run-new' });
+    await sendPromise;
+
+    expect(useChatStore.getState()).toMatchObject({
+      sending: true,
+      activeRunId: 'run-new',
+      pendingFinal: true,
+      streamingText: 'final after tool',
+    });
+    expect(useChatStore.getState().messages).toHaveLength(1);
+    expect(useChatStore.getState().toolMessages).toHaveLength(1);
+  });
+
   it('unblocks future adopted runs when a stale chat.send returns without a run id after abort', async () => {
     const sendResult = createDeferred<Record<string, never>>();
     const rpcMock = vi.fn((method: string) => {
