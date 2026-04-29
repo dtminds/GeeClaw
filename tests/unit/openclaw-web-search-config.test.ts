@@ -141,6 +141,7 @@ describe('openclaw-web-search-config', () => {
     const providers = listWebSearchProviderDescriptors();
 
     expect(providers.map((provider) => provider.providerId)).toEqual([
+      'geesearch',
       'brave',
       'minimax',
       'gemini',
@@ -158,6 +159,25 @@ describe('openclaw-web-search-config', () => {
       pluginId: 'minimax',
       autoDetectOrder: 2,
       availabilityKind: 'secret',
+    });
+    const geesearch = providers.find((provider) => provider.providerId === 'geesearch');
+    expect(geesearch).toMatchObject({
+      pluginId: 'geeclaw-plugin',
+      autoDetectOrder: 0,
+      autoSelectable: false,
+      availabilityKind: 'secret',
+      availabilityFieldKey: 'apiKey',
+      requiresCredential: true,
+      credentialPath: 'plugins.entries.geeclaw-plugin.config.geesearch.apiKey',
+      envVars: ['GEECLAW_API_KEY'],
+      fields: expect.arrayContaining([
+        expect.objectContaining({ key: 'apiKey', type: 'secret' }),
+        expect.objectContaining({
+          key: 'model',
+          type: 'enum',
+          enumValues: ['glm-search-std', 'glm-search-pro', 'glm-search-pro-sogou', 'glm-search-pro-quark', 'jina-search-v1'],
+        }),
+      ]),
     });
     expect(providers.find((provider) => provider.providerId === 'searxng')).toMatchObject({
       pluginId: 'searxng',
@@ -205,6 +225,13 @@ describe('openclaw-web-search-config', () => {
               },
             },
           },
+          'geeclaw-plugin': {
+            config: {
+              geesearch: {
+                apiKey: 'geekai-test',
+              },
+            },
+          },
         },
       },
     });
@@ -219,6 +246,10 @@ describe('openclaw-web-search-config', () => {
       duckduckgo: {
         available: true,
         source: 'built-in',
+      },
+      geesearch: {
+        available: true,
+        source: 'saved',
       },
       kimi: {
         available: true,
@@ -282,6 +313,67 @@ describe('openclaw-web-search-config', () => {
         },
       },
     });
+  });
+
+  it('reads and writes GeeSearch config under the GeeClaw plugin schema key', () => {
+    const config: Record<string, unknown> = {
+      plugins: {
+        entries: {
+          'geeclaw-plugin': {
+            enabled: true,
+            config: {
+              geesearch: {
+                apiKey: 'geekai-existing',
+                model: 'glm-search-pro',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    expect(readWebSearchSettingsSnapshot(config).providerConfigByProvider.geesearch).toEqual({
+      apiKey: 'geekai-existing',
+      model: 'glm-search-pro',
+    });
+
+    const changed = applyWebSearchSettingsPatch(config, {
+      enabled: true,
+      provider: 'geesearch',
+      providerConfig: {
+        providerId: 'geesearch',
+        values: {
+          apiKey: 'geekai-updated',
+          model: 'glm-search-pro-sogou',
+        },
+      },
+    });
+
+    expect(changed).toBe(true);
+    expect(config).toMatchObject({
+      tools: {
+        web: {
+          search: {
+            enabled: true,
+            provider: 'geesearch',
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          'geeclaw-plugin': {
+            enabled: true,
+            config: {
+              geesearch: {
+                apiKey: 'geekai-updated',
+                model: 'glm-search-pro-sogou',
+              },
+            },
+          },
+        },
+      },
+    });
+    expect((config.plugins as any)?.entries?.['geeclaw-plugin']?.config?.webSearch).toBeUndefined();
   });
 
   it('enables the selected brave plugin when saving brave as the provider', () => {

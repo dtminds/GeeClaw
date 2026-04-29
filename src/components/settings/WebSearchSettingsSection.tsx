@@ -108,6 +108,17 @@ function getLocalizedProviderRuntimeHint(
   });
 }
 
+function getLocalizedProviderAutoExcludedHint(
+  provider: WebSearchProviderDescriptor,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  return t(`webSearch.providers.${provider.providerId}.autoExcludedHint`, {
+    defaultValue: t('webSearch.provider.autoExcludedHint', {
+      defaultValue: provider.autoSelectionHint,
+    }),
+  });
+}
+
 function formatProviderList(labels: string[], locale: string): string {
   if (labels.length === 0) {
     return '';
@@ -271,12 +282,14 @@ export function WebSearchSettingsSection() {
   const savedSelectedProviderConfig = selectedProvider
     ? (savedProviderConfigByProvider[selectedProvider.providerId] ?? {})
     : {};
-  const availableProviders = visibleProviders.filter((entry) => entry.availability?.available);
+  const availableAutoProviders = visibleProviders.filter((entry) => (
+    entry.availability?.available && entry.autoSelectable !== false
+  ));
   const locale = i18n?.resolvedLanguage ?? i18n?.language ?? 'en';
-  const automaticProviderHelp = availableProviders.length > 0
+  const automaticProviderHelp = availableAutoProviders.length > 0
     ? t('webSearch.shared.autoReady', {
       providers: formatProviderList(
-        availableProviders.map((entry) => entry.label),
+        availableAutoProviders.map((entry) => entry.label),
         locale,
       ),
     })
@@ -743,6 +756,12 @@ export function WebSearchSettingsSection() {
                       {selectedProvider.runtimeRequirementHint ? (
                         <div className="rounded-2xl border border-black/8 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.03]">
                           <p className="text-sm text-muted-foreground">{getLocalizedProviderRuntimeHint(selectedProvider, t)}</p>
+                        </div>
+                      ) : null}
+
+                      {selectedProvider.autoSelectable === false ? (
+                        <div className="rounded-2xl border border-black/8 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                          <p className="text-sm text-muted-foreground">{getLocalizedProviderAutoExcludedHint(selectedProvider, t)}</p>
                         </div>
                       ) : null}
 

@@ -16,9 +16,12 @@ export type WebSearchProviderAvailability = {
 export type WebSearchProviderDescriptor = {
   providerId: string;
   pluginId: string;
+  configKey?: string;
   label: string;
   hint: string;
   autoDetectOrder?: number;
+  autoSelectable?: boolean;
+  autoSelectionHint?: string;
   requiresCredential?: boolean;
   credentialPath?: string;
   availabilityKind?: 'secret' | 'config' | 'runtime' | 'none';

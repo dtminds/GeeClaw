@@ -317,6 +317,7 @@ export function persistChannelDefault(stateDir, channel, accountId, to, agentId)
     const effectiveAgentId = agentId || MAIN_AGENT_ID;
     const effectiveAccountId = accountId || DEFAULT_ACCOUNT_ID;
     try {
+        // Keep this tiny best-effort read-modify-write synchronous to avoid lost updates.
         fs.mkdirSync(resolvedDir, { recursive: true });
         let defaults = {};
         if (fs.existsSync(filePath)) {

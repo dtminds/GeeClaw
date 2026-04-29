@@ -109,9 +109,15 @@
       "builtIn": "内置可用",
       "runtimePrereq": "需先启动",
       "unavailable": "未就绪",
+      "autoExcludedHint": "此服务需要设为默认搜索服务后才会生效",
       "envFallback": "可留空，留空则从环境变量中读取：{{envVars}}",
       "reveal": "显示值",
       "hide": "隐藏值"
+    },
+    "providers": {
+      "geesearch": {
+        "autoExcludedHint": "GeeSearch 需要设为默认搜索服务后才会生效"
+      }
     },
     "actions": {
       "save": "保存设置",

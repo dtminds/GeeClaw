@@ -463,4 +463,36 @@ describe('gateway supervisor process cleanup', () => {
     );
     expect(processKillSpy).not.toHaveBeenCalledWith(4321, 'SIGTERM');
   });
+
+  it('allows explicit attach to a foreign OpenClaw-compatible gateway even when foreign rejection is enabled', async () => {
+    setPlatform('darwin');
+    mockFetch.mockResolvedValue({ ok: true });
+    const processKillSpy = vi.spyOn(process, 'kill').mockImplementation((() => true) as typeof process.kill);
+
+    mockExec.mockImplementation((...args: unknown[]) => {
+      const [cmd, options, callback] = args as [string, object, (err: Error | null, stdout: string) => void];
+      void options;
+      if (cmd === 'lsof -i :28788 -sTCP:LISTEN -t') {
+        callback(null, '4321\n');
+        return {} as never;
+      }
+      callback(null, '');
+      return {} as never;
+    });
+
+    const { findExistingGatewayProcess } = await import('@electron/gateway/supervisor');
+
+    await expect(findExistingGatewayProcess({
+      port: 28788,
+      terminateForeignProcess: false,
+      allowForeignAttach: true,
+      rejectForeignProcess: true,
+    })).resolves.toEqual({ port: 28788 });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:28788/healthz',
+      expect.objectContaining({ method: 'HEAD' }),
+    );
+    expect(processKillSpy).not.toHaveBeenCalledWith(4321, 'SIGTERM');
+  });
 });

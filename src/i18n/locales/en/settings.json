@@ -109,9 +109,15 @@
       "builtIn": "Built In",
       "runtimePrereq": "Needs Runtime",
       "unavailable": "Not Ready",
+      "autoExcludedHint": "This provider only works when set as the default search service.",
       "envFallback": "Leave blank to use env vars: {{envVars}}",
       "reveal": "Show value",
       "hide": "Hide value"
+    },
+    "providers": {
+      "geesearch": {
+        "autoExcludedHint": "GeeSearch only works when set as the default search service."
+      }
     },
     "actions": {
       "save": "Save",

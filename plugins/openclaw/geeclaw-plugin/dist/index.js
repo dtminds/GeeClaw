@@ -10,6 +10,7 @@
  * - tool-sandbox
  * - evolution-proposal
  * - qmemory
+ * - geesearch
  */
 import { HookProxy } from './core/hook-proxy.js';
 import { FetchChain } from './core/fetch-chain.js';
@@ -25,6 +26,7 @@ import toolSandbox from './packages/tool-sandbox/index.js';
 import qmemoryPkg from './packages/qmemory/index.js';
 import errorResponseHandler from './packages/error-response-handler/index.js';
 import evolutionProposal from './packages/evolution-proposal/index.js';
+import geesearchPkg from './packages/geesearch/index.js';
 const LOG_TAG = '[geeclaw-plugin]';
 /**
  * 所有功能 package 列表（顺序即初始化顺序）
@@ -36,6 +38,7 @@ const LOG_TAG = '[geeclaw-plugin]';
  *   - tool-sandbox
  *   - evolution-proposal
  *   - qmemory
+ *   - geesearch
  */
 const PACKAGES = [
     errorResponseHandler,
@@ -43,6 +46,7 @@ const PACKAGES = [
     toolSandbox,
     evolutionProposal,
     qmemoryPkg,
+    geesearchPkg,
 ];
 /** 已初始化的 package 实例（用于 getPublicApi 跨 package 通讯） */
 const initializedPackages = new Map();
@@ -53,7 +57,13 @@ const plugin = {
     configSchema: {
         type: 'object',
         additionalProperties: false,
-        properties: {},
+        properties: {
+            geesearch: geesearchPkg.configSchema ?? {
+                type: 'object',
+                additionalProperties: false,
+                properties: {},
+            },
+        },
     },
     register(api) {
         console.log(`${LOG_TAG} initializing with ${PACKAGES.length} package(s)...`);

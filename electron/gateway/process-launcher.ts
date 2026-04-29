@@ -123,6 +123,24 @@ export async function launchGatewayProcess(options: {
   const lastSpawnSummary = `mode=${mode}, runtime=${runtimeSource}, command="${commandPath}", entry="${entryScript ?? 'n/a'}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}"`;
 
   const runtimeEnv = { ...forkEnv };
+  // Disable OpenClaw's mDNS/Bonjour gateway advertiser unconditionally.
+  //
+  // The OpenClaw gateway advertises `_openclaw-gw._tcp.local` on every
+  // active network interface using a hardcoded `openclaw.local` hostname,
+  // which causes:
+  //   - cross-machine name collisions when multiple OpenClaw/GeeClaw peers
+  //     share a LAN (each falls back to "<name> (OpenClaw) (2)")
+  //   - self-collisions on multi-homed hosts (Wi-Fi + Tailscale + utun ...)
+  //   - "ghost" record collisions after an unclean GeeClaw exit, because
+  //     SIGKILL prevents ciao from emitting the mDNS goodbye record.
+  //
+  // GeeClaw has no UI for LAN gateway discovery today, so the advertiser is
+  // pure log noise.  `OPENCLAW_DISABLE_BONJOUR=1` short-circuits
+  // `startGatewayBonjourAdvertiser()` (openclaw `src/infra/bonjour.ts`,
+  // `isDisabledByEnv()`).  Set after the `forkEnv` spread so any
+  // pre-existing value inherited from the user shell cannot re-enable it.
+  runtimeEnv.OPENCLAW_DISABLE_BONJOUR = '1';
+
   if (!app.isPackaged && launchMode === 'fork') {
     try {
       const preloadPath = ensureGatewayFetchPreload();

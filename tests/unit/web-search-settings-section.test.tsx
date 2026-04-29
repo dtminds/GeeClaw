@@ -24,6 +24,8 @@ const translations: Record<string, string> = {
   'webSearch.provider.docs': 'Help',
   'webSearch.provider.emptyFields': 'No extra settings needed.',
   'webSearch.provider.runtimeHint': 'Requires a running local service.',
+  'webSearch.provider.autoExcludedHint': 'This provider only works when set as default.',
+  'webSearch.providers.geesearch.autoExcludedHint': 'GeeSearch only works when set as the default search service.',
   'webSearch.provider.default': 'Default',
   'webSearch.providers.ollama.runtimeHint': 'Requires a running local service.',
   'webSearch.provider.configured': 'Saved',
@@ -467,6 +469,68 @@ describe('WebSearchSettingsSection', () => {
     expect(screen.getByText("If you do not specify one, we'll use any search service that is ready.")).toBeInTheDocument();
     expect(screen.queryByLabelText('Perplexity API Key')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('does not present non-auto-selectable providers as ready in auto mode', async () => {
+    hostApiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/api/settings/web-search/providers') {
+        return {
+          providers: [
+            {
+              providerId: 'geesearch',
+              pluginId: 'geeclaw-plugin',
+              label: 'GeeSearch',
+              hint: 'GeeClaw managed web search',
+              autoSelectable: false,
+              availability: {
+                available: true,
+                source: 'saved',
+              },
+              envVarStatuses: {
+                GEECLAW_API_KEY: false,
+              },
+              envVars: ['GEECLAW_API_KEY'],
+              signupUrl: 'https://geekai.co',
+              fields: [
+                { key: 'apiKey', type: 'secret', label: 'GeeClaw API Key' },
+              ],
+            },
+          ],
+        };
+      }
+
+      if (path === '/api/settings/web-search' && (!init || init.method === undefined)) {
+        return {
+          search: {
+            enabled: true,
+            maxResults: 5,
+            timeoutSeconds: 30,
+            cacheTtlMinutes: 15,
+          },
+          providerConfigByProvider: {
+            geesearch: {
+              apiKey: 'geekai-test',
+            },
+          },
+        };
+      }
+
+      if (path === '/api/settings/web-search' && init?.method === 'PUT') {
+        return { success: true };
+      }
+
+      throw new Error(`Unhandled hostApiFetch call: ${path}`);
+    });
+
+    render(<WebSearchSettingsSection />);
+
+    expect(await screen.findByText('Web Search')).toBeInTheDocument();
+    expect(screen.getByText('No search service is ready yet. Add an API key first.')).toBeInTheDocument();
+    expect(screen.queryByText('Available now: GeeSearch')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /GeeSearch/ }));
+
+    expect(screen.getByText('GeeSearch only works when set as the default search service.')).toBeInTheDocument();
   });
 
   it('uses the same compact header action style for auto-mode set default', async () => {

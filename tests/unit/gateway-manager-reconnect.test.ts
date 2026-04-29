@@ -186,6 +186,145 @@ describe('GatewayManager auto reconnect', () => {
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
 
+  it('allows one auto-reconnect attach to a compatible listener after the owned child exits unexpectedly', async () => {
+    vi.doUnmock('@electron/gateway/startup-orchestrator');
+
+    const ws = {
+      readyState: 1,
+      on: vi.fn(),
+      ping: vi.fn(),
+      terminate: vi.fn(),
+      send: vi.fn(),
+    };
+
+    let emitExit: ((code: number | null) => void) | null = null;
+
+    findExistingGatewayProcessMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ port: 28788 });
+
+    connectGatewaySocketMock.mockImplementation(async (options) => {
+      options.onHandshakeComplete(ws as never);
+      return ws as never;
+    });
+
+    launchGatewayProcessMock.mockImplementation(async (options) => {
+      const child = new MockGatewayChild();
+      emitExit = (code: number | null) => {
+        options.onExit(child as never, code);
+      };
+      options.onSpawn(child.pid);
+      return {
+        child: child as never,
+        lastSpawnSummary: 'mock-spawn',
+      };
+    });
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    await manager.start();
+    emitExit?.(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await vi.waitFor(() => {
+      expect(findExistingGatewayProcessMock).toHaveBeenCalledTimes(2);
+    });
+    expect(findExistingGatewayProcessMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      allowForeignAttach: true,
+      rejectForeignProcess: true,
+    }));
+    expect(manager.getStatus()).toMatchObject({
+      state: 'running',
+      port: 28788,
+      pid: undefined,
+    });
+
+    (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
+  });
+
+  it('allows auto-reconnect attach after the owned child exits before becoming ready', async () => {
+    vi.doUnmock('@electron/gateway/startup-orchestrator');
+
+    const ws = {
+      readyState: 1,
+      on: vi.fn(),
+      ping: vi.fn(),
+      terminate: vi.fn(),
+      send: vi.fn(),
+    };
+
+    let emitExit: ((code: number | null) => void) | null = null;
+    let lookupCount = 0;
+
+    findExistingGatewayProcessMock.mockImplementation(async (options) => {
+      lookupCount += 1;
+      if (lookupCount === 1) {
+        return null;
+      }
+      if (options.allowForeignAttach) {
+        return { port: 28788 };
+      }
+      throw new Error('Port 28788 is already in use by another OpenClaw-compatible process');
+    });
+
+    connectGatewaySocketMock.mockImplementation(async (options) => {
+      options.onHandshakeComplete(ws as never);
+      return ws as never;
+    });
+
+    launchGatewayProcessMock.mockImplementation(async (options) => {
+      const child = new MockGatewayChild();
+      emitExit = (code: number | null) => {
+        options.onExit(child as never, code);
+      };
+      options.onSpawn(child.pid);
+      return {
+        child: child as never,
+        lastSpawnSummary: 'mock-spawn',
+      };
+    });
+
+    waitForGatewayReadyMock.mockImplementationOnce(async () => {
+      emitExit?.(1);
+      throw new Error('Gateway process exited before becoming ready (code=1)');
+    });
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    (
+      manager as unknown as {
+        reconnectAttempts: number;
+        isAutoReconnectStart?: boolean;
+      }
+    ).reconnectAttempts = 1;
+    (
+      manager as unknown as {
+        reconnectAttempts: number;
+        isAutoReconnectStart?: boolean;
+      }
+    ).isAutoReconnectStart = true;
+
+    const startExpectation = expect(manager.start()).resolves.toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(3000);
+    await startExpectation;
+
+    expect(findExistingGatewayProcessMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      allowForeignAttach: true,
+      rejectForeignProcess: true,
+    }));
+    expect(manager.getStatus()).toMatchObject({
+      state: 'running',
+      port: 28788,
+      pid: undefined,
+    });
+
+    (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
+  });
+
   it('records restart completion when reconnecting to the owned process', async () => {
     vi.doMock('@electron/gateway/startup-orchestrator', () => ({
       runGatewayStartupSequence: runGatewayStartupSequenceMock,
