@@ -1364,13 +1364,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const returnedRunId = result.result?.runId;
-      if (returnedRunId && currentSendGeneration !== _sendGeneration) {
-        rememberAbortedRunId(returnedRunId);
-        unblockUnknownAbortedRunEvents();
-        return;
-      }
-
       if (currentSendGeneration !== _sendGeneration) {
+        if (returnedRunId) {
+          rememberAbortedRunId(returnedRunId);
+          unblockUnknownAbortedRunEvents();
+        }
         return;
       }
 
