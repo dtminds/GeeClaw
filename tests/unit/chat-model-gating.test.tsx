@@ -10,6 +10,7 @@ const chatState = {
   loading: false,
   sending: false,
   error: null,
+  runError: null,
   showThinking: false,
   showToolCalls: true,
   streamingText: '',
@@ -125,6 +126,8 @@ describe('Chat model gating', () => {
     vi.clearAllMocks();
     capturedChatInputProps.length = 0;
     chatState.loading = false;
+    chatState.error = null;
+    chatState.runError = null;
     hostApiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/api/agents/default-model') {
         return {
@@ -201,6 +204,43 @@ describe('Chat model gating', () => {
         },
       });
     });
+  });
+
+  it('renders terminal model errors as an in-chat run error callout', async () => {
+    chatState.runError = '404 Resource not found';
+    hostApiFetchMock.mockImplementationOnce(async (path: string) => {
+      if (path === '/api/agents/default-model') {
+        return {
+          model: { configured: true, primary: 'openai/gpt-5.4', fallbacks: [] },
+          imageModel: { configured: false, primary: null, fallbacks: [] },
+          pdfModel: { configured: false, primary: null, fallbacks: [] },
+          imageGenerationModel: { configured: false, primary: null, fallbacks: [] },
+          videoGenerationModel: { configured: false, primary: null, fallbacks: [] },
+          primary: 'openai/gpt-5.4',
+          fallbacks: [],
+          availableModels: [
+            {
+              providerId: 'openai',
+              providerName: 'OpenAI',
+              modelRefs: ['openai/gpt-5.4'],
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const { Chat } = await import('@/pages/Chat');
+    const { screen } = await import('@testing-library/react');
+
+    render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Chat />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('runError.title')).toBeInTheDocument();
+    expect(screen.getByText('404 Resource not found')).toBeInTheDocument();
   });
 
   it('shows the brand orb and disables the composer while chat history is loading', async () => {

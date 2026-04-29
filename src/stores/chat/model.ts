@@ -26,6 +26,8 @@ export interface RawMessage {
   model?: string;
   stopReason?: string;
   stop_reason?: string;
+  errorMessage?: string;
+  error_message?: string;
   usage?: {
     input?: number;
     output?: number;

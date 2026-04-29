@@ -146,3 +146,52 @@ describe('chat store internal final message handling', () => {
     expect(useChatStore.getState().streamingText).toBe('');
   });
 });
+
+describe('chat store terminal model error handling', () => {
+  beforeEach(() => {
+    useAgentsStore.setState(initialAgentsState, true);
+    useChatStore.setState(initialChatState, true);
+    useGatewayStore.setState(initialGatewayState, true);
+  });
+
+  it('treats assistant finals with stopReason=error as terminal run errors', () => {
+    useChatStore.setState({
+      currentSessionKey: 'agent:main:geeclaw_main',
+      currentAgentId: 'main',
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: 'run-model-error',
+      pendingFinal: true,
+      streamingText: '',
+      messages: [
+        { role: 'user', content: '你是什么模型？', id: 'u1', timestamp: 1 },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-model-error',
+      sessionKey: 'agent:main:geeclaw_main',
+      message: {
+        role: 'assistant',
+        id: 'assistant-error',
+        content: [],
+        stopReason: 'error',
+        errorMessage: '404 Resource not found',
+        timestamp: 2,
+      },
+    });
+
+    const state = useChatStore.getState() as unknown as {
+      error: string | null;
+      runError: string | null;
+      sending: boolean;
+      activeRunId: string | null;
+      pendingFinal: boolean;
+    };
+    expect(state.error).toBeNull();
+    expect(state.runError).toBe('404 Resource not found');
+    expect(state.sending).toBe(false);
+    expect(state.activeRunId).toBeNull();
+    expect(state.pendingFinal).toBe(false);
+  });
+});

@@ -126,6 +126,7 @@ export function Chat() {
   const loading = useChatStore((s) => s.loading);
   const sending = useChatStore((s) => s.sending);
   const error = useChatStore((s) => s.error);
+  const runError = useChatStore((s) => s.runError);
   const showThinking = useChatStore((s) => s.showThinking);
   const showToolCalls = useChatStore((s) => s.showToolCalls);
   const streamingText = useChatStore((s) => s.streamingText);
@@ -412,6 +413,29 @@ export function Chat() {
               </button>
             )}
           </div>
+
+          {/* Terminal run error */}
+          {runError && (
+            <div className="border-t border-destructive/20 bg-destructive/10 px-4 py-3">
+              <div className="mx-auto flex max-w-4xl items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {t('runError.title')}
+                  </p>
+                  <p className="mt-1 break-words text-sm text-destructive/90">
+                    {runError}
+                  </p>
+                </div>
+                <button
+                  onClick={clearError}
+                  className="shrink-0 text-xs text-destructive/60 underline hover:text-destructive"
+                >
+                  {t('common:actions.dismiss')}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Error bar */}
           {error && (

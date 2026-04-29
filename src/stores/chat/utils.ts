@@ -30,6 +30,50 @@ export function getMessageText(content: unknown): string {
   return '';
 }
 
+export function getMessageStopReason(message: RawMessage | unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+  const rawStopReason = (message as Record<string, unknown>).stopReason
+    ?? (message as Record<string, unknown>).stop_reason;
+  if (typeof rawStopReason !== 'string') return null;
+  const normalized = rawStopReason.trim().toLowerCase();
+  return normalized || null;
+}
+
+export function getMessageErrorMessage(message: RawMessage | unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+  const rawError = (message as Record<string, unknown>).errorMessage
+    ?? (message as Record<string, unknown>).error_message;
+  if (typeof rawError !== 'string') return null;
+  const normalized = rawError.trim();
+  return normalized || null;
+}
+
+export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): boolean {
+  if (!message || typeof message !== 'object') return false;
+  const role = (message as Record<string, unknown>).role;
+  return role === 'assistant' && getMessageStopReason(message) === 'error';
+}
+
+export function getLatestTerminalAssistantRunError(
+  messages: RawMessage[],
+  afterTimestamp: number | null | undefined,
+): string | null {
+  const afterMs = typeof afterTimestamp === 'number' ? toMs(afterTimestamp) : 0;
+  const isAfterTimestamp = (message: RawMessage): boolean => {
+    if (!afterMs || typeof message.timestamp !== 'number') return true;
+    return toMs(message.timestamp) >= afterMs;
+  };
+
+  const latestConversationTurn = [...messages].reverse().find((message) => (
+    (message.role === 'assistant' || message.role === 'user') && isAfterTimestamp(message)
+  ));
+  if (!latestConversationTurn || !isTerminalAssistantErrorMessage(latestConversationTurn)) {
+    return null;
+  }
+
+  return getMessageErrorMessage(latestConversationTurn) ?? 'An error occurred';
+}
+
 export function isInternalMessage(message: RawMessage): boolean {
   const role = typeof message.role === 'string' ? message.role.toLowerCase() : '';
   if (role === 'system') {

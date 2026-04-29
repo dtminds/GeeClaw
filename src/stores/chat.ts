@@ -77,10 +77,14 @@ import {
 import {
   extractTextFromRuntimeMessage,
   extractToolOutputText,
+  getLatestTerminalAssistantRunError,
+  getMessageErrorMessage,
   getMessageText,
+  getMessageStopReason,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
   isInternalMessage,
+  isTerminalAssistantErrorMessage,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
   toSessionPreview,
@@ -746,7 +750,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
     const request = createHistoryRequestSnapshot(get());
-    if (!quiet) set({ loading: true, error: null });
+    if (!quiet) set({ loading: true, error: null, runError: null });
 
     if (currentViewMode === 'cron' && selectedCronRun) {
       try {
@@ -774,6 +778,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages, {
           artifactBaseDir: resolveAgentWorkspace(selectedCronRun.agentId || get().currentAgentId),
         });
+        const latestTerminalAssistantError = getLatestTerminalAssistantRunError(
+          rawMessages,
+          get().lastUserMessageAt,
+        );
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
@@ -783,6 +791,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           thinkingLevel: null,
           loading: false,
           error: null,
+          runError: latestTerminalAssistantError,
           ...reconcileToolRuntimeWithHistory(
             state.toolStreamOrder,
             state.toolStreamById,
@@ -796,7 +805,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: [], loading: false, error: String(err) });
+        set({ messages: [], loading: false, error: String(err), runError: null });
       }
       return;
     }
@@ -819,6 +828,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
+        const latestTerminalAssistantError = getLatestTerminalAssistantRunError(
+          rawMessages,
+          get().lastUserMessageAt,
+        );
 
         // Before filtering: attach images/files from tool_result messages to the next assistant message
         const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages, {
@@ -839,6 +852,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
+        if (latestTerminalAssistantError) {
+          clearHistoryPoll();
+          clearErrorRecoveryTimer();
+          set({
+            messages: finalMessages,
+            thinkingLevel,
+            loading: false,
+            error: null,
+            ...createRunResetState(),
+            runError: latestTerminalAssistantError,
+          });
+          logChatTrace('loadHistory:terminal-run-error', {
+            quiet,
+            mode,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            error: latestTerminalAssistantError,
+            ...summarizeChatSelection(get()),
+          });
+          return;
+        }
         const toolPatchOnlyHistoryReload = mode === 'tool_patch';
         if (toolPatchOnlyHistoryReload) {
           set((state) => ({
@@ -846,6 +880,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             thinkingLevel,
             loading: false,
             error: null,
+            runError: null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -871,6 +906,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             messages: state.messages,
             loading: false,
             error: null,
+            runError: null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -893,6 +929,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           thinkingLevel,
           loading: false,
           error: null,
+          runError: null,
           ...reconcileToolRuntimeWithHistory(
             state.toolStreamOrder,
             state.toolStreamById,
@@ -1019,7 +1056,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: [], loading: false, error: null });
+        set({ messages: [], loading: false, error: null, runError: null });
         logChatTrace('loadHistory:empty', {
           quiet,
           durationMs: Date.now() - startedAt,
@@ -1050,6 +1087,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             });
             set({
               error: String(err),
+              runError: null,
               loading: false,
               ...(keepLoading ? { messages: [] } : {}),
             });
@@ -1062,6 +1100,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           };
           set({
             error: null,
+            runError: null,
             loading: keepLoading,
           });
           _historyStartupRetryTimer = setTimeout(() => {
@@ -1107,7 +1146,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!isSameHistoryRequest(request, get())) {
         return;
       }
-      set({ messages: [], loading: false });
+      set({ messages: [], loading: false, runError: null });
     }
   },
 
@@ -1217,6 +1256,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isDraftSession,
       sending: true,
       error: null,
+      runError: null,
       ...createEmptyToolRuntimeState(),
       streamingTextStartedAt: nowMs / 1000,
       pendingFinal: false,
@@ -1308,6 +1348,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       set({
         error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
+        runError: null,
         sending: false,
         activeRunId: null,
         lastUserMessageAt: null,
@@ -1394,10 +1435,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...summarizeChatSelection(get()),
           });
           console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
-          set({ error: errorMsg });
+          set({ error: errorMsg, runError: null });
         } else {
           clearHistoryPoll();
-          set({ error: errorMsg, sending: false, ...createEmptyToolRuntimeState() });
+          set({ error: errorMsg, runError: null, sending: false, ...createEmptyToolRuntimeState() });
           unblockUnknownAbortedRunEvents();
         }
       } else if (get().sending) {
@@ -1432,10 +1473,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...summarizeChatSelection(get()),
         });
         console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
-        set({ error: errStr });
+        set({ error: errStr, runError: null });
       } else {
         clearHistoryPoll();
-        set({ error: errStr, sending: false, ...createEmptyToolRuntimeState() });
+        set({ error: errStr, runError: null, sending: false, ...createEmptyToolRuntimeState() });
         unblockUnknownAbortedRunEvents();
       }
     }
@@ -1462,7 +1503,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         { sessionKey: currentSessionKey },
       );
     } catch (err) {
-      set({ error: String(err) });
+      set({ error: String(err), runError: null });
     }
   },
 
@@ -1505,9 +1546,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Defensive: if state is missing but we have a message, try to infer state.
     let resolvedState = eventState;
-    if (!resolvedState && event.message && typeof event.message === 'object') {
+    const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
+    if (terminalAssistantError) {
+      resolvedState = 'error';
+    } else if (!resolvedState && event.message && typeof event.message === 'object') {
       const msg = event.message as Record<string, unknown>;
-      const stopReason = msg.stopReason ?? msg.stop_reason;
+      const stopReason = getMessageStopReason(event.message);
       if (stopReason) {
         resolvedState = 'final';
       } else if (msg.role || msg.content) {
@@ -1527,7 +1571,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // show loading/streaming in the app when this session has an active run.
       const { sending } = get();
       if (!sending && runId) {
-        set({ sending: true, activeRunId: runId, error: null });
+        set({ sending: true, activeRunId: runId, error: null, runError: null });
       }
     }
 
@@ -1536,7 +1580,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Run just started (e.g. from console); show loading immediately.
         const { sending: currentSending } = get();
         if (!currentSending && runId) {
-          set({ sending: true, activeRunId: runId, error: null });
+          set({ sending: true, activeRunId: runId, error: null, runError: null });
         }
         break;
       }
@@ -1544,8 +1588,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (_errorRecoveryTimer) {
           clearErrorRecoveryTimer();
         }
-        if (get().error) {
-          set({ error: null });
+        if (get().error || get().runError) {
+          set({ error: null, runError: null });
         }
         const nextText = extractTextFromRuntimeMessage(event.message);
         const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
@@ -1587,9 +1631,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       case 'final': {
         clearErrorRecoveryTimer();
-        if (get().error) set({ error: null });
+        if (get().error || get().runError) set({ error: null, runError: null });
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
+          if (isTerminalAssistantErrorMessage(finalMsg)) {
+            get().handleChatEvent({
+              ...event,
+              state: 'error',
+              errorMessage: getMessageErrorMessage(finalMsg) ?? event.errorMessage,
+              message: finalMsg,
+            });
+            break;
+          }
+
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [];
             const toolFileIds = new Set<string>();
@@ -1811,7 +1865,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'error': {
-        const errorMsg = String(event.errorMessage || 'An error occurred');
+        const terminalAssistantRunError = isTerminalAssistantErrorMessage(event.message);
+        const errorMsg = String(
+          event.errorMessage
+          || getMessageErrorMessage(event.message)
+          || 'An error occurred',
+        );
         const wasSending = get().sending;
         const { streamingText, streamingTextStartedAt } = get();
 
@@ -1830,7 +1889,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         set({
-          error: errorMsg,
+          error: terminalAssistantRunError ? null : errorMsg,
+          runError: terminalAssistantRunError ? errorMsg : null,
           ...createEmptyToolRuntimeState(),
           pendingFinal: false,
           lastUserMessageAt: null,
@@ -1840,6 +1900,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
+
+        if (terminalAssistantRunError) {
+          clearHistoryPoll();
+          clearErrorRecoveryTimer();
+          set({
+            sending: false,
+            activeRunId: null,
+            lastUserMessageAt: null,
+            pendingOptimisticUserId: null,
+            pendingOptimisticUserAnchorAt: null,
+            pendingOptimisticUserIndex: null,
+          });
+          break;
+        }
 
         // Don't immediately give up: the Gateway often retries internally
         // after transient API failures (e.g. "terminated"). Keep `sending`
@@ -1970,7 +2044,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (_errorRecoveryTimer) {
       clearErrorRecoveryTimer();
-      set({ error: null });
+      set({ error: null, runError: null });
     }
 
     set((s) => {
@@ -2037,6 +2111,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // active chat run id stable so later text deltas are not filtered out.
         activeRunId: s.activeRunId,
         error: null,
+        runError: null,
         pendingFinal: phase === 'result' ? true : s.pendingFinal,
         streamingText: nextStreamingText,
         streamingTextStartedAt: nextStreamingTextStartedAt,
@@ -2097,7 +2172,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ error: null, runError: null }),
 
   queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => set({
     pendingComposerSeed: {

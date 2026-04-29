@@ -27,6 +27,7 @@ describe('chat store state helpers', () => {
       ...createEmptyToolRuntimeState(),
       activeRunId: null,
       error: null,
+      runError: null,
       pendingFinal: false,
       lastUserMessageAt: null,
       pendingOptimisticUserId: null,

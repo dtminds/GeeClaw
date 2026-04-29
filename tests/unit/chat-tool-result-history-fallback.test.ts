@@ -11,6 +11,75 @@ describe('chat tool result history fallback', () => {
     useGatewayStore.setState(initialGatewayState, true);
   });
 
+  it('surfaces terminal assistant errors from quiet history reloads during an active send', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            {
+              role: 'user',
+              id: 'user-model-error',
+              content: '你是什么模型？',
+              timestamp: 1_777_000_010,
+            },
+            {
+              role: 'assistant',
+              id: 'assistant-model-error',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '404 Resource not found',
+              timestamp: 1_777_000_011,
+            },
+          ],
+        };
+      }
+
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+
+      throw new Error(`Unexpected RPC method: ${method}`);
+    });
+
+    useGatewayStore.setState({
+      rpc: rpcMock as never,
+    });
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: 'run-model-error',
+      pendingFinal: true,
+      lastUserMessageAt: 1_777_000_010_000,
+      messages: [
+        {
+          role: 'user',
+          id: 'optimistic-user',
+          content: '你是什么模型？',
+          timestamp: 1_777_000_010,
+        },
+      ],
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const state = useChatStore.getState() as unknown as {
+      runError: string | null;
+      error: string | null;
+      sending: boolean;
+      activeRunId: string | null;
+      pendingFinal: boolean;
+      lastUserMessageAt: number | null;
+      messages: Array<{ id?: string; role: string }>;
+    };
+    expect(state.runError).toBe('404 Resource not found');
+    expect(state.error).toBeNull();
+    expect(state.sending).toBe(false);
+    expect(state.activeRunId).toBeNull();
+    expect(state.pendingFinal).toBe(false);
+    expect(state.lastUserMessageAt).toBeNull();
+  });
+
   it('triggers a quiet history reload once per tool call when a tool result stream ends without output', () => {
     const loadHistoryMock = vi.fn().mockResolvedValue(undefined);
     useChatStore.setState({

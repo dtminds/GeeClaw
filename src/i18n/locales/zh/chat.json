@@ -16,6 +16,9 @@
     "assistant": {
         "emptyResponse": "⚠️ 模型服务并未返回有效内容"
     },
+    "runError": {
+        "title": "模型调用失败"
+    },
     "toolbar": {
         "refresh": "刷新聊天",
         "thinking": "思考过程",

@@ -16,6 +16,9 @@
     "assistant": {
         "emptyResponse": "The model service did not return valid content"
     },
+    "runError": {
+        "title": "Model request failed"
+    },
     "toolbar": {
         "refresh": "Refresh chat",
         "thinking": "Thinking",
