@@ -16,6 +16,7 @@ import {
 
 const GEECLAW_BEGIN = '<!-- geeclaw:begin -->';
 const GEECLAW_END = '<!-- geeclaw:end -->';
+const OPENCLAW_FIRST_RUN_BODY = "If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -38,6 +39,30 @@ export function mergeGeeClawSection(existing: string, section: string): string {
     return existing.slice(0, beginIdx) + wrapped + existing.slice(endIdx + GEECLAW_END.length);
   }
   return existing.trimEnd() + '\n\n' + wrapped + '\n';
+}
+
+function stripStaleOpenClawFirstRunSection(content: string): string {
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
+  const hadFinalNewline = /(?:\r?\n)$/.test(content);
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === '## First Run');
+  if (start === -1) return content;
+
+  let cursor = start + 1;
+  while (cursor < lines.length && lines[cursor].trim() === '') cursor++;
+  if (lines[cursor]?.trim() !== OPENCLAW_FIRST_RUN_BODY) return content;
+
+  cursor++;
+  while (cursor < lines.length && lines[cursor].trim() === '') cursor++;
+  if (cursor < lines.length && !/^#+\s+/.test(lines[cursor])) return content;
+
+  const before = lines.slice(0, start);
+  const after = lines.slice(cursor);
+  while (before.length > 0 && before[before.length - 1].trim() === '') before.pop();
+  while (after.length > 0 && after[0].trim() === '') after.shift();
+
+  const merged = before.length > 0 && after.length > 0 ? [...before, '', ...after] : [...before, ...after];
+  return merged.join(newline) + (hadFinalNewline && merged.length > 0 ? newline : '');
 }
 
 // ── Workspace directory resolution ───────────────────────────────
@@ -178,10 +203,14 @@ async function mergeGeeClawContextOnce(): Promise<number> {
       }
 
       const section = await readFile(join(contextDir, file), 'utf-8');
-      const existing = await readFile(targetPath, 'utf-8');
+      const existingRaw = await readFile(targetPath, 'utf-8');
+      let existing = existingRaw;
+      if (targetName === 'AGENTS.md' && !(await fileExists(join(workspaceDir, 'BOOTSTRAP.md')))) {
+        existing = stripStaleOpenClawFirstRunSection(existingRaw);
+      }
 
       const merged = mergeGeeClawSection(existing, section);
-      if (merged !== existing) {
+      if (merged !== existingRaw) {
         await writeFile(targetPath, merged, 'utf-8');
         logger.info(`Merged GeeClaw context into ${targetName} (${workspaceDir})`);
       }

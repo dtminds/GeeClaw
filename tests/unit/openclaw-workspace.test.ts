@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { mkdtempSync } from 'fs';
@@ -98,5 +98,68 @@ describe('openclaw workspace context repair', () => {
     await ensureGeeClawContext();
 
     expect(existsSync(deletedWorkspaceDir)).toBe(false);
+  });
+
+  it('removes stale OpenClaw First Run instructions after BOOTSTRAP.md is gone', async () => {
+    vi.stubGlobal('setTimeout', ((callback: (...args: unknown[]) => void) => {
+      callback();
+      return 0;
+    }) as typeof setTimeout);
+
+    const rootDir = mkdtempSync(join(tmpdir(), 'openclaw-workspace-'));
+    const homeDir = join(rootDir, 'home');
+    const configDir = join(rootDir, '.openclaw-geeclaw');
+    const resourcesDir = join(rootDir, 'resources');
+    const contextDir = join(resourcesDir, 'context');
+    const workspaceDir = join(homeDir, 'geeclaw', 'workspace');
+
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(contextDir, { recursive: true });
+    mkdirSync(workspaceDir, { recursive: true });
+
+    writeFileSync(join(configDir, 'openclaw.json'), JSON.stringify({
+      agents: {
+        defaults: {
+          workspace: workspaceDir,
+        },
+        list: [],
+      },
+    }, null, 2), 'utf8');
+    writeFileSync(join(contextDir, 'AGENTS.geeclaw.md'), 'GeeClaw context\n', 'utf8');
+    writeFileSync(join(workspaceDir, 'AGENTS.md'), [
+      '# AGENTS.md',
+      '',
+      '## First Run',
+      '',
+      "If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.",
+      '',
+      '## Existing Section',
+      '',
+      'Keep this content.',
+      '',
+    ].join('\n'), 'utf8');
+
+    vi.doMock('os', () => ({
+      homedir: () => homeDir,
+      default: {
+        homedir: () => homeDir,
+      },
+    }));
+
+    vi.doMock('@electron/utils/paths', () => ({
+      getOpenClawConfigDir: () => configDir,
+      getResourcesDir: () => resourcesDir,
+      expandPath: (value: string) => value,
+    }));
+
+    const { ensureGeeClawContext } = await import('@electron/utils/openclaw-workspace');
+    await ensureGeeClawContext();
+
+    const content = readFileSync(join(workspaceDir, 'AGENTS.md'), 'utf8');
+    expect(content).not.toContain('## First Run');
+    expect(content).not.toContain('birth certificate');
+    expect(content).toContain('## Existing Section');
+    expect(content).toContain('<!-- geeclaw:begin -->');
   });
 });
