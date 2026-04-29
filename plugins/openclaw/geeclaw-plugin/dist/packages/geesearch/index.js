@@ -342,8 +342,11 @@ export function createGeeSearchProvider(config) {
         autoDetectOrder: 5,
         credentialPath: 'plugins.entries.geeclaw-plugin.config.geesearch.apiKey',
         inactiveSecretPaths: [],
-        getCredentialValue: () => resolveGeeClawApiKey(config.apiKey),
-        setCredentialValue: (_searchConfigTarget, value) => {
+        getCredentialValue: (searchConfig) => searchConfig && 'apiKey' in searchConfig
+            ? searchConfig.apiKey
+            : resolveGeeClawApiKey(config.apiKey),
+        setCredentialValue: (searchConfigTarget, value) => {
+            searchConfigTarget.apiKey = value;
             config.apiKey = readString(value);
         },
         createTool: (ctx) => {
