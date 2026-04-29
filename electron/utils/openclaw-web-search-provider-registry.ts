@@ -35,6 +35,8 @@ export type WebSearchProviderDescriptor = {
   signupUrl: string;
   docsUrl?: string;
   autoDetectOrder: number;
+  autoSelectable?: boolean;
+  autoSelectionHint?: string;
   requiresCredential: boolean;
   credentialPath: string;
   availabilityKind: WebSearchProviderAvailabilityKind;
@@ -52,9 +54,11 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
     label: 'GeeSearch',
     hint: 'GeekAI web search through the bundled GeeClaw plugin.',
     envVars: ['GEECLAW_API_KEY'],
-    signupUrl: 'https://geekai.co',
-    docsUrl: 'https://docs.geekai.co/cn/api/web_search',
+    signupUrl: 'https://www.geeclaw.cn',
+    docsUrl: 'https://gz44odmbj6.feishu.cn/docx/MqsAdc2WtozKE5xUzIfcw9Fbnue',
     autoDetectOrder: 0,
+    autoSelectable: false,
+    autoSelectionHint: 'GeeSearch only works when set as the default search service.',
     requiresCredential: true,
     credentialPath: 'plugins.entries.geeclaw-plugin.config.geesearch.apiKey',
     availabilityKind: 'secret',

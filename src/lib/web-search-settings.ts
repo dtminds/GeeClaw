@@ -20,6 +20,8 @@ export type WebSearchProviderDescriptor = {
   label: string;
   hint: string;
   autoDetectOrder?: number;
+  autoSelectable?: boolean;
+  autoSelectionHint?: string;
   requiresCredential?: boolean;
   credentialPath?: string;
   availabilityKind?: 'secret' | 'config' | 'runtime' | 'none';

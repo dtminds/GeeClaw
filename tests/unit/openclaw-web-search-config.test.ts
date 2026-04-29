@@ -164,6 +164,7 @@ describe('openclaw-web-search-config', () => {
     expect(geesearch).toMatchObject({
       pluginId: 'geeclaw-plugin',
       autoDetectOrder: 0,
+      autoSelectable: false,
       availabilityKind: 'secret',
       availabilityFieldKey: 'apiKey',
       requiresCredential: true,
