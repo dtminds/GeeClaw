@@ -23,6 +23,8 @@ const DEFAULT_GEESEARCH_CONFIG = {
     contentSize: 'medium',
     timeoutSeconds: 10,
 };
+const GEECLAW_PLUGIN_ID = 'geeclaw-plugin';
+const GEESEARCH_CONFIG_KEY = 'geesearch';
 const GEECLAW_API_KEY_ENV_VARS = ['GEECLAW_API_KEY'];
 const GEECLAW_WEB_SEARCH_PATH = '/web_search';
 const DEFAULT_GEESEARCH_COUNT = 5;
@@ -87,6 +89,43 @@ function resolveSearchCountBounds(searchConfig) {
         defaultCount: maxCount,
         maxCount,
     };
+}
+function resolveGeeSearchPluginConfig(config) {
+    if (!isRecord(config)) {
+        return undefined;
+    }
+    const plugins = isRecord(config.plugins) ? config.plugins : undefined;
+    const entries = isRecord(plugins?.entries) ? plugins.entries : undefined;
+    const entry = isRecord(entries?.[GEECLAW_PLUGIN_ID]) ? entries[GEECLAW_PLUGIN_ID] : undefined;
+    const pluginConfig = isRecord(entry?.config) ? entry.config : undefined;
+    const geesearch = isRecord(pluginConfig?.[GEESEARCH_CONFIG_KEY])
+        ? pluginConfig[GEESEARCH_CONFIG_KEY]
+        : undefined;
+    return geesearch;
+}
+function ensureObject(target, key) {
+    const current = target[key];
+    if (isRecord(current)) {
+        return current;
+    }
+    const next = {};
+    target[key] = next;
+    return next;
+}
+function setGeeSearchPluginConfigValue(configTarget, key, value) {
+    const plugins = ensureObject(configTarget, 'plugins');
+    const entries = ensureObject(plugins, 'entries');
+    const entry = ensureObject(entries, GEECLAW_PLUGIN_ID);
+    if (entry.enabled === undefined) {
+        entry.enabled = true;
+    }
+    const pluginConfig = ensureObject(entry, 'config');
+    const geesearch = ensureObject(pluginConfig, GEESEARCH_CONFIG_KEY);
+    geesearch[key] = value;
+}
+function resolveGeeSearchConfigForContext(ctx, fallback) {
+    const runtimeConfig = resolveGeeSearchPluginConfig(ctx.config);
+    return runtimeConfig ? parseGeeSearchConfig(runtimeConfig) : fallback;
 }
 function normalizeBaseUrl(value) {
     const raw = readString(value) ?? DEFAULT_GEESEARCH_CONFIG.baseUrl;
@@ -202,6 +241,16 @@ function resolveGeeClawApiKey(configured) {
         }
     }
     return undefined;
+}
+function resolveSearchConfigApiKey(searchConfig) {
+    const topLevel = readString(searchConfig?.apiKey);
+    if (topLevel) {
+        return topLevel;
+    }
+    const scoped = isRecord(searchConfig?.[GEESEARCH_CONFIG_KEY])
+        ? searchConfig[GEESEARCH_CONFIG_KEY]
+        : undefined;
+    return readString(scoped?.apiKey);
 }
 function buildGeeClawWebSearchBody(params) {
     const body = {
@@ -342,23 +391,31 @@ export function createGeeSearchProvider(config) {
         autoDetectOrder: 5,
         credentialPath: 'plugins.entries.geeclaw-plugin.config.geesearch.apiKey',
         inactiveSecretPaths: [],
-        getCredentialValue: (searchConfig) => searchConfig && 'apiKey' in searchConfig
-            ? searchConfig.apiKey
-            : resolveGeeClawApiKey(config.apiKey),
+        getCredentialValue: (searchConfig) => resolveSearchConfigApiKey(searchConfig) ?? resolveGeeClawApiKey(config.apiKey),
         setCredentialValue: (searchConfigTarget, value) => {
             searchConfigTarget.apiKey = value;
             config.apiKey = readString(value);
         },
+        getConfiguredCredentialValue: (runtimeConfig) => resolveGeeSearchPluginConfig(runtimeConfig)?.apiKey,
+        setConfiguredCredentialValue: (runtimeConfigTarget, value) => {
+            setGeeSearchPluginConfigValue(runtimeConfigTarget, 'apiKey', value);
+            config.apiKey = readString(value);
+        },
         createTool: (ctx) => {
-            if (!config.enabled) {
+            const toolConfig = resolveGeeSearchConfigForContext(ctx, config);
+            if (!toolConfig.enabled) {
                 return null;
             }
-            const countBounds = resolveSearchCountBounds(ctx.searchConfig);
             return {
                 description: 'Search the web using GeeSearch. Returns titles, URLs, snippets, site names, and icons from GeeClaw /web_search.',
                 parameters: GEESEARCH_PARAMS_SCHEMA,
                 execute: async (args) => {
                     const startedAt = performance.now();
+                    const runtimeConfig = resolveGeeSearchConfigForContext(ctx, config);
+                    if (!runtimeConfig.enabled) {
+                        throw new Error('GeeSearch provider is disabled.');
+                    }
+                    const countBounds = resolveSearchCountBounds(ctx.searchConfig);
                     const query = readQuery(args);
                     const count = clampInteger(args.count, countBounds.defaultCount, countBounds.maxCount);
                     const freshness = readString(args.freshness);
@@ -366,13 +423,13 @@ export function createGeeSearchProvider(config) {
                     const remote = await runRemoteGeeSearch({
                         query,
                         count,
-                        baseUrl: config.baseUrl,
-                        apiKey: config.apiKey,
-                        authType: config.authType,
-                        model: config.model,
-                        intent: config.intent,
-                        contentSize: config.contentSize,
-                        timeoutSeconds: config.timeoutSeconds,
+                        baseUrl: runtimeConfig.baseUrl,
+                        apiKey: resolveSearchConfigApiKey(ctx.searchConfig) ?? runtimeConfig.apiKey,
+                        authType: runtimeConfig.authType,
+                        model: runtimeConfig.model,
+                        intent: runtimeConfig.intent,
+                        contentSize: runtimeConfig.contentSize,
+                        timeoutSeconds: runtimeConfig.timeoutSeconds,
                         freshness,
                         sites,
                     });
@@ -435,6 +492,9 @@ const geesearchPkg = {
     parseConfig: parseGeeSearchConfig,
     setup(ctx) {
         const config = parseGeeSearchConfig(ctx.getConfig());
+        ctx.onConfigChange((nextConfig) => {
+            Object.assign(config, parseGeeSearchConfig(nextConfig));
+        });
         ctx.registerWebSearchProvider(createGeeSearchProvider(config));
         ctx.logger.info('GeeSearch provider registered');
     },
