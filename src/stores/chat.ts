@@ -204,6 +204,8 @@ function rememberAbortedRunId(runId: string): void {
     _abortedRunIds.add(runId);
     _abortedRunIdOrder.push(runId);
   }
+  _blockedChatEvents.delete(runId);
+  _blockedToolEvents.delete(runId);
   while (_abortedRunIdOrder.length > MAX_ABORTED_RUN_IDS) {
     const oldest = _abortedRunIdOrder.shift();
     if (oldest) {
@@ -242,6 +244,15 @@ function takeBlockedRunEvents(
   const events = queue.get(runId) ?? [];
   queue.delete(runId);
   return events;
+}
+
+export function __resetChatRuntimeGuardsForTests(): void {
+  _sendGeneration = 0;
+  _abortedRunIds.clear();
+  _abortedRunIdOrder.length = 0;
+  _blockUnknownAbortedRunEvents = false;
+  _blockedChatEvents.clear();
+  _blockedToolEvents.clear();
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
@@ -1367,7 +1378,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (currentSendGeneration !== _sendGeneration) {
         if (returnedRunId) {
           rememberAbortedRunId(returnedRunId);
-          unblockUnknownAbortedRunEvents();
+          if (!get().sending) {
+            unblockUnknownAbortedRunEvents();
+          }
         }
         return;
       }
@@ -1474,6 +1487,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (_blockUnknownAbortedRunEvents && runId) {
       if (eventState === 'aborted') {
         rememberAbortedRunId(runId);
+        if (get().sending) return;
         unblockUnknownAbortedRunEvents();
       } else {
         if (!activeRunId && get().sending) {
