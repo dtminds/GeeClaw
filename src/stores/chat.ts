@@ -1634,16 +1634,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (get().error || get().runError) set({ error: null, runError: null });
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
-          if (isTerminalAssistantErrorMessage(finalMsg)) {
-            get().handleChatEvent({
-              ...event,
-              state: 'error',
-              errorMessage: getMessageErrorMessage(finalMsg) ?? event.errorMessage,
-              message: finalMsg,
-            });
-            break;
-          }
-
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [];
             const toolFileIds = new Set<string>();
