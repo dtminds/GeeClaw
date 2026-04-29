@@ -98,9 +98,11 @@ export class GatewayManager extends EventEmitter {
   private readonly restartController = new GatewayRestartController();
   private reloadDebounceTimer: NodeJS.Timeout | null = null;
   private externalShutdownSupported: boolean | null = null;
+  private managedRespawnAttachUntil = 0;
   private static readonly HEARTBEAT_INTERVAL_MS = 30_000;
   private static readonly HEARTBEAT_TIMEOUT_MS = 12_000;
   private static readonly HEARTBEAT_MAX_MISSES = 3;
+  private static readonly MANAGED_RESPAWN_ATTACH_GRACE_MS = 30_000;
   private isAutoReconnectStart = false;
 
   constructor(config?: Partial<ReconnectConfig>) {
@@ -237,7 +239,8 @@ export class GatewayManager extends EventEmitter {
       logger.debug('Cleared pending reconnect timer because start was requested manually');
     }
 
-    if (!this.isAutoReconnectStart) {
+    const autoReconnectStart = this.isAutoReconnectStart;
+    if (!autoReconnectStart) {
       this.reconnectAttempts = 0;
     }
     this.isAutoReconnectStart = false;
@@ -248,6 +251,8 @@ export class GatewayManager extends EventEmitter {
     // Check if Python environment is ready (self-healing) asynchronously.
     // Fire-and-forget: only needs to run once, not on every retry.
     warmupManagedPythonReadiness();
+
+    let allowedManagedRespawnAttach = false;
 
     try {
       await runGatewayStartupSequence({
@@ -261,11 +266,17 @@ export class GatewayManager extends EventEmitter {
           this.lifecycleController.assert(startEpoch, phase);
         },
         findExistingGateway: async (port) => {
+          allowedManagedRespawnAttach = autoReconnectStart && Date.now() < this.managedRespawnAttachUntil;
+          if (allowedManagedRespawnAttach) {
+            logger.info(
+              `Gateway auto-reconnect may attach to a recently respawned managed listener on port ${port}`,
+            );
+          }
           return await findExistingGatewayProcess({
             port,
             ownedPid: this.process?.pid,
             terminateForeignProcess: false,
-            allowForeignAttach: false,
+            allowForeignAttach: allowedManagedRespawnAttach,
             rejectForeignProcess: true,
             reclaimLikelyGatewayResidue: true,
           });
@@ -275,9 +286,13 @@ export class GatewayManager extends EventEmitter {
         },
         onConnectedToExistingGateway: () => {
           const isOwnProcess = this.process?.pid != null && this.ownsProcess;
+          this.managedRespawnAttachUntil = 0;
           if (!isOwnProcess) {
             this.ownsProcess = false;
             this.setStatus({ pid: undefined });
+            if (allowedManagedRespawnAttach) {
+              logger.info('Gateway auto-reconnect attached to a recently respawned managed listener');
+            }
           } else {
             this.restartController.recordRestartCompleted();
           }
@@ -296,6 +311,7 @@ export class GatewayManager extends EventEmitter {
           });
         },
         onConnectedToManagedGateway: () => {
+          this.managedRespawnAttachUntil = 0;
           this.startHealthCheck();
           logger.debug('Gateway started successfully');
         },
@@ -758,6 +774,13 @@ export class GatewayManager extends EventEmitter {
       onExit: (exitedChild, code) => {
         this.processExitCode = code;
         const exitedOwnedChild = this.process === exitedChild;
+        const unexpectedOwnedExit = exitedOwnedChild && this.ownsProcess && this.shouldReconnect && this.status.state === 'running';
+        if (unexpectedOwnedExit) {
+          this.managedRespawnAttachUntil = Date.now() + GatewayManager.MANAGED_RESPAWN_ATTACH_GRACE_MS;
+          logger.warn(
+            `Owned Gateway process exited unexpectedly; allowing managed respawn attach for ${GatewayManager.MANAGED_RESPAWN_ATTACH_GRACE_MS}ms`,
+          );
+        }
         this.ownsProcess = false;
         if (exitedOwnedChild) {
           this.process = null;

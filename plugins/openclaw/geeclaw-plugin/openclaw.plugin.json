@@ -1,10 +1,63 @@
 {
-"id": "geeclaw-plugin",
+  "id": "geeclaw-plugin",
   "name": "GeeClaw 主插件",
   "description": "通过统一的 Hook 代理和 Fetch 中间件链协调执行。",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "webSearchProviders": ["geesearch"]
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "geesearch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "baseUrl": {
+            "type": "string",
+            "default": "https://geekai.co/api/v1"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "authType": {
+            "type": "string",
+            "enum": ["api-key", "bearer"],
+            "default": "api-key"
+          },
+          "model": {
+            "type": "string",
+            "default": "glm-search-std"
+          },
+          "intent": {
+            "type": "boolean",
+            "default": false
+          },
+          "contentSize": {
+            "type": "string",
+            "enum": ["medium", "high"],
+            "default": "medium"
+          },
+          "timeoutSeconds": {
+            "type": "number",
+            "minimum": 1,
+            "default": 10
+          },
+          "maxResults": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 5
+          }
+        }
+      }
+    }
   }
 }

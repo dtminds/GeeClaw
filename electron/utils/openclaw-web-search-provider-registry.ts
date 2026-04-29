@@ -3,6 +3,7 @@ export type WebSearchProviderId =
   | 'duckduckgo'
   | 'exa'
   | 'firecrawl'
+  | 'geesearch'
   | 'gemini'
   | 'grok'
   | 'kimi'
@@ -27,6 +28,7 @@ export type WebSearchProviderField = {
 export type WebSearchProviderDescriptor = {
   providerId: WebSearchProviderId;
   pluginId: string;
+  configKey?: string;
   label: string;
   hint: string;
   envVars: string[];
@@ -43,6 +45,44 @@ export type WebSearchProviderDescriptor = {
 };
 
 const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
+  {
+    providerId: 'geesearch',
+    pluginId: 'geeclaw-plugin',
+    configKey: 'geesearch',
+    label: 'GeeSearch',
+    hint: 'GeekAI web search through the bundled GeeClaw plugin.',
+    envVars: ['GEECLAW_API_KEY'],
+    signupUrl: 'https://geekai.co',
+    docsUrl: 'https://docs.geekai.co/cn/api/web_search',
+    autoDetectOrder: 0,
+    requiresCredential: true,
+    credentialPath: 'plugins.entries.geeclaw-plugin.config.geesearch.apiKey',
+    availabilityKind: 'secret',
+    availabilityFieldKey: 'apiKey',
+    enablePluginOnSelect: true,
+    fields: [
+      {
+        key: 'apiKey',
+        type: 'secret',
+        label: 'GeeClaw API Key',
+        help: 'Falls back to GEECLAW_API_KEY when left blank.',
+        placeholder: 'GeeClaw API key',
+        sensitive: true,
+      },
+      {
+        key: 'model',
+        type: 'enum',
+        label: 'Search Engine',
+        enumValues: [
+          'glm-search-std',
+          'glm-search-pro',
+          'glm-search-pro-sogou',
+          'glm-search-pro-quark',
+          'jina-search-v1',
+        ],
+      },
+    ],
+  },
   {
     providerId: 'brave',
     pluginId: 'brave',

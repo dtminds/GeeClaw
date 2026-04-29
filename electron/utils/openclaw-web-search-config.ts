@@ -7,6 +7,7 @@ import {
 
 type WebSearchSharedField = 'maxResults' | 'timeoutSeconds' | 'cacheTtlMinutes';
 const WEB_SEARCH_SHARED_FIELDS = ['maxResults', 'timeoutSeconds', 'cacheTtlMinutes'] satisfies WebSearchSharedField[];
+const DEFAULT_PROVIDER_CONFIG_KEY = 'webSearch';
 
 export type WebSearchSettingsSnapshot = {
   search: {
@@ -54,6 +55,10 @@ function findDescriptor(providerId: WebSearchProviderId): WebSearchProviderDescr
     throw new Error(`Unsupported web search provider: ${providerId}`);
   }
   return descriptor;
+}
+
+function getProviderConfigKey(descriptor: WebSearchProviderDescriptor): string {
+  return descriptor.configKey || DEFAULT_PROVIDER_CONFIG_KEY;
 }
 
 function isEmptyRecord(value: Record<string, unknown> | undefined): boolean {
@@ -200,7 +205,7 @@ export function readWebSearchSettingsSnapshot(config: OpenClawConfigDocument): W
   for (const descriptor of listWebSearchProviderDescriptors()) {
     const pluginEntry = cloneConfigObject(entries?.[descriptor.pluginId]);
     const pluginConfig = cloneConfigObject(pluginEntry?.config);
-    const providerConfig = cloneConfigObject(pluginConfig?.webSearch);
+    const providerConfig = cloneConfigObject(pluginConfig?.[getProviderConfigKey(descriptor)]);
 
     if (providerConfig && Object.keys(providerConfig).length > 0) {
       providerConfigByProvider[descriptor.providerId] = shallowCopy(providerConfig);
@@ -295,32 +300,33 @@ export function applyWebSearchSettingsPatch(
   if (patch.providerConfig) {
     const descriptor = findDescriptor(patch.providerConfig.providerId);
     const providerEntryChanged = updatePluginEntry(config, descriptor.pluginId, (entry) => {
+      const providerConfigKey = getProviderConfigKey(descriptor);
       const existingConfig = cloneConfigObject(entry.config);
-      const existingWebSearch = cloneConfigObject(existingConfig?.webSearch);
+      const existingProviderConfig = cloneConfigObject(existingConfig?.[providerConfigKey]);
       const nextConfig = existingConfig ?? {};
-      const nextWebSearch = existingWebSearch ?? {};
-      let webSearchChanged = false;
+      const nextProviderConfig = existingProviderConfig ?? {};
+      let providerConfigChanged = false;
 
       for (const [key, value] of Object.entries(patch.providerConfig?.values ?? {})) {
         if (value === null || value === '') {
-          if (key in nextWebSearch) {
-            delete nextWebSearch[key];
-            webSearchChanged = true;
+          if (key in nextProviderConfig) {
+            delete nextProviderConfig[key];
+            providerConfigChanged = true;
           }
           continue;
         }
 
-        if (nextWebSearch[key] !== value) {
-          nextWebSearch[key] = value;
-          webSearchChanged = true;
+        if (nextProviderConfig[key] !== value) {
+          nextProviderConfig[key] = value;
+          providerConfigChanged = true;
         }
       }
 
-      if (!webSearchChanged) {
+      if (!providerConfigChanged) {
         return false;
       }
 
-      nextConfig.webSearch = nextWebSearch;
+      nextConfig[providerConfigKey] = nextProviderConfig;
       entry.config = nextConfig;
       return true;
     });
@@ -357,13 +363,14 @@ export function deleteWebSearchProviderConfig(
   const entries = cloneConfigObject(plugins?.entries);
   const entry = cloneConfigObject(entries?.[descriptor.pluginId]);
   const entryConfig = cloneConfigObject(entry?.config);
-  const webSearch = cloneConfigObject(entryConfig?.webSearch);
+  const providerConfigKey = getProviderConfigKey(descriptor);
+  const providerConfig = cloneConfigObject(entryConfig?.[providerConfigKey]);
 
-  if (!entry || !entryConfig || !webSearch) {
+  if (!entry || !entryConfig || !providerConfig) {
     return false;
   }
 
-  delete entryConfig.webSearch;
+  delete entryConfig[providerConfigKey];
 
   if (isEmptyRecord(entryConfig)) {
     delete entry.config;

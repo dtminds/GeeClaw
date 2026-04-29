@@ -16,6 +16,7 @@ export type WebSearchProviderAvailability = {
 export type WebSearchProviderDescriptor = {
   providerId: string;
   pluginId: string;
+  configKey?: string;
   label: string;
   hint: string;
   autoDetectOrder?: number;

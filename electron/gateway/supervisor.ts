@@ -499,17 +499,17 @@ export async function findExistingGatewayProcess(options: {
 
       const existingGateway = await probeGatewayHealth(port);
       if (existingGateway) {
+        if (allowForeignAttach) {
+          return existingGateway;
+        }
+
         if (rejectForeignProcess) {
           throw new Error(
             `Port ${port} is already in use by another OpenClaw-compatible process (PIDs: ${foreignPids.join(', ')}). GeeClaw will not attach to or terminate external OpenClaw runtimes.`,
           );
         }
 
-        if (!allowForeignAttach) {
-          return null;
-        }
-
-        return existingGateway;
+        return null;
       }
 
       if (reclaimLikelyGatewayResidue) {

@@ -217,6 +217,39 @@ export interface ServiceDefinition {
     description: string;
     handler: (params: Record<string, unknown>) => Promise<unknown>;
 }
+/** OpenClaw web_search provider 工具定义 */
+export interface WebSearchProviderToolDefinition {
+    description: string;
+    parameters: Record<string, unknown>;
+    execute: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+}
+/** OpenClaw web_search provider 创建上下文 */
+export interface WebSearchProviderContext {
+    config?: RuntimeConfig;
+    searchConfig?: Record<string, unknown>;
+    runtimeMetadata?: Record<string, unknown>;
+}
+/** OpenClaw web_search provider 定义 */
+export interface WebSearchProviderDefinition {
+    id: string;
+    label: string;
+    hint: string;
+    requiresCredential?: boolean;
+    credentialLabel?: string;
+    envVars: string[];
+    placeholder: string;
+    signupUrl: string;
+    docsUrl?: string;
+    autoDetectOrder?: number;
+    credentialPath: string;
+    inactiveSecretPaths?: string[];
+    getCredentialValue: (searchConfig?: Record<string, unknown>) => unknown;
+    setCredentialValue: (searchConfigTarget: Record<string, unknown>, value: unknown) => void;
+    getConfiguredCredentialValue?: (config?: RuntimeConfig) => unknown;
+    setConfiguredCredentialValue?: (configTarget: RuntimeConfig, value: unknown) => void;
+    applySelectionConfig?: (config: RuntimeConfig) => RuntimeConfig;
+    createTool: (ctx: WebSearchProviderContext) => WebSearchProviderToolDefinition | null;
+}
 /** OpenClaw 运行时配置 */
 export interface RuntimeConfig {
     [key: string]: unknown;
@@ -258,6 +291,8 @@ export interface GeeClawContext {
     registerTool(tool: RegisteredTool, options?: ToolOptions): void;
     /** 注册 OpenClaw Service */
     registerService(service: ServiceDefinition): void;
+    /** 注册 OpenClaw web_search provider */
+    registerWebSearchProvider(provider: WebSearchProviderDefinition): void;
     /** 获取本 package 的配置段 */
     getConfig<T = Record<string, unknown>>(): T;
     /**
@@ -348,6 +383,8 @@ export interface OpenClawPluginApi {
     registerTool?(tool: unknown, options?: unknown): void;
     /** 注册 Service */
     registerService?(service: unknown): void;
+    /** 注册 web_search provider */
+    registerWebSearchProvider?(provider: WebSearchProviderDefinition): void;
     /** 日志 */
     logger?: GeeClawLogger;
     /** 其他 API 方法 */

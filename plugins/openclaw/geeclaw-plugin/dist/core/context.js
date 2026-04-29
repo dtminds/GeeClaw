@@ -58,6 +58,15 @@ export function createGeeClawContext(options) {
                 logger.warn(`api.registerService not available, skipping: ${serviceName}`);
             }
         },
+        registerWebSearchProvider(provider) {
+            if (api.registerWebSearchProvider) {
+                api.registerWebSearchProvider(provider);
+                logger.info(`registered web_search provider: ${provider.id}`);
+            }
+            else {
+                logger.warn(`api.registerWebSearchProvider not available, skipping: ${provider.id}`);
+            }
+        },
         getConfig() {
             return configCenter.getPackageConfig(packageId);
         },

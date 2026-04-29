@@ -10,6 +10,7 @@
  * - tool-sandbox
  * - evolution-proposal
  * - qmemory
+ * - geesearch
  */
 import type { OpenClawPluginApi } from './core/types.js';
 declare const plugin: {
@@ -19,7 +20,13 @@ declare const plugin: {
     configSchema: {
         type: "object";
         additionalProperties: false;
-        properties: {};
+        properties: {
+            geesearch: {
+                type: "object";
+                additionalProperties: false;
+                properties: Record<string, unknown>;
+            };
+        };
     };
     register(api: OpenClawPluginApi): void;
 };

@@ -186,6 +186,64 @@ describe('GatewayManager auto reconnect', () => {
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
 
+  it('allows one auto-reconnect attach to a compatible listener after the owned child exits unexpectedly', async () => {
+    vi.doUnmock('@electron/gateway/startup-orchestrator');
+
+    const ws = {
+      readyState: 1,
+      on: vi.fn(),
+      ping: vi.fn(),
+      terminate: vi.fn(),
+      send: vi.fn(),
+    };
+
+    let emitExit: ((code: number | null) => void) | null = null;
+
+    findExistingGatewayProcessMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ port: 28788 });
+
+    connectGatewaySocketMock.mockImplementation(async (options) => {
+      options.onHandshakeComplete(ws as never);
+      return ws as never;
+    });
+
+    launchGatewayProcessMock.mockImplementation(async (options) => {
+      const child = new MockGatewayChild();
+      emitExit = (code: number | null) => {
+        options.onExit(child as never, code);
+      };
+      options.onSpawn(child.pid);
+      return {
+        child: child as never,
+        lastSpawnSummary: 'mock-spawn',
+      };
+    });
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    await manager.start();
+    emitExit?.(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await vi.waitFor(() => {
+      expect(findExistingGatewayProcessMock).toHaveBeenCalledTimes(2);
+    });
+    expect(findExistingGatewayProcessMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      allowForeignAttach: true,
+      rejectForeignProcess: true,
+    }));
+    expect(manager.getStatus()).toMatchObject({
+      state: 'running',
+      port: 28788,
+      pid: undefined,
+    });
+
+    (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
+  });
+
   it('records restart completion when reconnecting to the owned process', async () => {
     vi.doMock('@electron/gateway/startup-orchestrator', () => ({
       runGatewayStartupSequence: runGatewayStartupSequenceMock,
