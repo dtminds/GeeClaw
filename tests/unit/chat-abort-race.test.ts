@@ -95,6 +95,37 @@ describe('chat abort race handling', () => {
     });
   });
 
+  it('clears scheduled history poll timers when resetting runtime guards', async () => {
+    const sendResult = createDeferred<{ runId: string }>();
+    const rpcMock = vi.fn((method: string) => {
+      if (method === 'chat.send') {
+        return sendResult.promise;
+      }
+      if (method === 'chat.history') {
+        return Promise.resolve({ messages: [] });
+      }
+      return Promise.reject(new Error(`Unexpected RPC method: ${method}`));
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+    });
+
+    const sendPromise = useChatStore.getState().sendMessage('hello');
+    await Promise.resolve();
+
+    __resetChatRuntimeGuardsForTests();
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    const historyCalls = rpcMock.mock.calls.filter(([method]) => method === 'chat.history');
+    expect(historyCalls).toHaveLength(0);
+
+    sendResult.resolve({ runId: 'run-after-reset' });
+    await sendPromise;
+  });
+
   it('does not bind a run id when chat.send resolves after the user already aborted', async () => {
     const sendResult = createDeferred<{ runId: string }>();
     const rpcMock = vi.fn((method: string) => {

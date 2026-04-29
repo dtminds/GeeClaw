@@ -243,6 +243,10 @@ function takeBlockedRunEvents(runId: string): BlockedRunEvent[] {
 }
 
 export function __resetChatRuntimeGuardsForTests(): void {
+  clearErrorRecoveryTimer();
+  clearHistoryPoll();
+  clearHistoryStartupRetry();
+  _lastChatEventAt = 0;
   _sendGeneration = 0;
   _abortedRunIds.clear();
   _abortedRunIdOrder.length = 0;
