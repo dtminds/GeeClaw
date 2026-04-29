@@ -141,6 +141,18 @@ let _historyStartupRetryState: { requestKey: string; attempt: number; mode: 'def
 // before committing the error to give the recovery path a chance.
 let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
+// A chat.send RPC can resolve after the user has already pressed stop. Track
+// send generations so stale completions cannot re-bind the UI to an aborted run.
+let _sendGeneration = 0;
+
+const MAX_ABORTED_RUN_IDS = 50;
+const MAX_BLOCKED_RUN_EVENTS = 100;
+const _abortedRunIds = new Set<string>();
+const _abortedRunIdOrder: string[] = [];
+let _blockUnknownAbortedRunEvents = false;
+const _blockedChatEvents = new Map<string, Record<string, unknown>[]>();
+const _blockedToolEvents = new Map<string, Record<string, unknown>[]>();
+
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
 function summarizeChatSelection(
@@ -184,6 +196,52 @@ function clearHistoryStartupRetryTimer(): void {
 function clearHistoryStartupRetry(): void {
   clearHistoryStartupRetryTimer();
   _historyStartupRetryState = null;
+}
+
+function rememberAbortedRunId(runId: string): void {
+  if (!runId) return;
+  if (!_abortedRunIds.has(runId)) {
+    _abortedRunIds.add(runId);
+    _abortedRunIdOrder.push(runId);
+  }
+  while (_abortedRunIdOrder.length > MAX_ABORTED_RUN_IDS) {
+    const oldest = _abortedRunIdOrder.shift();
+    if (oldest) {
+      _abortedRunIds.delete(oldest);
+      _blockedChatEvents.delete(oldest);
+      _blockedToolEvents.delete(oldest);
+    }
+  }
+}
+
+function blockUnknownAbortedRunEvents(): void {
+  _blockUnknownAbortedRunEvents = true;
+}
+
+function unblockUnknownAbortedRunEvents(): void {
+  _blockUnknownAbortedRunEvents = false;
+}
+
+function queueBlockedRunEvent(
+  queue: Map<string, Record<string, unknown>[]>,
+  runId: string,
+  event: Record<string, unknown>,
+): void {
+  const events = queue.get(runId) ?? [];
+  events.push({ ...event });
+  if (events.length > MAX_BLOCKED_RUN_EVENTS) {
+    events.shift();
+  }
+  queue.set(runId, events);
+}
+
+function takeBlockedRunEvents(
+  queue: Map<string, Record<string, unknown>[]>,
+  runId: string,
+): Record<string, unknown>[] {
+  const events = queue.get(runId) ?? [];
+  queue.delete(runId);
+  return events;
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
@@ -1052,6 +1110,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   ) => {
     const trimmed = text.trim();
     if (!trimmed && (!attachments || attachments.length === 0)) return;
+    const currentSendGeneration = ++_sendGeneration;
 
     let {
       currentSessionKey,
@@ -1304,6 +1363,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         result = { success: true, result: rpcResult };
       }
 
+      const returnedRunId = result.result?.runId;
+      if (returnedRunId && currentSendGeneration !== _sendGeneration) {
+        rememberAbortedRunId(returnedRunId);
+        unblockUnknownAbortedRunEvents();
+        return;
+      }
+
+      if (currentSendGeneration !== _sendGeneration) {
+        return;
+      }
+
       if (!result.success) {
         const errorMsg = result.error || 'Failed to send message';
         if (isRecoverableChatSendTimeout(errorMsg)) {
@@ -1319,10 +1389,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
           clearHistoryPoll();
           set({ error: errorMsg, sending: false, ...createEmptyToolRuntimeState() });
         }
-      } else if (result.result?.runId) {
-        set({ activeRunId: result.result.runId });
+      } else if (returnedRunId && get().sending) {
+        set({ activeRunId: returnedRunId });
+        unblockUnknownAbortedRunEvents();
+        const blockedChatEvents = takeBlockedRunEvents(_blockedChatEvents, returnedRunId);
+        const blockedToolEvents = takeBlockedRunEvents(_blockedToolEvents, returnedRunId);
+        if (blockedChatEvents.length > 0 || blockedToolEvents.length > 0) {
+          queueMicrotask(() => {
+            for (const blockedEvent of blockedChatEvents) {
+              get().handleChatEvent(blockedEvent);
+            }
+            for (const blockedEvent of blockedToolEvents) {
+              get().handleAgentEvent(blockedEvent);
+            }
+          });
+        }
       }
     } catch (err) {
+      if (currentSendGeneration !== _sendGeneration) {
+        return;
+      }
       const errStr = String(err);
       if (isRecoverableChatSendTimeout(errStr)) {
         logChatTrace('sendMessage:recoverable-timeout', {
@@ -1343,9 +1429,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Abort active run ──
 
   abortRun: async () => {
+    _sendGeneration += 1;
     clearHistoryPoll();
     clearErrorRecoveryTimer();
-    const { currentSessionKey } = get();
+    const { currentSessionKey, activeRunId } = get();
+    if (activeRunId) {
+      rememberAbortedRunId(activeRunId);
+      unblockUnknownAbortedRunEvents();
+    } else {
+      blockUnknownAbortedRunEvents();
+    }
     set(createRunResetState());
 
     try {
@@ -1374,6 +1467,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Only process events for the active run (or if no active run set)
     if (activeRunId && runId && runId !== activeRunId) {
       return;
+    }
+
+    if (runId && _abortedRunIds.has(runId) && eventState !== 'aborted') {
+      return;
+    }
+
+    if (_blockUnknownAbortedRunEvents && runId) {
+      if (eventState === 'aborted') {
+        rememberAbortedRunId(runId);
+        unblockUnknownAbortedRunEvents();
+      } else {
+        if (!activeRunId && get().sending) {
+          queueBlockedRunEvent(_blockedChatEvents, runId, event);
+        }
+        return;
+      }
     }
 
     _lastChatEventAt = Date.now();
@@ -1802,6 +1911,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    const runId = String(event.runId || '');
+    if (runId && _abortedRunIds.has(runId)) {
+      return;
+    }
+
+    if (_blockUnknownAbortedRunEvents && runId) {
+      if (!get().activeRunId && get().sending) {
+        queueBlockedRunEvent(_blockedToolEvents, runId, event);
+      }
+      return;
+    }
+
     const data = event.data && typeof event.data === 'object'
       ? event.data as Record<string, unknown>
       : event;
@@ -1859,7 +1980,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         entry = {
           toolCallId,
-          runId: String(event.runId || s.activeRunId || ''),
+          runId: runId || s.activeRunId || '',
           sessionKey: eventSessionKey ?? undefined,
           name,
           args: phase === 'start' ? data.args : undefined,
