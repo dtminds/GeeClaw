@@ -153,6 +153,20 @@ export type ConversationResetState = Pick<
   | 'pendingToolHiddenCount'
 >;
 
+export type RunResetState = Pick<
+  ChatState,
+  | 'sending'
+  | 'activeRunId'
+  | keyof ToolRuntimeState
+  | 'pendingFinal'
+  | 'lastUserMessageAt'
+  | 'pendingOptimisticUserId'
+  | 'pendingOptimisticUserAnchorAt'
+  | 'pendingOptimisticUserIndex'
+  | 'pendingToolImages'
+  | 'pendingToolHiddenCount'
+>;
+
 export function createEmptyToolRuntimeState(): ToolRuntimeState {
   return {
     streamingText: '',
@@ -163,6 +177,21 @@ export function createEmptyToolRuntimeState(): ToolRuntimeState {
     toolStreamOrder: [],
     toolMessages: [],
     toolResultHistoryReloadedIds: new Set<string>(),
+  };
+}
+
+export function createRunResetState(): RunResetState {
+  return {
+    sending: false,
+    activeRunId: null,
+    ...createEmptyToolRuntimeState(),
+    pendingFinal: false,
+    lastUserMessageAt: null,
+    pendingOptimisticUserId: null,
+    pendingOptimisticUserAnchorAt: null,
+    pendingOptimisticUserIndex: null,
+    pendingToolImages: [],
+    pendingToolHiddenCount: 0,
   };
 }
 
