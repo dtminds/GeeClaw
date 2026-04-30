@@ -48,10 +48,14 @@ export function getMessageErrorMessage(message: RawMessage | unknown): string | 
   return normalized || null;
 }
 
+function getMessageRole(message: RawMessage | unknown): string {
+  if (!message || typeof message !== 'object') return '';
+  const rawRole = (message as Record<string, unknown>).role;
+  return typeof rawRole === 'string' ? rawRole.trim().toLowerCase() : '';
+}
+
 export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): boolean {
-  if (!message || typeof message !== 'object') return false;
-  const role = (message as Record<string, unknown>).role;
-  return role === 'assistant' && getMessageStopReason(message) === 'error';
+  return getMessageRole(message) === 'assistant' && getMessageStopReason(message) === 'error';
 }
 
 export function getLatestTerminalAssistantRunError(
@@ -67,7 +71,8 @@ export function getLatestTerminalAssistantRunError(
   let latestConversationTurn: RawMessage | undefined;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if ((message.role === 'assistant' || message.role === 'user') && isAfterTimestamp(message)) {
+    const role = getMessageRole(message);
+    if ((role === 'assistant' || role === 'user') && isAfterTimestamp(message)) {
       latestConversationTurn = message;
       break;
     }

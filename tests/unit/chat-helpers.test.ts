@@ -80,4 +80,23 @@ describe('chat helper dedupe', () => {
       },
     ], null)).toBeNull();
   });
+
+  it('matches terminal assistant errors when gateway role casing differs', () => {
+    expect(getLatestTerminalAssistantRunError([
+      {
+        role: 'user',
+        id: 'user-1',
+        content: '你是什么模型？',
+        timestamp: 1,
+      },
+      {
+        role: 'Assistant',
+        id: 'assistant-error',
+        content: [],
+        stopReason: 'error',
+        errorMessage: '404 Resource not found',
+        timestamp: 2,
+      } as unknown as RawMessage,
+    ], null)).toBe('404 Resource not found');
+  });
 });
