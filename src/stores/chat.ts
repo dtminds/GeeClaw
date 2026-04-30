@@ -1897,6 +1897,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             sending: false,
             activeRunId: null,
           });
+          void get().loadHistory(true);
           break;
         }
 

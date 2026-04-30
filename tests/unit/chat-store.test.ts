@@ -154,7 +154,29 @@ describe('chat store terminal model error handling', () => {
     useGatewayStore.setState(initialGatewayState, true);
   });
 
-  it('treats assistant finals with stopReason=error as terminal run errors', () => {
+  it('treats assistant finals with stopReason=error as terminal run errors', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            { role: 'user', content: '你是什么模型？', id: 'u1-history', timestamp: 1 },
+            {
+              role: 'assistant',
+              id: 'assistant-error-history',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '404 Resource not found',
+              timestamp: 2,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
     useChatStore.setState({
       currentSessionKey: 'agent:main:geeclaw_main',
       currentAgentId: 'main',
@@ -193,5 +215,12 @@ describe('chat store terminal model error handling', () => {
     expect(state.sending).toBe(false);
     expect(state.activeRunId).toBeNull();
     expect(state.pendingFinal).toBe(false);
+
+    await flushPromises();
+
+    expect(rpcMock).toHaveBeenCalledWith('chat.history', {
+      sessionKey: 'agent:main:geeclaw_main',
+      limit: 200,
+    });
   });
 });
