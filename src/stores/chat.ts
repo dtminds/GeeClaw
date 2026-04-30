@@ -271,7 +271,7 @@ function getCurrentRuntimeSessionKey(state: Pick<ChatState, 'currentSessionKey' 
 async function rpcBestEffort(method: string, params?: unknown): Promise<unknown | null> {
   try {
     return await useGatewayStore.getState().rpc(method, params);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -2142,7 +2142,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       if (steerRunId) {
         rememberIgnoredSteerAckRunId(steerRunId);
-      } else {
       }
     } catch (err) {
       set({ error: String(err), runError: null });
