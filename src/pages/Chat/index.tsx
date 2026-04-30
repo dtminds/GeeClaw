@@ -416,7 +416,7 @@ export function Chat() {
 
           {/* Terminal run error */}
           {runError && (
-            <div className="border-t border-destructive/20 bg-destructive/10 px-4 py-3">
+            <div className="border border-destructive/20 bg-destructive/10 px-4 py-3 mx-4 rounded-xl mb-2">
               <div className="mx-auto flex max-w-4xl items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-destructive">
@@ -439,7 +439,7 @@ export function Chat() {
 
           {/* Error bar */}
           {error && (
-            <div className="border-t border-destructive/20 bg-destructive/10 px-4 py-2">
+            <div className="border border-destructive/20 bg-destructive/10 px-4 py-2 mx-4 rounded-xl mb-2">
               <div className="mx-auto flex max-w-4xl items-center justify-between">
                 <p className="flex items-center gap-2 text-sm text-destructive">
                   <AlertCircle className="h-4 w-4" />
