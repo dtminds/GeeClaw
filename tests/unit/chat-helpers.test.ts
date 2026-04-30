@@ -100,6 +100,24 @@ describe('chat helper dedupe', () => {
     ], null)).toBe('404 Resource not found');
   });
 
+  it('matches terminal assistant errors surfaced as isError payload text', () => {
+    expect(getLatestTerminalAssistantRunError([
+      {
+        role: 'user',
+        id: 'user-1',
+        content: '继续',
+        timestamp: 1,
+      },
+      {
+        role: 'assistant',
+        id: 'assistant-incomplete-turn-error',
+        content: "⚠️ Agent couldn't generate a response. Please try again.",
+        isError: true,
+        timestamp: 2,
+      },
+    ], null)).toBe("⚠️ Agent couldn't generate a response. Please try again.");
+  });
+
   it('allows small clock skew when finding terminal assistant errors after send start', () => {
     const sendStartedAt = 1_710_000_010_000;
 

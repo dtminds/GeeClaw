@@ -44,9 +44,17 @@ export function getMessageErrorMessage(message: RawMessage | unknown): string | 
   if (!message || typeof message !== 'object') return null;
   const rawError = (message as Record<string, unknown>).errorMessage
     ?? (message as Record<string, unknown>).error_message;
-  if (typeof rawError !== 'string') return null;
-  const normalized = rawError.trim();
-  return normalized || null;
+  if (typeof rawError === 'string') {
+    const normalized = rawError.trim();
+    if (normalized) return normalized;
+  }
+  if (getMessageIsError(message)) {
+    const record = message as Record<string, unknown>;
+    const contentText = getMessageText(record.content).trim();
+    if (contentText) return contentText;
+    if (typeof record.text === 'string' && record.text.trim()) return record.text.trim();
+  }
+  return null;
 }
 
 function getMessageRole(message: RawMessage | unknown): string {
@@ -55,8 +63,15 @@ function getMessageRole(message: RawMessage | unknown): string {
   return typeof rawRole === 'string' ? rawRole.trim().toLowerCase() : '';
 }
 
+function getMessageIsError(message: RawMessage | unknown): boolean {
+  if (!message || typeof message !== 'object') return false;
+  const record = message as Record<string, unknown>;
+  return record.isError === true || record.is_error === true;
+}
+
 export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): boolean {
-  return getMessageRole(message) === 'assistant' && getMessageStopReason(message) === 'error';
+  return getMessageRole(message) === 'assistant'
+    && (getMessageStopReason(message) === 'error' || getMessageIsError(message));
 }
 
 export function getLatestTerminalAssistantRunError(
