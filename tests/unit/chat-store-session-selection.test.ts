@@ -8,7 +8,7 @@ vi.mock('@/lib/host-api', () => ({
 
 import { AppError } from '@/lib/error-model';
 import { useAgentsStore } from '@/stores/agents';
-import { useChatStore } from '@/stores/chat';
+import { __resetChatRuntimeGuardsForTests, useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 import type { DesktopSessionSummary } from '@/stores/chat';
 
@@ -47,6 +47,7 @@ function createDeferred<T>() {
 describe('chat store session selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetChatRuntimeGuardsForTests();
     useAgentsStore.setState(initialAgentsState, true);
     useChatStore.setState(initialChatState, true);
     useGatewayStore.setState({
@@ -184,6 +185,397 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().currentSessionKey).toBe('');
     expect(useChatStore.getState().currentDesktopSessionId).toBe('');
     expect(useChatStore.getState().currentAgentId).toBe('main');
+  });
+
+  it('subscribes to transcript messages for the selected session without enabling global session tools', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      return {};
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: rpcMock,
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentViewMode: 'session',
+    });
+
+    await (useChatStore.getState() as unknown as {
+      syncRuntimeSubscriptions: () => Promise<void>;
+    }).syncRuntimeSubscriptions();
+
+    expect(rpcMock).toHaveBeenCalledWith(
+      'sessions.messages.subscribe',
+      { key: writerSession.gatewaySessionKey },
+    );
+    expect(rpcMock).not.toHaveBeenCalledWith('sessions.subscribe', {});
+  });
+
+  it('keeps session tool fallback subscribed while local runtime work is pending', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      return {};
+    });
+
+    useGatewayStore.setState({
+      ...useGatewayStore.getState(),
+      rpc: rpcMock,
+    });
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: null,
+      sendAckPending: false,
+    });
+
+    await (useChatStore.getState() as unknown as {
+      syncRuntimeSubscriptions: () => Promise<void>;
+    }).syncRuntimeSubscriptions();
+
+    expect(rpcMock).toHaveBeenCalledWith('sessions.subscribe', {});
+    expect(rpcMock).not.toHaveBeenCalledWith('sessions.unsubscribe', {});
+  });
+
+  it('applies session.message events only for the selected session', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleSessionMessageEvent: (payload: Record<string, unknown>) => void;
+    };
+
+    store.handleSessionMessageEvent({
+      key: mainSession.gatewaySessionKey,
+      message: {
+        id: 'main-user',
+        role: 'user',
+        content: 'wrong session',
+        timestamp: 1,
+      },
+    });
+    store.handleSessionMessageEvent({
+      key: writerSession.gatewaySessionKey,
+      message: {
+        id: 'writer-user',
+        role: 'user',
+        content: 'synced user turn',
+        timestamp: 2,
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({
+        id: 'writer-user',
+        role: 'user',
+        content: 'synced user turn',
+      }),
+    ]);
+  });
+
+  it('ignores assistant session.message events because assistant runtime is owned by chat events', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [
+        {
+          id: 'live-final',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: '已运行 1 条命令' },
+            { type: 'text', text: '上海现在 14°C，微风。' },
+          ],
+          timestamp: 100,
+          _toolStatuses: [{
+            id: 'tool-1',
+            toolCallId: 'tool-1',
+            name: 'weather',
+            status: 'completed',
+            updatedAt: 100_000,
+          }],
+        },
+      ],
+    });
+
+    (useChatStore.getState() as unknown as {
+      handleSessionMessageEvent: (payload: Record<string, unknown>) => void;
+    }).handleSessionMessageEvent({
+      key: writerSession.gatewaySessionKey,
+      message: {
+        id: 'transcript-final',
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '已运行 1 条命令' },
+          { type: 'text', text: '上海现在 14°C，微风。' },
+        ],
+        timestamp: 160,
+        _toolStatuses: [{
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'weather',
+          status: 'completed',
+          updatedAt: 160_000,
+        }],
+      },
+    });
+
+    expect(useChatStore.getState().messages).toHaveLength(1);
+    expect(useChatStore.getState().messages[0]).toEqual(
+      expect.objectContaining({
+        id: 'live-final',
+        role: 'assistant',
+      }),
+    );
+  });
+
+  it('dedupes equivalent agent and session.tool events using nested run ids', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+      sending: true,
+      activeRunId: 'run-1',
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleToolEvent: (source: 'agent' | 'session.tool', payload: Record<string, unknown>) => void;
+    };
+
+    store.handleToolEvent('session.tool', {
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        runId: 'run-1',
+        toolCallId: 'tool-1',
+        name: 'weather',
+        phase: 'start',
+        args: { city: 'Shanghai' },
+      },
+    });
+
+    const firstMessage = useChatStore.getState().toolMessages[0];
+    expect(firstMessage).toBeTruthy();
+
+    vi.setSystemTime(5_000);
+    store.handleToolEvent('agent', {
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        runId: 'run-1',
+        toolCallId: 'tool-1',
+        name: 'weather',
+        phase: 'start',
+        args: { city: 'Shanghai' },
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toEqual(['tool-1']);
+    expect(useChatStore.getState().toolMessages[0]).toBe(firstMessage);
+  });
+
+  it('ignores session.tool fallback events once an agent event identifies the run as run-scoped', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+      sending: true,
+      activeRunId: 'run-1',
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleToolEvent: (source: 'agent' | 'session.tool', payload: Record<string, unknown>) => void;
+    };
+
+    store.handleToolEvent('agent', {
+      runId: 'run-1',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-agent',
+        name: 'weather',
+        phase: 'start',
+      },
+    });
+
+    store.handleToolEvent('session.tool', {
+      runId: 'run-1',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-fallback',
+        name: 'weather',
+        phase: 'start',
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toEqual(['tool-agent']);
+  });
+
+  it('ignores session.tool fallback for a steered run after any agent event identifies that run as run-scoped', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+      sending: true,
+      activeRunId: 'run-active',
+      queuedMessages: [{
+        id: 'queued-steer',
+        text: 'adjust course',
+        targetAgentId: null,
+        createdAt: 1,
+        kind: 'steered',
+        pendingRunId: 'run-active',
+        steerRunId: null,
+      }],
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleToolEvent: (source: 'agent' | 'session.tool', payload: Record<string, unknown>) => void;
+    };
+
+    store.handleToolEvent('agent', {
+      runId: 'run-steer',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-buffered',
+        name: 'weather',
+        phase: 'start',
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toEqual([]);
+
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      activeRunId: 'run-steer',
+      queuedMessages: [],
+    });
+
+    store.handleToolEvent('session.tool', {
+      runId: 'run-steer',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-fallback',
+        name: 'weather',
+        phase: 'start',
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toEqual([]);
+  });
+
+  it('normalizes alternate agent tool payload shapes before filtering session.tool fallback', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+      sending: true,
+      activeRunId: 'run-1',
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleToolEvent: (source: 'agent' | 'session.tool', payload: Record<string, unknown>) => void;
+    };
+
+    store.handleToolEvent('agent', {
+      runId: 'run-1',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        tool_call_id: 'tool-alt',
+        tool_name: 'weather',
+        type: 'start',
+        input: { city: 'Shanghai' },
+      },
+    });
+
+    store.handleToolEvent('session.tool', {
+      runId: 'run-1',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-alt',
+        name: 'weather',
+        phase: 'start',
+        args: { city: 'Shanghai' },
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toEqual(['tool-alt']);
+    expect(useChatStore.getState().toolMessages[0]).toEqual(
+      expect.objectContaining({
+        toolCallId: 'tool-alt',
+        toolName: 'weather',
+      }),
+    );
+  });
+
+  it('reconciles a persisted session.message with the matching optimistic user turn', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [
+        {
+          id: 'optimistic-user',
+          role: 'user',
+          content: 'same user turn',
+          timestamp: 100,
+        },
+      ],
+      pendingOptimisticUserId: 'optimistic-user',
+    });
+
+    (useChatStore.getState() as unknown as {
+      handleSessionMessageEvent: (payload: Record<string, unknown>) => void;
+    }).handleSessionMessageEvent({
+      key: writerSession.gatewaySessionKey,
+      message: {
+        id: 'persisted-user',
+        role: 'user',
+        content: 'same user turn',
+        timestamp: 101,
+      },
+    });
+
+    expect(useChatStore.getState().messages).toEqual([
+      expect.objectContaining({
+        id: 'persisted-user',
+        role: 'user',
+        content: 'same user turn',
+      }),
+    ]);
   });
 
   it('refreshes session selection without eagerly loading chat history', async () => {

@@ -4,6 +4,7 @@ const hostApiFetchMock = vi.fn();
 const subscribeHostEventMock = vi.fn();
 const handleChatEventMock = vi.fn();
 const handleAgentEventMock = vi.fn();
+const syncRuntimeSubscriptionsMock = vi.fn();
 const loadHistoryMock = vi.fn();
 const setChatStateMock = vi.fn();
 const fetchChannelsMock = vi.fn();
@@ -23,6 +24,7 @@ vi.mock('@/stores/chat', () => ({
     getState: () => ({
       handleChatEvent: handleChatEventMock,
       handleAgentEvent: handleAgentEventMock,
+      syncRuntimeSubscriptions: syncRuntimeSubscriptionsMock,
       loadHistory: loadHistoryMock,
       sending: false,
     }),
@@ -45,6 +47,7 @@ describe('gateway store event wiring', () => {
     subscribeHostEventMock.mockReset();
     handleChatEventMock.mockReset();
     handleAgentEventMock.mockReset();
+    syncRuntimeSubscriptionsMock.mockReset();
     loadHistoryMock.mockReset();
     setChatStateMock.mockReset();
     fetchChannelsMock.mockReset();
@@ -236,6 +239,62 @@ describe('gateway store event wiring', () => {
         phase: 'start',
       }),
     }));
+  });
+
+  it('routes session.tool notifications to the chat tool event handler', async () => {
+    hostApiFetchMock.mockResolvedValueOnce({ state: 'running', port: 28788 });
+
+    const handlers = new Map<string, (payload: unknown) => void>();
+    subscribeHostEventMock.mockImplementation((eventName: string, handler: (payload: unknown) => void) => {
+      handlers.set(eventName, handler);
+      return () => {};
+    });
+
+    const { useGatewayStore } = await import('@/stores/gateway');
+    await useGatewayStore.getState().init();
+
+    handlers.get('gateway:notification')?.({
+      method: 'session.tool',
+      params: {
+        runId: 'run-continuation',
+        sessionKey: 'agent:main:main',
+        data: {
+          toolCallId: 'tool-continuation',
+          name: 'read',
+          phase: 'start',
+        },
+      },
+    });
+    await vi.dynamicImportSettled();
+
+    expect(handleAgentEventMock).toHaveBeenCalledWith(expect.objectContaining({
+      runId: 'run-continuation',
+      sessionKey: 'agent:main:main',
+      stream: 'tool',
+      data: expect.objectContaining({
+        toolCallId: 'tool-continuation',
+        phase: 'start',
+      }),
+    }));
+  });
+
+  it('delegates chat runtime subscriptions to the chat store when the gateway is running', async () => {
+    hostApiFetchMock.mockResolvedValue({ state: 'running', port: 28788 });
+    vi.mocked(window.electron.ipcRenderer.invoke).mockResolvedValue({ success: true, result: { subscribed: true } });
+
+    subscribeHostEventMock.mockImplementation(() => () => {});
+
+    const { useGatewayStore } = await import('@/stores/gateway');
+    await useGatewayStore.getState().init();
+    await vi.dynamicImportSettled();
+
+    expect(window.electron.ipcRenderer.invoke).not.toHaveBeenCalledWith(
+      'gateway:rpc',
+      'sessions.subscribe',
+      {},
+      undefined,
+    );
+    expect(syncRuntimeSubscriptionsMock).toHaveBeenCalled();
   });
 
   it('does not finalize chat state on lifecycle end notifications', async () => {

@@ -63,4 +63,33 @@ describe('gateway event dispatch', () => {
       },
     });
   });
+
+  it('forwards session-scoped tool events through the generic notification channel', () => {
+    const emit = vi.fn();
+
+    dispatchProtocolEvent({ emit }, 'session.tool', {
+      runId: 'run-continuation',
+      sessionKey: 'agent:main:main',
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-1',
+        name: 'read',
+        phase: 'start',
+      },
+    });
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith('notification', {
+      method: 'session.tool',
+      params: expect.objectContaining({
+        runId: 'run-continuation',
+        sessionKey: 'agent:main:main',
+        stream: 'tool',
+        data: expect.objectContaining({
+          toolCallId: 'tool-1',
+          phase: 'start',
+        }),
+      }),
+    });
+  });
 });

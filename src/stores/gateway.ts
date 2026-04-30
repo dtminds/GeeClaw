@@ -44,6 +44,10 @@ function logGatewayAsyncError(context: string, error: unknown): void {
   console.error(`Failed to ${context}:`, error);
 }
 
+function logChatQueueDebug(event: string, details: Record<string, unknown> = {}): void {
+  console.info(`[chat-queue-debug] ${event}`, details);
+}
+
 function clearChannelWarmupRefreshTimers(): void {
   for (const timer of channelWarmupRefreshTimers) {
     clearTimeout(timer);
@@ -92,8 +96,65 @@ function scheduleDebouncedChannelStatusRefresh(): void {
   }, CHANNEL_STATUS_REFRESH_DEBOUNCE_MS);
 }
 
+function forwardGatewayToolEvent(source: 'agent' | 'session.tool', payload: Record<string, unknown>, context: string): void {
+  import('./chat')
+    .then(({ useChatStore }) => {
+      const chatState = useChatStore.getState();
+      if ('handleToolEvent' in chatState && typeof chatState.handleToolEvent === 'function') {
+        chatState.handleToolEvent(source, payload);
+        return;
+      }
+      chatState.handleAgentEvent(payload);
+    })
+    .catch((error) => {
+      logGatewayAsyncError(context, error);
+    });
+}
+
+function syncChatRuntimeSubscriptions(context: string): void {
+  import('./chat')
+    .then(({ useChatStore }) => useChatStore.getState().syncRuntimeSubscriptions())
+    .catch((error) => {
+      logChatQueueDebug('gateway:runtime-subscription-sync:error', {
+        context,
+        error: String(error),
+      });
+      logGatewayAsyncError(context, error);
+    });
+}
+
 function handleGatewayNotification(notification: { method?: string; params?: Record<string, unknown> } | undefined): void {
   const payload = notification;
+  if (payload?.method === 'session.message' && payload.params && typeof payload.params === 'object') {
+    import('./chat')
+      .then(({ useChatStore }) => {
+        useChatStore.getState().handleSessionMessageEvent(payload.params!);
+      })
+      .catch((error) => {
+        logGatewayAsyncError('process gateway session message notification', error);
+      });
+    return;
+  }
+
+  if (payload?.method === 'session.tool' && payload.params && typeof payload.params === 'object') {
+    logChatQueueDebug('gateway:session-tool-notification', {
+      runId: typeof payload.params.runId === 'string' ? payload.params.runId : null,
+      sessionKey: typeof payload.params.sessionKey === 'string' ? payload.params.sessionKey : null,
+      dataKeys: payload.params.data && typeof payload.params.data === 'object'
+        ? Object.keys(payload.params.data)
+        : [],
+    });
+    forwardGatewayToolEvent(
+      'session.tool',
+      {
+        ...payload.params,
+        stream: 'tool',
+      },
+      'process gateway session tool notification',
+    );
+    return;
+  }
+
   if (!payload || payload.method !== 'agent' || !payload.params || typeof payload.params !== 'object') {
     return;
   }
@@ -103,17 +164,20 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
   const stream = p.stream ?? data.stream;
   const phase = data.phase ?? p.phase;
   if (stream === 'tool') {
-    import('./chat')
-      .then(({ useChatStore }) => {
-        useChatStore.getState().handleAgentEvent({
-          ...p,
-          stream,
-          data,
-        });
-      })
-      .catch((error) => {
-        logGatewayAsyncError('process gateway tool notification', error);
-      });
+    logChatQueueDebug('gateway:agent-tool-notification', {
+      runId: typeof p.runId === 'string' ? p.runId : null,
+      sessionKey: typeof p.sessionKey === 'string' ? p.sessionKey : null,
+      dataKeys: Object.keys(data),
+    });
+    forwardGatewayToolEvent(
+      'agent',
+      {
+        ...p,
+        stream,
+        data,
+      },
+      'process gateway tool notification',
+    );
   }
 
   // Agent notifications also emit a separate gateway:chat-message event for
@@ -209,6 +273,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
             if (payload.state === 'running') {
               refreshChannelsSnapshot();
               scheduleChannelWarmupRefreshes();
+              syncChatRuntimeSubscriptions('sync chat runtime subscriptions after gateway running');
             } else {
               clearChannelWarmupRefreshTimers();
               clearChannelStatusRefreshTimer();
@@ -280,6 +345,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
           if (refreshed.state === 'running') {
             refreshChannelsSnapshot();
             scheduleChannelWarmupRefreshes();
+            syncChatRuntimeSubscriptions('sync chat runtime subscriptions after gateway init');
           }
         } catch {
           // best-effort; periodic reconciliation will recover later

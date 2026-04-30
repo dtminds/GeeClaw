@@ -10,7 +10,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { EditorContent, Node as TiptapNode, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Square, X, FileText, Film, Music, FileArchive, File, Loader2, ArrowUp, Plus, Package2, Search, ChevronDown, Check, Shield, Terminal } from 'lucide-react';
+import { Square, X, FileText, Film, Music, FileArchive, File, Loader2, ArrowUp, Plus, Package2, Search, ChevronDown, Check, Shield, Terminal, CornerDownRight, Trash2, MoreHorizontal, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -33,6 +33,7 @@ import {
   pendingModelSelectionMatchesSession,
 } from './model-selection';
 import type { ApprovalPolicy, ToolPermission } from '@/stores/settings';
+import type { QueuedChatMessage } from '@/stores/chat/state';
 import type { AgentSummary } from '@/types/agent';
 import type { Skill } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -680,6 +681,10 @@ export const ChatInput = memo(function ChatInput({
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const messages = useChatStore((s) => s.messages);
+  const queuedMessages = useChatStore((s) => s.queuedMessages);
+  const sendAckPending = useChatStore((s) => s.sendAckPending);
+  const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
+  const steerQueuedMessage = useChatStore((s) => s.steerQueuedMessage);
   const pendingComposerSeed = useChatStore((s) => s.pendingComposerSeed);
   const consumePendingComposerSeed = useChatStore((s) => s.consumePendingComposerSeed);
   const currentToolPermission = safetySettings?.toolPermission ?? 'default';
@@ -1362,8 +1367,13 @@ export const ChatInput = memo(function ChatInput({
 
   const allReady = attachments.length === 0 || attachments.every((attachment) => attachment.status === 'ready');
   const hasFailedAttachments = attachments.some((attachment) => attachment.status === 'error');
-  const canSend = (editorText.trim() || attachments.length > 0) && allReady && !disabled && !sending;
+  const hasComposerDraft = editorText.trim().length > 0 || attachments.length > 0;
+  const queuedMessageLimitReached = queuedMessages.length > 0;
+  const canSend = hasComposerDraft && allReady && !disabled && !sendAckPending && !queuedMessageLimitReached;
   const canStop = sending && !disabled && !!onStop;
+  const showStopAction = sending && !hasComposerDraft;
+  const primaryActionDisabled = showStopAction ? !canStop : !canSend;
+  const primaryActionEnabled = showStopAction ? canStop : canSend;
 
   const handleSend = useCallback(() => {
     if (!canSend) return;
@@ -1393,6 +1403,26 @@ export const ChatInput = memo(function ChatInput({
     onStop?.();
   }, [canStop, onStop]);
 
+  const handleEditQueuedMessage = useCallback((queuedMessage: QueuedChatMessage) => {
+    removeQueuedMessage(queuedMessage.id);
+    const nextAttachments = (queuedMessage.attachments || []).map((attachment) => ({
+      ...attachment,
+      id: crypto.randomUUID(),
+      status: 'ready' as const,
+    }));
+    setAttachments(nextAttachments);
+    setTargetAgentIdState(queuedMessage.targetAgentId);
+    setEditorText(queuedMessage.text);
+    editorTextRef.current = queuedMessage.text;
+    setSlashQuery(null);
+    editor?.commands.setContent(createComposerDocumentFromPlainText(queuedMessage.text, resolvableSkills));
+    editor?.commands.focus('end');
+  }, [editor, removeQueuedMessage, resolvableSkills, setTargetAgentIdState]);
+
+  const handleSteerQueuedMessage = useCallback((id: string) => {
+    void steerQueuedMessage(id);
+  }, [steerQueuedMessage]);
+
   const handleModelSelect = useCallback((runtimeProviderId: string, model: string) => {
     if (disabled || sending) return;
     const nextModel = buildProviderModelRef(runtimeProviderId, model);
@@ -1402,10 +1432,10 @@ export const ChatInput = memo(function ChatInput({
   }, [disabled, editor, onSend, sending]);
 
   const handleToolbarSkillSelect = useCallback((skill: Skill) => {
-    if (!editor || disabled || sending) return;
+    if (!editor || disabled) return;
     insertSkillTokenIntoEditor(editor, skill);
     editor.commands.focus('end');
-  }, [disabled, editor, sending]);
+  }, [disabled, editor]);
 
   const handleAgentSelect = useCallback((agent: AgentSummary) => {
     setTargetAgentIdState(agent.id);
@@ -1622,6 +1652,97 @@ export const ChatInput = memo(function ChatInput({
           </div>
         )}
 
+        {queuedMessages.length > 0 && (
+          <div className="-mb-px px-8">
+            <div className="space-y-1">
+              {queuedMessages.map((queuedMessage) => {
+                const previewText = queuedMessage.text.trim()
+                  || queuedMessage.attachments?.map((attachment) => attachment.fileName).join(', ')
+                  || t('composer.queuedAttachmentFallback');
+                const queuedMessageSteered = queuedMessage.kind === 'steered';
+
+                return (
+                  <div
+                    key={queuedMessage.id}
+                    className="flex min-h-10 items-center gap-1.5 rounded-t-[14px] rounded-b-none border border-black/8 bg-white/95 px-4 py-1.5 shadow-[0_6px_16px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-white/10 dark:bg-card/95"
+                  >
+                    <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground/85">
+                      {previewText}
+                    </div>
+
+                    {queuedMessageSteered ? (
+                      <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground">
+                        <CornerDownRight className="h-3.5 w-3.5" />
+                        {t('composer.steeredQueued')}
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={sendAckPending}
+                        onClick={() => handleSteerQueuedMessage(queuedMessage.id)}
+                        className="surface-hover h-7 shrink-0 rounded-md px-2 text-[12px] font-medium text-muted-foreground"
+                        title={t('composer.steerQueued')}
+                      >
+                        <CornerDownRight className="mr-1 h-3.5 w-3.5" />
+                        {t('composer.steerQueued')}
+                      </Button>
+                    )}
+
+                    {!queuedMessageSteered && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeQueuedMessage(queuedMessage.id)}
+                          className="surface-hover h-7 w-7 shrink-0 rounded-md text-muted-foreground"
+                          aria-label={t('composer.deleteQueued')}
+                          title={t('composer.deleteQueued')}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+
+                        <DropdownMenu.Root>
+                          <DropdownMenu.Trigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="surface-hover h-7 w-7 shrink-0 rounded-md text-muted-foreground"
+                              aria-label={t('composer.queuedActions')}
+                              title={t('composer.queuedActions')}
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenu.Trigger>
+                          <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                              side="top"
+                              align="end"
+                              sideOffset={8}
+                              className="z-50 min-w-[172px] overflow-hidden rounded-xl border border-black/8 bg-white p-1 text-popover-foreground shadow-[0_16px_36px_rgba(15,23,42,0.12)] outline-none data-[side=top]:animate-in data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-card"
+                            >
+                              <DropdownMenu.Item
+                                onSelect={() => handleEditQueuedMessage(queuedMessage)}
+                                className="flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-foreground outline-none transition-colors focus:bg-accent/60"
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                {t('composer.editQueued')}
+                              </DropdownMenu.Item>
+                            </DropdownMenu.Content>
+                          </DropdownMenu.Portal>
+                        </DropdownMenu.Root>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className={`rounded-[20px] border border-border/60 bg-popover/98 px-1 py-1.5 transition-[border-color,box-shadow] shadow-[0_12px_30px_-12px_rgba(28,28,32,0.18)] ${dragOver ? 'border-primary/80' : 'focus-within:border-primary/25'}`}>
           <div className="relative">
             {disabled && disabledHint && disabledAction ? (
@@ -1740,7 +1861,11 @@ export const ChatInput = memo(function ChatInput({
               <div className="relative min-h-[72px]">
                 {editorIsEmpty && (
                   <div className="pointer-events-none absolute inset-x-2 top-2 text-sm leading-[24px] text-muted-foreground/40">
-                    {disabled ? (disabledPlaceholder || t('composer.gatewayDisconnectedPlaceholder')) : t('composer.placeholder')}
+                    {disabled
+                      ? (disabledPlaceholder || t('composer.gatewayDisconnectedPlaceholder'))
+                      : sending
+                        ? t('composer.followUpPlaceholder')
+                        : t('composer.placeholder')}
                   </div>
                 )}
                 <EditorContent editor={editor} />
@@ -1755,7 +1880,7 @@ export const ChatInput = memo(function ChatInput({
                 size="icon"
                 className="h-8 w-8 shrink-0 rounded-full text-muted-foreground transition-colors"
                 onClick={pickFiles}
-                disabled={disabled || sending}
+                disabled={disabled}
                 title={t('composer.attachFiles')}
               >
                 <Plus className="h-4 w-4" />
@@ -1824,7 +1949,7 @@ export const ChatInput = memo(function ChatInput({
                   <Button
                     variant="ghost"
                     className="surface-hover h-8 max-w-[220px] shrink-0 rounded-full px-3 text-xs text-muted-foreground/80 transition-colors"
-                    disabled={disabled || sending || toolbarSkillItems.length === 0}
+                    disabled={disabled || toolbarSkillItems.length === 0}
                     title={t('composer.skillsMenuTitle')}
                   >
                     <span className="truncate">{t('composer.skillsMenuLabel')}</span>
@@ -1903,19 +2028,19 @@ export const ChatInput = memo(function ChatInput({
             </div>
 
             <Button
-              onClick={sending ? handleStop : handleSend}
-              disabled={sending ? !canStop : !canSend}
+              onClick={showStopAction ? handleStop : handleSend}
+              disabled={primaryActionDisabled}
               size="icon"
               className={cn(
                 'h-8 w-8 shrink-0 rounded-full transition-colors',
-                sending || canSend
+                primaryActionEnabled
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'surface-muted text-muted-foreground/70 hover:bg-accent/50',
               )}
               variant="ghost"
-              title={sending ? t('composer.stop') : t('composer.send')}
+              title={showStopAction ? t('composer.stop') : sending ? t('composer.queueSend') : t('composer.send')}
             >
-              {sending ? (
+              {showStopAction ? (
                 <Square className="h-3.5 w-3.5" fill="currentColor" />
               ) : (
                 <ArrowUp className="h-4 w-4" strokeWidth={2.2} />
