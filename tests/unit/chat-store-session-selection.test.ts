@@ -435,6 +435,48 @@ describe('chat store session selection', () => {
     expect(useChatStore.getState().toolStreamOrder).toEqual(['tool-agent']);
   });
 
+  it('caps remembered run-scoped tool event run ids', () => {
+    useChatStore.setState({
+      ...useChatStore.getState(),
+      currentSessionKey: writerSession.gatewaySessionKey,
+      currentAgentId: 'writer',
+      currentViewMode: 'session',
+      messages: [],
+      sending: true,
+      activeRunId: 'run-0',
+    });
+
+    const store = useChatStore.getState() as unknown as {
+      handleToolEvent: (source: 'agent' | 'session.tool', payload: Record<string, unknown>) => void;
+    };
+
+    for (let index = 0; index <= 200; index += 1) {
+      store.handleToolEvent('agent', {
+        runId: `run-${index}`,
+        sessionKey: writerSession.gatewaySessionKey,
+        stream: 'tool',
+        data: {
+          toolCallId: `tool-agent-${index}`,
+          name: 'weather',
+          phase: 'start',
+        },
+      });
+    }
+
+    store.handleToolEvent('session.tool', {
+      runId: 'run-0',
+      sessionKey: writerSession.gatewaySessionKey,
+      stream: 'tool',
+      data: {
+        toolCallId: 'tool-fallback-after-cap',
+        name: 'weather',
+        phase: 'start',
+      },
+    });
+
+    expect(useChatStore.getState().toolStreamOrder).toContain('tool-fallback-after-cap');
+  });
+
   it('ignores session.tool fallback for a steered run after any agent event identifies that run as run-scoped', () => {
     useChatStore.setState({
       ...useChatStore.getState(),

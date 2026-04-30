@@ -161,6 +161,7 @@ let _queuedMessageFlushTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_ABORTED_RUN_IDS = 50;
 const MAX_BLOCKED_RUN_EVENTS = 100;
 const MAX_SEEN_TOOL_EVENTS = 500;
+const MAX_RUN_SCOPED_SUBSCRIBED_RUN_IDS = 200;
 const CHAT_SEND_TIMEOUT_MS = 120_000;
 type BlockedRunEvent =
   | { kind: 'chat'; event: Record<string, unknown> }
@@ -174,6 +175,7 @@ const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
 const _seenToolEventKeys = new Set<string>();
 const _seenToolEventKeyOrder: string[] = [];
 const _runScopedSubscribedRunIds = new Set<string>();
+const _runScopedSubscribedRunIdOrder: string[] = [];
 let _awaitingSteeredRunAdoption = false;
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
@@ -485,6 +487,20 @@ function rememberToolEventKey(key: string): void {
   }
 }
 
+function rememberRunScopedSubscribedRunId(runId: string): void {
+  if (!runId) return;
+  if (!_runScopedSubscribedRunIds.has(runId)) {
+    _runScopedSubscribedRunIds.add(runId);
+    _runScopedSubscribedRunIdOrder.push(runId);
+  }
+  while (_runScopedSubscribedRunIdOrder.length > MAX_RUN_SCOPED_SUBSCRIBED_RUN_IDS) {
+    const oldest = _runScopedSubscribedRunIdOrder.shift();
+    if (oldest) {
+      _runScopedSubscribedRunIds.delete(oldest);
+    }
+  }
+}
+
 function getSessionMessagePayloadSessionKey(payload: Record<string, unknown>, message: RawMessage | null): string {
   const directKey = payload.key ?? payload.sessionKey;
   if (typeof directKey === 'string') return directKey;
@@ -626,6 +642,7 @@ export function __resetChatRuntimeGuardsForTests(): void {
   _seenToolEventKeys.clear();
   _seenToolEventKeyOrder.length = 0;
   _runScopedSubscribedRunIds.clear();
+  _runScopedSubscribedRunIdOrder.length = 0;
   _awaitingSteeredRunAdoption = false;
 }
 
@@ -708,7 +725,7 @@ function completeSteeredQueuedMessagesForRun(
   const limitedOptimisticAttachments = limitAttachedFilesForMessage(optimisticAttachments);
   const userMsg: RawMessage = {
     role: 'user',
-    content: queuedMessage.text || (queuedMessage.attachments?.length ? '(file attached)' : ''),
+    content: queuedMessage.text || (queuedMessage.attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''),
     timestamp: nowMs / 1000,
     id: crypto.randomUUID(),
     _attachedFiles: limitedOptimisticAttachments.files,
@@ -1798,7 +1815,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const limitedOptimisticAttachments = limitAttachedFilesForMessage(optimisticAttachments);
     const userMsg: RawMessage = {
       role: 'user',
-      content: trimmed || (attachments?.length ? '(file attached)' : ''),
+      content: trimmed || (attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''),
       timestamp: nowMs / 1000,
       id: crypto.randomUUID(),
       _attachedFiles: limitedOptimisticAttachments.files,
@@ -1829,7 +1846,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const isFirstMessage = !messages.slice(0, -1).some((m) => m.role === 'user');
     const currentDesktopSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
     const titleText = renderSkillMarkersAsPlainText(trimmed);
-    const previewText = toSessionPreview(trimmed || (attachments?.length ? '(file attached)' : ''));
+    const previewText = toSessionPreview(trimmed || (attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''));
     const nextTitle = isFirstMessage && titleText
       ? (titleText.length > 50 ? `${titleText.slice(0, 50)}…` : titleText)
       : (currentDesktopSession?.title ?? '');
@@ -1941,7 +1958,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             method: 'POST',
             body: JSON.stringify({
               sessionKey: currentSessionKey,
-              message: trimmed || 'Process the attached file(s).',
+              message: trimmed || i18n.t('chat:composer.attachmentDefaultInstruction'),
               deliver: false,
               idempotencyKey,
               media: attachments.map((a) => ({
@@ -2106,10 +2123,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const idempotencyKey = crypto.randomUUID();
-      const steerText = queuedMessage.text.trim() || 'Process the attached file(s).';
+      const steerText = queuedMessage.text.trim() || i18n.t('chat:composer.steerDefaultInstruction');
       let steerRunId: string | null = null;
       if (queuedMessage.attachments?.length) {
-        const result = await hostApiFetch<{ success?: boolean; result?: { runId?: string }; error?: string }>(
+        const result = await hostApiFetch<{ success?: boolean; result?: { runId?: string }; error?: string; errorCode?: string }>(
           '/api/chat/send-with-media',
           {
             method: 'POST',
@@ -2126,6 +2143,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }),
           },
         );
+        if (result?.success === false) {
+          throw new Error(getLocalizedRunPayloadErrorMessage(result.errorCode || result.error || ''));
+        }
         steerRunId = typeof result?.result?.runId === 'string' ? result.result.runId : null;
       } else {
         const result = await useGatewayStore.getState().rpc<Record<string, unknown> & { runId?: string }>(
@@ -2753,7 +2773,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   handleToolEvent: (source: 'agent' | 'session.tool', event: Record<string, unknown>) => {
     const runId = getToolEventRunId(event);
     if (source === 'agent' && runId) {
-      _runScopedSubscribedRunIds.add(runId);
+      rememberRunScopedSubscribedRunId(runId);
     }
     if (source === 'session.tool' && runId && _runScopedSubscribedRunIds.has(runId)) {
       return;
