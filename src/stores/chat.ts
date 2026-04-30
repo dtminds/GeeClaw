@@ -1855,7 +1855,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'error': {
-        const terminalAssistantRunError = terminalAssistantError;
         const errorMsg = String(
           event.errorMessage
           || getMessageErrorMessage(event.message)
@@ -1879,8 +1878,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         set({
-          error: terminalAssistantRunError ? null : errorMsg,
-          runError: terminalAssistantRunError ? errorMsg : null,
+          error: terminalAssistantError ? null : errorMsg,
+          runError: terminalAssistantError ? errorMsg : null,
           ...createEmptyToolRuntimeState(),
           pendingFinal: false,
           lastUserMessageAt: null,
@@ -1891,7 +1890,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingToolHiddenCount: 0,
         });
 
-        if (terminalAssistantRunError) {
+        if (terminalAssistantError) {
           clearHistoryPoll();
           clearErrorRecoveryTimer();
           set({
