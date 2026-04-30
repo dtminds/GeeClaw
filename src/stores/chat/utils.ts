@@ -66,13 +66,13 @@ export function getRunErrorFromPayloads(value: unknown): string | null {
     const payload = payloads[index];
     if (!payload || typeof payload !== 'object') continue;
     const record = payload as Record<string, unknown>;
-    if (record.isError !== true && record.is_error !== true) continue;
-    if (typeof record.errorCode === 'string' && record.errorCode.trim()) return record.errorCode.trim();
-    if (typeof record.error_code === 'string' && record.error_code.trim()) return record.error_code.trim();
-    if (typeof record.code === 'string' && record.code.trim()) return record.code.trim();
-    if (typeof record.text === 'string' && record.text.trim()) return record.text.trim();
-    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
-    const contentText = getMessageText(record.content).trim();
+    if (record['isError'] !== true && record['is_error'] !== true) continue;
+    if (typeof record['errorCode'] === 'string' && record['errorCode'].trim()) return record['errorCode'].trim();
+    if (typeof record['error_code'] === 'string' && record['error_code'].trim()) return record['error_code'].trim();
+    if (typeof record['code'] === 'string' && record['code'].trim()) return record['code'].trim();
+    if (typeof record['text'] === 'string' && record['text'].trim()) return record['text'].trim();
+    if (typeof record['message'] === 'string' && record['message'].trim()) return record['message'].trim();
+    const contentText = getMessageText(record['content']).trim();
     if (contentText) return contentText;
     return '';
   }
@@ -89,7 +89,7 @@ function getMessageRole(message: RawMessage | unknown): string {
 function getMessageIsError(message: RawMessage | unknown): boolean {
   if (!message || typeof message !== 'object') return false;
   const record = message as Record<string, unknown>;
-  return record.isError === true || record.is_error === true;
+  return record['isError'] === true || record['is_error'] === true;
 }
 
 export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): boolean {

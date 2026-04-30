@@ -165,12 +165,12 @@ const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
 function getRuntimeErrorCode(event: Record<string, unknown>): string | null {
-  const directCode = event.errorCode ?? event.error_code;
+  const directCode = event['errorCode'] ?? event['error_code'];
   if (typeof directCode === 'string' && directCode.trim()) return directCode.trim();
-  const message = event.message;
+  const message = event['message'];
   if (!message || typeof message !== 'object') return null;
-  const messageCode = (message as Record<string, unknown>).errorCode
-    ?? (message as Record<string, unknown>).error_code;
+  const messageRecord = message as Record<string, unknown>;
+  const messageCode = messageRecord['errorCode'] ?? messageRecord['error_code'];
   return typeof messageCode === 'string' && messageCode.trim() ? messageCode.trim() : null;
 }
 
@@ -179,8 +179,8 @@ function getLocalizedRuntimeErrorMessage(event: Record<string, unknown>): string
     return i18n.t('chat:runError.incompleteTurn');
   }
   return String(
-    event.errorMessage
-    || getMessageErrorMessage(event.message)
+    event['errorMessage']
+    || getMessageErrorMessage(event['message'])
     || i18n.t('chat:runError.generic'),
   );
 }
@@ -1564,9 +1564,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Handle incoming chat events from Gateway ──
 
   handleChatEvent: (event: Record<string, unknown>) => {
-    const runId = String(event.runId || '');
-    const eventState = String(event.state || '');
-    const eventSessionKey = event.sessionKey != null ? String(event.sessionKey) : null;
+    const runId = String(event['runId'] || '');
+    const eventState = String(event['state'] || '');
+    const eventSessionKey = event['sessionKey'] != null ? String(event['sessionKey']) : null;
     const { activeRunId, currentSessionKey } = get();
 
     // Only process events for the current session (when sessionKey is present)
@@ -1574,7 +1574,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
+    const eventMessage = event['message'];
+    const terminalAssistantError = isTerminalAssistantErrorMessage(eventMessage);
     const terminalAssistantErrorForActiveSession = terminalAssistantError
       && get().sending
       && eventSessionKey != null
@@ -1608,12 +1609,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     let resolvedState = eventState;
     if (terminalAssistantError) {
       resolvedState = 'error';
-    } else if (!resolvedState && event.message && typeof event.message === 'object') {
-      const msg = event.message as Record<string, unknown>;
-      const stopReason = getMessageStopReason(event.message);
+    } else if (!resolvedState && eventMessage && typeof eventMessage === 'object') {
+      const msg = eventMessage as Record<string, unknown>;
+      const stopReason = getMessageStopReason(eventMessage);
       if (stopReason) {
         resolvedState = 'final';
-      } else if (msg.role || msg.content) {
+      } else if (msg['role'] || msg['content']) {
         resolvedState = 'delta';
       }
     }
@@ -1650,14 +1651,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (get().error || get().runError) {
           set({ error: null, runError: null });
         }
-        const nextText = extractTextFromRuntimeMessage(event.message);
-        const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-          ? (event.message as RawMessage).timestamp
+        const nextText = extractTextFromRuntimeMessage(eventMessage);
+        const eventTimestamp = typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+          ? (eventMessage as RawMessage).timestamp
           : undefined;
         const shouldResumeSending = !get().sending
-          && !!event.message
-          && typeof event.message === 'object'
-          && !isToolResultRole((event.message as RawMessage).role);
+          && !!eventMessage
+          && typeof eventMessage === 'object'
+          && !isToolResultRole((eventMessage as RawMessage).role);
         set((s) => ({
           ...(shouldResumeSending
             ? {
@@ -1677,8 +1678,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingTextStartedAt: nextText.trim()
             ? (
                 s.streamingTextStartedAt
-                ?? (typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-                  ? (event.message as RawMessage).timestamp!
+                ?? (typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+                  ? (eventMessage as RawMessage).timestamp!
                   : Date.now() / 1000)
               )
             : s.streamingTextStartedAt,
@@ -1691,7 +1692,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'final': {
         clearErrorRecoveryTimer();
         if (get().error || get().runError) set({ error: null, runError: null });
-        const finalMsg = event.message as RawMessage | undefined;
+        const finalMsg = eventMessage as RawMessage | undefined;
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [];
@@ -2000,11 +2001,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       default: {
         const { sending } = get();
-        if (sending && event.message && typeof event.message === 'object') {
+        if (sending && eventMessage && typeof eventMessage === 'object') {
           console.warn(`[handleChatEvent] Unknown event state "${resolvedState}", treating message as streaming delta. Event keys:`, Object.keys(event));
-          const nextText = extractTextFromRuntimeMessage(event.message);
-          const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-            ? (event.message as RawMessage).timestamp
+          const nextText = extractTextFromRuntimeMessage(eventMessage);
+          const eventTimestamp = typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+            ? (eventMessage as RawMessage).timestamp
             : undefined;
           set((s) => ({
             streamingText: nextText.trim()
@@ -2018,8 +2019,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             streamingTextStartedAt: nextText.trim()
               ? (
                   s.streamingTextStartedAt
-                  ?? (typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-                    ? (event.message as RawMessage).timestamp!
+                  ?? (typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+                    ? (eventMessage as RawMessage).timestamp!
                     : Date.now() / 1000)
                 )
               : s.streamingTextStartedAt,
