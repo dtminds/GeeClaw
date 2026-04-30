@@ -78,7 +78,6 @@ export function normalizeProviderModelEntries(
       results.push({
         id,
         name: id,
-        reasoning: false,
       });
       continue;
     }
@@ -99,7 +98,7 @@ export function normalizeProviderModelEntries(
       ...rest,
       id,
       name: typeof value?.name === 'string' && value.name.trim() ? value.name.trim() : id,
-      reasoning: typeof value?.reasoning === 'boolean' ? value.reasoning : false,
+      ...(typeof value?.reasoning === 'boolean' ? { reasoning: value.reasoning } : {}),
       ...(input ? { input } : {}),
       ...(contextWindow ? { contextWindow } : {}),
       ...(maxTokens ? { maxTokens } : {}),

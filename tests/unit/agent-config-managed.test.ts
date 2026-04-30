@@ -1208,7 +1208,7 @@ describe('managed agent config domain', () => {
       return {
         ...definition,
         defaultModelId: 'gpt-6.0',
-        defaultModels: [{ id: 'gpt-6.0', name: 'gpt-6.0', reasoning: false }],
+        defaultModels: [{ id: 'gpt-6.0', name: 'gpt-6.0' }],
       };
     });
 
@@ -1263,7 +1263,6 @@ describe('managed agent config domain', () => {
                 {
                   id: 'gpt-5.4',
                   name: 'gpt-5.4',
-                  reasoning: false,
                 },
               ],
             },
@@ -1354,7 +1353,7 @@ describe('managed agent config domain', () => {
       return {
         ...definition,
         defaultModelId: 'gpt-6.0',
-        defaultModels: [{ id: 'gpt-6.0', name: 'gpt-6.0', reasoning: false }],
+        defaultModels: [{ id: 'gpt-6.0', name: 'gpt-6.0' }],
       };
     });
 

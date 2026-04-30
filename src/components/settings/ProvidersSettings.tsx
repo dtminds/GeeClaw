@@ -108,7 +108,6 @@ function createProviderModelEntry(
   return {
     id: normalizedId,
     name: normalizedId,
-    reasoning: false,
     ...(options?.supportsImage ? { input: ['text', 'image'] as const } : {}),
     ...(typeof options?.contextWindow === 'number' ? { contextWindow: options.contextWindow } : {}),
     ...(typeof options?.maxTokens === 'number' ? { maxTokens: options.maxTokens } : {}),

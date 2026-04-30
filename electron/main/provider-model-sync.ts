@@ -8,7 +8,7 @@ export interface AgentProviderUpdatePayload {
     baseUrl: string;
     api: string;
     apiKey: string | undefined;
-    models: Array<{ id: string; name: string; reasoning: boolean }>;
+    models: Array<{ id: string; name: string; reasoning?: boolean }>;
   };
 }
 
@@ -42,7 +42,7 @@ export function buildNonOAuthAgentProviderUpdate(
       baseUrl,
       api,
       apiKey: meta?.apiKeyEnv,
-      models: modelId ? [{ id: modelId, name: modelId, reasoning: false }] : [],
+      models: modelId ? [{ id: modelId, name: modelId }] : [],
     },
   };
 }

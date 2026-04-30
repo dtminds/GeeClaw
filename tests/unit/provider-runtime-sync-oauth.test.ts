@@ -601,7 +601,6 @@ describe('provider runtime sync for browser OAuth', () => {
         {
           id: 'qwen3:30b',
           name: 'qwen3:30b',
-          reasoning: false,
         },
       ],
       expect.objectContaining({
