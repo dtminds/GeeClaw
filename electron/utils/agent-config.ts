@@ -1301,7 +1301,6 @@ async function reconcileReferencedBuiltinModelRefs(
       catalog.customModels.push({
         id: modelId,
         name: modelId,
-        reasoning: false,
       });
       effectiveIds.add(modelId);
       changed = true;

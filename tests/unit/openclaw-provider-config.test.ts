@@ -308,7 +308,6 @@ describe('removeProviderFromOpenClaw', () => {
       {
         id: 'google/gemini-3-flash-preview',
         name: 'google/gemini-3-flash-preview',
-        reasoning: false,
         input: ['text', 'image'],
         contextWindow: 1048576,
         maxTokens: 65536,
@@ -345,7 +344,6 @@ describe('removeProviderFromOpenClaw', () => {
       {
         id: 'google/gemini-3-flash-preview',
         name: 'google/gemini-3-flash-preview',
-        reasoning: false,
         input: ['text', 'image'],
         contextWindow: 1048576,
         maxTokens: 65536,
@@ -354,6 +352,41 @@ describe('removeProviderFromOpenClaw', () => {
         id: 'openai/gpt-5.4',
         name: 'openai/gpt-5.4',
         reasoning: false,
+      },
+    ]);
+  });
+
+  it('removes previously defaulted reasoning=false when the current model entry omits reasoning', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          moonshot: {
+            baseUrl: 'https://api.moonshot.cn/v1',
+            api: 'openai-completions',
+            models: [
+              {
+                id: 'kimi-k2.5',
+                name: 'kimi-k2.5',
+                reasoning: false,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const { setOpenClawDefaultModel } = await import('@electron/utils/openclaw-provider-config');
+    await setOpenClawDefaultModel('moonshot', 'moonshot/kimi-k2.5');
+
+    const config = await readOpenClawJson();
+    const providers = ((config.models as { providers?: Record<string, unknown> })?.providers ?? {}) as Record<string, {
+      models?: Array<Record<string, unknown>>;
+    }>;
+
+    expect(providers.moonshot?.models).toEqual([
+      {
+        id: 'kimi-k2.5',
+        name: 'kimi-k2.5',
       },
     ]);
   });

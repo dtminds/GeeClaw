@@ -131,8 +131,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@tencent-weixin/openclaw-weixin':
-        specifier: 2.1.10
-        version: 2.1.10
+        specifier: 2.3.1
+        version: 2.3.1
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -161,8 +161,8 @@ importers:
         specifier: ^5.1.4
         version: 5.1.4(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.3))
       '@wecom/wecom-openclaw-plugin':
-        specifier: 2026.4.23
-        version: 2026.4.23
+        specifier: 2026.4.29
+        version: 2026.4.29
       '@whiskeysockets/baileys':
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(jimp@1.6.1)(sharp@0.34.5)
@@ -2729,8 +2729,8 @@ packages:
   '@telegraf/types@7.1.0':
     resolution: {integrity: sha512-kGevOIbpMcIlCDeorKGpwZmdH7kHbqlk/Yj6dEpJMKEQw5lk0KVQY0OLXaCswy8GqlIVLd5625OB+rAntP9xVw==}
 
-  '@tencent-weixin/openclaw-weixin@2.1.10':
-    resolution: {integrity: sha512-cEG6Iw5g2qqlA+8/TcmV+E8aFUEX0ruxF0+a5LgVy5wv56/qP07KoapfRa7YTRPzhRW5UDaz6zsZQArt/4ZNnA==}
+  '@tencent-weixin/openclaw-weixin@2.3.1':
+    resolution: {integrity: sha512-plOrZq5Oj4YkmP2/yclVnlPuPruUfXxk7BmHfnJFcFPmaXpt9X3gMF1WyQ6ebnEqtCvIpAIsntufgKShZemxCA==}
     engines: {node: '>=22'}
 
   '@testing-library/dom@10.4.1':
@@ -3300,8 +3300,8 @@ packages:
   '@wecom/aibot-node-sdk@1.0.6':
     resolution: {integrity: sha512-WZJN3Q+s+94Qjc0VW8d5W1cVkA3emYxiqf+mNRO9UEHoF40puHvizreNMtudjFhm7mmkYiK5ue/QzNiCk+xwLA==}
 
-  '@wecom/wecom-openclaw-plugin@2026.4.23':
-    resolution: {integrity: sha512-bnzfdIEEu1/LFvcdyjaTkyxt27w6c7dqhkPezU62OWaqmcdFsUGR3T55USK/O9pIKsNcnL1Tnu1pqKYCWHFgWQ==}
+  '@wecom/wecom-openclaw-plugin@2026.4.29':
+    resolution: {integrity: sha512-t6IFMG991ZYSzctJ+FoLdZ4uZeJnL/WVII4F56oUM1UDx9Ryy/bC+AiEffVKYYZ0bQvGkfha/kswvo4W2Q4g+g==}
 
   '@whiskeysockets/baileys@7.0.0-rc.9':
     resolution: {integrity: sha512-YFm5gKXfDP9byCXCW3OPHKXLzrAKzolzgVUlRosHHgwbnf2YOO3XknkMm6J7+F0ns8OA0uuSBhgkRHTDtqkacw==}
@@ -7298,6 +7298,7 @@ packages:
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   vary@1.1.2:
@@ -10862,7 +10863,7 @@ snapshots:
   '@telegraf/types@7.1.0':
     optional: true
 
-  '@tencent-weixin/openclaw-weixin@2.1.10':
+  '@tencent-weixin/openclaw-weixin@2.3.1':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6
@@ -11594,7 +11595,7 @@ snapshots:
       - debug
       - utf-8-validate
 
-  '@wecom/wecom-openclaw-plugin@2026.4.23':
+  '@wecom/wecom-openclaw-plugin@2026.4.29':
     dependencies:
       '@wecom/aibot-node-sdk': 1.0.6
       fast-xml-parser: 5.5.10

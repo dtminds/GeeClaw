@@ -245,12 +245,10 @@ describe('provider metadata', () => {
         expect.objectContaining({
           id: 'claude-opus-4-6',
           name: 'claude-opus-4-6',
-          reasoning: false,
         }),
         expect.objectContaining({
           id: 'claude-sonnet-4-6',
           name: 'claude-sonnet-4-6',
-          reasoning: false,
         }),
       ],
     });
@@ -261,12 +259,10 @@ describe('provider metadata', () => {
         expect.objectContaining({
           id: 'gpt-5.5',
           name: 'gpt-5.5',
-          reasoning: false,
         }),
         expect.objectContaining({
           id: 'gpt-5.4',
           name: 'gpt-5.4',
-          reasoning: false,
         }),
       ],
     });
@@ -277,17 +273,14 @@ describe('provider metadata', () => {
         expect.objectContaining({
           id: 'gemini-3-flash-preview',
           name: 'gemini-3-flash-preview',
-          reasoning: false,
         }),
         expect.objectContaining({
           id: 'gemini-3.1-pro-preview',
           name: 'gemini-3.1-pro-preview',
-          reasoning: false,
         }),
         expect.objectContaining({
           id: 'gemini-3.1-flash-lite-preview',
           name: 'gemini-3.1-flash-lite-preview',
-          reasoning: false,
         }),
       ],
     });
@@ -368,7 +361,6 @@ describe('provider metadata', () => {
       {
         id: 'kimi-k2.5',
         name: 'kimi-k2.5',
-        reasoning: false,
         contextWindow: 256000,
         maxTokens: 8192,
       },
@@ -378,17 +370,14 @@ describe('provider metadata', () => {
       {
         id: 'gemini-3-flash-preview',
         name: 'gemini-3-flash-preview',
-        reasoning: false,
       },
       {
         id: 'gemini-3.1-pro-preview',
         name: 'gemini-3.1-pro-preview',
-        reasoning: false,
       },
       {
         id: 'gemini-3.1-flash-lite-preview',
         name: 'gemini-3.1-flash-lite-preview',
-        reasoning: false,
       },
     ]);
   });

@@ -251,15 +251,13 @@ function mergeProviderModels(
     .filter((item): item is Record<string, unknown> => Boolean(item));
 }
 
-function withDefaultModelFlags(model: Record<string, unknown>): Record<string, unknown> {
-  if (typeof model.reasoning === 'boolean') {
+function removeDefaultedReasoningFalse(model: Record<string, unknown>): Record<string, unknown> {
+  if (model.reasoning !== false) {
     return model;
   }
 
-  return {
-    ...model,
-    reasoning: false,
-  };
+  const { reasoning: _defaultedReasoning, ...rest } = model;
+  return rest;
 }
 
 function normalizeRuntimeProviderModels(
@@ -268,7 +266,7 @@ function normalizeRuntimeProviderModels(
   return normalizeProviderModelEntries(models).map((model) => ({
     id: model.id,
     name: model.name,
-    reasoning: typeof model.reasoning === 'boolean' ? model.reasoning : false,
+    ...(typeof model.reasoning === 'boolean' ? { reasoning: model.reasoning } : {}),
     ...(model.input ? { input: model.input } : {}),
     ...(typeof model.contextWindow === 'number' ? { contextWindow: model.contextWindow } : {}),
     ...(typeof model.maxTokens === 'number' ? { maxTokens: model.maxTokens } : {}),
@@ -299,12 +297,12 @@ function upsertOpenClawProviderEntry(
   );
 
   const existingModels = options.mergeExistingModels && Array.isArray(existingProvider.models)
-    ? (existingProvider.models as Array<Record<string, unknown>>)
+    ? (existingProvider.models as Array<Record<string, unknown>>).map(removeDefaultedReasoningFalse)
     : [];
   const registryModels = options.includeRegistryModels
-    ? ((getProviderConfig(provider)?.models ?? []).map((m) => withDefaultModelFlags({ ...m })) as Array<Record<string, unknown>>)
+    ? (getProviderConfig(provider)?.models ?? []) as Array<Record<string, unknown>>
     : [];
-  const runtimeModels = normalizeRuntimeProviderModels(options.models).map((model) => withDefaultModelFlags(model));
+  const runtimeModels = normalizeRuntimeProviderModels(options.models);
   const existingRequest = (
     existingProvider.request && typeof existingProvider.request === 'object' && !Array.isArray(existingProvider.request)
       ? (existingProvider.request as Record<string, unknown>)

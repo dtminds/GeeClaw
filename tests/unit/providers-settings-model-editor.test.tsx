@@ -176,7 +176,6 @@ describe('ProvidersSettings model editor', () => {
           customModels: [{
             id: 'google/gemini-3-flash-preview',
             name: 'google/gemini-3-flash-preview',
-            reasoning: false,
             input: ['text', 'image'],
             contextWindow: 1048576,
             maxTokens: 65536,
