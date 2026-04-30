@@ -185,6 +185,13 @@ function getLocalizedRuntimeErrorMessage(event: Record<string, unknown>): string
   );
 }
 
+function getLocalizedRunPayloadErrorMessage(error: string): string {
+  if (error === GATEWAY_INCOMPLETE_TURN_ERROR_CODE) {
+    return getLocalizedRuntimeErrorMessage({ errorCode: error });
+  }
+  return error || i18n.t('chat:runError.generic');
+}
+
 function summarizeChatSelection(
   state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
 ): Record<string, unknown> {
@@ -1456,12 +1463,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
-      if (returnedRunError) {
+      if (returnedRunError !== null) {
         clearHistoryPoll();
         clearErrorRecoveryTimer();
         set({
           error: null,
-          runError: returnedRunError,
+          runError: getLocalizedRunPayloadErrorMessage(returnedRunError),
           sending: false,
           activeRunId: null,
           pendingFinal: false,

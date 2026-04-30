@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 
@@ -81,6 +82,79 @@ describe('chat send timeout recovery', () => {
     expect(useChatStore.getState()).toMatchObject({
       error: null,
       runError: "⚠️ Agent couldn't generate a response. Please try again.",
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
+  });
+
+  it('localizes chat.send error payloads with structured error codes', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-incomplete-turn',
+          payloads: [
+            {
+              code: 'gateway.incompleteTurn',
+              isError: true,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: 'Agent 未能生成回复，请重试',
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
+  });
+
+  it('uses localized generic text for chat.send error payloads without details', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-error',
+          payloads: [
+            {
+              isError: true,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: '发生错误',
       sending: false,
       activeRunId: null,
       pendingFinal: false,
