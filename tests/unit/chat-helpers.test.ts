@@ -99,4 +99,34 @@ describe('chat helper dedupe', () => {
       } as unknown as RawMessage,
     ], null)).toBe('404 Resource not found');
   });
+
+  it('allows small clock skew when finding terminal assistant errors after send start', () => {
+    const sendStartedAt = 1_710_000_010_000;
+
+    expect(getLatestTerminalAssistantRunError([
+      {
+        role: 'assistant',
+        id: 'assistant-error',
+        content: [],
+        stopReason: 'error',
+        errorMessage: '429 Resource exhausted',
+        timestamp: sendStartedAt - 5_000,
+      },
+    ], sendStartedAt)).toBe('429 Resource exhausted');
+  });
+
+  it('does not surface terminal assistant errors outside the clock skew window', () => {
+    const sendStartedAt = 1_710_000_010_000;
+
+    expect(getLatestTerminalAssistantRunError([
+      {
+        role: 'assistant',
+        id: 'assistant-error',
+        content: [],
+        stopReason: 'error',
+        errorMessage: '429 Resource exhausted',
+        timestamp: sendStartedAt - 11_000,
+      },
+    ], sendStartedAt)).toBeNull();
+  });
 });

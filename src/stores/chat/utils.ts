@@ -11,6 +11,7 @@ const RAW_PATH_SCAN_COMMANDS = new Set(['ls', 'find', 'tree', 'fd', 'rg', 'grep'
 const RAW_PATH_READ_TOOL_NAMES = new Set(['read', 'read_file', 'cat', 'view', 'list_dir', 'glob', 'grep', 'search']);
 const RAW_PATH_READ_COMMANDS = new Set(['cat', 'less', 'more', 'head', 'tail', 'bat', 'sed', 'awk']);
 const INTERNAL_ASSISTANT_ACK_MESSAGES = new Set(['HEARTBEAT_OK', 'NO_REPLY']);
+const TERMINAL_ERROR_TIMESTAMP_GRACE_MS = 10_000;
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
 export function toMs(ts: number): number {
@@ -62,9 +63,11 @@ export function getLatestTerminalAssistantRunError(
   messages: RawMessage[],
   afterTimestamp: number | null | undefined,
 ): string | null {
-  const afterMs = typeof afterTimestamp === 'number' ? toMs(afterTimestamp) : 0;
+  const afterMs = typeof afterTimestamp === 'number'
+    ? toMs(afterTimestamp) - TERMINAL_ERROR_TIMESTAMP_GRACE_MS
+    : 0;
   const isAfterTimestamp = (message: RawMessage): boolean => {
-    if (!afterMs || typeof message.timestamp !== 'number') return true;
+    if (afterMs <= 0 || typeof message.timestamp !== 'number') return true;
     return toMs(message.timestamp) >= afterMs;
   };
 
