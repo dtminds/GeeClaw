@@ -28,6 +28,8 @@ export interface RawMessage {
   stop_reason?: string;
   errorMessage?: string;
   error_message?: string;
+  errorCode?: string;
+  error_code?: string;
   usage?: {
     input?: number;
     output?: number;

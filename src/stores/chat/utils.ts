@@ -97,7 +97,7 @@ export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): 
 export function getLatestTerminalAssistantRunError(
   messages: RawMessage[],
   afterTimestamp: number | null | undefined,
-): string | null {
+): RawMessage | null {
   const afterMs = typeof afterTimestamp === 'number'
     ? toMs(afterTimestamp) - TERMINAL_ERROR_TIMESTAMP_GRACE_MS
     : 0;
@@ -119,7 +119,7 @@ export function getLatestTerminalAssistantRunError(
     return null;
   }
 
-  return getMessageErrorMessage(latestConversationTurn) ?? 'An error occurred';
+  return latestConversationTurn;
 }
 
 export function isInternalMessage(message: RawMessage): boolean {

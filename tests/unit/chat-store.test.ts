@@ -419,4 +419,53 @@ describe('chat store terminal model error handling', () => {
       limit: 200,
     });
   });
+
+  it('localizes terminal assistant errors found in history by structured error code', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            { role: 'user', content: '继续', id: 'u1-history', timestamp: 1 },
+            {
+              role: 'assistant',
+              id: 'assistant-incomplete-turn-error-history',
+              content: '',
+              stopReason: 'error',
+              errorCode: 'gateway.incompleteTurn',
+              isError: true,
+              timestamp: 2,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'agent:main:geeclaw_main',
+      currentAgentId: 'main',
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: 'run-incomplete-turn',
+      pendingFinal: true,
+      lastUserMessageAt: 1,
+      messages: [
+        { role: 'user', content: '继续', id: 'u1', timestamp: 1 },
+      ],
+    });
+
+    await useChatStore.getState().loadHistory(true);
+
+    const state = useChatStore.getState() as unknown as {
+      error: string | null;
+      runError: string | null;
+      sending: boolean;
+      activeRunId: string | null;
+    };
+    expect(state.error).toBeNull();
+    expect(state.runError).toBe('Agent 未能生成回复，请重试');
+    expect(state.sending).toBe(false);
+    expect(state.activeRunId).toBeNull();
+  });
 });

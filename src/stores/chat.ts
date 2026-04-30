@@ -802,10 +802,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages, {
           artifactBaseDir: resolveAgentWorkspace(selectedCronRun.agentId || get().currentAgentId),
         });
-        const latestTerminalAssistantError = getLatestTerminalAssistantRunError(
+        const latestTerminalAssistantErrorTurn = getLatestTerminalAssistantRunError(
           rawMessages,
           get().lastUserMessageAt,
         );
+        const latestTerminalAssistantError = latestTerminalAssistantErrorTurn
+          ? getLocalizedRuntimeErrorMessage({ message: latestTerminalAssistantErrorTurn })
+          : null;
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
@@ -852,10 +855,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
-        const latestTerminalAssistantError = getLatestTerminalAssistantRunError(
+        const latestTerminalAssistantErrorTurn = getLatestTerminalAssistantRunError(
           rawMessages,
           get().lastUserMessageAt,
         );
+        const latestTerminalAssistantError = latestTerminalAssistantErrorTurn
+          ? getLocalizedRuntimeErrorMessage({ message: latestTerminalAssistantErrorTurn })
+          : null;
 
         // Before filtering: attach images/files from tool_result messages to the next assistant message
         const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages, {

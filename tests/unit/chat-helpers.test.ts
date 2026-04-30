@@ -97,7 +97,7 @@ describe('chat helper dedupe', () => {
         errorMessage: '404 Resource not found',
         timestamp: 2,
       } as unknown as RawMessage,
-    ], null)).toBe('404 Resource not found');
+    ], null)).toMatchObject({ errorMessage: '404 Resource not found' });
   });
 
   it('matches terminal assistant errors surfaced as isError payload text', () => {
@@ -115,7 +115,7 @@ describe('chat helper dedupe', () => {
         isError: true,
         timestamp: 2,
       },
-    ], null)).toBe("⚠️ Agent couldn't generate a response. Please try again.");
+    ], null)).toMatchObject({ content: "⚠️ Agent couldn't generate a response. Please try again." });
   });
 
   it('allows small clock skew when finding terminal assistant errors after send start', () => {
@@ -130,7 +130,7 @@ describe('chat helper dedupe', () => {
         errorMessage: '429 Resource exhausted',
         timestamp: sendStartedAt - 5_000,
       },
-    ], sendStartedAt)).toBe('429 Resource exhausted');
+    ], sendStartedAt)).toMatchObject({ errorMessage: '429 Resource exhausted' });
   });
 
   it('does not surface terminal assistant errors outside the clock skew window', () => {
