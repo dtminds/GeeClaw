@@ -416,23 +416,34 @@ export function Chat() {
 
           {/* Terminal run error */}
           {runError && (
-            <div className="border border-destructive/20 bg-destructive/10 px-4 py-3 mx-4 rounded-xl mb-2">
-              <div className="mx-auto flex max-w-4xl items-start justify-between gap-3">
-                <div className="min-w-0">
+            <div
+              role="alert"
+              className="border border-destructive/20 bg-destructive/10 px-4 py-3 mx-4 rounded-xl mb-2"
+            >
+              <div
+                data-testid="run-error-panel"
+                className="mx-auto flex max-h-[min(28vh,16rem)] max-w-4xl flex-col gap-2 overflow-hidden"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <p className="flex items-center gap-2 text-sm font-medium text-destructive">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     {t('runError.title')}
                   </p>
-                  <p className="mt-1 break-words text-sm text-destructive/90">
+                  <button
+                    onClick={clearError}
+                    className="shrink-0 text-xs text-destructive/60 underline hover:text-destructive"
+                  >
+                    {t('common:actions.dismiss')}
+                  </button>
+                </div>
+                <div
+                  data-testid="run-error-body"
+                  className="min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]"
+                >
+                  <p className="break-words whitespace-pre-wrap text-sm text-destructive/90">
                     {runError}
                   </p>
                 </div>
-                <button
-                  onClick={clearError}
-                  className="shrink-0 text-xs text-destructive/60 underline hover:text-destructive"
-                >
-                  {t('common:actions.dismiss')}
-                </button>
               </div>
             </div>
           )}

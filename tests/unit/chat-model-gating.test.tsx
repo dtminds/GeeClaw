@@ -241,6 +241,9 @@ describe('Chat model gating', () => {
 
     expect(await screen.findByText('runError.title')).toBeInTheDocument();
     expect(screen.getByText('404 Resource not found')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveClass('border', 'bg-destructive/10');
+    expect(screen.getByTestId('run-error-panel')).toHaveClass('max-h-[min(28vh,16rem)]', 'overflow-hidden');
+    expect(screen.getByTestId('run-error-body')).toHaveClass('min-h-0', 'overflow-y-auto');
   });
 
   it('shows the brand orb and disables the composer while chat history is loading', async () => {
