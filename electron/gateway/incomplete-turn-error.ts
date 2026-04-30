@@ -1,6 +1,7 @@
 import { GATEWAY_INCOMPLETE_TURN_ERROR_CODE } from '../../shared/chat-errors';
 
-const ANSI_ESCAPE_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/g;
+const ESC = String.fromCharCode(27);
+const ANSI_ESCAPE_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g');
 
 export interface IncompleteTurnErrorInfo {
   runId: string;
