@@ -64,9 +64,14 @@ export function getLatestTerminalAssistantRunError(
     return toMs(message.timestamp) >= afterMs;
   };
 
-  const latestConversationTurn = [...messages].reverse().find((message) => (
-    (message.role === 'assistant' || message.role === 'user') && isAfterTimestamp(message)
-  ));
+  let latestConversationTurn: RawMessage | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if ((message.role === 'assistant' || message.role === 'user') && isAfterTimestamp(message)) {
+      latestConversationTurn = message;
+      break;
+    }
+  }
   if (!latestConversationTurn || !isTerminalAssistantErrorMessage(latestConversationTurn)) {
     return null;
   }
