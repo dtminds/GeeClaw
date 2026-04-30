@@ -178,25 +178,6 @@ let _awaitingSteeredRunAdoption = false;
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
 
-const CHAT_QUEUE_DEBUG = false;
-
-function summarizeQueuedMessagesForDebug(state: Pick<ChatState, 'queuedMessages'>): Array<Record<string, unknown>> {
-  return state.queuedMessages.map((message) => ({
-    id: message.id,
-    kind: message.kind ?? 'queued',
-    pendingRunId: message.pendingRunId ?? null,
-    steerRunId: message.steerRunId ?? null,
-    text: message.text,
-  }));
-}
-
-function logChatQueueDebug(event: string, details: Record<string, unknown> = {}): void {
-  if (!CHAT_QUEUE_DEBUG) {
-    return;
-  }
-
-  console.info(`[chat-queue-debug] ${event}`, details);
-}
 
 function getRuntimeErrorCode(event: Record<string, unknown>): string | null {
   const directCode = event['errorCode'] ?? event['error_code'];
@@ -291,11 +272,6 @@ async function rpcBestEffort(method: string, params?: unknown): Promise<unknown 
   try {
     return await useGatewayStore.getState().rpc(method, params);
   } catch (error) {
-    logChatQueueDebug('runtime-subscription:rpc-error', {
-      method,
-      params: params && typeof params === 'object' ? params as Record<string, unknown> : params,
-      error: String(error),
-    });
     return null;
   }
 }
@@ -338,22 +314,20 @@ async function subscribeSessionMessages(sessionKey: string, generation: number):
   }
 }
 
-async function enableSessionToolFallback(reason: string): Promise<void> {
+async function enableSessionToolFallback(_reason: string): Promise<void> {
   clearSessionToolFallbackUnsubscribeTimer();
   if (_sessionToolFallbackSubscribed) return;
   const result = await rpcBestEffort('sessions.subscribe', {});
   if (result !== null) {
     _sessionToolFallbackSubscribed = true;
-    logChatQueueDebug('runtime-subscription:session-tool-fallback-enabled', { reason });
   }
 }
 
-async function disableSessionToolFallback(reason: string): Promise<void> {
+async function disableSessionToolFallback(_reason: string): Promise<void> {
   clearSessionToolFallbackUnsubscribeTimer();
   if (!_sessionToolFallbackSubscribed) return;
   _sessionToolFallbackSubscribed = false;
   await rpcBestEffort('sessions.unsubscribe', {});
-  logChatQueueDebug('runtime-subscription:session-tool-fallback-disabled', { reason });
 }
 
 function scheduleSessionToolFallbackUnsubscribe(reason: string): void {
@@ -361,7 +335,6 @@ function scheduleSessionToolFallbackUnsubscribe(reason: string): void {
   clearSessionToolFallbackUnsubscribeTimer();
   _sessionToolFallbackUnsubscribeTimer = setTimeout(() => {
     if (shouldKeepSessionToolFallbackSubscribed()) {
-      logChatQueueDebug('runtime-subscription:session-tool-fallback-keep', { reason });
       return;
     }
     void disableSessionToolFallback(reason);
@@ -620,33 +593,10 @@ function takeBlockedRunEvents(runId: string): BlockedRunEvent[] {
 
 function replayBlockedRunEvents(runId: string | null, getState: () => ChatState): void {
   if (!runId) {
-    logChatQueueDebug('replay-blocked:skip-no-run-id', {
-      sending: getState().sending,
-      activeRunId: getState().activeRunId,
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    });
     return;
   }
 
   const blockedEvents = takeBlockedRunEvents(runId);
-  logChatQueueDebug('replay-blocked:start', {
-    runId,
-    count: blockedEvents.length,
-    before: {
-      sending: getState().sending,
-      activeRunId: getState().activeRunId,
-      pendingFinal: getState().pendingFinal,
-      pendingOptimisticUserId: getState().pendingOptimisticUserId,
-      streamingTextLength: getState().streamingText.length,
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    },
-    events: blockedEvents.map((entry) => ({
-      kind: entry.kind,
-      runId: String(entry.event.runId ?? ''),
-      state: String(entry.event.state ?? ''),
-      hasMessage: entry.event.message != null,
-    })),
-  });
   for (const blockedEvent of blockedEvents) {
     if (blockedEvent.kind === 'chat') {
       getState().handleChatEvent(blockedEvent.event);
@@ -654,17 +604,6 @@ function replayBlockedRunEvents(runId: string | null, getState: () => ChatState)
       getState().handleAgentEvent(blockedEvent.event);
     }
   }
-  logChatQueueDebug('replay-blocked:done', {
-    runId,
-    after: {
-      sending: getState().sending,
-      activeRunId: getState().activeRunId,
-      pendingFinal: getState().pendingFinal,
-      pendingOptimisticUserId: getState().pendingOptimisticUserId,
-      streamingTextLength: getState().streamingText.length,
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    },
-  });
 }
 
 export function __resetChatRuntimeGuardsForTests(): void {
@@ -747,9 +686,6 @@ function completeSteeredQueuedMessagesForRun(
   getState: () => ChatState,
 ): string | null {
   if (!runId) {
-    logChatQueueDebug('complete-steered:skip-empty-run-id', {
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    });
     return null;
   }
 
@@ -757,35 +693,9 @@ function completeSteeredQueuedMessagesForRun(
     message.kind === 'steered' && message.pendingRunId === runId
   ));
   if (!queuedMessage) {
-    logChatQueueDebug('complete-steered:not-found', {
-      runId,
-      activeRunId: getState().activeRunId,
-      sending: getState().sending,
-      pendingOptimisticUserId: getState().pendingOptimisticUserId,
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    });
     return null;
   }
 
-  logChatQueueDebug('complete-steered:start', {
-    runId,
-    queuedMessage: {
-      id: queuedMessage.id,
-      kind: queuedMessage.kind,
-      pendingRunId: queuedMessage.pendingRunId ?? null,
-      steerRunId: queuedMessage.steerRunId ?? null,
-      text: queuedMessage.text,
-      attachmentsCount: queuedMessage.attachments?.length ?? 0,
-    },
-    before: {
-      sending: getState().sending,
-      activeRunId: getState().activeRunId,
-      pendingFinal: getState().pendingFinal,
-      pendingOptimisticUserId: getState().pendingOptimisticUserId,
-      messagesCount: getState().messages.length,
-      historyRequestGeneration: getState().historyRequestGeneration,
-    },
-  });
 
   const nowMs = Date.now();
   const optimisticAttachments = queuedMessage.attachments?.map((attachment) => ({
@@ -828,19 +738,6 @@ function completeSteeredQueuedMessagesForRun(
       pendingOptimisticUserIndex: state.messages.length,
       historyRequestGeneration: state.historyRequestGeneration + 1,
     };
-  });
-  logChatQueueDebug('complete-steered:applied', {
-    runId,
-    returnedSteerRunId: queuedMessage.steerRunId ?? null,
-    after: {
-      sending: getState().sending,
-      activeRunId: getState().activeRunId,
-      pendingFinal: getState().pendingFinal,
-      pendingOptimisticUserId: getState().pendingOptimisticUserId,
-      messagesCount: getState().messages.length,
-      historyRequestGeneration: getState().historyRequestGeneration,
-      queuedMessages: summarizeQueuedMessagesForDebug(getState()),
-    },
   });
   _awaitingSteeredRunAdoption = true;
   return queuedMessage.steerRunId ?? null;
@@ -1522,16 +1419,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
           if (state.activeRunId && recentAssistant) {
             const completedRunId = state.activeRunId;
-            logChatQueueDebug('history:mid-run-observed-final-assistant', {
-              completedRunId,
-              quiet,
-              mode,
-              messagesCount: state.messages.length,
-              finalMessagesCount: finalMessages.length,
-              pendingOptimisticUserId: state.pendingOptimisticUserId,
-              queuedMessages: summarizeQueuedMessagesForDebug(state),
-              historyRequestGeneration: state.historyRequestGeneration,
-            });
             clearHistoryPoll();
             set({
               messages: finalMessages,
@@ -1550,33 +1437,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...createEmptyToolRuntimeState(),
             });
             const replayRunId = completeSteeredQueuedMessagesForRun(completedRunId ?? '', set, get);
-            logChatQueueDebug('history:mid-run-replay-after-complete-steered', {
-              completedRunId,
-              replayRunId,
-              state: {
-                sending: get().sending,
-                activeRunId: get().activeRunId,
-                pendingFinal: get().pendingFinal,
-                pendingOptimisticUserId: get().pendingOptimisticUserId,
-                messagesCount: get().messages.length,
-                queuedMessages: summarizeQueuedMessagesForDebug(get()),
-              },
-            });
             replayBlockedRunEvents(replayRunId, get);
             scheduleQueuedMessageFlush(get);
             return;
           }
 
-          logChatQueueDebug('history:mid-run-tool-only-patch', {
-            quiet,
-            mode,
-            messagesCount: state.messages.length,
-            enrichedMessagesCount: enrichedMessages.length,
-            pendingFinal: state.pendingFinal,
-            activeRunId: state.activeRunId,
-            pendingOptimisticUserId: state.pendingOptimisticUserId,
-            queuedMessages: summarizeQueuedMessagesForDebug(state),
-          });
           set((state) => ({
             messages: state.messages,
             loading: false,
@@ -1612,17 +1477,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             finalMessages,
           ),
         }));
-        logChatQueueDebug('history:applied', {
-          quiet,
-          mode,
-          finalMessagesCount: finalMessages.length,
-          sending: get().sending,
-          activeRunId: get().activeRunId,
-          pendingFinal: get().pendingFinal,
-          pendingOptimisticUserId: get().pendingOptimisticUserId,
-          queuedMessages: summarizeQueuedMessagesForDebug(get()),
-          historyRequestGeneration: get().historyRequestGeneration,
-        });
         logChatTrace('loadHistory:applied', {
           quiet,
           durationMs: Date.now() - startedAt,
@@ -1723,12 +1577,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           if (recentAssistant) {
             const completedRunId = get().activeRunId;
-            logChatQueueDebug('history:post-apply-observed-final-assistant', {
-              completedRunId,
-              pendingOptimisticUserId: get().pendingOptimisticUserId,
-              messagesCount: get().messages.length,
-              queuedMessages: summarizeQueuedMessagesForDebug(get()),
-            });
             clearHistoryPoll();
             set({
               sending: false,
@@ -1737,18 +1585,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...createEmptyToolRuntimeState(),
             });
             const replayRunId = completeSteeredQueuedMessagesForRun(completedRunId ?? '', set, get);
-            logChatQueueDebug('history:post-apply-replay-after-complete-steered', {
-              completedRunId,
-              replayRunId,
-              state: {
-                sending: get().sending,
-                activeRunId: get().activeRunId,
-                pendingFinal: get().pendingFinal,
-                pendingOptimisticUserId: get().pendingOptimisticUserId,
-                messagesCount: get().messages.length,
-                queuedMessages: summarizeQueuedMessagesForDebug(get()),
-              },
-            });
             replayBlockedRunEvents(replayRunId, get);
             scheduleQueuedMessageFlush(get);
           }
@@ -2230,29 +2066,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   flushNextQueuedMessage: () => {
     const state = get();
     if (state.sending || state.activeRunId || state.sendAckPending || state.queuedMessages.length === 0) {
-      logChatQueueDebug('flush-next:blocked', {
-        sending: state.sending,
-        activeRunId: state.activeRunId,
-        sendAckPending: state.sendAckPending,
-        queuedMessages: summarizeQueuedMessagesForDebug(state),
-      });
       return;
     }
 
     const nextMessage = state.queuedMessages.find((message) => message.kind !== 'steered');
     if (!nextMessage) {
-      logChatQueueDebug('flush-next:no-non-steered-message', {
-        queuedMessages: summarizeQueuedMessagesForDebug(state),
-      });
       return;
     }
 
-    logChatQueueDebug('flush-next:send', {
-      id: nextMessage.id,
-      text: nextMessage.text,
-      targetAgentId: nextMessage.targetAgentId,
-      attachmentsCount: nextMessage.attachments?.length ?? 0,
-    });
     set((currentState) => ({
       queuedMessages: currentState.queuedMessages.filter((message) => message.id !== nextMessage.id),
     }));
@@ -2266,30 +2087,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   steerQueuedMessage: async (id: string) => {
     const queuedMessage = get().queuedMessages.find((message) => message.id === id);
     if (!queuedMessage) {
-      logChatQueueDebug('steer:missing-queued-message', {
-        id,
-        queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      });
       return;
     }
 
     const activeRunId = get().activeRunId;
     if (!activeRunId) {
-      logChatQueueDebug('steer:no-active-run', {
-        id,
-        sending: get().sending,
-        queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      });
       return;
     }
 
-    logChatQueueDebug('steer:mark-steered', {
-      id,
-      activeRunId,
-      text: queuedMessage.text,
-      attachmentsCount: queuedMessage.attachments?.length ?? 0,
-      beforeQueuedMessages: summarizeQueuedMessagesForDebug(get()),
-    });
     set((state) => ({
       queuedMessages: state.queuedMessages.map((message) => (
         message.id === id
@@ -2303,14 +2108,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const idempotencyKey = crypto.randomUUID();
       const steerText = queuedMessage.text.trim() || 'Process the attached file(s).';
       let steerRunId: string | null = null;
-      logChatQueueDebug('steer:rpc-send', {
-        id,
-        activeRunId,
-        sessionKey: get().currentSessionKey,
-        idempotencyKey,
-        message: steerText,
-        hasAttachments: !!queuedMessage.attachments?.length,
-      });
       if (queuedMessage.attachments?.length) {
         const result = await hostApiFetch<{ success?: boolean; result?: { runId?: string }; error?: string }>(
           '/api/chat/send-with-media',
@@ -2330,12 +2127,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         );
         steerRunId = typeof result?.result?.runId === 'string' ? result.result.runId : null;
-        logChatQueueDebug('steer:media-rpc-ack', {
-          id,
-          activeRunId,
-          steerRunId,
-          rawResult: result,
-        });
       } else {
         const result = await useGatewayStore.getState().rpc<Record<string, unknown> & { runId?: string }>(
           'chat.send',
@@ -2348,34 +2139,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           CHAT_SEND_TIMEOUT_MS,
         );
         steerRunId = typeof result?.runId === 'string' ? result.runId : null;
-        logChatQueueDebug('steer:rpc-ack', {
-          id,
-          activeRunId,
-          steerRunId,
-          rawResult: result,
-        });
       }
       if (steerRunId) {
         rememberIgnoredSteerAckRunId(steerRunId);
-        logChatQueueDebug('steer:remember-ack-run-id', {
-          id,
-          activeRunId,
-          steerRunId,
-          queuedMessages: summarizeQueuedMessagesForDebug(get()),
-        });
       } else {
-        logChatQueueDebug('steer:no-steer-run-id-from-ack', {
-          id,
-          activeRunId,
-          queuedMessages: summarizeQueuedMessagesForDebug(get()),
-        });
       }
     } catch (err) {
-      logChatQueueDebug('steer:rpc-error', {
-        id,
-        activeRunId,
-        error: String(err),
-      });
       set({ error: String(err), runError: null });
     }
   },
@@ -2440,45 +2209,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const eventState = String(event['state'] || '');
     const eventSessionKey = event['sessionKey'] != null ? String(event['sessionKey']) : null;
     const { activeRunId, currentSessionKey } = get();
-    logChatQueueDebug('event:received', {
-      runId,
-      eventState,
-      eventSessionKey,
-      activeRunId,
-      currentSessionKey,
-      sending: get().sending,
-      pendingFinal: get().pendingFinal,
-      sendAckPending: get().sendAckPending,
-      pendingOptimisticUserId: get().pendingOptimisticUserId,
-      messagesCount: get().messages.length,
-      streamingTextLength: get().streamingText.length,
-      queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      messageRole: event['message'] && typeof event['message'] === 'object'
-        ? String((event['message'] as Record<string, unknown>)['role'] ?? '')
-        : '',
-      hasMessage: event['message'] != null,
-    });
 
     // Only process events for the current session (when sessionKey is present)
     if (eventSessionKey != null && eventSessionKey !== currentSessionKey) {
-      logChatQueueDebug('event:drop-session-mismatch', {
-        runId,
-        eventState,
-        eventSessionKey,
-        currentSessionKey,
-      });
       return;
     }
 
     const eventMessage = event['message'];
     if (isIgnorableSteerAckLifecycleEvent(runId, eventState, eventMessage)) {
-      logChatQueueDebug('event:drop-steer-ack-lifecycle', {
-        runId,
-        eventState,
-        activeRunId: get().activeRunId,
-        sending: get().sending,
-        queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      });
       return;
     }
 
@@ -2500,30 +2238,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           eventMessage == null
           && (eventState === 'started' || eventState === 'final' || eventState === 'aborted')
         ) {
-          logChatQueueDebug('event:drop-steer-contentless-lifecycle-while-original-active', {
-            runId,
-            eventState,
-            activeRunId,
-            pendingSteeredMessage: {
-              id: pendingSteeredMessage.id,
-              pendingRunId: pendingSteeredMessage.pendingRunId ?? null,
-              steerRunId: pendingSteeredMessage.steerRunId ?? null,
-              text: pendingSteeredMessage.text,
-            },
-          });
           return;
         }
-        logChatQueueDebug('event:buffer-steer-run-while-original-active', {
-          runId,
-          eventState,
-          activeRunId,
-          pendingSteeredMessage: {
-            id: pendingSteeredMessage.id,
-            pendingRunId: pendingSteeredMessage.pendingRunId ?? null,
-            steerRunId: pendingSteeredMessage.steerRunId ?? null,
-            text: pendingSteeredMessage.text,
-          },
-        });
         if (!pendingSteeredMessage.steerRunId) {
           set((state) => ({
             queuedMessages: state.queuedMessages.map((message) => (
@@ -2536,21 +2252,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         queueBlockedRunEvent(runId, { kind: 'chat', event });
         return;
       }
-      logChatQueueDebug('event:drop-run-mismatch', {
-        runId,
-        eventState,
-        activeRunId,
-        terminalAssistantErrorForActiveSession,
-        queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      });
       return;
     }
 
     if (runId && _abortedRunIds.has(runId) && eventState !== 'aborted') {
-      logChatQueueDebug('event:drop-aborted-run', {
-        runId,
-        eventState,
-      });
       return;
     }
 
@@ -2561,18 +2266,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         unblockUnknownAbortedRunEvents();
       } else {
         if (!activeRunId && get().sending) {
-          logChatQueueDebug('event:block-unknown-aborted-buffer', {
-            runId,
-            eventState,
-          });
           queueBlockedRunEvent(runId, { kind: 'chat', event });
         }
-        logChatQueueDebug('event:block-unknown-aborted-drop', {
-          runId,
-          eventState,
-          activeRunId,
-          sending: get().sending,
-        });
         return;
       }
     }
@@ -2606,10 +2301,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { sending, activeRunId: currentActiveRunId } = get();
       const canAdoptRun = !!runId && (resolvedState !== 'final' || eventMessage != null);
       if (!sending && canAdoptRun) {
-        logChatQueueDebug('event:adopt-external-run', {
-          runId,
-          resolvedState,
-        });
         set({ sending: true, activeRunId: runId, error: null, runError: null });
       } else if (
         sending
@@ -2617,10 +2308,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         && canAdoptRun
         && (resolvedState === 'started' || _awaitingSteeredRunAdoption)
       ) {
-        logChatQueueDebug('event:adopt-run-while-sending-without-active', {
-          runId,
-          resolvedState,
-        });
         _awaitingSteeredRunAdoption = false;
         set({ activeRunId: runId, error: null, runError: null });
       }
@@ -2631,10 +2318,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Run just started (e.g. from console); show loading immediately.
         const { sending: currentSending, activeRunId: currentActiveRunId } = get();
         if (!currentSending && runId) {
-          logChatQueueDebug('event:started-adopt-external-run', { runId });
           set({ sending: true, activeRunId: runId, error: null, runError: null });
         } else if (currentSending && !currentActiveRunId && runId) {
-          logChatQueueDebug('event:started-adopt-while-sending-without-active', { runId });
           set({ activeRunId: runId, error: null, runError: null });
         }
         break;
@@ -2900,52 +2585,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           if (hasOutput) {
             scheduleSessionToolFallbackUnsubscribe(`terminal-final:${runId || 'unknown'}`);
-            logChatQueueDebug('event:final-has-output-before-complete-steered', {
-              runId,
-              hasOutput,
-              hadToolEvents,
-              toolOnly,
-              state: {
-                sending: get().sending,
-                activeRunId: get().activeRunId,
-                pendingFinal: get().pendingFinal,
-                pendingOptimisticUserId: get().pendingOptimisticUserId,
-                messagesCount: get().messages.length,
-                streamingTextLength: get().streamingText.length,
-                queuedMessages: summarizeQueuedMessagesForDebug(get()),
-              },
-            });
             const replayRunId = completeSteeredQueuedMessagesForRun(runId, set, get);
-            logChatQueueDebug('event:final-has-output-after-complete-steered', {
-              runId,
-              replayRunId,
-              state: {
-                sending: get().sending,
-                activeRunId: get().activeRunId,
-                pendingFinal: get().pendingFinal,
-                pendingOptimisticUserId: get().pendingOptimisticUserId,
-                messagesCount: get().messages.length,
-                streamingTextLength: get().streamingText.length,
-                queuedMessages: summarizeQueuedMessagesForDebug(get()),
-              },
-            });
             replayBlockedRunEvents(replayRunId, get);
             scheduleQueuedMessageFlush(get);
           }
         } else {
           if (get().pendingOptimisticUserId) {
-            logChatQueueDebug('event:final-empty-keep-optimistic-user', {
-              runId,
-              state: {
-                sending: get().sending,
-                activeRunId: get().activeRunId,
-                pendingFinal: get().pendingFinal,
-                pendingOptimisticUserId: get().pendingOptimisticUserId,
-                messagesCount: get().messages.length,
-                streamingTextLength: get().streamingText.length,
-                queuedMessages: summarizeQueuedMessagesForDebug(get()),
-              },
-            });
             set({
               pendingFinal: true,
               sendAckPending: false,
@@ -2954,18 +2599,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             break;
           }
 
-          logChatQueueDebug('event:final-empty-reset-run', {
-            runId,
-            state: {
-              sending: get().sending,
-              activeRunId: get().activeRunId,
-              pendingFinal: get().pendingFinal,
-              pendingOptimisticUserId: get().pendingOptimisticUserId,
-              messagesCount: get().messages.length,
-              streamingTextLength: get().streamingText.length,
-              queuedMessages: summarizeQueuedMessagesForDebug(get()),
-            },
-          });
           set({
             sending: false,
             sendAckPending: false,
@@ -2980,19 +2613,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           scheduleSessionToolFallbackUnsubscribe(`terminal-final-empty:${runId || 'unknown'}`);
           get().loadHistory();
           const replayRunId = completeSteeredQueuedMessagesForRun(runId, set, get);
-          logChatQueueDebug('event:final-empty-after-complete-steered', {
-            runId,
-            replayRunId,
-            state: {
-              sending: get().sending,
-              activeRunId: get().activeRunId,
-              pendingFinal: get().pendingFinal,
-              pendingOptimisticUserId: get().pendingOptimisticUserId,
-              messagesCount: get().messages.length,
-              streamingTextLength: get().streamingText.length,
-              queuedMessages: summarizeQueuedMessagesForDebug(get()),
-            },
-          });
           replayBlockedRunEvents(replayRunId, get);
           scheduleQueuedMessageFlush(get);
         }
@@ -3137,19 +2757,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       _runScopedSubscribedRunIds.add(runId);
     }
     if (source === 'session.tool' && runId && _runScopedSubscribedRunIds.has(runId)) {
-      logChatQueueDebug('tool-event:drop-session-fallback-for-run-scoped-stream', {
-        source,
-        runId,
-      });
       return;
     }
 
     const dedupeKey = getToolEventDedupeKey(event);
     if (dedupeKey && _seenToolEventKeys.has(dedupeKey)) {
-      logChatQueueDebug('tool-event:drop-duplicate', {
-        source,
-        dedupeKey,
-      });
       return;
     }
     if (dedupeKey) {
@@ -3161,10 +2773,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   handleAgentEvent: (event: Record<string, unknown>) => {
     const stream = String(event.stream || '');
     if (stream !== 'tool') {
-      logChatQueueDebug('tool-event:drop-non-tool-stream', {
-        stream,
-        keys: Object.keys(event),
-      });
       return;
     }
 
@@ -3173,37 +2781,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       : event;
     const eventSessionKey = getToolEventSessionKey(event) || null;
     const runId = getToolEventRunId(event);
-    logChatQueueDebug('tool-event:received', {
-      runId,
-      eventSessionKey,
-      currentSessionKey: get().currentSessionKey,
-      activeRunId: get().activeRunId,
-      sending: get().sending,
-      pendingFinal: get().pendingFinal,
-      pendingOptimisticUserId: get().pendingOptimisticUserId,
-      toolMessagesCount: get().toolMessages.length,
-      toolStreamOrder: get().toolStreamOrder,
-      queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      dataKeys: Object.keys(data),
-      rawKeys: Object.keys(event),
-      toolCallId: getToolEventToolCallId(event) || null,
-      phase: getToolEventPhase(event) || null,
-      name: getToolEventName(event) || null,
-    });
 
     if (eventSessionKey && eventSessionKey !== get().currentSessionKey) {
-      logChatQueueDebug('tool-event:drop-session-mismatch', {
-        runId,
-        eventSessionKey,
-        currentSessionKey: get().currentSessionKey,
-      });
       return;
     }
 
     if (runId && _abortedRunIds.has(runId)) {
-      logChatQueueDebug('tool-event:drop-aborted-run', {
-        runId,
-      });
       return;
     }
 
@@ -3215,16 +2798,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         && (!message.steerRunId || message.steerRunId === runId)
       ));
       if (pendingSteeredMessage) {
-        logChatQueueDebug('tool-event:buffer-steer-run-while-original-active', {
-          runId,
-          activeRunId,
-          pendingSteeredMessage: {
-            id: pendingSteeredMessage.id,
-            pendingRunId: pendingSteeredMessage.pendingRunId ?? null,
-            steerRunId: pendingSteeredMessage.steerRunId ?? null,
-            text: pendingSteeredMessage.text,
-          },
-        });
         if (!pendingSteeredMessage.steerRunId) {
           set((state) => ({
             queuedMessages: state.queuedMessages.map((message) => (
@@ -3241,27 +2814,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (_blockUnknownAbortedRunEvents && runId) {
       if (!get().activeRunId && get().sending) {
-        logChatQueueDebug('tool-event:block-unknown-aborted-buffer', {
-          runId,
-        });
         queueBlockedRunEvent(runId, { kind: 'tool', event });
       }
-      logChatQueueDebug('tool-event:block-unknown-aborted-drop', {
-        runId,
-        activeRunId: get().activeRunId,
-        sending: get().sending,
-      });
       return;
     }
 
     const toolCallId = getToolEventToolCallId(event);
     if (!toolCallId) {
-      logChatQueueDebug('tool-event:drop-missing-tool-call-id', {
-        runId,
-        dataKeys: Object.keys(data),
-        rawKeys: Object.keys(event),
-        data,
-      });
       return;
     }
 
@@ -3364,22 +2923,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         toolMessages: syncToolMessages(nextToolStreamOrder, nextToolStreamById),
       };
     });
-    logChatQueueDebug('tool-event:applied', {
-      runId,
-      toolCallId,
-      name,
-      phase,
-      status,
-      outputLength: output?.length ?? 0,
-      shouldReloadHistoryForMissingResult,
-      state: {
-        activeRunId: get().activeRunId,
-        sending: get().sending,
-        pendingFinal: get().pendingFinal,
-        toolMessagesCount: get().toolMessages.length,
-        toolStreamOrder: get().toolStreamOrder,
-      },
-    });
 
     if (get().pendingFinal && get().streamingText.trim() && !hasRunningLiveToolMessages(get().toolMessages)) {
       void get().loadHistory(true);
@@ -3392,18 +2935,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const message = getSessionMessage(event);
     if (!message) return;
     if (String(message.role).toLowerCase() === 'assistant') {
-      logChatQueueDebug('session-message:drop-assistant-runtime-owned-by-chat', {
-        messageId: message.id ?? null,
-      });
       return;
     }
 
     const eventSessionKey = getSessionMessagePayloadSessionKey(event, message);
     if (eventSessionKey && eventSessionKey !== get().currentSessionKey) {
-      logChatQueueDebug('session-message:drop-session-mismatch', {
-        eventSessionKey,
-        currentSessionKey: get().currentSessionKey,
-      });
       return;
     }
 
@@ -3412,11 +2948,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     if (!displayMessage || isInternalMessage(displayMessage)) return;
     if (hasMatchingSteeredQueuedMessage(get(), displayMessage)) {
-      logChatQueueDebug('session-message:defer-steered-user', {
-        messageId: displayMessage.id ?? null,
-        content: getMessageText(displayMessage.content),
-        queuedMessages: summarizeQueuedMessagesForDebug(get()),
-      });
       return;
     }
 

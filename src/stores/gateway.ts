@@ -44,9 +44,6 @@ function logGatewayAsyncError(context: string, error: unknown): void {
   console.error(`Failed to ${context}:`, error);
 }
 
-function logChatQueueDebug(event: string, details: Record<string, unknown> = {}): void {
-  console.info(`[chat-queue-debug] ${event}`, details);
-}
 
 function clearChannelWarmupRefreshTimers(): void {
   for (const timer of channelWarmupRefreshTimers) {
@@ -115,10 +112,6 @@ function syncChatRuntimeSubscriptions(context: string): void {
   import('./chat')
     .then(({ useChatStore }) => useChatStore.getState().syncRuntimeSubscriptions())
     .catch((error) => {
-      logChatQueueDebug('gateway:runtime-subscription-sync:error', {
-        context,
-        error: String(error),
-      });
       logGatewayAsyncError(context, error);
     });
 }
@@ -137,13 +130,6 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
   }
 
   if (payload?.method === 'session.tool' && payload.params && typeof payload.params === 'object') {
-    logChatQueueDebug('gateway:session-tool-notification', {
-      runId: typeof payload.params.runId === 'string' ? payload.params.runId : null,
-      sessionKey: typeof payload.params.sessionKey === 'string' ? payload.params.sessionKey : null,
-      dataKeys: payload.params.data && typeof payload.params.data === 'object'
-        ? Object.keys(payload.params.data)
-        : [],
-    });
     forwardGatewayToolEvent(
       'session.tool',
       {
@@ -164,11 +150,6 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
   const stream = p.stream ?? data.stream;
   const phase = data.phase ?? p.phase;
   if (stream === 'tool') {
-    logChatQueueDebug('gateway:agent-tool-notification', {
-      runId: typeof p.runId === 'string' ? p.runId : null,
-      sessionKey: typeof p.sessionKey === 'string' ? p.sessionKey : null,
-      dataKeys: Object.keys(data),
-    });
     forwardGatewayToolEvent(
       'agent',
       {
