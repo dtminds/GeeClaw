@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 
@@ -46,6 +47,118 @@ describe('chat send timeout recovery', () => {
       sending: true,
     });
     expect(useChatStore.getState().error).toContain('RPC timeout: chat.send');
+  });
+
+  it('surfaces terminal run errors returned only in chat.send payloads', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-incomplete-turn',
+          payloads: [
+            {
+              text: "⚠️ Agent couldn't generate a response. Please try again.",
+              isError: true,
+            },
+          ],
+        };
+      }
+      if (method === 'chat.history') {
+        return { messages: [] };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: "⚠️ Agent couldn't generate a response. Please try again.",
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
+  });
+
+  it('localizes chat.send error payloads with structured error codes', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-incomplete-turn',
+          payloads: [
+            {
+              code: 'gateway.incompleteTurn',
+              isError: true,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: 'Agent 未能生成回复，请重试',
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
+  });
+
+  it('uses localized generic text for chat.send error payloads without details', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-error',
+          payloads: [
+            {
+              isError: true,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: '发生错误',
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
   });
 
   it('clears a recoverable timeout error once chat deltas arrive', () => {

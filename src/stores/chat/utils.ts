@@ -11,6 +11,7 @@ const RAW_PATH_SCAN_COMMANDS = new Set(['ls', 'find', 'tree', 'fd', 'rg', 'grep'
 const RAW_PATH_READ_TOOL_NAMES = new Set(['read', 'read_file', 'cat', 'view', 'list_dir', 'glob', 'grep', 'search']);
 const RAW_PATH_READ_COMMANDS = new Set(['cat', 'less', 'more', 'head', 'tail', 'bat', 'sed', 'awk']);
 const INTERNAL_ASSISTANT_ACK_MESSAGES = new Set(['HEARTBEAT_OK', 'NO_REPLY']);
+const TERMINAL_ERROR_TIMESTAMP_GRACE_MS = 10_000;
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
 export function toMs(ts: number): number {
@@ -28,6 +29,100 @@ export function getMessageText(content: unknown): string {
       .join('\n');
   }
   return '';
+}
+
+export function getMessageStopReason(message: RawMessage | unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+  const rawStopReason = (message as Record<string, unknown>).stopReason
+    ?? (message as Record<string, unknown>).stop_reason;
+  if (typeof rawStopReason !== 'string') return null;
+  const normalized = rawStopReason.trim().toLowerCase();
+  return normalized || null;
+}
+
+export function getMessageErrorMessage(message: RawMessage | unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+  const rawError = (message as Record<string, unknown>).errorMessage
+    ?? (message as Record<string, unknown>).error_message;
+  if (typeof rawError === 'string') {
+    const normalized = rawError.trim();
+    if (normalized) return normalized;
+  }
+  if (getMessageIsError(message)) {
+    const record = message as Record<string, unknown>;
+    const contentText = getMessageText(record.content).trim();
+    if (contentText) return contentText;
+    if (typeof record.text === 'string' && record.text.trim()) return record.text.trim();
+  }
+  return null;
+}
+
+export function getRunErrorFromPayloads(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const payloads = (value as Record<string, unknown>).payloads;
+  if (!Array.isArray(payloads)) return null;
+
+  for (let index = payloads.length - 1; index >= 0; index -= 1) {
+    const payload = payloads[index];
+    if (!payload || typeof payload !== 'object') continue;
+    const record = payload as Record<string, unknown>;
+    if (record['isError'] !== true && record['is_error'] !== true) continue;
+    if (typeof record['errorCode'] === 'string' && record['errorCode'].trim()) return record['errorCode'].trim();
+    if (typeof record['error_code'] === 'string' && record['error_code'].trim()) return record['error_code'].trim();
+    if (typeof record['code'] === 'string' && record['code'].trim()) return record['code'].trim();
+    if (typeof record['text'] === 'string' && record['text'].trim()) return record['text'].trim();
+    if (typeof record['message'] === 'string' && record['message'].trim()) return record['message'].trim();
+    const contentText = getMessageText(record['content']).trim();
+    if (contentText) return contentText;
+    return '';
+  }
+
+  return null;
+}
+
+function getMessageRole(message: RawMessage | unknown): string {
+  if (!message || typeof message !== 'object') return '';
+  const rawRole = (message as Record<string, unknown>).role;
+  return typeof rawRole === 'string' ? rawRole.trim().toLowerCase() : '';
+}
+
+function getMessageIsError(message: RawMessage | unknown): boolean {
+  if (!message || typeof message !== 'object') return false;
+  const record = message as Record<string, unknown>;
+  return record['isError'] === true || record['is_error'] === true;
+}
+
+export function isTerminalAssistantErrorMessage(message: RawMessage | unknown): boolean {
+  return getMessageRole(message) === 'assistant'
+    && (getMessageStopReason(message) === 'error' || getMessageIsError(message));
+}
+
+export function getLatestTerminalAssistantRunError(
+  messages: RawMessage[],
+  afterTimestamp: number | null | undefined,
+): RawMessage | null {
+  const afterMs = typeof afterTimestamp === 'number'
+    ? toMs(afterTimestamp) - TERMINAL_ERROR_TIMESTAMP_GRACE_MS
+    : 0;
+  const isAfterTimestamp = (message: RawMessage): boolean => {
+    if (afterMs <= 0 || typeof message.timestamp !== 'number') return true;
+    return toMs(message.timestamp) >= afterMs;
+  };
+
+  let latestConversationTurn: RawMessage | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const role = getMessageRole(message);
+    if ((role === 'assistant' || role === 'user') && isAfterTimestamp(message)) {
+      latestConversationTurn = message;
+      break;
+    }
+  }
+  if (!latestConversationTurn || !isTerminalAssistantErrorMessage(latestConversationTurn)) {
+    return null;
+  }
+
+  return latestConversationTurn;
 }
 
 export function isInternalMessage(message: RawMessage): boolean {

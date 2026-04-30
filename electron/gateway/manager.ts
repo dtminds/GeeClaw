@@ -26,7 +26,10 @@ import {
   resolvePendingGatewayRequest,
   type PendingGatewayRequest,
 } from './request-store';
-import { dispatchJsonRpcNotification, dispatchProtocolEvent } from './event-dispatch';
+import {
+  dispatchJsonRpcNotification,
+  dispatchProtocolEvent,
+} from './event-dispatch';
 import { GatewayStateController } from './state';
 import { prepareGatewayLaunchContext } from './config-sync';
 import { connectGatewaySocket, waitForGatewayReady } from './ws-client';
@@ -47,6 +50,10 @@ import { launchGatewayProcess, type ManagedGatewayProcess } from './process-laun
 import { GatewayRestartController } from './restart-controller';
 import { classifyGatewayStderrMessage, recordGatewayStartupStderrLine } from './startup-stderr';
 import { runGatewayStartupSequence } from './startup-orchestrator';
+import {
+  createIncompleteTurnChatErrorEvent,
+  parseIncompleteTurnErrorLine,
+} from './incomplete-turn-error';
 
 export interface GatewayStatus {
   state: GatewayLifecycleState;
@@ -760,6 +767,10 @@ export class GatewayManager extends EventEmitter {
       getShouldReconnect: () => this.shouldReconnect,
       onStderrLine: (line) => {
         recordGatewayStartupStderrLine(this.recentStartupStderrLines, line);
+        const incompleteTurnError = parseIncompleteTurnErrorLine(line);
+        if (incompleteTurnError) {
+          this.emit('chat:message', createIncompleteTurnChatErrorEvent(incompleteTurnError));
+        }
         const classified = classifyGatewayStderrMessage(line);
         if (classified.level === 'drop') return;
         if (classified.level === 'debug') {

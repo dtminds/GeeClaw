@@ -16,6 +16,11 @@
     "assistant": {
         "emptyResponse": "The model service did not return valid content"
     },
+    "runError": {
+        "title": "Model request failed",
+        "generic": "An error occurred",
+        "incompleteTurn": "Agent could not generate a response. Please try again."
+    },
     "toolbar": {
         "refresh": "Refresh chat",
         "thinking": "Thinking",

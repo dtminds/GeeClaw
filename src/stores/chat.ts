@@ -4,7 +4,9 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
+import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
+import { GATEWAY_INCOMPLETE_TURN_ERROR_CODE } from '../../shared/chat-errors';
 import {
   renderSkillMarkersAsPlainText,
 } from '@/lib/chat-message-text';
@@ -77,10 +79,15 @@ import {
 import {
   extractTextFromRuntimeMessage,
   extractToolOutputText,
+  getLatestTerminalAssistantRunError,
+  getMessageErrorMessage,
   getMessageText,
+  getMessageStopReason,
+  getRunErrorFromPayloads,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
   isInternalMessage,
+  isTerminalAssistantErrorMessage,
   shouldExtractRawFilePathsForTool,
   stripRenderedPrefixFromStreamingText,
   toSessionPreview,
@@ -156,6 +163,34 @@ let _blockUnknownAbortedRunEvents = false;
 const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
+
+function getRuntimeErrorCode(event: Record<string, unknown>): string | null {
+  const directCode = event['errorCode'] ?? event['error_code'];
+  if (typeof directCode === 'string' && directCode.trim()) return directCode.trim();
+  const message = event['message'];
+  if (!message || typeof message !== 'object') return null;
+  const messageRecord = message as Record<string, unknown>;
+  const messageCode = messageRecord['errorCode'] ?? messageRecord['error_code'];
+  return typeof messageCode === 'string' && messageCode.trim() ? messageCode.trim() : null;
+}
+
+function getLocalizedRuntimeErrorMessage(event: Record<string, unknown>): string {
+  if (getRuntimeErrorCode(event) === GATEWAY_INCOMPLETE_TURN_ERROR_CODE) {
+    return i18n.t('chat:runError.incompleteTurn');
+  }
+  return String(
+    event['errorMessage']
+    || getMessageErrorMessage(event['message'])
+    || i18n.t('chat:runError.generic'),
+  );
+}
+
+function getLocalizedRunPayloadErrorMessage(error: string): string {
+  if (error === GATEWAY_INCOMPLETE_TURN_ERROR_CODE) {
+    return getLocalizedRuntimeErrorMessage({ errorCode: error });
+  }
+  return error || i18n.t('chat:runError.generic');
+}
 
 function summarizeChatSelection(
   state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
@@ -746,7 +781,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
     const request = createHistoryRequestSnapshot(get());
-    if (!quiet) set({ loading: true, error: null });
+    if (!quiet) set({ loading: true, error: null, runError: null });
 
     if (currentViewMode === 'cron' && selectedCronRun) {
       try {
@@ -774,6 +809,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const displayMessages = await hydrateHistoryMessagesForDisplay(rawMessages, {
           artifactBaseDir: resolveAgentWorkspace(selectedCronRun.agentId || get().currentAgentId),
         });
+        const latestTerminalAssistantErrorTurn = getLatestTerminalAssistantRunError(
+          rawMessages,
+          get().lastUserMessageAt,
+        );
+        const latestTerminalAssistantError = latestTerminalAssistantErrorTurn
+          ? getLocalizedRuntimeErrorMessage({ message: latestTerminalAssistantErrorTurn })
+          : null;
         if (!isSameHistoryRequest(request, get())) {
           return;
         }
@@ -783,6 +825,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           thinkingLevel: null,
           loading: false,
           error: null,
+          runError: latestTerminalAssistantError,
           ...reconcileToolRuntimeWithHistory(
             state.toolStreamOrder,
             state.toolStreamById,
@@ -796,7 +839,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: [], loading: false, error: String(err) });
+        set({ messages: [], loading: false, error: String(err), runError: null });
       }
       return;
     }
@@ -819,6 +862,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       if (data) {
         const rawMessages = Array.isArray(data.messages) ? data.messages as RawMessage[] : [];
+        const latestTerminalAssistantErrorTurn = getLatestTerminalAssistantRunError(
+          rawMessages,
+          get().lastUserMessageAt,
+        );
+        const latestTerminalAssistantError = latestTerminalAssistantErrorTurn
+          ? getLocalizedRuntimeErrorMessage({ message: latestTerminalAssistantErrorTurn })
+          : null;
 
         // Before filtering: attach images/files from tool_result messages to the next assistant message
         const filteredMessages = prepareHistoryMessagesForDisplay(rawMessages, {
@@ -839,6 +889,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
+        if (latestTerminalAssistantError) {
+          clearHistoryPoll();
+          clearErrorRecoveryTimer();
+          set({
+            messages: finalMessages,
+            thinkingLevel,
+            loading: false,
+            error: null,
+            ...createRunResetState(),
+            runError: latestTerminalAssistantError,
+          });
+          logChatTrace('loadHistory:terminal-run-error', {
+            quiet,
+            mode,
+            durationMs: Date.now() - startedAt,
+            requestSessionKey: request.sessionKey,
+            error: latestTerminalAssistantError,
+            ...summarizeChatSelection(get()),
+          });
+          return;
+        }
         const toolPatchOnlyHistoryReload = mode === 'tool_patch';
         if (toolPatchOnlyHistoryReload) {
           set((state) => ({
@@ -846,6 +917,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             thinkingLevel,
             loading: false,
             error: null,
+            runError: quiet ? state.runError : null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -871,6 +943,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             messages: state.messages,
             loading: false,
             error: null,
+            runError: quiet ? state.runError : null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -893,6 +966,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           thinkingLevel,
           loading: false,
           error: null,
+          runError: quiet ? state.runError : null,
           ...reconcileToolRuntimeWithHistory(
             state.toolStreamOrder,
             state.toolStreamById,
@@ -1019,7 +1093,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return;
         }
         clearHistoryStartupRetry();
-        set({ messages: [], loading: false, error: null });
+        set({ messages: [], loading: false, error: null, runError: null });
         logChatTrace('loadHistory:empty', {
           quiet,
           durationMs: Date.now() - startedAt,
@@ -1050,6 +1124,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             });
             set({
               error: String(err),
+              runError: null,
               loading: false,
               ...(keepLoading ? { messages: [] } : {}),
             });
@@ -1062,6 +1137,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           };
           set({
             error: null,
+            runError: null,
             loading: keepLoading,
           });
           _historyStartupRetryTimer = setTimeout(() => {
@@ -1107,7 +1183,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!isSameHistoryRequest(request, get())) {
         return;
       }
-      set({ messages: [], loading: false });
+      set({ messages: [], loading: false, runError: null });
     }
   },
 
@@ -1217,6 +1293,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isDraftSession,
       sending: true,
       error: null,
+      runError: null,
       ...createEmptyToolRuntimeState(),
       streamingTextStartedAt: nowMs / 1000,
       pendingFinal: false,
@@ -1308,6 +1385,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       set({
         error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
+        runError: null,
         sending: false,
         activeRunId: null,
         lastUserMessageAt: null,
@@ -1336,7 +1414,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
-      let result: { success: boolean; result?: { runId?: string }; error?: string };
+      let result: { success: boolean; result?: Record<string, unknown> & { runId?: string }; error?: string };
 
       // Longer timeout for chat sends to tolerate high-latency networks (avoids connect error)
       const CHAT_SEND_TIMEOUT_MS = 120_000;
@@ -1360,7 +1438,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         );
       } else {
-        const rpcResult = await useGatewayStore.getState().rpc<{ runId?: string }>(
+        const rpcResult = await useGatewayStore.getState().rpc<Record<string, unknown> & { runId?: string }>(
           'chat.send',
           {
             sessionKey: currentSessionKey,
@@ -1374,6 +1452,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const returnedRunId = result.result?.runId;
+      const returnedRunError = getRunErrorFromPayloads(result.result);
       if (currentSendGeneration !== _sendGeneration) {
         if (returnedRunId) {
           rememberAbortedRunId(returnedRunId);
@@ -1384,7 +1463,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
-      if (!result.success) {
+      if (returnedRunError !== null) {
+        clearHistoryPoll();
+        clearErrorRecoveryTimer();
+        set({
+          error: null,
+          runError: getLocalizedRunPayloadErrorMessage(returnedRunError),
+          sending: false,
+          activeRunId: null,
+          pendingFinal: false,
+          lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
+          ...createEmptyToolRuntimeState(),
+        });
+        unblockUnknownAbortedRunEvents();
+      } else if (!result.success) {
         const errorMsg = result.error || 'Failed to send message';
         if (isRecoverableChatSendTimeout(errorMsg)) {
           logChatTrace('sendMessage:recoverable-timeout', {
@@ -1394,10 +1489,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...summarizeChatSelection(get()),
           });
           console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
-          set({ error: errorMsg });
+          set({ error: errorMsg, runError: null });
         } else {
           clearHistoryPoll();
-          set({ error: errorMsg, sending: false, ...createEmptyToolRuntimeState() });
+          set({ error: errorMsg, runError: null, sending: false, ...createEmptyToolRuntimeState() });
           unblockUnknownAbortedRunEvents();
         }
       } else if (get().sending) {
@@ -1432,10 +1527,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...summarizeChatSelection(get()),
         });
         console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
-        set({ error: errStr });
+        set({ error: errStr, runError: null });
       } else {
         clearHistoryPoll();
-        set({ error: errStr, sending: false, ...createEmptyToolRuntimeState() });
+        set({ error: errStr, runError: null, sending: false, ...createEmptyToolRuntimeState() });
         unblockUnknownAbortedRunEvents();
       }
     }
@@ -1462,16 +1557,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         { sessionKey: currentSessionKey },
       );
     } catch (err) {
-      set({ error: String(err) });
+      set({ error: String(err), runError: null });
     }
   },
 
   // ── Handle incoming chat events from Gateway ──
 
   handleChatEvent: (event: Record<string, unknown>) => {
-    const runId = String(event.runId || '');
-    const eventState = String(event.state || '');
-    const eventSessionKey = event.sessionKey != null ? String(event.sessionKey) : null;
+    const runId = String(event['runId'] || '');
+    const eventState = String(event['state'] || '');
+    const eventSessionKey = event['sessionKey'] != null ? String(event['sessionKey']) : null;
     const { activeRunId, currentSessionKey } = get();
 
     // Only process events for the current session (when sessionKey is present)
@@ -1479,8 +1574,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    const eventMessage = event['message'];
+    const terminalAssistantError = isTerminalAssistantErrorMessage(eventMessage);
+    const terminalAssistantErrorForActiveSession = terminalAssistantError
+      && get().sending
+      && eventSessionKey != null
+      && eventSessionKey === currentSessionKey;
+
     // Only process events for the active run (or if no active run set)
-    if (activeRunId && runId && runId !== activeRunId) {
+    if (activeRunId && runId && runId !== activeRunId && !terminalAssistantErrorForActiveSession) {
       return;
     }
 
@@ -1505,12 +1607,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Defensive: if state is missing but we have a message, try to infer state.
     let resolvedState = eventState;
-    if (!resolvedState && event.message && typeof event.message === 'object') {
-      const msg = event.message as Record<string, unknown>;
-      const stopReason = msg.stopReason ?? msg.stop_reason;
+    if (terminalAssistantError) {
+      resolvedState = 'error';
+    } else if (!resolvedState && eventMessage && typeof eventMessage === 'object') {
+      const msg = eventMessage as Record<string, unknown>;
+      const stopReason = getMessageStopReason(eventMessage);
       if (stopReason) {
         resolvedState = 'final';
-      } else if (msg.role || msg.content) {
+      } else if (msg['role'] || msg['content']) {
         resolvedState = 'delta';
       }
     }
@@ -1527,7 +1631,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // show loading/streaming in the app when this session has an active run.
       const { sending } = get();
       if (!sending && runId) {
-        set({ sending: true, activeRunId: runId, error: null });
+        set({ sending: true, activeRunId: runId, error: null, runError: null });
       }
     }
 
@@ -1536,7 +1640,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Run just started (e.g. from console); show loading immediately.
         const { sending: currentSending } = get();
         if (!currentSending && runId) {
-          set({ sending: true, activeRunId: runId, error: null });
+          set({ sending: true, activeRunId: runId, error: null, runError: null });
         }
         break;
       }
@@ -1544,17 +1648,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (_errorRecoveryTimer) {
           clearErrorRecoveryTimer();
         }
-        if (get().error) {
-          set({ error: null });
+        if (get().error || get().runError) {
+          set({ error: null, runError: null });
         }
-        const nextText = extractTextFromRuntimeMessage(event.message);
-        const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-          ? (event.message as RawMessage).timestamp
+        const nextText = extractTextFromRuntimeMessage(eventMessage);
+        const eventTimestamp = typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+          ? (eventMessage as RawMessage).timestamp
           : undefined;
         const shouldResumeSending = !get().sending
-          && !!event.message
-          && typeof event.message === 'object'
-          && !isToolResultRole((event.message as RawMessage).role);
+          && !!eventMessage
+          && typeof eventMessage === 'object'
+          && !isToolResultRole((eventMessage as RawMessage).role);
         set((s) => ({
           ...(shouldResumeSending
             ? {
@@ -1574,8 +1678,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingTextStartedAt: nextText.trim()
             ? (
                 s.streamingTextStartedAt
-                ?? (typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-                  ? (event.message as RawMessage).timestamp!
+                ?? (typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+                  ? (eventMessage as RawMessage).timestamp!
                   : Date.now() / 1000)
               )
             : s.streamingTextStartedAt,
@@ -1587,8 +1691,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       case 'final': {
         clearErrorRecoveryTimer();
-        if (get().error) set({ error: null });
-        const finalMsg = event.message as RawMessage | undefined;
+        if (get().error || get().runError) set({ error: null, runError: null });
+        const finalMsg = eventMessage as RawMessage | undefined;
         if (finalMsg) {
           if (isToolResultRole(finalMsg.role)) {
             const toolFiles: AttachedFileMeta[] = [];
@@ -1811,7 +1915,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'error': {
-        const errorMsg = String(event.errorMessage || 'An error occurred');
+        const errorMsg = getLocalizedRuntimeErrorMessage(event);
         const wasSending = get().sending;
         const { streamingText, streamingTextStartedAt } = get();
 
@@ -1830,7 +1934,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
 
         set({
-          error: errorMsg,
+          error: terminalAssistantError ? null : errorMsg,
+          runError: terminalAssistantError ? errorMsg : null,
           ...createEmptyToolRuntimeState(),
           pendingFinal: false,
           lastUserMessageAt: null,
@@ -1840,6 +1945,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingToolImages: [],
           pendingToolHiddenCount: 0,
         });
+
+        if (terminalAssistantError) {
+          clearHistoryPoll();
+          clearErrorRecoveryTimer();
+          set({
+            sending: false,
+            activeRunId: null,
+          });
+          void get().loadHistory(true);
+          break;
+        }
 
         // Don't immediately give up: the Gateway often retries internally
         // after transient API failures (e.g. "terminated"). Keep `sending`
@@ -1885,11 +2001,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       default: {
         const { sending } = get();
-        if (sending && event.message && typeof event.message === 'object') {
+        if (sending && eventMessage && typeof eventMessage === 'object') {
           console.warn(`[handleChatEvent] Unknown event state "${resolvedState}", treating message as streaming delta. Event keys:`, Object.keys(event));
-          const nextText = extractTextFromRuntimeMessage(event.message);
-          const eventTimestamp = typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-            ? (event.message as RawMessage).timestamp
+          const nextText = extractTextFromRuntimeMessage(eventMessage);
+          const eventTimestamp = typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+            ? (eventMessage as RawMessage).timestamp
             : undefined;
           set((s) => ({
             streamingText: nextText.trim()
@@ -1903,8 +2019,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             streamingTextStartedAt: nextText.trim()
               ? (
                   s.streamingTextStartedAt
-                  ?? (typeof (event.message as RawMessage | undefined)?.timestamp === 'number'
-                    ? (event.message as RawMessage).timestamp!
+                  ?? (typeof (eventMessage as RawMessage | undefined)?.timestamp === 'number'
+                    ? (eventMessage as RawMessage).timestamp!
                     : Date.now() / 1000)
                 )
               : s.streamingTextStartedAt,
@@ -1970,7 +2086,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (_errorRecoveryTimer) {
       clearErrorRecoveryTimer();
-      set({ error: null });
+      set({ error: null, runError: null });
     }
 
     set((s) => {
@@ -2037,6 +2153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // active chat run id stable so later text deltas are not filtered out.
         activeRunId: s.activeRunId,
         error: null,
+        runError: null,
         pendingFinal: phase === 'result' ? true : s.pendingFinal,
         streamingText: nextStreamingText,
         streamingTextStartedAt: nextStreamingTextStartedAt,
@@ -2097,7 +2214,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ error: null, runError: null }),
 
   queueComposerSeed: (text: string, tokenizableSkillSlugs?: string[]) => set({
     pendingComposerSeed: {

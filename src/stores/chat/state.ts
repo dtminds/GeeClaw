@@ -31,6 +31,7 @@ export interface ChatState {
   messages: RawMessage[];
   loading: boolean;
   error: string | null;
+  runError: string | null;
 
   // Streaming
   sending: boolean;
@@ -144,6 +145,7 @@ export type ConversationResetState = Pick<
   | keyof ToolRuntimeState
   | 'activeRunId'
   | 'error'
+  | 'runError'
   | 'pendingFinal'
   | 'lastUserMessageAt'
   | 'pendingOptimisticUserId'
@@ -157,6 +159,7 @@ export type RunResetState = Pick<
   ChatState,
   | 'sending'
   | 'activeRunId'
+  | 'runError'
   | keyof ToolRuntimeState
   | 'pendingFinal'
   | 'lastUserMessageAt'
@@ -184,6 +187,7 @@ export function createRunResetState(): RunResetState {
   return {
     sending: false,
     activeRunId: null,
+    runError: null,
     ...createEmptyToolRuntimeState(),
     pendingFinal: false,
     lastUserMessageAt: null,
@@ -201,6 +205,7 @@ export function createConversationResetState(): ConversationResetState {
     ...createEmptyToolRuntimeState(),
     activeRunId: null,
     error: null,
+    runError: null,
     pendingFinal: false,
     lastUserMessageAt: null,
     pendingOptimisticUserId: null,
@@ -216,6 +221,7 @@ export function createChatInitialState(): ChatDataState {
     messages: [],
     loading: false,
     error: null,
+    runError: null,
 
     sending: false,
     activeRunId: null,

@@ -126,6 +126,7 @@ export function Chat() {
   const loading = useChatStore((s) => s.loading);
   const sending = useChatStore((s) => s.sending);
   const error = useChatStore((s) => s.error);
+  const runError = useChatStore((s) => s.runError);
   const showThinking = useChatStore((s) => s.showThinking);
   const showToolCalls = useChatStore((s) => s.showToolCalls);
   const streamingText = useChatStore((s) => s.streamingText);
@@ -413,9 +414,43 @@ export function Chat() {
             )}
           </div>
 
+          {/* Terminal run error */}
+          {runError && (
+            <div
+              role="alert"
+              className="border border-destructive/20 bg-destructive/10 px-4 py-3 mx-4 rounded-xl mb-2"
+            >
+              <div
+                data-testid="run-error-panel"
+                className="mx-auto flex max-h-[min(28vh,16rem)] max-w-4xl flex-col gap-2 overflow-hidden"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {t('runError.title')}
+                  </p>
+                  <button
+                    onClick={clearError}
+                    className="shrink-0 text-xs text-destructive/60 underline hover:text-destructive"
+                  >
+                    {t('common:actions.dismiss')}
+                  </button>
+                </div>
+                <div
+                  data-testid="run-error-body"
+                  className="min-h-0 overflow-y-auto pr-2 [scrollbar-gutter:stable]"
+                >
+                  <p className="break-words whitespace-pre-wrap text-sm text-destructive/90">
+                    {runError}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Error bar */}
           {error && (
-            <div className="border-t border-destructive/20 bg-destructive/10 px-4 py-2">
+            <div className="border border-destructive/20 bg-destructive/10 px-4 py-2 mx-4 rounded-xl mb-2">
               <div className="mx-auto flex max-w-4xl items-center justify-between">
                 <p className="flex items-center gap-2 text-sm text-destructive">
                   <AlertCircle className="h-4 w-4" />
