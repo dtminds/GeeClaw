@@ -1897,10 +1897,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({
             sending: false,
             activeRunId: null,
-            lastUserMessageAt: null,
-            pendingOptimisticUserId: null,
-            pendingOptimisticUserAnchorAt: null,
-            pendingOptimisticUserIndex: null,
           });
           break;
         }
