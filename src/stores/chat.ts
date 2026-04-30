@@ -81,6 +81,7 @@ import {
   getMessageErrorMessage,
   getMessageText,
   getMessageStopReason,
+  getRunErrorFromPayloads,
   getToolCallInput,
   hasEquivalentFinalAssistantMessage,
   isInternalMessage,
@@ -1377,7 +1378,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
-      let result: { success: boolean; result?: { runId?: string }; error?: string };
+      let result: { success: boolean; result?: Record<string, unknown> & { runId?: string }; error?: string };
 
       // Longer timeout for chat sends to tolerate high-latency networks (avoids connect error)
       const CHAT_SEND_TIMEOUT_MS = 120_000;
@@ -1401,7 +1402,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         );
       } else {
-        const rpcResult = await useGatewayStore.getState().rpc<{ runId?: string }>(
+        const rpcResult = await useGatewayStore.getState().rpc<Record<string, unknown> & { runId?: string }>(
           'chat.send',
           {
             sessionKey: currentSessionKey,
@@ -1415,6 +1416,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const returnedRunId = result.result?.runId;
+      const returnedRunError = getRunErrorFromPayloads(result.result);
       if (currentSendGeneration !== _sendGeneration) {
         if (returnedRunId) {
           rememberAbortedRunId(returnedRunId);
@@ -1425,7 +1427,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
-      if (!result.success) {
+      if (returnedRunError) {
+        clearHistoryPoll();
+        clearErrorRecoveryTimer();
+        set({
+          error: null,
+          runError: returnedRunError,
+          sending: false,
+          activeRunId: null,
+          pendingFinal: false,
+          lastUserMessageAt: null,
+          pendingOptimisticUserId: null,
+          pendingOptimisticUserAnchorAt: null,
+          pendingOptimisticUserIndex: null,
+          ...createEmptyToolRuntimeState(),
+        });
+        unblockUnknownAbortedRunEvents();
+      } else if (!result.success) {
         const errorMsg = result.error || 'Failed to send message';
         if (isRecoverableChatSendTimeout(errorMsg)) {
           logChatTrace('sendMessage:recoverable-timeout', {

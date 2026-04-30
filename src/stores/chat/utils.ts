@@ -57,6 +57,26 @@ export function getMessageErrorMessage(message: RawMessage | unknown): string | 
   return null;
 }
 
+export function getRunErrorFromPayloads(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const payloads = (value as Record<string, unknown>).payloads;
+  if (!Array.isArray(payloads)) return null;
+
+  for (let index = payloads.length - 1; index >= 0; index -= 1) {
+    const payload = payloads[index];
+    if (!payload || typeof payload !== 'object') continue;
+    const record = payload as Record<string, unknown>;
+    if (record.isError !== true && record.is_error !== true) continue;
+    if (typeof record.text === 'string' && record.text.trim()) return record.text.trim();
+    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+    const contentText = getMessageText(record.content).trim();
+    if (contentText) return contentText;
+    return 'An error occurred';
+  }
+
+  return null;
+}
+
 function getMessageRole(message: RawMessage | unknown): string {
   if (!message || typeof message !== 'object') return '';
   const rawRole = (message as Record<string, unknown>).role;

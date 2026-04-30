@@ -48,6 +48,45 @@ describe('chat send timeout recovery', () => {
     expect(useChatStore.getState().error).toContain('RPC timeout: chat.send');
   });
 
+  it('surfaces terminal run errors returned only in chat.send payloads', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.send') {
+        return {
+          runId: 'run-incomplete-turn',
+          payloads: [
+            {
+              text: "⚠️ Agent couldn't generate a response. Please try again.",
+              isError: true,
+            },
+          ],
+        };
+      }
+      if (method === 'chat.history') {
+        return { messages: [] };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'cron:test',
+      currentDesktopSessionId: '',
+      currentViewMode: 'cron',
+      currentAgentId: 'test',
+      desktopSessions: [],
+      messages: [],
+    });
+
+    await useChatStore.getState().sendMessage('hello');
+
+    expect(useChatStore.getState()).toMatchObject({
+      error: null,
+      runError: "⚠️ Agent couldn't generate a response. Please try again.",
+      sending: false,
+      activeRunId: null,
+      pendingFinal: false,
+    });
+  });
+
   it('clears a recoverable timeout error once chat deltas arrive', () => {
     useChatStore.setState({
       sending: true,
