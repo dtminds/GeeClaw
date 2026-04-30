@@ -1855,7 +1855,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'error': {
-        const terminalAssistantRunError = isTerminalAssistantErrorMessage(event.message);
+        const terminalAssistantRunError = terminalAssistantError;
         const errorMsg = String(
           event.errorMessage
           || getMessageErrorMessage(event.message)
