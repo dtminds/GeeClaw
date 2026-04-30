@@ -291,4 +291,70 @@ describe('chat store terminal model error handling', () => {
       limit: 200,
     });
   });
+
+  it('does not drop terminal assistant errors when runtime runId differs from the active run', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            { role: 'user', content: '继续', id: 'u1-history', timestamp: 1 },
+            {
+              role: 'assistant',
+              id: 'assistant-incomplete-turn-error-history',
+              content: "⚠️ Agent couldn't generate a response. Please try again.",
+              isError: true,
+              timestamp: 2,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'agent:main:geeclaw_main',
+      currentAgentId: 'main',
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: 'run-started',
+      pendingFinal: true,
+      streamingText: '',
+      messages: [
+        { role: 'user', content: '继续', id: 'u1', timestamp: 1 },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-runtime-incomplete',
+      sessionKey: 'agent:main:geeclaw_main',
+      message: {
+        role: 'assistant',
+        id: 'assistant-incomplete-turn-error',
+        content: "⚠️ Agent couldn't generate a response. Please try again.",
+        isError: true,
+        timestamp: 2,
+      },
+    });
+
+    const state = useChatStore.getState() as unknown as {
+      error: string | null;
+      runError: string | null;
+      sending: boolean;
+      activeRunId: string | null;
+    };
+    expect(state.error).toBeNull();
+    expect(state.runError).toBe("⚠️ Agent couldn't generate a response. Please try again.");
+    expect(state.sending).toBe(false);
+    expect(state.activeRunId).toBeNull();
+
+    await flushPromises();
+
+    expect(rpcMock).toHaveBeenCalledWith('chat.history', {
+      sessionKey: 'agent:main:geeclaw_main',
+      limit: 200,
+    });
+  });
 });

@@ -1520,8 +1520,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
+    const terminalAssistantErrorForActiveSession = terminalAssistantError
+      && get().sending
+      && eventSessionKey != null
+      && eventSessionKey === currentSessionKey;
+
     // Only process events for the active run (or if no active run set)
-    if (activeRunId && runId && runId !== activeRunId) {
+    if (activeRunId && runId && runId !== activeRunId && !terminalAssistantErrorForActiveSession) {
       return;
     }
 
@@ -1546,7 +1552,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Defensive: if state is missing but we have a message, try to infer state.
     let resolvedState = eventState;
-    const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
     if (terminalAssistantError) {
       resolvedState = 'error';
     } else if (!resolvedState && event.message && typeof event.message === 'object') {
