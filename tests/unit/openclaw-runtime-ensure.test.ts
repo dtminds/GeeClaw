@@ -30,6 +30,7 @@ vi.mock('../../openclaw-runtime/install-runtime.mjs', () => ({
 
 type RuntimeFixture = {
   declaredVersion?: string;
+  runtimeDependencies?: Record<string, string>;
   installedVersion?: string | null;
   installedDependencies?: Record<string, string>;
   malformedInstalledPackage?: boolean;
@@ -42,12 +43,16 @@ function normalizePath(value: string) {
 
 function configureRuntimeFixture({
   declaredVersion = '2026.4.25',
+  runtimeDependencies,
   installedVersion = '2026.4.25',
   installedDependencies = {},
   malformedInstalledPackage = false,
   presentDependencyPackages = [],
 }: RuntimeFixture = {}) {
   const presentDependencyPackageNames = new Set(presentDependencyPackages);
+  const declaredRuntimeDependencies = runtimeDependencies ?? {
+    openclaw: declaredVersion,
+  };
 
   mockExistsSync.mockImplementation((value: string) => {
     const normalized = normalizePath(value);
@@ -65,9 +70,7 @@ function configureRuntimeFixture({
     const normalized = normalizePath(value);
     if (normalized.endsWith('/openclaw-runtime/package.json')) {
       return JSON.stringify({
-        dependencies: {
-          openclaw: declaredVersion,
-        },
+        dependencies: declaredRuntimeDependencies,
       });
     }
 
@@ -133,6 +136,22 @@ describe('openclaw-runtime ensure script', () => {
     expect(mockInstallRuntime).toHaveBeenCalledTimes(1);
   });
 
+  it('installs the runtime when a direct runtime package dependency is missing', async () => {
+    configureRuntimeFixture({
+      runtimeDependencies: {
+        openclaw: '2026.4.25',
+        grammy: '^1.42.0',
+      },
+      presentDependencyPackages: [],
+    });
+
+    const { ensureRuntime } = await import('../../openclaw-runtime/ensure-runtime.mjs');
+
+    await ensureRuntime();
+
+    expect(mockInstallRuntime).toHaveBeenCalledTimes(1);
+  });
+
   it('installs the runtime when installed OpenClaw metadata is malformed', async () => {
     configureRuntimeFixture({ malformedInstalledPackage: true });
 
@@ -145,10 +164,14 @@ describe('openclaw-runtime ensure script', () => {
 
   it('skips installation when the installed OpenClaw version and direct dependencies are current', async () => {
     configureRuntimeFixture({
+      runtimeDependencies: {
+        openclaw: '2026.4.25',
+        grammy: '^1.42.0',
+      },
       installedDependencies: {
         chokidar: '^5.0.0',
       },
-      presentDependencyPackages: ['chokidar'],
+      presentDependencyPackages: ['chokidar', 'grammy'],
     });
 
     const { ensureRuntime } = await import('../../openclaw-runtime/ensure-runtime.mjs');

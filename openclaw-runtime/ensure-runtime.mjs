@@ -24,6 +24,14 @@ function getRequestedOpenClawVersion() {
     : null;
 }
 
+function getRuntimePackageDependencies() {
+  const runtimePkg = readJsonFile(runtimePkgPath);
+  const dependencies = runtimePkg?.dependencies;
+  return dependencies && typeof dependencies === 'object' && !Array.isArray(dependencies)
+    ? dependencies
+    : {};
+}
+
 function getPackageJsonPath(nodeModulesDir, packageName) {
   return path.join(nodeModulesDir, ...packageName.split('/'), 'package.json');
 }
@@ -42,19 +50,29 @@ function hasMissingOpenClawDependency(openClawPkg) {
   return Object.keys(dependencies).some((packageName) => !isDependencyPackageInstalled(packageName));
 }
 
+function hasMissingRuntimePackageDependency(runtimeDependencies) {
+  return Object.keys(runtimeDependencies)
+    .filter((packageName) => packageName !== 'openclaw')
+    .some((packageName) => !isDependencyPackageInstalled(packageName));
+}
+
 function isRuntimeCurrent() {
   try {
     if (!fs.existsSync(installedOpenClawPkg)) {
       return false;
     }
 
+    const runtimeDependencies = getRuntimePackageDependencies();
     const installedOpenClawPkgJson = readJsonFile(installedOpenClawPkg);
-    const requestedVersion = getRequestedOpenClawVersion();
+    const requestedVersion = typeof runtimeDependencies.openclaw === 'string' && isExactVersionSpec(runtimeDependencies.openclaw)
+      ? runtimeDependencies.openclaw
+      : getRequestedOpenClawVersion();
     if (requestedVersion && installedOpenClawPkgJson?.version !== requestedVersion) {
       return false;
     }
 
-    return !hasMissingOpenClawDependency(installedOpenClawPkgJson);
+    return !hasMissingRuntimePackageDependency(runtimeDependencies)
+      && !hasMissingOpenClawDependency(installedOpenClawPkgJson);
   } catch {
     return false;
   }

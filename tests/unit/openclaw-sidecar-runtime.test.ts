@@ -45,7 +45,7 @@ describe('openclaw sidecar runtime hydration', () => {
       version: '2026.4.10-r2',
     });
 
-    expect(first.runtimeRoot).toBe(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64'));
+    expect(first.runtimeRoot).toBe(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar'));
     expect(readFileSync(join(first.runtimeRoot, 'openclaw.mjs'), 'utf8')).toContain('runtime = true');
     expect(readFileSync(join(first.runtimeRoot, '.archive-stamp'), 'utf8').trim()).toBe('2026.4.10-r2');
 
@@ -57,5 +57,51 @@ describe('openclaw sidecar runtime hydration', () => {
 
     expect(second.runtimeRoot).toBe(first.runtimeRoot);
     expect(readFileSync(join(second.runtimeRoot, 'dist', 'entry.js'), 'utf8')).toContain('ready');
+  });
+
+  it('rehydrates when the payload checksum changes without a version bump', async () => {
+    const { hydrateOpenClawSidecar } = await import('../../scripts/lib/openclaw-sidecar-runtime.mjs');
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-hydration-'));
+    tempDirs.push(projectRoot);
+
+    const archiveRoot = join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64');
+    const sourceRoot = join(projectRoot, 'tmp-openclaw-source');
+    mkdirSync(archiveRoot, { recursive: true });
+    mkdirSync(sourceRoot, { recursive: true });
+
+    writeFileSync(join(sourceRoot, 'openclaw.mjs'), 'export const runtime = "first";\n', 'utf8');
+    execFileSync('tar', ['-czf', join(archiveRoot, 'payload.tar.gz'), '-C', sourceRoot, '.']);
+    writeFileSync(
+      join(archiveRoot, 'archive.json'),
+      JSON.stringify({ format: 'tar.gz', path: 'payload.tar.gz', version: '2026.4.27-r1' }) + '\n',
+      'utf8',
+    );
+    writeFileSync(join(archiveRoot, 'SHA256SUMS'), 'aaa  payload.tar.gz\n', 'utf8');
+
+    const first = hydrateOpenClawSidecar({
+      projectRoot,
+      target: 'darwin-arm64',
+      version: '2026.4.27-r1',
+    });
+
+    expect(readFileSync(join(first.runtimeRoot, 'openclaw.mjs'), 'utf8')).toContain('"first"');
+    expect(readFileSync(join(first.runtimeRoot, '.archive-stamp'), 'utf8').trim()).toBe('2026.4.27-r1:aaa');
+
+    rmSync(sourceRoot, { recursive: true, force: true });
+    mkdirSync(sourceRoot, { recursive: true });
+    writeFileSync(join(sourceRoot, 'openclaw.mjs'), 'export const runtime = "second";\n', 'utf8');
+    execFileSync('tar', ['-czf', join(archiveRoot, 'payload.tar.gz'), '-C', sourceRoot, '.']);
+    writeFileSync(join(archiveRoot, 'SHA256SUMS'), 'bbb  payload.tar.gz\n', 'utf8');
+
+    const second = hydrateOpenClawSidecar({
+      projectRoot,
+      target: 'darwin-arm64',
+      version: '2026.4.27-r1',
+    });
+
+    expect(second.runtimeRoot).toBe(first.runtimeRoot);
+    expect(readFileSync(join(second.runtimeRoot, 'openclaw.mjs'), 'utf8')).toContain('"second"');
+    expect(readFileSync(join(second.runtimeRoot, '.archive-stamp'), 'utf8').trim()).toBe('2026.4.27-r1:bbb');
   });
 });

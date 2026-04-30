@@ -3,7 +3,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { getConfiguredOpenClawRuntime } from '../utils/openclaw-runtime';
 import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
-import { getOpenClawConfigDir } from '../utils/paths';
+import { getOpenClawConfigDir, getOpenClawPluginStageDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { isPythonReady, setupManagedPython } from '../utils/uv-setup';
 import {
@@ -568,12 +568,15 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
   const pathEntries = getGeeClawRuntimePathEntries(baseProcessEnv);
   const binPathExists = pathEntries.length > 0;
   const baseEnvPatched = setPathEnvValue(baseProcessEnv, getGeeClawRuntimePath(baseProcessEnv));
+  const pluginStageDir = runtime.source === 'bundled'
+    ? getOpenClawPluginStageDir(openclawDir)
+    : null;
 
   const uvEnv = await getUvMirrorEnv();
   const openclawConfigDir = getOpenClawConfigDir();
   const doctorArgs = buildManagedOpenClawArgs('doctor', ['--fix', '--yes', '--non-interactive']);
   logger.info(
-    `Running OpenClaw doctor repair (runtime=${runtime.source}, command="${commandPath}", entry="${runtime.entryPath ?? 'n/a'}", args="${doctorArgs.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
+    `Running OpenClaw doctor repair (runtime=${runtime.source}, command="${commandPath}", entry="${runtime.entryPath ?? 'n/a'}", args="${doctorArgs.join(' ')}", cwd="${openclawDir}", stage="${pluginStageDir || '-'}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
   );
 
   return await new Promise<boolean>((resolve) => {
@@ -584,6 +587,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
       OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(openclawConfigDir),
       OPENCLAW_GATEWAY_PORT: String(PORTS.OPENCLAW_GATEWAY),
       OPENCLAW_NO_RESPAWN: '1',
+      ...(pluginStageDir ? { OPENCLAW_PLUGIN_STAGE_DIR: pluginStageDir } : {}),
     };
 
     const child = utilityProcess.fork(runtime.entryPath!, doctorArgs, {

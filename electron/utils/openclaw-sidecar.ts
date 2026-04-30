@@ -35,9 +35,43 @@ function resolveTarCommand(): string {
   return process.platform === 'win32' ? 'tar.exe' : 'tar';
 }
 
-function resolveArchiveStamp(archivePath: string, archiveMetadata: PackagedArchiveMetadata | null): string {
+function readPayloadChecksum(packagedSidecarRoot: string, payloadName: string): string | null {
+  const checksumsPath = join(packagedSidecarRoot, 'SHA256SUMS');
+  if (!existsSync(checksumsPath)) {
+    return null;
+  }
+
+  const expectedNames = new Set([payloadName, `./${payloadName}`]);
+  for (const rawLine of readFileSync(checksumsPath, 'utf8').split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    const match = line.match(/^(\S+)\s+\*?(.+)$/u);
+    if (!match) {
+      continue;
+    }
+
+    const [, checksum, fileName] = match;
+    const normalizedFileName = fileName.trim().replace(/\\/gu, '/');
+    if (expectedNames.has(normalizedFileName) || normalizedFileName.endsWith(`/${payloadName}`)) {
+      return checksum;
+    }
+  }
+
+  return null;
+}
+
+function resolveArchiveStamp(
+  archivePath: string,
+  archiveMetadata: PackagedArchiveMetadata | null,
+  packagedSidecarRoot: string,
+): string {
+  const payloadName = archiveMetadata?.path || 'payload.tar.gz';
+  const payloadChecksum = readPayloadChecksum(packagedSidecarRoot, payloadName);
   if (archiveMetadata?.version) {
-    return archiveMetadata.version;
+    return payloadChecksum ? `${archiveMetadata.version}:${payloadChecksum}` : archiveMetadata.version;
   }
 
   const archiveStat = statSync(archivePath);
@@ -140,7 +174,7 @@ export async function materializePackagedOpenClawSidecar(): Promise<string | nul
     const extractedSidecarRoot = getHydratedOpenClawSidecarRoot();
     const extractedEntryPath = join(extractedSidecarRoot, 'openclaw.mjs');
     const stampPath = join(extractedSidecarRoot, '.archive-stamp');
-    const archiveStamp = resolveArchiveStamp(archivePath, archiveMetadata);
+    const archiveStamp = resolveArchiveStamp(archivePath, archiveMetadata, packagedSidecarRoot);
     const previousStamp = readSidecarStamp(stampPath);
     const previousVersion = normalizeVersionStamp(previousStamp);
     const version = archiveMetadata?.version;

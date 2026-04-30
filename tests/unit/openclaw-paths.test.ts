@@ -88,19 +88,34 @@ describe('getOpenClawDir (development)', () => {
 
     mockExistsSync.mockImplementation((value: string) => (
       supportedTarget !== null
-      && value === `/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw.mjs`
+      && (
+        value === `/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw-sidecar/openclaw.mjs`
+        || value === `/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw-sidecar/geeclaw-bundled-runtime-deps.json`
+      )
     ));
 
-    const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
+    const { getOpenClawDir, getOpenClawEntryPath, getOpenClawPluginStageDir } = await import('@electron/utils/paths');
 
     if (supportedTarget === null) {
       expect(getOpenClawDir()).toBe('/repo/openclaw-runtime/node_modules/openclaw');
       expect(getOpenClawEntryPath()).toBe('/repo/openclaw-runtime/node_modules/openclaw/openclaw.mjs');
+      expect(getOpenClawPluginStageDir()).toBeNull();
       return;
     }
 
-    expect(getOpenClawDir()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}`);
-    expect(getOpenClawEntryPath()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw.mjs`);
+    expect(getOpenClawDir()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw-sidecar`);
+    expect(getOpenClawEntryPath()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}/openclaw-sidecar/openclaw.mjs`);
+    expect(getOpenClawPluginStageDir()).toBe(`/repo/build/prebuilt-sidecar-runtime/${supportedTarget}`);
+  });
+
+  it('does not stage plugin deps for the repo-local development runtime', async () => {
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/repo/openclaw-runtime/node_modules/openclaw/package.json'
+    ));
+
+    const { getOpenClawPluginStageDir } = await import('@electron/utils/paths');
+
+    expect(getOpenClawPluginStageDir()).toBeNull();
   });
 });
 
@@ -118,17 +133,31 @@ describe('getOpenClawDir (packaged)', () => {
   });
 
   it('prefers the hydrated sidecar runtime when a packaged archive is present', async () => {
-    const { getOpenClawDir, getOpenClawEntryPath } = await import('@electron/utils/paths');
+    mockExistsSync.mockImplementation((value: string) => (
+      value === '/tmp/geeclaw-user-data/runtime/openclaw-sidecar/geeclaw-bundled-runtime-deps.json'
+    ));
+
+    const { getOpenClawDir, getOpenClawEntryPath, getOpenClawPluginStageDir } = await import('@electron/utils/paths');
 
     expect(getOpenClawDir()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar');
     expect(getOpenClawEntryPath()).toBe('/tmp/geeclaw-user-data/runtime/openclaw-sidecar/openclaw.mjs');
+    expect(getOpenClawPluginStageDir()).toBe('/tmp/geeclaw-user-data/runtime');
+  });
+
+  it('does not stage plugin deps for legacy sidecars without the runtime-deps manifest', async () => {
+    mockExistsSync.mockReturnValue(false);
+
+    const { getOpenClawPluginStageDir } = await import('@electron/utils/paths');
+
+    expect(getOpenClawPluginStageDir()).toBeNull();
   });
 
   it('falls back to the legacy bundled resources path when no sidecar archive is present', async () => {
     mockGetHydratedOpenClawSidecarRootIfReady.mockReturnValue(null);
 
-    const { getOpenClawDir } = await import('@electron/utils/paths');
+    const { getOpenClawDir, getOpenClawPluginStageDir } = await import('@electron/utils/paths');
 
     expect(getOpenClawDir()).toBe('/opt/geeclaw/resources/openclaw');
+    expect(getOpenClawPluginStageDir()).toBeNull();
   });
 });

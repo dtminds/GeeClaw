@@ -106,6 +106,7 @@ export async function launchGatewayProcess(options: {
     runtimeSource,
     openclawDir,
     entryScript,
+    pluginStageDir,
     commandPath,
     launchMode,
     gatewayArgs,
@@ -118,9 +119,9 @@ export async function launchGatewayProcess(options: {
   } = options.launchContext;
 
   logger.info(
-    `Starting Gateway process (mode=${mode}, runtime=${runtimeSource}, port=${options.port}, command="${commandPath}", entry="${entryScript ?? 'n/a'}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'}, providerKeys=${loadedProviderKeyCount}, channels=${channelStartupSummary}, proxy=${proxySummary})`,
+    `Starting Gateway process (mode=${mode}, runtime=${runtimeSource}, port=${options.port}, command="${commandPath}", entry="${entryScript ?? 'n/a'}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}", stage="${pluginStageDir || '-'}", bundledBin=${binPathExists ? 'yes' : 'no'}, providerKeys=${loadedProviderKeyCount}, channels=${channelStartupSummary}, proxy=${proxySummary})`,
   );
-  const lastSpawnSummary = `mode=${mode}, runtime=${runtimeSource}, command="${commandPath}", entry="${entryScript ?? 'n/a'}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}"`;
+  const lastSpawnSummary = `mode=${mode}, runtime=${runtimeSource}, command="${commandPath}", entry="${entryScript ?? 'n/a'}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}", stage="${pluginStageDir || '-'}"`;
 
   const runtimeEnv = { ...forkEnv };
   // Disable OpenClaw's mDNS/Bonjour gateway advertiser unconditionally.

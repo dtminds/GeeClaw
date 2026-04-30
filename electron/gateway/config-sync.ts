@@ -9,7 +9,7 @@ import { getApiKey, getDefaultProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import { getConfiguredOpenClawRuntime, type OpenClawRuntimeSource } from '../utils/openclaw-runtime';
 import { materializePackagedOpenClawSidecar } from '../utils/openclaw-sidecar';
-import { getOpenClawConfigDir } from '../utils/paths';
+import { getOpenClawConfigDir, getOpenClawPluginStageDir } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { listConfiguredChannels } from '../utils/channel-config';
 import { syncGatewayTokenToConfig, syncBrowserConfigToOpenClaw } from '../utils/openclaw-gateway-config';
@@ -188,6 +188,7 @@ export interface GatewayLaunchContext {
   runtimeSource: OpenClawRuntimeSource;
   openclawDir: string;
   entryScript: string | null;
+  pluginStageDir: string | null;
   commandPath: string;
   launchMode: 'fork';
   gatewayArgs: string[];
@@ -348,6 +349,7 @@ async function runManagedProfileSetupOnce(options: {
   openclawConfigDir: string;
   openclawDir: string;
   entryScript: string;
+  pluginStageDir: string | null;
   finalPath: string;
   managedAppEnv: Record<string, string | undefined>;
   uvEnv: Record<string, string | undefined>;
@@ -366,6 +368,7 @@ async function runManagedProfileSetupOnce(options: {
       ...options.proxyEnv,
       ELECTRON_RUN_AS_NODE: '1',
       OPENCLAW_EMBEDDED_IN: 'GeeClaw',
+      ...(options.pluginStageDir ? { OPENCLAW_PLUGIN_STAGE_DIR: options.pluginStageDir } : {}),
       GIT_TERMINAL_PROMPT: '0',
       GCM_INTERACTIVE: 'never',
       GIT_ASKPASS: 'echo',
@@ -524,6 +527,7 @@ async function ensureManagedProfileSetup(options: {
   openclawConfigDir: string;
   openclawDir: string;
   entryScript: string;
+  pluginStageDir: string | null;
   finalPath: string;
   managedAppEnv: Record<string, string | undefined>;
   uvEnv: Record<string, string | undefined>;
@@ -713,6 +717,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const runtime = await getConfiguredOpenClawRuntime();
   const openclawDir = runtime.dir;
   const entryScript = runtime.entryPath;
+  const pluginStageDir = runtime.source === 'bundled'
+    ? getOpenClawPluginStageDir(openclawDir)
+    : null;
   const commandPath = runtime.commandPath ?? runtime.entryPath;
 
   if (!runtime.packageExists || !commandPath) {
@@ -740,6 +747,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     openclawConfigDir,
     openclawDir,
     entryScript,
+    pluginStageDir,
     finalPath,
     managedAppEnv,
     uvEnv,
@@ -784,6 +792,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
       ...uvEnv,
       ...proxyEnv,
       OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
+      ...(pluginStageDir ? { OPENCLAW_PLUGIN_STAGE_DIR: pluginStageDir } : {}),
       OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
       CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',
     },
@@ -796,6 +805,7 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     runtimeSource: runtime.source,
     openclawDir,
     entryScript,
+    pluginStageDir,
     commandPath,
     launchMode: 'fork',
     gatewayArgs,

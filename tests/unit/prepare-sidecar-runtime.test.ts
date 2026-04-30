@@ -49,7 +49,7 @@ describe('prepare sidecar runtime', () => {
       version: '2026.4.10-r2',
       target: 'darwin-arm64',
       archiveRoot: join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64'),
-      runtimeRoot: join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64'),
+      runtimeRoot: join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar'),
     }));
     const runScript = vi.fn(async (scriptName: string) => {
       calls.push(scriptName);
@@ -80,13 +80,13 @@ describe('prepare sidecar runtime', () => {
     expect(log).toHaveBeenCalledWith('Preparing sidecar runtime for darwin-arm64');
     expect(log).toHaveBeenCalledWith('Preparing bundled macOS binaries');
     expect(log).toHaveBeenCalledWith(
-      `Hydrated sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64')}`,
+      `Hydrated sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar')}`,
     );
     expect(log).toHaveBeenCalledWith('Building renderer assets');
     expect(log).toHaveBeenCalledWith('Preparing bundled OpenClaw plugins');
     expect(log).toHaveBeenCalledWith('Preparing preinstalled skills');
     expect(log).toHaveBeenCalledWith(
-      `Prepared sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64')}`,
+      `Prepared sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar')}`,
     );
   });
 
@@ -97,7 +97,7 @@ describe('prepare sidecar runtime', () => {
 
     mkdirSync(join(projectRoot, 'openclaw-runtime'), { recursive: true });
     mkdirSync(join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64'), { recursive: true });
-    mkdirSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64'), { recursive: true });
+    mkdirSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar'), { recursive: true });
 
     writeFileSync(
       join(projectRoot, 'openclaw-runtime', 'version.json'),
@@ -120,8 +120,8 @@ describe('prepare sidecar runtime', () => {
       'utf8',
     );
     writeFileSync(join(projectRoot, 'build', 'prebuilt-sidecar', 'darwin-arm64', 'payload.tar.gz'), 'payload', 'utf8');
-    writeFileSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', '.archive-stamp'), '2026.4.10-r2', 'utf8');
-    writeFileSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw.mjs'), 'export {};', 'utf8');
+    writeFileSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar', '.archive-stamp'), '2026.4.10-r2', 'utf8');
+    writeFileSync(join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar', 'openclaw.mjs'), 'export {};', 'utf8');
 
     const runScript = vi.fn(async () => {});
     const downloadSidecar = vi.fn(async () => {
@@ -148,7 +148,7 @@ describe('prepare sidecar runtime', () => {
     expect(runScript).toHaveBeenNthCalledWith(3, 'bundle:openclaw-plugins');
     expect(runScript).toHaveBeenNthCalledWith(4, 'bundle:preinstalled-skills');
     expect(log).toHaveBeenCalledWith(
-      `Reusing hydrated sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64')}`,
+      `Reusing hydrated sidecar runtime 2026.4.10-r2 for darwin-arm64 at ${join(projectRoot, 'build', 'prebuilt-sidecar-runtime', 'darwin-arm64', 'openclaw-sidecar')}`,
     );
   });
 });
