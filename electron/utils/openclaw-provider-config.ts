@@ -300,7 +300,7 @@ function upsertOpenClawProviderEntry(
     ? (existingProvider.models as Array<Record<string, unknown>>).map(removeDefaultedReasoningFalse)
     : [];
   const registryModels = options.includeRegistryModels
-    ? ((getProviderConfig(provider)?.models ?? []).map((m) => ({ ...m })) as Array<Record<string, unknown>>)
+    ? (getProviderConfig(provider)?.models ?? []) as Array<Record<string, unknown>>
     : [];
   const runtimeModels = normalizeRuntimeProviderModels(options.models);
   const existingRequest = (
