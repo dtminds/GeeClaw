@@ -17,7 +17,9 @@
         "emptyResponse": "⚠️ 模型服务并未返回有效内容"
     },
     "runError": {
-        "title": "模型调用失败"
+        "title": "模型调用失败",
+        "generic": "发生错误",
+        "incompleteTurn": "Agent 未能生成回复，请重试"
     },
     "toolbar": {
         "refresh": "刷新聊天",

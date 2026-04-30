@@ -4,7 +4,9 @@
  * Communicates with OpenClaw Gateway via renderer WebSocket RPC.
  */
 import { create } from 'zustand';
+import i18n from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
+import { GATEWAY_INCOMPLETE_TURN_ERROR_CODE } from '../../shared/chat-errors';
 import {
   renderSkillMarkersAsPlainText,
 } from '@/lib/chat-message-text';
@@ -161,6 +163,27 @@ let _blockUnknownAbortedRunEvents = false;
 const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
+
+function getRuntimeErrorCode(event: Record<string, unknown>): string | null {
+  const directCode = event.errorCode ?? event.error_code;
+  if (typeof directCode === 'string' && directCode.trim()) return directCode.trim();
+  const message = event.message;
+  if (!message || typeof message !== 'object') return null;
+  const messageCode = (message as Record<string, unknown>).errorCode
+    ?? (message as Record<string, unknown>).error_code;
+  return typeof messageCode === 'string' && messageCode.trim() ? messageCode.trim() : null;
+}
+
+function getLocalizedRuntimeErrorMessage(event: Record<string, unknown>): string {
+  if (getRuntimeErrorCode(event) === GATEWAY_INCOMPLETE_TURN_ERROR_CODE) {
+    return i18n.t('chat:runError.incompleteTurn');
+  }
+  return String(
+    event.errorMessage
+    || getMessageErrorMessage(event.message)
+    || i18n.t('chat:runError.generic'),
+  );
+}
 
 function summarizeChatSelection(
   state: Pick<ChatState, 'currentSessionKey' | 'currentDesktopSessionId' | 'currentAgentId' | 'isDraftSession' | 'currentViewMode'>,
@@ -881,7 +904,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             thinkingLevel,
             loading: false,
             error: null,
-            runError: null,
+            runError: quiet ? state.runError : null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -907,7 +930,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             messages: state.messages,
             loading: false,
             error: null,
-            runError: null,
+            runError: quiet ? state.runError : null,
             ...patchToolRuntimeWithHistory(
               state.toolStreamOrder,
               state.toolStreamById,
@@ -930,7 +953,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           thinkingLevel,
           loading: false,
           error: null,
-          runError: null,
+          runError: quiet ? state.runError : null,
           ...reconcileToolRuntimeWithHistory(
             state.toolStreamOrder,
             state.toolStreamById,
@@ -1878,11 +1901,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'error': {
-        const errorMsg = String(
-          event.errorMessage
-          || getMessageErrorMessage(event.message)
-          || 'An error occurred',
-        );
+        const errorMsg = getLocalizedRuntimeErrorMessage(event);
         const wasSending = get().sending;
         const { streamingText, streamingTextStartedAt } = get();
 

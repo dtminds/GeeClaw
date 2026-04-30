@@ -123,6 +123,46 @@ describe('GatewayManager auto reconnect', () => {
     expect(reconcileGatewayRuntimeForEmbeddedModeMock).toHaveBeenCalledWith(28788);
   });
 
+  it('bridges embedded incomplete-turn stderr lines to chat message errors', async () => {
+    let emitStderrLine: ((line: string) => void) | null = null;
+
+    launchGatewayProcessMock.mockImplementation(async (options) => {
+      const child = new MockGatewayChild();
+      emitStderrLine = options.onStderrLine;
+      options.onSpawn(child.pid);
+      return {
+        child: child as never,
+        lastSpawnSummary: 'mock-spawn',
+      };
+    });
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+    const chatMessages: Array<{ message: unknown }> = [];
+    manager.on('chat:message', (message) => {
+      chatMessages.push(message);
+    });
+
+    await manager.start();
+    const startupHooks = runGatewayStartupSequenceMock.mock.calls.at(-1)?.[0];
+    await startupHooks.startProcess();
+
+    emitStderrLine?.('\u001b[90m2026-04-30T11:44:41.425+08:00\u001b[39m \u001b[33m[agent/embedded]\u001b[39m \u001b[33mincomplete turn detected: runId=1a3ec31e-ce3c-4e69-9aa2-fda9b9d02ccf sessionId=07e62e35-33dd-4cc8-8c51-ccef5a744667 stopReason=stop payloads=0 - surfacing error to user\u001b[39m');
+
+    expect(chatMessages).toHaveLength(1);
+    expect(chatMessages[0]).toMatchObject({
+      message: {
+        runId: '1a3ec31e-ce3c-4e69-9aa2-fda9b9d02ccf',
+        state: 'error',
+        message: {
+          role: 'assistant',
+          stopReason: 'error',
+          isError: true,
+        },
+      },
+    });
+  });
+
   it('tears down the socket and schedules reconnect when the owned child exits after handshake', async () => {
     vi.doUnmock('@electron/gateway/startup-orchestrator');
 

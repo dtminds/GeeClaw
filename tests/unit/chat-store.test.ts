@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -352,6 +353,67 @@ describe('chat store terminal model error handling', () => {
 
     await flushPromises();
 
+    expect(rpcMock).toHaveBeenCalledWith('chat.history', {
+      sessionKey: 'agent:main:geeclaw_main',
+      limit: 200,
+    });
+  });
+
+  it('keeps stderr-bridged terminal errors when the follow-up history reload has no persisted error', async () => {
+    await i18n.changeLanguage('zh');
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            { role: 'user', content: '继续', id: 'u1-history', timestamp: 1 },
+          ],
+        };
+      }
+      return {};
+    });
+    useGatewayStore.setState({ rpc: rpcMock as never });
+    useChatStore.setState({
+      currentSessionKey: 'agent:main:geeclaw_main',
+      currentAgentId: 'main',
+      currentViewMode: 'session',
+      sending: true,
+      activeRunId: 'run-incomplete-turn',
+      pendingFinal: true,
+      streamingText: '',
+      messages: [
+        { role: 'user', content: '继续', id: 'u1', timestamp: 1 },
+      ],
+    });
+
+    useChatStore.getState().handleChatEvent({
+      runId: 'run-incomplete-turn',
+      state: 'error',
+      errorCode: 'gateway.incompleteTurn',
+      message: {
+        role: 'assistant',
+        content: '',
+        stopReason: 'error',
+        errorCode: 'gateway.incompleteTurn',
+        isError: true,
+        timestamp: 2,
+      },
+    });
+
+    await flushPromises();
+
+    const state = useChatStore.getState() as unknown as {
+      error: string | null;
+      runError: string | null;
+      sending: boolean;
+      activeRunId: string | null;
+    };
+    expect(state.error).toBeNull();
+    expect(state.runError).toBe('Agent 未能生成回复，请重试');
+    expect(state.sending).toBe(false);
+    expect(state.activeRunId).toBeNull();
     expect(rpcMock).toHaveBeenCalledWith('chat.history', {
       sessionKey: 'agent:main:geeclaw_main',
       limit: 200,
