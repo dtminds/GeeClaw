@@ -152,13 +152,6 @@ const SLASH_COMMANDS: SlashCommandOption[] = [
     descriptionKey: 'composer.slashCommands.commands.session_status.description',
     type: 'command',
   },
-  {
-    id: 'stop',
-    value: '/stop',
-    nameKey: 'composer.slashCommands.commands.stop.name',
-    descriptionKey: 'composer.slashCommands.commands.stop.description',
-    type: 'command',
-  },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────

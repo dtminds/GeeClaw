@@ -267,6 +267,21 @@ describe('ChatInput preset agent skills loading', () => {
     useSkillsStore.setState(skillsState);
   });
 
+  it('does not register the stop slash command', async () => {
+    await act(async () => {
+      render(
+        <ChatInput
+          onSend={vi.fn()}
+        />,
+      );
+    });
+
+    const lastInput = buildSlashPickerItemsMock.mock.calls.at(-1)?.[0] as {
+      commands?: Array<{ value: string }>;
+    };
+    expect(lastInput.commands?.map((command) => command.value)).toEqual(['/new', '/compact', '/status']);
+  });
+
   it('waits for the gateway to be running before loading preset agent skills and retries once running', async () => {
     await act(async () => {
       render(

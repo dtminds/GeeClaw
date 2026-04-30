@@ -241,10 +241,6 @@
                 "session_status": {
                     "name": "会话状态",
                     "description": "查看当前会话的状态"
-                },
-                "stop": {
-                    "name": "强制停止",
-                    "description": "停止当前正在进行的回复"
                 }
             }
         },
