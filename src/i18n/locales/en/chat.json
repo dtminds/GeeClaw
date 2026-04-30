@@ -238,10 +238,6 @@
                     "name": "Session Status",
                     "description": "View the current session status"
                 },
-                "stop": {
-                    "name": "Stop Reply",
-                    "description": "Stop the current in-progress reply"
-                },
                 "compact": {
                     "name": "Compact Session",
                     "description": "Compact the current session context"
