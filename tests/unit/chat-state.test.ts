@@ -26,6 +26,7 @@ describe('chat store state helpers', () => {
       messages: [],
       ...createEmptyToolRuntimeState(),
       activeRunId: null,
+      queuedMessages: [],
       error: null,
       runError: null,
       pendingFinal: false,

@@ -40,7 +40,7 @@ import {
   createEmptyToolRuntimeState,
   createRunResetState,
 } from './chat/state';
-import type { ChatMessageAttachmentInput, ChatState } from './chat/state';
+import type { ChatMessageAttachmentInput, ChatState, QueuedChatMessage } from './chat/state';
 import {
   buildCronRunSessionKey,
   buildDefaultMainSessionKey,
@@ -152,17 +152,34 @@ let _errorRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 // send generations so stale completions cannot re-bind the UI to an aborted run.
 let _sendGeneration = 0;
 
+let _runtimeSubscriptionGeneration = 0;
+let _subscribedMessagesSessionKey: string | null = null;
+let _sessionToolFallbackSubscribed = false;
+let _sessionToolFallbackUnsubscribeTimer: ReturnType<typeof setTimeout> | null = null;
+let _queuedMessageFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
 const MAX_ABORTED_RUN_IDS = 50;
 const MAX_BLOCKED_RUN_EVENTS = 100;
+const MAX_SEEN_TOOL_EVENTS = 500;
+const MAX_RUN_SCOPED_SUBSCRIBED_RUN_IDS = 200;
+const CHAT_SEND_TIMEOUT_MS = 120_000;
 type BlockedRunEvent =
   | { kind: 'chat'; event: Record<string, unknown> }
   | { kind: 'tool'; event: Record<string, unknown> };
 const _abortedRunIds = new Set<string>();
 const _abortedRunIdOrder: string[] = [];
+const _ignoredSteerAckRunIds = new Set<string>();
+const _ignoredSteerAckRunIdOrder: string[] = [];
 let _blockUnknownAbortedRunEvents = false;
 const _blockedRunEvents = new Map<string, BlockedRunEvent[]>();
+const _seenToolEventKeys = new Set<string>();
+const _seenToolEventKeyOrder: string[] = [];
+const _runScopedSubscribedRunIds = new Set<string>();
+const _runScopedSubscribedRunIdOrder: string[] = [];
+let _awaitingSteeredRunAdoption = false;
 
 function logChatTrace(_event: string, _details?: Record<string, unknown>): void {}
+
 
 function getRuntimeErrorCode(event: Record<string, unknown>): string | null {
   const directCode = event['errorCode'] ?? event['error_code'];
@@ -235,6 +252,294 @@ function clearHistoryStartupRetry(): void {
   _historyStartupRetryState = null;
 }
 
+function clearSessionToolFallbackUnsubscribeTimer(): void {
+  if (_sessionToolFallbackUnsubscribeTimer) {
+    clearTimeout(_sessionToolFallbackUnsubscribeTimer);
+    _sessionToolFallbackUnsubscribeTimer = null;
+  }
+}
+
+function clearQueuedMessageFlushTimer(): void {
+  if (_queuedMessageFlushTimer) {
+    clearTimeout(_queuedMessageFlushTimer);
+    _queuedMessageFlushTimer = null;
+  }
+}
+
+function getCurrentRuntimeSessionKey(state: Pick<ChatState, 'currentSessionKey' | 'currentViewMode'>): string {
+  return state.currentViewMode === 'session' ? state.currentSessionKey : '';
+}
+
+async function rpcBestEffort(method: string, params?: unknown): Promise<unknown | null> {
+  try {
+    return await useGatewayStore.getState().rpc(method, params);
+  } catch {
+    return null;
+  }
+}
+
+function hasActiveGatewayRun(row: Record<string, unknown> | undefined): boolean {
+  if (!row) return false;
+  return row.status === 'running'
+    || row.hasActiveSubagentRun === true
+    || row.subagentRunState === 'active';
+}
+
+async function resolveSessionHasActiveRun(sessionKey: string): Promise<boolean> {
+  const result = await rpcBestEffort('sessions.list', {
+    includeGlobal: true,
+    includeUnknown: true,
+    activeMinutes: 120,
+  });
+  if (!result || typeof result !== 'object') return false;
+  const sessions = Array.isArray((result as Record<string, unknown>).sessions)
+    ? (result as Record<string, unknown>).sessions as Array<Record<string, unknown>>
+    : [];
+  return hasActiveGatewayRun(sessions.find((session) => session.key === sessionKey));
+}
+
+async function unsubscribeSessionMessages(): Promise<void> {
+  const previous = _subscribedMessagesSessionKey;
+  if (!previous) return;
+  _subscribedMessagesSessionKey = null;
+  await rpcBestEffort('sessions.messages.unsubscribe', { key: previous });
+}
+
+async function subscribeSessionMessages(sessionKey: string, generation: number): Promise<void> {
+  if (_subscribedMessagesSessionKey !== sessionKey) {
+    await unsubscribeSessionMessages();
+  }
+  if (generation !== _runtimeSubscriptionGeneration) return;
+  await rpcBestEffort('sessions.messages.subscribe', { key: sessionKey });
+  if (generation === _runtimeSubscriptionGeneration) {
+    _subscribedMessagesSessionKey = sessionKey;
+  }
+}
+
+async function enableSessionToolFallback(_reason: string): Promise<void> {
+  clearSessionToolFallbackUnsubscribeTimer();
+  if (_sessionToolFallbackSubscribed) return;
+  const result = await rpcBestEffort('sessions.subscribe', {});
+  if (result !== null) {
+    _sessionToolFallbackSubscribed = true;
+  }
+}
+
+async function disableSessionToolFallback(_reason: string): Promise<void> {
+  clearSessionToolFallbackUnsubscribeTimer();
+  if (!_sessionToolFallbackSubscribed) return;
+  _sessionToolFallbackSubscribed = false;
+  await rpcBestEffort('sessions.unsubscribe', {});
+}
+
+function scheduleSessionToolFallbackUnsubscribe(reason: string): void {
+  if (!_sessionToolFallbackSubscribed) return;
+  clearSessionToolFallbackUnsubscribeTimer();
+  _sessionToolFallbackUnsubscribeTimer = setTimeout(() => {
+    if (shouldKeepSessionToolFallbackSubscribed()) {
+      return;
+    }
+    void disableSessionToolFallback(reason);
+  }, 3_000);
+}
+
+function shouldKeepSessionToolFallbackSubscribed(): boolean {
+  const state = useChatStore.getState();
+  const sessionKey = getCurrentRuntimeSessionKey(state);
+  if (!sessionKey) return false;
+  return state.sending
+    || state.sendAckPending
+    || !!state.activeRunId
+    || state.queuedMessages.some((message) => message.kind === 'steered' || !!message.pendingRunId);
+}
+
+function getToolEventData(event: Record<string, unknown>): Record<string, unknown> {
+  return event.data && typeof event.data === 'object'
+    ? event.data as Record<string, unknown>
+    : event;
+}
+
+function getStringField(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number') return String(value);
+  }
+  return '';
+}
+
+function getToolEventRunId(event: Record<string, unknown>): string {
+  const data = getToolEventData(event);
+  return getStringField(event.runId, data.runId);
+}
+
+function getToolEventSessionKey(event: Record<string, unknown>): string {
+  const data = getToolEventData(event);
+  return getStringField(event.sessionKey, data.sessionKey, event.key, data.key);
+}
+
+function normalizeToolPhase(value: string): string {
+  switch (value) {
+    case 'started':
+    case 'begin':
+    case 'call':
+    case 'tool_call':
+      return 'start';
+    case 'complete':
+    case 'completed':
+    case 'finish':
+    case 'finished':
+    case 'end':
+      return 'result';
+    case 'delta':
+    case 'partial':
+    case 'progress':
+      return 'update';
+    default:
+      return value;
+  }
+}
+
+function getToolEventToolCallId(event: Record<string, unknown>): string {
+  const data = getToolEventData(event);
+  return getStringField(
+    data.toolCallId,
+    data.tool_call_id,
+    data.callId,
+    data.call_id,
+    data.id,
+    event.toolCallId,
+    event.tool_call_id,
+    event.callId,
+    event.call_id,
+    event.id,
+  );
+}
+
+function getToolEventPhase(event: Record<string, unknown>): string {
+  const data = getToolEventData(event);
+  const phase = getStringField(data.phase, data.type, data.status, event.phase, event.type, event.status);
+  return phase ? normalizeToolPhase(phase) : '';
+}
+
+function getToolEventName(event: Record<string, unknown>): string {
+  const data = getToolEventData(event);
+  return getStringField(
+    data.name,
+    data.toolName,
+    data.tool_name,
+    event.name,
+    event.toolName,
+    event.tool_name,
+  );
+}
+
+function getToolEventArgs(event: Record<string, unknown>, phase: string): unknown {
+  const data = getToolEventData(event);
+  if (phase !== 'start') return undefined;
+  return data.args ?? data.arguments ?? data.input ?? event.args ?? event.arguments ?? event.input;
+}
+
+function getToolEventRawOutput(event: Record<string, unknown>, phase: string): unknown {
+  const data = getToolEventData(event);
+  if (phase === 'update') {
+    return data.partialResult ?? data.partial_result ?? data.delta ?? data.output ?? event.partialResult ?? event.partial_result;
+  }
+  if (phase === 'result') {
+    return data.result ?? data.output ?? data.content ?? event.result ?? event.output ?? event.content;
+  }
+  return undefined;
+}
+
+function isToolEventError(event: Record<string, unknown>, output: string | undefined): boolean {
+  const data = getToolEventData(event);
+  return data.isError === true
+    || data.is_error === true
+    || event.isError === true
+    || event.is_error === true
+    || (output ? looksLikeToolErrorText(output) : false);
+}
+
+function getToolEventDedupeKey(event: Record<string, unknown>): string | null {
+  const data = getToolEventData(event);
+  const runId = getToolEventRunId(event);
+  const sessionKey = getToolEventSessionKey(event);
+  const toolCallId = getToolEventToolCallId(event);
+  const phase = getToolEventPhase(event);
+  const seqValue = data.seq ?? event.seq;
+  const seq = typeof seqValue === 'string' || typeof seqValue === 'number'
+    ? String(seqValue)
+    : '';
+
+  if (!toolCallId || !phase) return null;
+  const scope = runId || sessionKey;
+  if (!scope) return null;
+  if (!seq && phase === 'update') return null;
+  return [scope, toolCallId, phase, seq].join('|');
+}
+
+function rememberToolEventKey(key: string): void {
+  if (_seenToolEventKeys.has(key)) return;
+  _seenToolEventKeys.add(key);
+  _seenToolEventKeyOrder.push(key);
+  while (_seenToolEventKeyOrder.length > MAX_SEEN_TOOL_EVENTS) {
+    const oldest = _seenToolEventKeyOrder.shift();
+    if (oldest) _seenToolEventKeys.delete(oldest);
+  }
+}
+
+function rememberRunScopedSubscribedRunId(runId: string): void {
+  if (!runId) return;
+  if (!_runScopedSubscribedRunIds.has(runId)) {
+    _runScopedSubscribedRunIds.add(runId);
+    _runScopedSubscribedRunIdOrder.push(runId);
+  }
+  while (_runScopedSubscribedRunIdOrder.length > MAX_RUN_SCOPED_SUBSCRIBED_RUN_IDS) {
+    const oldest = _runScopedSubscribedRunIdOrder.shift();
+    if (oldest) {
+      _runScopedSubscribedRunIds.delete(oldest);
+    }
+  }
+}
+
+function getSessionMessagePayloadSessionKey(payload: Record<string, unknown>, message: RawMessage | null): string {
+  const directKey = payload.key ?? payload.sessionKey;
+  if (typeof directKey === 'string') return directKey;
+  const messageSessionKey = message && (message as unknown as Record<string, unknown>).sessionKey;
+  return typeof messageSessionKey === 'string' ? messageSessionKey : '';
+}
+
+function getSessionMessage(payload: Record<string, unknown>): RawMessage | null {
+  const candidate = payload.message && typeof payload.message === 'object'
+    ? payload.message
+    : payload;
+  if (!candidate || typeof candidate !== 'object') return null;
+  const record = candidate as Record<string, unknown>;
+  if (!record.role && record.content == null) return null;
+  return record as unknown as RawMessage;
+}
+
+function messagesMatch(left: RawMessage, right: RawMessage): boolean {
+  if (left.id && right.id && left.id === right.id) return true;
+  if (left.role !== right.role) return false;
+  const leftTimestamp = typeof left.timestamp === 'number' ? left.timestamp : null;
+  const rightTimestamp = typeof right.timestamp === 'number' ? right.timestamp : null;
+  if (leftTimestamp !== null && rightTimestamp !== null && Math.abs(leftTimestamp - rightTimestamp) > 0.001) {
+    return false;
+  }
+  return getMessageText(left.content) === getMessageText(right.content);
+}
+
+function hasMatchingSteeredQueuedMessage(state: ChatState, message: RawMessage): boolean {
+  if (String(message.role).toLowerCase() !== 'user') return false;
+  const messageText = getMessageText(message.content).trim();
+  if (!messageText) return false;
+  return state.queuedMessages.some((queuedMessage) => (
+    queuedMessage.kind === 'steered'
+    && !!queuedMessage.pendingRunId
+    && queuedMessage.text.trim() === messageText
+  ));
+}
+
 function rememberAbortedRunId(runId: string): void {
   if (!runId) return;
   if (!_abortedRunIds.has(runId)) {
@@ -259,6 +564,31 @@ function unblockUnknownAbortedRunEvents(): void {
   _blockUnknownAbortedRunEvents = false;
 }
 
+function rememberIgnoredSteerAckRunId(runId: string): void {
+  if (!runId) return;
+  if (!_ignoredSteerAckRunIds.has(runId)) {
+    _ignoredSteerAckRunIds.add(runId);
+    _ignoredSteerAckRunIdOrder.push(runId);
+  }
+  while (_ignoredSteerAckRunIdOrder.length > MAX_ABORTED_RUN_IDS) {
+    const oldest = _ignoredSteerAckRunIdOrder.shift();
+    if (oldest) {
+      _ignoredSteerAckRunIds.delete(oldest);
+    }
+  }
+}
+
+function isIgnorableSteerAckLifecycleEvent(
+  runId: string,
+  state: string,
+  eventMessage: unknown,
+): boolean {
+  return !!runId
+    && _ignoredSteerAckRunIds.has(runId)
+    && eventMessage == null
+    && (state === 'started' || state === 'final' || state === 'aborted');
+}
+
 function queueBlockedRunEvent(runId: string, event: BlockedRunEvent): void {
   const events = _blockedRunEvents.get(runId) ?? [];
   events.push({
@@ -277,20 +607,167 @@ function takeBlockedRunEvents(runId: string): BlockedRunEvent[] {
   return events;
 }
 
+function replayBlockedRunEvents(runId: string | null, getState: () => ChatState): void {
+  if (!runId) {
+    return;
+  }
+
+  const blockedEvents = takeBlockedRunEvents(runId);
+  for (const blockedEvent of blockedEvents) {
+    if (blockedEvent.kind === 'chat') {
+      getState().handleChatEvent(blockedEvent.event);
+    } else {
+      getState().handleAgentEvent(blockedEvent.event);
+    }
+  }
+}
+
 export function __resetChatRuntimeGuardsForTests(): void {
   clearErrorRecoveryTimer();
   clearHistoryPoll();
   clearHistoryStartupRetry();
+  clearSessionToolFallbackUnsubscribeTimer();
+  clearQueuedMessageFlushTimer();
   _lastChatEventAt = 0;
   _sendGeneration = 0;
+  _runtimeSubscriptionGeneration = 0;
+  _subscribedMessagesSessionKey = null;
+  _sessionToolFallbackSubscribed = false;
   _abortedRunIds.clear();
   _abortedRunIdOrder.length = 0;
+  _ignoredSteerAckRunIds.clear();
+  _ignoredSteerAckRunIdOrder.length = 0;
   _blockUnknownAbortedRunEvents = false;
   _blockedRunEvents.clear();
+  _seenToolEventKeys.clear();
+  _seenToolEventKeyOrder.length = 0;
+  _runScopedSubscribedRunIds.clear();
+  _runScopedSubscribedRunIdOrder.length = 0;
+  _awaitingSteeredRunAdoption = false;
 }
 
 function isRecoverableChatSendTimeout(error: string): boolean {
   return error.includes('RPC timeout: chat.send');
+}
+
+function cloneQueuedAttachments(
+  attachments?: ChatMessageAttachmentInput[],
+): ChatMessageAttachmentInput[] | undefined {
+  if (!attachments || attachments.length === 0) {
+    return undefined;
+  }
+
+  return attachments.map((attachment) => ({ ...attachment }));
+}
+
+function createQueuedMessage(
+  text: string,
+  attachments: ChatMessageAttachmentInput[] | undefined,
+  targetAgentId: string | null | undefined,
+): QueuedChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    text,
+    attachments: cloneQueuedAttachments(attachments),
+    targetAgentId: targetAgentId ?? null,
+    createdAt: Date.now(),
+    kind: 'queued',
+    pendingRunId: null,
+  };
+}
+
+function queueMessageIfRuntimeBusy(
+  state: ChatState,
+  setState: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
+  text: string,
+  attachments: ChatMessageAttachmentInput[] | undefined,
+  targetAgentId: string | null | undefined,
+): boolean {
+  if (!state.sending && !state.activeRunId) {
+    return false;
+  }
+  if (state.queuedMessages.length > 0) {
+    return true;
+  }
+
+  const queuedMessage = createQueuedMessage(text, attachments, targetAgentId);
+  setState((currentState) => ({
+    queuedMessages: [...currentState.queuedMessages, queuedMessage],
+  }));
+  return true;
+}
+
+function completeSteeredQueuedMessagesForRun(
+  runId: string,
+  setState: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
+  getState: () => ChatState,
+): string | null {
+  if (!runId) {
+    return null;
+  }
+
+  const queuedMessage = getState().queuedMessages.find((message) => (
+    message.kind === 'steered' && message.pendingRunId === runId
+  ));
+  if (!queuedMessage) {
+    return null;
+  }
+
+
+  const nowMs = Date.now();
+  const optimisticAttachments = queuedMessage.attachments?.map((attachment) => ({
+    fileName: attachment.fileName,
+    mimeType: attachment.mimeType,
+    fileSize: attachment.fileSize,
+    preview: attachment.preview,
+    filePath: attachment.stagedPath,
+  })) || [];
+  const limitedOptimisticAttachments = limitAttachedFilesForMessage(optimisticAttachments);
+  const userMsg: RawMessage = {
+    role: 'user',
+    content: queuedMessage.text || (queuedMessage.attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''),
+    timestamp: nowMs / 1000,
+    id: crypto.randomUUID(),
+    _attachedFiles: limitedOptimisticAttachments.files,
+    _hiddenAttachmentCount: limitedOptimisticAttachments.hiddenCount || undefined,
+  };
+
+  setState((state) => {
+    const previousMessage = state.messages[state.messages.length - 1];
+    return {
+      messages: [...state.messages, userMsg],
+      queuedMessages: state.queuedMessages.filter((message) => (
+        message.kind !== 'steered' || message.pendingRunId !== runId
+      )),
+      sending: true,
+      sendAckPending: false,
+      activeRunId: null,
+      error: null,
+      runError: null,
+      ...createEmptyToolRuntimeState(),
+      streamingTextStartedAt: nowMs / 1000,
+      pendingFinal: false,
+      lastUserMessageAt: nowMs,
+      pendingOptimisticUserId: userMsg.id || null,
+      pendingOptimisticUserAnchorAt: typeof previousMessage?.timestamp === 'number'
+        ? toMs(previousMessage.timestamp)
+        : null,
+      pendingOptimisticUserIndex: state.messages.length,
+      historyRequestGeneration: state.historyRequestGeneration + 1,
+    };
+  });
+  _awaitingSteeredRunAdoption = true;
+  return queuedMessage.steerRunId ?? null;
+}
+
+function scheduleQueuedMessageFlush(getState: () => ChatState): void {
+  if (_queuedMessageFlushTimer) {
+    return;
+  }
+  _queuedMessageFlushTimer = setTimeout(() => {
+    _queuedMessageFlushTimer = null;
+    getState().flushNextQueuedMessage();
+  }, 0);
 }
 
 function resolveMainSessionKeyForAgent(agentId?: string | null): string | null {
@@ -475,6 +952,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         selectedCronRun: null,
         sessionTokenInfoByKey,
       });
+      void get().syncRuntimeSubscriptions();
       logChatTrace('loadSessions:done', {
         durationMs: Date.now() - startedAt,
         preferredMainSessionKey,
@@ -543,6 +1021,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         loading: true,
         ...createConversationResetState(),
       });
+      void get().syncRuntimeSubscriptions();
       logChatTrace('openAgentMainSession:reuse-existing', {
         durationMs: Date.now() - startedAt,
         selectedSessionId: existingMainSession.id,
@@ -566,6 +1045,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         loading: true,
         ...createConversationResetState(),
       }));
+      void get().syncRuntimeSubscriptions();
       logChatTrace('openAgentMainSession:created', {
         durationMs: Date.now() - startedAt,
         createdSessionId: createdMainSession.id,
@@ -602,6 +1082,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       selectedCronRun: null,
       ...createConversationResetState(),
     });
+    void get().syncRuntimeSubscriptions();
     logChatTrace('switchSession:selected', {
       targetSessionId: target.id,
       targetSessionKey: target.gatewaySessionKey,
@@ -622,6 +1103,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ...createConversationResetState(),
       thinkingLevel: null,
     });
+    void get().syncRuntimeSubscriptions();
     await get().loadHistory();
   },
 
@@ -676,6 +1158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       selectedCronRun: null,
       ...conversationState,
     });
+    void get().syncRuntimeSubscriptions();
     logChatTrace('deleteSession:done', {
       deletedSessionId: desktopSessionId,
       nextSessionId: next?.id ?? '',
@@ -735,6 +1218,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ...createConversationResetState(),
       historyRequestGeneration: state.historyRequestGeneration + 1,
     }));
+    void get().syncRuntimeSubscriptions();
     logChatTrace('newTemporarySession:selected', summarizeChatSelection(get()));
   },
 
@@ -939,6 +1423,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         const midRunToolOnlyHistoryReload = quiet && get().sending;
         if (midRunToolOnlyHistoryReload) {
+          const state = get();
+          const userMsTs = state.lastUserMessageAt ? toMs(state.lastUserMessageAt) : 0;
+          const recentAssistant = state.pendingFinal
+            ? [...filteredMessages].reverse().find((msg) => {
+                if (msg.role !== 'assistant') return false;
+                if (!hasNonToolAssistantContent(msg)) return false;
+                if (!userMsTs || !msg.timestamp) return true;
+                return toMs(msg.timestamp) >= userMsTs;
+              })
+            : null;
+
+          if (state.activeRunId && recentAssistant) {
+            const completedRunId = state.activeRunId;
+            clearHistoryPoll();
+            set({
+              messages: finalMessages,
+              thinkingLevel,
+              loading: false,
+              error: null,
+              runError: quiet ? state.runError : null,
+              sending: false,
+              sendAckPending: false,
+              activeRunId: null,
+              pendingFinal: false,
+              lastUserMessageAt: null,
+              pendingOptimisticUserId: null,
+              pendingOptimisticUserAnchorAt: null,
+              pendingOptimisticUserIndex: null,
+              ...createEmptyToolRuntimeState(),
+            });
+            const replayRunId = completeSteeredQueuedMessagesForRun(completedRunId ?? '', set, get);
+            replayBlockedRunEvents(replayRunId, get);
+            scheduleQueuedMessageFlush(get);
+            return;
+          }
+
           set((state) => ({
             messages: state.messages,
             loading: false,
@@ -1073,6 +1593,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             return isAfterUserMsg(msg);
           });
           if (recentAssistant) {
+            const completedRunId = get().activeRunId;
             clearHistoryPoll();
             set({
               sending: false,
@@ -1080,6 +1601,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
               pendingFinal: false,
               ...createEmptyToolRuntimeState(),
             });
+            const replayRunId = completeSteeredQueuedMessagesForRun(completedRunId ?? '', set, get);
+            replayBlockedRunEvents(replayRunId, get);
+            scheduleQueuedMessageFlush(get);
           }
         }
       } else {
@@ -1196,6 +1720,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   ) => {
     const trimmed = text.trim();
     if (!trimmed && (!attachments || attachments.length === 0)) return;
+
+    const currentState = get();
+    if (queueMessageIfRuntimeBusy(currentState, set, trimmed, attachments, targetAgentId)) {
+      return;
+    }
+
     const currentSendGeneration = ++_sendGeneration;
 
     let {
@@ -1220,6 +1750,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           selectedCronRun: null,
           ...createConversationResetState(),
         });
+        void get().syncRuntimeSubscriptions();
         currentSessionKey = existingTargetSession.gatewaySessionKey;
         currentDesktopSessionId = existingTargetSession.id;
         isDraftSession = false;
@@ -1240,6 +1771,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           selectedCronRun: null,
           ...createConversationResetState(),
         }));
+        void get().syncRuntimeSubscriptions();
         currentSessionKey = createdTargetSession.gatewaySessionKey;
         currentDesktopSessionId = createdTargetSession.id;
         isDraftSession = false;
@@ -1259,6 +1791,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentSessionKey: createdSession.gatewaySessionKey,
         currentAgentId: getAgentIdFromSessionKey(createdSession.gatewaySessionKey),
       }));
+      void get().syncRuntimeSubscriptions();
       logChatTrace('sendMessage:created-session-for-draft', {
         createdSessionId: createdSession.id,
         createdSessionKey: createdSession.gatewaySessionKey,
@@ -1282,7 +1815,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const limitedOptimisticAttachments = limitAttachedFilesForMessage(optimisticAttachments);
     const userMsg: RawMessage = {
       role: 'user',
-      content: trimmed || (attachments?.length ? '(file attached)' : ''),
+      content: trimmed || (attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''),
       timestamp: nowMs / 1000,
       id: crypto.randomUUID(),
       _attachedFiles: limitedOptimisticAttachments.files,
@@ -1292,6 +1825,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...s.messages, userMsg],
       isDraftSession,
       sending: true,
+      sendAckPending: true,
       error: null,
       runError: null,
       ...createEmptyToolRuntimeState(),
@@ -1312,7 +1846,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const isFirstMessage = !messages.slice(0, -1).some((m) => m.role === 'user');
     const currentDesktopSession = desktopSessions.find((session) => session.id === currentDesktopSessionId);
     const titleText = renderSkillMarkersAsPlainText(trimmed);
-    const previewText = toSessionPreview(trimmed || (attachments?.length ? '(file attached)' : ''));
+    const previewText = toSessionPreview(trimmed || (attachments?.length ? i18n.t('chat:composer.attachmentFallback') : ''));
     const nextTitle = isFirstMessage && titleText
       ? (titleText.length > 50 ? `${titleText.slice(0, 50)}…` : titleText)
       : (currentDesktopSession?.title ?? '');
@@ -1387,6 +1921,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
         runError: null,
         sending: false,
+        sendAckPending: false,
         activeRunId: null,
         lastUserMessageAt: null,
         pendingOptimisticUserId: null,
@@ -1416,9 +1951,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       let result: { success: boolean; result?: Record<string, unknown> & { runId?: string }; error?: string };
 
-      // Longer timeout for chat sends to tolerate high-latency networks (avoids connect error)
-      const CHAT_SEND_TIMEOUT_MS = 120_000;
-
       if (hasMedia) {
         result = await hostApiFetch<{ success: boolean; result?: { runId?: string }; error?: string }>(
           '/api/chat/send-with-media',
@@ -1426,7 +1958,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             method: 'POST',
             body: JSON.stringify({
               sessionKey: currentSessionKey,
-              message: trimmed || 'Process the attached file(s).',
+              message: trimmed || i18n.t('chat:composer.attachmentDefaultInstruction'),
               deliver: false,
               idempotencyKey,
               media: attachments.map((a) => ({
@@ -1470,6 +2002,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           error: null,
           runError: getLocalizedRunPayloadErrorMessage(returnedRunError),
           sending: false,
+          sendAckPending: false,
           activeRunId: null,
           pendingFinal: false,
           lastUserMessageAt: null,
@@ -1489,13 +2022,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...summarizeChatSelection(get()),
           });
           console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errorMsg}`);
-          set({ error: errorMsg, runError: null });
+          set({ error: errorMsg, runError: null, sendAckPending: false });
         } else {
           clearHistoryPoll();
-          set({ error: errorMsg, runError: null, sending: false, ...createEmptyToolRuntimeState() });
+          set({ error: errorMsg, runError: null, sending: false, sendAckPending: false, ...createEmptyToolRuntimeState() });
           unblockUnknownAbortedRunEvents();
         }
       } else if (get().sending) {
+        set({ sendAckPending: false });
         if (returnedRunId) {
           set({ activeRunId: returnedRunId });
         }
@@ -1527,12 +2061,110 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...summarizeChatSelection(get()),
         });
         console.warn(`[sendMessage] Recoverable chat.send timeout, keeping poll alive: ${errStr}`);
-        set({ error: errStr, runError: null });
+        set({ error: errStr, runError: null, sendAckPending: false });
       } else {
         clearHistoryPoll();
-        set({ error: errStr, runError: null, sending: false, ...createEmptyToolRuntimeState() });
+        set({ error: errStr, runError: null, sending: false, sendAckPending: false, ...createEmptyToolRuntimeState() });
         unblockUnknownAbortedRunEvents();
       }
+    }
+  },
+
+  removeQueuedMessage: (id: string) => {
+    set((state) => ({
+      queuedMessages: state.queuedMessages.filter((message) => message.id !== id),
+    }));
+  },
+
+  clearQueuedMessages: () => {
+    set({ queuedMessages: [] });
+  },
+
+  flushNextQueuedMessage: () => {
+    const state = get();
+    if (state.sending || state.activeRunId || state.sendAckPending || state.queuedMessages.length === 0) {
+      return;
+    }
+
+    const nextMessage = state.queuedMessages.find((message) => message.kind !== 'steered');
+    if (!nextMessage) {
+      return;
+    }
+
+    set((currentState) => ({
+      queuedMessages: currentState.queuedMessages.filter((message) => message.id !== nextMessage.id),
+    }));
+    void get().sendMessage(
+      nextMessage.text,
+      cloneQueuedAttachments(nextMessage.attachments),
+      nextMessage.targetAgentId,
+    );
+  },
+
+  steerQueuedMessage: async (id: string) => {
+    const queuedMessage = get().queuedMessages.find((message) => message.id === id);
+    if (!queuedMessage) {
+      return;
+    }
+
+    const activeRunId = get().activeRunId;
+    if (!activeRunId) {
+      return;
+    }
+
+    set((state) => ({
+      queuedMessages: state.queuedMessages.map((message) => (
+        message.id === id
+          ? { ...message, kind: 'steered', pendingRunId: activeRunId }
+          : message
+      )),
+    }));
+    void enableSessionToolFallback('steered-follow-up');
+
+    try {
+      const idempotencyKey = crypto.randomUUID();
+      const steerText = queuedMessage.text.trim() || i18n.t('chat:composer.steerDefaultInstruction');
+      let steerRunId: string | null = null;
+      if (queuedMessage.attachments?.length) {
+        const result = await hostApiFetch<{ success?: boolean; result?: { runId?: string }; error?: string; errorCode?: string }>(
+          '/api/chat/send-with-media',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              sessionKey: get().currentSessionKey,
+              message: steerText,
+              deliver: false,
+              idempotencyKey,
+              media: queuedMessage.attachments.map((attachment) => ({
+                filePath: attachment.stagedPath,
+                mimeType: attachment.mimeType,
+                fileName: attachment.fileName,
+              })),
+            }),
+          },
+        );
+        if (result?.success === false) {
+          throw new Error(getLocalizedRunPayloadErrorMessage(result.errorCode || result.error || ''));
+        }
+        steerRunId = typeof result?.result?.runId === 'string' ? result.result.runId : null;
+      } else {
+        const result = await useGatewayStore.getState().rpc<Record<string, unknown> & { runId?: string }>(
+          'chat.send',
+          {
+            sessionKey: get().currentSessionKey,
+            message: steerText,
+            deliver: false,
+            idempotencyKey,
+          },
+          CHAT_SEND_TIMEOUT_MS,
+        );
+        steerRunId = typeof result?.runId === 'string' ? result.runId : null;
+      }
+      if (steerRunId) {
+        rememberIgnoredSteerAckRunId(steerRunId);
+      }
+    } catch (err) {
+      set({ error: String(err), runError: null });
     }
   },
 
@@ -1549,15 +2181,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } else {
       blockUnknownAbortedRunEvents();
     }
-    set(createRunResetState());
+    set({
+      ...createRunResetState(),
+      queuedMessages: [],
+    });
 
     try {
       await useGatewayStore.getState().rpc(
         'chat.abort',
-        { sessionKey: currentSessionKey },
+        activeRunId
+          ? { sessionKey: currentSessionKey, runId: activeRunId }
+          : { sessionKey: currentSessionKey },
       );
     } catch (err) {
       set({ error: String(err), runError: null });
+    }
+  },
+
+  syncRuntimeSubscriptions: async () => {
+    const generation = ++_runtimeSubscriptionGeneration;
+    const sessionKey = getCurrentRuntimeSessionKey(get());
+
+    if (!sessionKey) {
+      await unsubscribeSessionMessages();
+      await disableSessionToolFallback('no-active-chat-session');
+      return;
+    }
+
+    await subscribeSessionMessages(sessionKey, generation);
+    if (generation !== _runtimeSubscriptionGeneration) return;
+
+    const hasActiveRun = await resolveSessionHasActiveRun(sessionKey);
+    if (generation !== _runtimeSubscriptionGeneration) return;
+
+    if (hasActiveRun || shouldKeepSessionToolFallbackSubscribed()) {
+      await enableSessionToolFallback(hasActiveRun ? 'active-run-detected' : 'local-runtime-pending');
+    } else if (!get().sending && !get().activeRunId) {
+      await disableSessionToolFallback('no-active-run');
     }
   },
 
@@ -1575,6 +2235,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     const eventMessage = event['message'];
+    if (isIgnorableSteerAckLifecycleEvent(runId, eventState, eventMessage)) {
+      return;
+    }
+
     const terminalAssistantError = isTerminalAssistantErrorMessage(eventMessage);
     const terminalAssistantErrorForActiveSession = terminalAssistantError
       && get().sending
@@ -1583,6 +2247,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Only process events for the active run (or if no active run set)
     if (activeRunId && runId && runId !== activeRunId && !terminalAssistantErrorForActiveSession) {
+      const pendingSteeredMessage = get().queuedMessages.find((message) => (
+        message.kind === 'steered'
+        && message.pendingRunId === activeRunId
+        && (!message.steerRunId || message.steerRunId === runId)
+      ));
+      if (pendingSteeredMessage) {
+        if (
+          eventMessage == null
+          && (eventState === 'started' || eventState === 'final' || eventState === 'aborted')
+        ) {
+          return;
+        }
+        if (!pendingSteeredMessage.steerRunId) {
+          set((state) => ({
+            queuedMessages: state.queuedMessages.map((message) => (
+              message.id === pendingSteeredMessage.id
+                ? { ...message, steerRunId: runId }
+                : message
+            )),
+          }));
+        }
+        queueBlockedRunEvent(runId, { kind: 'chat', event });
+        return;
+      }
       return;
     }
 
@@ -1629,18 +2317,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       clearHistoryPoll();
       // Adopt run started from another client (e.g. console at 127.0.0.1:28788):
       // show loading/streaming in the app when this session has an active run.
-      const { sending } = get();
-      if (!sending && runId) {
+      const { sending, activeRunId: currentActiveRunId } = get();
+      const canAdoptRun = !!runId && (resolvedState !== 'final' || eventMessage != null);
+      if (!sending && canAdoptRun) {
         set({ sending: true, activeRunId: runId, error: null, runError: null });
+      } else if (
+        sending
+        && !currentActiveRunId
+        && canAdoptRun
+        && (resolvedState === 'started' || _awaitingSteeredRunAdoption)
+      ) {
+        _awaitingSteeredRunAdoption = false;
+        set({ activeRunId: runId, error: null, runError: null });
       }
     }
 
     switch (resolvedState) {
       case 'started': {
         // Run just started (e.g. from console); show loading immediately.
-        const { sending: currentSending } = get();
+        const { sending: currentSending, activeRunId: currentActiveRunId } = get();
         if (!currentSending && runId) {
           set({ sending: true, activeRunId: runId, error: null, runError: null });
+        } else if (currentSending && !currentActiveRunId && runId) {
+          set({ activeRunId: runId, error: null, runError: null });
         }
         break;
       }
@@ -1799,6 +2498,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             clearHistoryPoll();
             set(createRunResetState());
             void get().loadHistory(true);
+            replayBlockedRunEvents(completeSteeredQueuedMessagesForRun(runId, set, get), get);
+            scheduleQueuedMessageFlush(get);
             break;
           }
 
@@ -1875,6 +2576,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages: mergeToolStatusesIntoEquivalentAssistantMessage(s.messages, msgWithImages, liveToolStatuses),
                 ...(hasOutput ? createEmptyToolRuntimeState() : {}),
                 sending: hasOutput ? false : s.sending,
+                sendAckPending: hasOutput ? false : s.sendAckPending,
                 activeRunId: hasOutput ? null : s.activeRunId,
                 pendingFinal: hasOutput ? false : true,
                 pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
@@ -1887,6 +2589,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               messages: [...s.messages, msgWithImages],
               ...(hasOutput ? createEmptyToolRuntimeState() : {}),
               sending: hasOutput ? false : s.sending,
+              sendAckPending: hasOutput ? false : s.sendAckPending,
               activeRunId: hasOutput ? null : s.activeRunId,
               pendingFinal: hasOutput ? false : true,
               pendingOptimisticUserId: hasOutput ? null : s.pendingOptimisticUserId,
@@ -1899,9 +2602,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
             clearHistoryPoll();
             void get().loadHistory(true, 'tool_patch');
           }
+          if (hasOutput) {
+            scheduleSessionToolFallbackUnsubscribe(`terminal-final:${runId || 'unknown'}`);
+            const replayRunId = completeSteeredQueuedMessagesForRun(runId, set, get);
+            replayBlockedRunEvents(replayRunId, get);
+            scheduleQueuedMessageFlush(get);
+          }
         } else {
+          if (get().pendingOptimisticUserId) {
+            set({
+              pendingFinal: true,
+              sendAckPending: false,
+            });
+            void get().loadHistory(true);
+            break;
+          }
+
           set({
             sending: false,
+            sendAckPending: false,
             activeRunId: null,
             pendingFinal: false,
             lastUserMessageAt: null,
@@ -1910,7 +2629,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             pendingOptimisticUserIndex: null,
             ...createEmptyToolRuntimeState(),
           });
+          scheduleSessionToolFallbackUnsubscribe(`terminal-final-empty:${runId || 'unknown'}`);
           get().loadHistory();
+          const replayRunId = completeSteeredQueuedMessagesForRun(runId, set, get);
+          replayBlockedRunEvents(replayRunId, get);
+          scheduleQueuedMessageFlush(get);
         }
         break;
       }
@@ -1951,9 +2674,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           clearErrorRecoveryTimer();
           set({
             sending: false,
+            sendAckPending: false,
             activeRunId: null,
           });
+          scheduleSessionToolFallbackUnsubscribe(`terminal-error:${runId || 'unknown'}`);
           void get().loadHistory(true);
+          replayBlockedRunEvents(completeSteeredQueuedMessagesForRun(runId, set, get), get);
+          scheduleQueuedMessageFlush(get);
           break;
         }
 
@@ -1971,6 +2698,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               clearHistoryPoll();
               set({
                 sending: false,
+                sendAckPending: false,
                 activeRunId: null,
                 lastUserMessageAt: null,
                 pendingOptimisticUserId: null,
@@ -1978,18 +2706,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 pendingOptimisticUserIndex: null,
               });
               state.loadHistory(true);
+              replayBlockedRunEvents(completeSteeredQueuedMessagesForRun(runId, set, get), get);
+              scheduleQueuedMessageFlush(get);
             }
           }, ERROR_RECOVERY_GRACE_MS);
         } else {
           clearHistoryPoll();
           set({
             sending: false,
+            sendAckPending: false,
             activeRunId: null,
             lastUserMessageAt: null,
             pendingOptimisticUserId: null,
             pendingOptimisticUserAnchorAt: null,
             pendingOptimisticUserIndex: null,
           });
+          replayBlockedRunEvents(completeSteeredQueuedMessagesForRun(runId, set, get), get);
+          scheduleQueuedMessageFlush(get);
         }
         break;
       }
@@ -1997,6 +2730,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         clearHistoryPoll();
         clearErrorRecoveryTimer();
         set(createRunResetState());
+        scheduleSessionToolFallbackUnsubscribe(`terminal-aborted:${runId || 'unknown'}`);
+        replayBlockedRunEvents(completeSteeredQueuedMessagesForRun(runId, set, get), get);
+        scheduleQueuedMessageFlush(get);
         break;
       }
       default: {
@@ -2034,18 +2770,65 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  handleToolEvent: (source: 'agent' | 'session.tool', event: Record<string, unknown>) => {
+    const runId = getToolEventRunId(event);
+    if (source === 'agent' && runId) {
+      rememberRunScopedSubscribedRunId(runId);
+    }
+    if (source === 'session.tool' && runId && _runScopedSubscribedRunIds.has(runId)) {
+      return;
+    }
+
+    const dedupeKey = getToolEventDedupeKey(event);
+    if (dedupeKey && _seenToolEventKeys.has(dedupeKey)) {
+      return;
+    }
+    if (dedupeKey) {
+      rememberToolEventKey(dedupeKey);
+    }
+    get().handleAgentEvent(event);
+  },
+
   handleAgentEvent: (event: Record<string, unknown>) => {
     const stream = String(event.stream || '');
-    if (stream !== 'tool') return;
+    if (stream !== 'tool') {
+      return;
+    }
 
-    const eventSessionKey = event.sessionKey != null ? String(event.sessionKey) : null;
+    const data = event.data && typeof event.data === 'object'
+      ? event.data as Record<string, unknown>
+      : event;
+    const eventSessionKey = getToolEventSessionKey(event) || null;
+    const runId = getToolEventRunId(event);
+
     if (eventSessionKey && eventSessionKey !== get().currentSessionKey) {
       return;
     }
 
-    const runId = String(event.runId || '');
     if (runId && _abortedRunIds.has(runId)) {
       return;
+    }
+
+    const activeRunId = get().activeRunId;
+    if (activeRunId && runId && runId !== activeRunId) {
+      const pendingSteeredMessage = get().queuedMessages.find((message) => (
+        message.kind === 'steered'
+        && message.pendingRunId === activeRunId
+        && (!message.steerRunId || message.steerRunId === runId)
+      ));
+      if (pendingSteeredMessage) {
+        if (!pendingSteeredMessage.steerRunId) {
+          set((state) => ({
+            queuedMessages: state.queuedMessages.map((message) => (
+              message.id === pendingSteeredMessage.id
+                ? { ...message, steerRunId: runId }
+                : message
+            )),
+          }));
+        }
+        queueBlockedRunEvent(runId, { kind: 'tool', event });
+        return;
+      }
     }
 
     if (_blockUnknownAbortedRunEvents && runId) {
@@ -2055,26 +2838,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    const data = event.data && typeof event.data === 'object'
-      ? event.data as Record<string, unknown>
-      : event;
-    const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : '';
-    if (!toolCallId) return;
+    const toolCallId = getToolEventToolCallId(event);
+    if (!toolCallId) {
+      return;
+    }
 
-    const name = typeof data.name === 'string' ? data.name : 'tool';
-    const phase = typeof data.phase === 'string' ? data.phase : '';
-    const rawOutput = phase === 'update'
-      ? data.partialResult
-      : phase === 'result'
-        ? data.result
-        : undefined;
+    const name = getToolEventName(event) || 'tool';
+    const phase = getToolEventPhase(event);
+    const rawOutput = getToolEventRawOutput(event, phase);
     const output = extractToolOutputText(rawOutput) ?? undefined;
     const meta = data.meta && typeof data.meta === 'object' ? data.meta as Record<string, unknown> : undefined;
     const rawDuration = meta?.durationMs ?? meta?.duration ?? data.durationMs;
     const durationMs = parseDurationMs(rawDuration);
-    const outputLooksErrored = output ? looksLikeToolErrorText(output) : false;
     const status: ToolStatus['status'] = phase === 'result'
-      ? ((data.isError === true || outputLooksErrored) ? 'error' : 'completed')
+      ? (isToolEventError(event, output) ? 'error' : 'completed')
       : 'running';
     const startedAt = typeof event.ts === 'number' ? event.ts : Date.now() / 1000;
     const shouldReloadHistoryForMissingResult = phase === 'result'
@@ -2115,7 +2892,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           runId: runId || s.activeRunId || '',
           sessionKey: eventSessionKey ?? undefined,
           name,
-          args: phase === 'start' ? data.args : undefined,
+          args: getToolEventArgs(event, phase),
           output,
           status,
           durationMs,
@@ -2129,7 +2906,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         entry = {
           ...entry,
           name,
-          args: phase === 'start' ? data.args : entry.args,
+          args: getToolEventArgs(event, phase) ?? entry.args,
           output: output ?? entry.output,
           status: mergeToolStatus(entry.status, status),
           durationMs: durationMs ?? entry.durationMs,
@@ -2171,6 +2948,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } else if (shouldReloadHistoryForMissingResult) {
       void get().loadHistory(true, 'tool_patch');
     }
+  },
+
+  handleSessionMessageEvent: (event: Record<string, unknown>) => {
+    const message = getSessionMessage(event);
+    if (!message) return;
+    if (String(message.role).toLowerCase() === 'assistant') {
+      return;
+    }
+
+    const eventSessionKey = getSessionMessagePayloadSessionKey(event, message);
+    if (eventSessionKey && eventSessionKey !== get().currentSessionKey) {
+      return;
+    }
+
+    const [displayMessage] = prepareHistoryMessagesForDisplay([message], {
+      artifactBaseDir: resolveAgentWorkspace(get().currentAgentId),
+    });
+    if (!displayMessage || isInternalMessage(displayMessage)) return;
+    if (hasMatchingSteeredQueuedMessage(get(), displayMessage)) {
+      return;
+    }
+
+    set((state) => {
+      let existingIndex = state.messages.findIndex((current) => messagesMatch(current, displayMessage));
+      if (existingIndex < 0 && displayMessage.role === 'user' && state.pendingOptimisticUserId) {
+        const incomingText = getMessageText(displayMessage.content);
+        existingIndex = state.messages.findIndex((current) => (
+          current.id === state.pendingOptimisticUserId
+          && current.role === 'user'
+          && getMessageText(current.content) === incomingText
+        ));
+      }
+      if (existingIndex >= 0) {
+        const nextMessages = [...state.messages];
+        nextMessages[existingIndex] = {
+          ...nextMessages[existingIndex],
+          ...displayMessage,
+        };
+        return { messages: nextMessages };
+      }
+
+      return {
+        messages: [...state.messages, displayMessage],
+      };
+    });
   },
 
   handleAgentDeleted: async (agentId: string) => {
