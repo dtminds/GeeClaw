@@ -1,4 +1,4 @@
-import type { ContentBlock, RawMessage, ToolStatus, ToolStreamEntry } from './model';
+import type { AttachedFileMeta, ContentBlock, RawMessage, ToolStatus, ToolStreamEntry } from './model';
 import {
   collectToolUpdates,
   isToolResultRole,
@@ -10,6 +10,8 @@ import {
   stripRenderedPrefixFromStreamingText,
   toMs,
 } from './utils';
+
+const MAX_MESSAGE_ATTACHMENTS = 20;
 
 export function buildToolStreamMessage(entry: ToolStreamEntry): RawMessage {
   const content: ContentBlock[] = [
@@ -177,11 +179,75 @@ function collectMessageToolCallIds(message: RawMessage): Set<string> {
   return toolCallIds;
 }
 
+function getAttachmentIdentity(file: Pick<AttachedFileMeta, 'filePath' | 'url' | 'preview' | 'fileName'>): string | undefined {
+  return file.filePath || file.url || file.preview || file.fileName || undefined;
+}
+
+function assistantMessagesEquivalent(current: RawMessage, history: RawMessage): boolean {
+  if (current.id && history.id && current.id === history.id) {
+    return true;
+  }
+  if (current.role !== 'assistant' || history.role !== 'assistant') {
+    return false;
+  }
+
+  const currentText = getMessageText(current.content).trim();
+  const historyText = getMessageText(history.content).trim();
+  if (!currentText || !historyText || currentText !== historyText) {
+    return false;
+  }
+
+  if (typeof current.timestamp !== 'number' || typeof history.timestamp !== 'number') {
+    return true;
+  }
+
+  return Math.abs(toMs(current.timestamp) - toMs(history.timestamp)) < 5000;
+}
+
+function mergeAttachedFilesFromHistory(message: RawMessage, historyMessage: RawMessage): RawMessage {
+  const historyFiles = historyMessage._attachedFiles || [];
+  if (historyFiles.length === 0) {
+    return message;
+  }
+
+  const files = [...(message._attachedFiles || [])];
+  const seen = new Set(files.map(getAttachmentIdentity).filter(Boolean));
+  let hiddenCount = message._hiddenAttachmentCount || 0;
+
+  for (const file of historyFiles) {
+    const identity = getAttachmentIdentity(file);
+    if (identity && seen.has(identity)) {
+      continue;
+    }
+    if (files.length >= MAX_MESSAGE_ATTACHMENTS) {
+      hiddenCount += 1;
+      continue;
+    }
+    if (identity) {
+      seen.add(identity);
+    }
+    files.push({ ...file });
+  }
+
+  if (files.length === (message._attachedFiles?.length || 0) && hiddenCount === (message._hiddenAttachmentCount || 0)) {
+    return message;
+  }
+
+  return {
+    ...message,
+    _attachedFiles: files,
+    _hiddenAttachmentCount: hiddenCount || undefined,
+  };
+}
+
 export function mergeHistoryToolStatusesIntoMessages(
   currentMessages: RawMessage[],
   historyMessages: RawMessage[],
 ): RawMessage[] {
   const updatesByToolCallId = new Map<string, ToolStatus[]>();
+  const historyAssistantMessagesWithFiles = historyMessages.filter((message) => (
+    message.role === 'assistant' && (message._attachedFiles?.length ?? 0) > 0
+  ));
 
   for (const historyMessage of historyMessages) {
     for (const update of collectHistoryToolResultUpdates(historyMessage)) {
@@ -192,7 +258,7 @@ export function mergeHistoryToolStatusesIntoMessages(
     }
   }
 
-  if (updatesByToolCallId.size === 0) {
+  if (updatesByToolCallId.size === 0 && historyAssistantMessagesWithFiles.length === 0) {
     return currentMessages;
   }
 
@@ -209,14 +275,24 @@ export function mergeHistoryToolStatusesIntoMessages(
       }
     }
 
-    if (updates.length === 0) {
+    const historyMessageWithFiles = historyAssistantMessagesWithFiles.find((historyMessage) => (
+      assistantMessagesEquivalent(message, historyMessage)
+    ));
+
+    if (updates.length === 0 && !historyMessageWithFiles) {
       return message;
     }
 
-    return {
-      ...message,
-      _toolStatuses: upsertToolStatuses(message._toolStatuses || [], updates),
-    };
+    const messageWithFiles = historyMessageWithFiles
+      ? mergeAttachedFilesFromHistory(message, historyMessageWithFiles)
+      : message;
+
+    return updates.length > 0
+      ? {
+          ...messageWithFiles,
+          _toolStatuses: upsertToolStatuses(messageWithFiles._toolStatuses || [], updates),
+        }
+      : messageWithFiles;
   });
 }
 
