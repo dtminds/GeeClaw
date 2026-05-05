@@ -443,6 +443,82 @@ describe('chat tool result history fallback', () => {
     expect(useChatStore.getState().messages.some((message) => message.id === 'assistant-final-1')).toBe(false);
   });
 
+  it('patches assistant file artifacts from history without replaying the assistant turn', async () => {
+    const rpcMock = vi.fn(async (method: string) => {
+      if (method === 'chat.history') {
+        return {
+          messages: [
+            {
+              role: 'assistant',
+              id: 'assistant-tool-write',
+              timestamp: 1,
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'tool-write',
+                  name: 'write',
+                  arguments: { path: '/tmp/report.md' },
+                },
+              ],
+            },
+            {
+              role: 'toolresult',
+              id: 'tool-result-write',
+              toolCallId: 'tool-write',
+              toolName: 'write',
+              timestamp: 2,
+              content: 'created',
+            },
+            {
+              role: 'assistant',
+              id: 'assistant-final-with-artifact',
+              timestamp: 3,
+              content: 'Created report',
+            },
+          ],
+        };
+      }
+
+      if (method === 'sessions.list') {
+        return { sessions: [] };
+      }
+
+      throw new Error(`Unexpected RPC method: ${method}`);
+    });
+
+    useGatewayStore.setState({
+      rpc: rpcMock as never,
+    });
+    useChatStore.setState({
+      currentSessionKey: 'agent:test:geeclaw_main',
+      currentDesktopSessionId: '',
+      currentViewMode: 'session',
+      desktopSessions: [],
+      messages: [
+        {
+          role: 'assistant',
+          id: 'run-run-1',
+          timestamp: 3,
+          content: 'Created report',
+        },
+      ],
+    });
+
+    await useChatStore.getState().loadHistory(true, 'tool_patch');
+
+    expect(useChatStore.getState().messages).toHaveLength(1);
+    expect(useChatStore.getState().messages[0]).toMatchObject({
+      id: 'run-run-1',
+      _attachedFiles: [
+        expect.objectContaining({
+          fileName: 'report.md',
+          filePath: '/tmp/report.md',
+          mimeType: 'text/markdown',
+        }),
+      ],
+    });
+  });
+
   it('does not rehydrate tool cards from an older run during a new active send', async () => {
     const rpcMock = vi.fn(async (method: string) => {
       if (method === 'chat.history') {

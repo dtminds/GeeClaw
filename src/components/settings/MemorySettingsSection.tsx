@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
 import { toUserMessage } from '@/lib/api-client';
+import { isVersionAtLeast } from '@/shared/version-compatibility';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -151,7 +152,7 @@ export function MemorySettingsSection() {
       }
 
       const losslessReady = (
-        current.losslessClaw.installedVersion === current.losslessClaw.requiredVersion
+        isVersionAtLeast(current.losslessClaw.installedVersion, current.losslessClaw.requiredVersion)
         && (current.losslessClaw.status === 'disabled' || current.losslessClaw.status === 'enabled')
       );
       const lateProgressEvent = Boolean(

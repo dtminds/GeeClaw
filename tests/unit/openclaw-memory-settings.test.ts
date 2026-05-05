@@ -168,7 +168,7 @@ describe('openclaw memory settings', () => {
     });
   });
 
-  it('marks lossless-claw unavailable when the installed version does not match the GeeClaw pin', async () => {
+  it('marks lossless-claw unavailable when the installed version is below the GeeClaw minimum', async () => {
     const {
       LOSSLESS_CLAW_REQUIRED_VERSION,
       readMemorySettingsSnapshot,
@@ -211,7 +211,7 @@ describe('openclaw memory settings', () => {
     ]);
   });
 
-  it('treats newer installed lossless-claw versions as unavailable when they do not match the GeeClaw pin', async () => {
+  it('treats newer installed lossless-claw versions as satisfying the GeeClaw minimum', async () => {
     const {
       LOSSLESS_CLAW_REQUIRED_VERSION,
       readMemorySettingsSnapshot,
@@ -219,6 +219,9 @@ describe('openclaw memory settings', () => {
 
     await writeOpenClawJson({
       plugins: {
+        slots: {
+          contextEngine: 'lossless-claw',
+        },
         entries: {
           'lossless-claw': {
             enabled: true,
@@ -234,14 +237,40 @@ describe('openclaw memory settings', () => {
     const snapshot = await readMemorySettingsSnapshot(await readOpenClawJson());
 
     expect(snapshot.losslessClaw).toEqual({
-      enabled: false,
+      enabled: true,
       installJob: null,
       installedVersion: newerVersion,
       requiredVersion: LOSSLESS_CLAW_REQUIRED_VERSION,
       summaryModel: 'openai/gpt-5.4-mini',
       summaryModelMode: 'custom',
-      status: 'unavailable',
+      status: 'enabled',
     });
+  });
+
+  it('marks prerelease lossless-claw versions below the GeeClaw stable minimum as unavailable', async () => {
+    const {
+      LOSSLESS_CLAW_REQUIRED_VERSION,
+      readMemorySettingsSnapshot,
+    } = await import('@electron/utils/openclaw-memory-settings');
+
+    await writeOpenClawJson({
+      plugins: {
+        slots: {
+          contextEngine: 'lossless-claw',
+        },
+        entries: {
+          'lossless-claw': {
+            enabled: true,
+            config: {},
+          },
+        },
+      },
+    });
+    await writeLosslessClawPackage(`${LOSSLESS_CLAW_REQUIRED_VERSION}-beta.1`);
+    const snapshot = await readMemorySettingsSnapshot(await readOpenClawJson());
+
+    expect(snapshot.losslessClaw.status).toBe('unavailable');
+    expect(snapshot.losslessClaw.enabled).toBe(false);
   });
 
   it('applies active memory settings without erasing sibling plugin config', async () => {

@@ -6,7 +6,8 @@
     "onStartup": true
   },
   "contracts": {
-    "webSearchProviders": ["geesearch"]
+    "webSearchProviders": ["geesearch"],
+    "tools": ["evolution_proposal"]
   },
   "configSchema": {
     "type": "object",

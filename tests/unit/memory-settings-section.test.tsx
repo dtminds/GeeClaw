@@ -289,7 +289,7 @@ describe('MemorySettingsSection', () => {
     expect(screen.queryByRole('button', { name: 'memory.actions.install' })).not.toBeInTheDocument();
   });
 
-  it('ignores late install progress events after lossless-claw has already refreshed to installed state', async () => {
+  it('ignores late install progress events after lossless-claw has refreshed to a compatible installed state', async () => {
     const initialSnapshot = {
       availableModels,
       dreaming: {
@@ -316,7 +316,7 @@ describe('MemorySettingsSection', () => {
       ...initialSnapshot,
       losslessClaw: {
         ...initialSnapshot.losslessClaw,
-        installedVersion: '0.9.1',
+        installedVersion: '0.9.4',
         status: 'disabled',
         installJob: null,
       },
