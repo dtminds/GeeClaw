@@ -39,6 +39,19 @@ export async function handleGatewayRoutes(
     return true;
   }
 
+  if (url.pathname === '/api/gateway/diagnostics' && req.method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      capturedAt: new Date().toISOString(),
+      gateway: {
+        status: ctx.gatewayManager.getStatus(),
+        diagnostics: ctx.gatewayManager.getDiagnostics(),
+        capabilities: ctx.gatewayManager.getCapabilitySnapshot(),
+      },
+    });
+    return true;
+  }
+
   if (url.pathname === '/api/gateway/start' && req.method === 'POST') {
     try {
       await syncAllProviderAuthToRuntime();

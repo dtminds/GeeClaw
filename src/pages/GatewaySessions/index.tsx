@@ -37,6 +37,7 @@ export function GatewaySessions() {
   const gatewayStatus = useGatewayStore((state) => state.status);
   const gatewayRpc = useGatewayStore((state) => state.rpc);
   const isGatewayRunning = gatewayStatus.state === 'running';
+  const isGatewayReady = isGatewayRunning && gatewayStatus.gatewayReady !== false;
 
   const [sessions, setSessions] = useState<GatewaySessionSummary[]>([]);
   const [selectedKey, setSelectedKey] = useState('');
@@ -46,7 +47,7 @@ export function GatewaySessions() {
   const [error, setError] = useState<string | null>(null);
 
   const refreshSessions = useCallback(async () => {
-    if (!isGatewayRunning) return;
+    if (!isGatewayReady) return;
     setLoadingSessions(true);
     setError(null);
     try {
@@ -65,14 +66,14 @@ export function GatewaySessions() {
     } finally {
       setLoadingSessions(false);
     }
-  }, [gatewayRpc, isGatewayRunning]);
+  }, [gatewayRpc, isGatewayReady]);
 
   useEffect(() => {
     void refreshSessions();
   }, [refreshSessions]);
 
   useEffect(() => {
-    if (!isGatewayRunning || !selectedKey) {
+    if (!isGatewayReady || !selectedKey) {
       setMessages([]);
       return;
     }
@@ -102,7 +103,7 @@ export function GatewaySessions() {
     return () => {
       cancelled = true;
     };
-  }, [gatewayRpc, isGatewayRunning, selectedKey]);
+  }, [gatewayRpc, isGatewayReady, selectedKey]);
 
   if (!isGatewayRunning) {
     return (
@@ -121,7 +122,7 @@ export function GatewaySessions() {
           <h1 className="text-2xl font-normal tracking-tight">{t('title')}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{sessions.length ? t('sessionCount', { count: sessions.length }) : t('emptyDescription')}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void refreshSessions()} disabled={loadingSessions}>
+        <Button variant="outline" size="sm" onClick={() => void refreshSessions()} disabled={loadingSessions || !isGatewayReady}>
           <RefreshCw className={cn('mr-2 h-4 w-4', loadingSessions && 'animate-spin')} />
           {t('refresh')}
         </Button>
