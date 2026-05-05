@@ -99,6 +99,9 @@ export interface GatewaySessionSummary {
   displayName?: string;
   thinkingLevel?: string;
   model?: string;
+  status?: string;
+  hasActiveSubagentRun?: boolean;
+  subagentRunState?: string;
 }
 
 export interface SessionTokenInfo {

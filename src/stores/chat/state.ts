@@ -26,6 +26,17 @@ export type ChatMessageAttachmentInput = {
   preview: string | null;
 };
 
+export interface QueuedChatMessage {
+  id: string;
+  text: string;
+  attachments?: ChatMessageAttachmentInput[];
+  targetAgentId: string | null;
+  createdAt: number;
+  kind?: 'queued' | 'steered';
+  pendingRunId?: string | null;
+  steerRunId?: string | null;
+}
+
 export interface ChatState {
   // Messages
   messages: RawMessage[];
@@ -35,7 +46,9 @@ export interface ChatState {
 
   // Streaming
   sending: boolean;
+  sendAckPending: boolean;
   activeRunId: string | null;
+  queuedMessages: QueuedChatMessage[];
   streamingText: string;
   streamingTextStartedAt: number | null;
   streamingTextLastEventAt: number | null;
@@ -87,9 +100,16 @@ export interface ChatState {
     attachments?: ChatMessageAttachmentInput[],
     targetAgentId?: string | null,
   ) => Promise<void>;
+  removeQueuedMessage: (id: string) => void;
+  clearQueuedMessages: () => void;
+  flushNextQueuedMessage: () => void;
+  steerQueuedMessage: (id: string) => Promise<void>;
   abortRun: () => Promise<void>;
+  syncRuntimeSubscriptions: () => Promise<void>;
   handleChatEvent: (event: Record<string, unknown>) => void;
+  handleToolEvent: (source: 'agent' | 'session.tool', event: Record<string, unknown>) => void;
   handleAgentEvent: (event: Record<string, unknown>) => void;
+  handleSessionMessageEvent: (event: Record<string, unknown>) => void;
   handleAgentDeleted: (agentId: string) => Promise<void>;
   toggleThinking: () => void;
   toggleToolCalls: () => void;
@@ -113,9 +133,16 @@ type ChatActionKeys =
   | 'cleanupEmptySession'
   | 'loadHistory'
   | 'sendMessage'
+  | 'removeQueuedMessage'
+  | 'clearQueuedMessages'
+  | 'flushNextQueuedMessage'
+  | 'steerQueuedMessage'
   | 'abortRun'
+  | 'syncRuntimeSubscriptions'
   | 'handleChatEvent'
+  | 'handleToolEvent'
   | 'handleAgentEvent'
+  | 'handleSessionMessageEvent'
   | 'handleAgentDeleted'
   | 'toggleThinking'
   | 'toggleToolCalls'
@@ -144,6 +171,7 @@ export type ConversationResetState = Pick<
   | 'messages'
   | keyof ToolRuntimeState
   | 'activeRunId'
+  | 'queuedMessages'
   | 'error'
   | 'runError'
   | 'pendingFinal'
@@ -158,6 +186,7 @@ export type ConversationResetState = Pick<
 export type RunResetState = Pick<
   ChatState,
   | 'sending'
+  | 'sendAckPending'
   | 'activeRunId'
   | 'runError'
   | keyof ToolRuntimeState
@@ -186,6 +215,7 @@ export function createEmptyToolRuntimeState(): ToolRuntimeState {
 export function createRunResetState(): RunResetState {
   return {
     sending: false,
+    sendAckPending: false,
     activeRunId: null,
     runError: null,
     ...createEmptyToolRuntimeState(),
@@ -204,6 +234,7 @@ export function createConversationResetState(): ConversationResetState {
     messages: [],
     ...createEmptyToolRuntimeState(),
     activeRunId: null,
+    queuedMessages: [],
     error: null,
     runError: null,
     pendingFinal: false,
@@ -224,7 +255,9 @@ export function createChatInitialState(): ChatDataState {
     runError: null,
 
     sending: false,
+    sendAckPending: false,
     activeRunId: null,
+    queuedMessages: [],
     ...createEmptyToolRuntimeState(),
     pendingFinal: false,
     lastUserMessageAt: null,

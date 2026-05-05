@@ -218,9 +218,22 @@
         "removeSkill": "Remove skill {{skill}}",
         "agentPickerTitle": "Route the next message to another agent",
         "placeholder": "Message the agent, / for skills",
+        "followUpPlaceholder": "Request follow-up changes",
         "skillSearchPlaceholder": "Search skills",
         "skillPickerLoading": "Loading skills...",
         "skillPickerEmpty": "No matching skills found",
+        "queuedBadge": "Queued ({{count}})",
+        "attachmentFallback": "File attached",
+        "attachmentDefaultInstruction": "Process the attached file(s).",
+        "queuedAttachmentFallback": "Queued attachment",
+        "queuedAttachments": "{{count}} attachment(s)",
+        "queueSend": "Queue message",
+        "steerQueued": "Steer",
+        "steerDefaultInstruction": "Process the attached file(s).",
+        "steeredQueued": "Steered",
+        "deleteQueued": "Delete queued message",
+        "queuedActions": "Queued message actions",
+        "editQueued": "Edit message",
         "presetAgentSkillBadge": "Current Agent",
         "skillRecommendation": {
             "title": "Use the {{skill}} skill in this prompt",
@@ -237,10 +250,6 @@
                 "session_status": {
                     "name": "Session Status",
                     "description": "View the current session status"
-                },
-                "stop": {
-                    "name": "Stop Reply",
-                    "description": "Stop the current in-progress reply"
                 },
                 "compact": {
                     "name": "Compact Session",
