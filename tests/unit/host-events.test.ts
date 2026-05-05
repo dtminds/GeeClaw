@@ -116,6 +116,36 @@ describe('host-events', () => {
     expect(offMock).not.toHaveBeenCalled();
   });
 
+  it('maps gateway health and presence host events through IPC', async () => {
+    const onMock = vi.mocked(window.electron.ipcRenderer.on);
+    const offMock = vi.mocked(window.electron.ipcRenderer.off);
+    const captured: Array<(...args: unknown[]) => void> = [];
+    const cleanup = vi.fn();
+    onMock.mockImplementation((_, cb: (...args: unknown[]) => void) => {
+      captured.push(cb);
+      return cleanup;
+    });
+
+    const { subscribeHostEvent } = await import('@/lib/host-events');
+    const healthHandler = vi.fn();
+    const presenceHandler = vi.fn();
+    const unsubscribeHealth = subscribeHostEvent('gateway:health', healthHandler);
+    const unsubscribePresence = subscribeHostEvent('gateway:presence', presenceHandler);
+
+    expect(onMock).toHaveBeenCalledWith('gateway:health-changed', expect.any(Function));
+    expect(onMock).toHaveBeenCalledWith('gateway:presence-changed', expect.any(Function));
+
+    captured[0]({ ok: true, version: '1.2.3' });
+    captured[1]([{ mode: 'gateway', ts: 2 }]);
+    expect(healthHandler).toHaveBeenCalledWith({ ok: true, version: '1.2.3' });
+    expect(presenceHandler).toHaveBeenCalledWith([{ mode: 'gateway', ts: 2 }]);
+
+    unsubscribeHealth();
+    unsubscribePresence();
+    expect(cleanup).toHaveBeenCalledTimes(2);
+    expect(offMock).not.toHaveBeenCalled();
+  });
+
   it('does not use SSE fallback by default for unknown events', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { subscribeHostEvent } = await import('@/lib/host-events');

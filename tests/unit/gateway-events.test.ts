@@ -76,11 +76,19 @@ describe('gateway store event wiring', () => {
     expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:status', expect.any(Function));
     expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:error', expect.any(Function));
     expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:notification', expect.any(Function));
+    expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:health', expect.any(Function));
+    expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:presence', expect.any(Function));
     expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:chat-message', expect.any(Function));
     expect(subscribeHostEventMock).toHaveBeenCalledWith('gateway:channel-status', expect.any(Function));
 
     handlers.get('gateway:status')?.({ state: 'stopped', port: 28788 });
     expect(useGatewayStore.getState().status.state).toBe('stopped');
+
+    handlers.get('gateway:health')?.({ ok: true, version: '1.2.3' });
+    expect(useGatewayStore.getState().health?.openclawHealth).toEqual({ ok: true, version: '1.2.3' });
+
+    handlers.get('gateway:presence')?.([{ mode: 'gateway', ts: 2 }]);
+    expect(useGatewayStore.getState().health?.presence).toEqual([{ mode: 'gateway', ts: 2 }]);
   });
 
   it('re-fetches gateway status after wiring listeners to close the missed-event race', async () => {

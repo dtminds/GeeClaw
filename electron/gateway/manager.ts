@@ -54,6 +54,12 @@ import {
   createIncompleteTurnChatErrorEvent,
   parseIncompleteTurnErrorLine,
 } from './incomplete-turn-error';
+import {
+  GatewayCapabilityMonitor,
+  type GatewayCapabilityName,
+  type GatewayCapabilitySnapshot,
+  type GatewayDiagnosticsSnapshot,
+} from './capability-monitor';
 
 export interface GatewayStatus {
   state: GatewayLifecycleState;
@@ -64,6 +70,36 @@ export interface GatewayStatus {
   connectedAt?: number;
   version?: string;
   reconnectAttempts?: number;
+  gatewayReady?: boolean;
+}
+
+export interface GatewayHealthReport {
+  ok: boolean;
+  error?: string;
+  uptime?: number;
+  version?: string;
+  capabilities: GatewayCapabilitySnapshot;
+}
+
+function isCoreRpcMethod(method: string): boolean {
+  return method === 'system-presence';
+}
+
+function isTransportRpcFailure(method: string, error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('RPC timeout:')
+    ? isCoreRpcMethod(method)
+    : message.includes('Gateway not connected')
+      || message.includes('Gateway stopped')
+      || message.includes('Failed to send RPC request:');
+}
+
+function classifyCapabilityMethod(method: string): GatewayCapabilityName | null {
+  if (method === 'health') return 'openclawHealth';
+  if (method === 'status') return 'openclawStatus';
+  if (method === 'channels.status') return 'channels';
+  if (method.startsWith('doctor.memory.')) return 'memory';
+  return null;
 }
 
 /**
@@ -75,6 +111,9 @@ export interface GatewayManagerEvents {
   notification: (notification: JsonRpcNotification) => void;
   exit: (code: number | null) => void;
   error: (error: Error) => void;
+  'gateway:ready': (data: unknown) => void;
+  'gateway:health': (data: unknown) => void;
+  'gateway:presence': (data: unknown) => void;
   'channel:status': (data: { channelId: string; status: string }) => void;
   'chat:message': (data: { message: unknown }) => void;
 }
@@ -106,6 +145,11 @@ export class GatewayManager extends EventEmitter {
   private reloadDebounceTimer: NodeJS.Timeout | null = null;
   private externalShutdownSupported: boolean | null = null;
   private managedRespawnAttachUntil = 0;
+  private readonly capabilityMonitor = new GatewayCapabilityMonitor();
+  private diagnostics: GatewayDiagnosticsSnapshot = {
+    consecutiveHeartbeatMisses: 0,
+    consecutiveRpcFailures: 0,
+  };
   private static readonly HEARTBEAT_INTERVAL_MS = 30_000;
   private static readonly HEARTBEAT_TIMEOUT_MS = 12_000;
   private static readonly HEARTBEAT_MAX_MISSES = 3;
@@ -138,6 +182,18 @@ export class GatewayManager extends EventEmitter {
     this.reconnectConfig = { ...DEFAULT_RECONNECT_CONFIG, ...config };
     // Device identity is loaded lazily in start() — not in the constructor —
     // so that async file I/O and key generation don't block module loading.
+    this.on('gateway:ready', () => {
+      if (this.status.state === 'running' && !this.status.gatewayReady) {
+        logger.info('Gateway subsystems ready (event received)');
+        this.setStatus({ gatewayReady: true });
+      }
+    });
+    this.on('gateway:health', (payload) => {
+      this.capabilityMonitor.recordOpenClawHealth(payload);
+    });
+    this.on('gateway:presence', (payload) => {
+      this.capabilityMonitor.recordPresence(payload);
+    });
   }
 
   private async initDeviceIdentity(): Promise<void> {
@@ -170,6 +226,18 @@ export class GatewayManager extends EventEmitter {
    */
   getStatus(): GatewayStatus {
     return this.stateController.getStatus();
+  }
+
+  getDiagnostics(): GatewayDiagnosticsSnapshot {
+    return { ...this.diagnostics };
+  }
+
+  getCapabilitySnapshot(): GatewayCapabilitySnapshot {
+    return this.capabilityMonitor.buildSnapshot({
+      status: this.status,
+      transportConnected: this.ws?.readyState === WebSocket.OPEN,
+      diagnostics: this.getDiagnostics(),
+    });
   }
 
   /**
@@ -251,7 +319,7 @@ export class GatewayManager extends EventEmitter {
       this.reconnectAttempts = 0;
     }
     this.isAutoReconnectStart = false;
-    this.setStatus({ state: 'starting', reconnectAttempts: this.reconnectAttempts });
+    this.setStatus({ state: 'starting', reconnectAttempts: this.reconnectAttempts, gatewayReady: false });
 
     await reconcileGatewayRuntimeForEmbeddedMode(this.status.port);
 
@@ -480,7 +548,15 @@ export class GatewayManager extends EventEmitter {
 
     this.restartController.resetDeferredRestart();
     this.isAutoReconnectStart = false;
-    this.setStatus({ state: 'stopped', error: undefined, pid: undefined, connectedAt: undefined, uptime: undefined });
+    this.diagnostics.consecutiveHeartbeatMisses = 0;
+    this.setStatus({
+      state: 'stopped',
+      error: undefined,
+      pid: undefined,
+      connectedAt: undefined,
+      uptime: undefined,
+      gatewayReady: undefined,
+    });
   }
 
   /**
@@ -667,7 +743,8 @@ export class GatewayManager extends EventEmitter {
    * Uses OpenClaw protocol format: { type: "req", id: "...", method: "...", params: {...} }
    */
   async rpc<T>(method: string, params?: unknown, timeoutMs = 30000): Promise<T> {
-    return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    return await new Promise<T>((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('Gateway not connected'));
         return;
@@ -700,6 +777,35 @@ export class GatewayManager extends EventEmitter {
       } catch (error) {
         rejectPendingGatewayRequest(this.pendingRequests, id, new Error(`Failed to send RPC request: ${error}`));
       }
+    }).then((result) => {
+      this.recordRpcSuccess();
+      if (isCoreRpcMethod(method)) {
+        this.capabilityMonitor.recordCoreProbe({
+          ok: true,
+          checkedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      const capability = classifyCapabilityMethod(method);
+      if (capability) {
+        this.capabilityMonitor.recordCapabilitySuccess(capability, result, Date.now() - startedAt);
+      }
+      return result;
+    }).catch((error) => {
+      const capability = classifyCapabilityMethod(method);
+      if (capability) {
+        this.capabilityMonitor.recordCapabilityFailure(capability, error, Date.now() - startedAt);
+      }
+      if (isTransportRpcFailure(method, error)) {
+        this.capabilityMonitor.recordCoreProbe({
+          ok: false,
+          checkedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.recordRpcFailure(method);
+      }
+      throw error;
     });
   }
 
@@ -709,7 +815,7 @@ export class GatewayManager extends EventEmitter {
   private startHealthCheck(): void {
     this.connectionMonitor.startHealthCheck({
       shouldCheck: () => this.status.state === 'running',
-      checkHealth: () => this.checkHealth(),
+      checkHealth: () => this.checkTransportHealth(),
       onUnhealthy: (errorMessage) => {
         this.emit('error', new Error(errorMessage));
       },
@@ -720,34 +826,104 @@ export class GatewayManager extends EventEmitter {
   }
 
   /**
-   * Check Gateway semantic health via RPC.
-   * OpenClaw Gateway doesn't have an HTTP /health endpoint.
+   * Check transport health without probing optional OpenClaw capabilities.
    */
-  async checkHealth(): Promise<{ ok: boolean; error?: string; uptime?: number; version?: string }> {
+  private async checkTransportHealth(): Promise<{ ok: boolean; error?: string; uptime?: number }> {
     try {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        return { ok: false, error: 'WebSocket not connected' };
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const uptime = this.status.connectedAt
+          ? Math.floor((Date.now() - this.status.connectedAt) / 1000)
+          : undefined;
+        return { ok: true, uptime };
       }
-
-      const result = await this.rpc<{ uptime?: number; uptimeMs?: number; version?: string }>(
-        'health',
-        { probe: false },
-        5000,
-      );
-
-      const fallbackUptime = this.status.connectedAt
-        ? Math.floor((Date.now() - this.status.connectedAt) / 1000)
-        : undefined;
-      return {
-        ok: true,
-        uptime: typeof result?.uptime === 'number'
-          ? result.uptime
-          : (typeof result?.uptimeMs === 'number' ? Math.floor(result.uptimeMs / 1000) : fallbackUptime),
-        version: result?.version,
-      };
+      return { ok: false, error: 'WebSocket not connected' };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
+  }
+
+  /**
+   * Check Gateway transport health and update optional OpenClaw capability probes.
+   */
+  async checkHealth(options?: { probe?: boolean }): Promise<GatewayHealthReport> {
+    const transport = await this.checkTransportHealth();
+    let version: string | undefined;
+
+    if (transport.ok && this.status.state === 'running' && this.status.gatewayReady === false) {
+      const startedAt = Date.now();
+      try {
+        await this.rpc('system-presence', {}, 3_000);
+        this.capabilityMonitor.recordCoreProbe({
+          ok: true,
+          checkedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+        });
+        this.setStatus({ gatewayReady: true });
+      } catch (error) {
+        this.capabilityMonitor.recordCoreProbe({
+          ok: false,
+          checkedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else if (transport.ok && this.status.state === 'running') {
+      const timeoutMs = options?.probe ? 8_000 : 3_000;
+      const startedAt = Date.now();
+      const [healthResult, statusResult] = await Promise.allSettled([
+        this.rpc<{ uptime?: number; uptimeMs?: number; version?: string }>(
+          'health',
+          { probe: options?.probe === true },
+          timeoutMs,
+        ),
+        this.rpc('status', {}, timeoutMs),
+      ]);
+
+      if (healthResult.status === 'fulfilled') {
+        this.capabilityMonitor.recordOpenClawHealth(healthResult.value, Date.now() - startedAt);
+        version = healthResult.value?.version;
+      } else {
+        this.capabilityMonitor.recordCapabilityFailure('openclawHealth', healthResult.reason, Date.now() - startedAt);
+      }
+
+      if (statusResult.status === 'fulfilled') {
+        this.capabilityMonitor.recordOpenClawStatus(statusResult.value, Date.now() - startedAt);
+      } else {
+        this.capabilityMonitor.recordCapabilityFailure('openclawStatus', statusResult.reason, Date.now() - startedAt);
+      }
+    }
+
+    return {
+      ...transport,
+      version,
+      capabilities: this.getCapabilitySnapshot(),
+    };
+  }
+
+  private recordGatewayAlive(): void {
+    this.diagnostics.lastAliveAt = Date.now();
+    this.diagnostics.consecutiveHeartbeatMisses = 0;
+  }
+
+  private recordRpcSuccess(): void {
+    this.diagnostics.lastRpcSuccessAt = Date.now();
+    this.diagnostics.consecutiveRpcFailures = 0;
+  }
+
+  private recordRpcFailure(method: string): void {
+    this.diagnostics.lastRpcFailureAt = Date.now();
+    this.diagnostics.lastRpcFailureMethod = method;
+    this.diagnostics.consecutiveRpcFailures += 1;
+  }
+
+  private recordHeartbeatTimeout(consecutiveMisses: number): void {
+    this.diagnostics.lastHeartbeatTimeoutAt = Date.now();
+    this.diagnostics.consecutiveHeartbeatMisses = consecutiveMisses;
+  }
+
+  private recordSocketClose(code: number): void {
+    this.diagnostics.lastSocketCloseAt = Date.now();
+    this.diagnostics.lastSocketCloseCode = code;
   }
 
   /**
@@ -821,7 +997,7 @@ export class GatewayManager extends EventEmitter {
 
         this.connectionMonitor.clear();
         if (this.status.state === 'running') {
-          this.setStatus({ state: 'stopped' });
+          this.setStatus({ state: 'stopped', gatewayReady: false });
           this.scheduleReconnect();
         }
       },
@@ -856,7 +1032,9 @@ export class GatewayManager extends EventEmitter {
         this.ws = ws;
         ws.on('pong', () => {
           this.connectionMonitor.markAlive('pong');
+          this.recordGatewayAlive();
         });
+        this.recordGatewayAlive();
         this.setStatus({
           state: 'running',
           port,
@@ -876,8 +1054,10 @@ export class GatewayManager extends EventEmitter {
       },
       onCloseAfterHandshake: (closeCode) => {
         this.connectionMonitor.clear();
+        this.recordSocketClose(closeCode);
+        this.diagnostics.consecutiveHeartbeatMisses = 0;
         if (this.status.state === 'running') {
-          this.setStatus({ state: 'stopped' });
+          this.setStatus({ state: 'stopped', gatewayReady: false });
           if (process.platform !== 'win32' || closeCode === 1012) {
             this.scheduleReconnect();
           }
@@ -891,6 +1071,7 @@ export class GatewayManager extends EventEmitter {
    */
   private handleMessage(message: unknown): void {
     this.connectionMonitor.markAlive('message');
+    this.recordGatewayAlive();
 
     if (typeof message !== 'object' || message === null) {
       logger.debug('Received non-object Gateway message');
@@ -954,6 +1135,7 @@ export class GatewayManager extends EventEmitter {
         }
       },
       onHeartbeatTimeout: ({ consecutiveMisses, timeoutMs }) => {
+        this.recordHeartbeatTimeout(consecutiveMisses);
         if (this.status.state !== 'running' || !this.shouldReconnect) {
           return;
         }

@@ -258,6 +258,7 @@ GeeClaw employs a **dual-process + unified Host API architecture**. The renderer
 - Single-instance protection uses Electron's lock plus a local process-file lock fallback, preventing duplicate launches in environments where desktop IPC or the session bus is unstable.
 - During rolling upgrades, mixed old/new app versions can still produce asymmetric protection behavior. For best reliability, upgrade all desktop clients to the same version.
 - The OpenClaw Gateway listener should still be **single-owner**: only one process should listen on `127.0.0.1:28788`.
+- Gateway readiness is based on process/transport and core OpenClaw signals such as `ready`, `system-presence`, `health`, and `status`; memory, Dreams, or channel failures are reported as capability degradation instead of global Gateway failure.
 - To verify the active listener:
   - macOS/Linux: `lsof -nP -iTCP:28788 -sTCP:LISTEN`
   - Windows (PowerShell): `Get-NetTCPConnection -LocalPort 28788 -State Listen`

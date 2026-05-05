@@ -8,7 +8,7 @@ import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
 import { invalidatePresetAgentSkillsCache } from '@/pages/Chat/slash-picker';
 import { subscribeHostEvent } from '@/lib/host-events';
-import type { GatewayStatus } from '../types/gateway';
+import type { GatewayHealth, GatewayStatus } from '../types/gateway';
 
 let gatewayInitPromise: Promise<void> | null = null;
 let gatewayEventUnsubscribers: Array<() => void> | null = null;
@@ -18,12 +18,6 @@ let channelStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const CHANNEL_WARMUP_REFRESH_DELAYS_MS = [1500, 5000, 12000, 25000];
 const CHANNEL_STATUS_REFRESH_DEBOUNCE_MS = 400;
-
-interface GatewayHealth {
-  ok: boolean;
-  error?: string;
-  uptime?: number;
-}
 
 interface GatewayState {
   status: GatewayStatus;
@@ -269,6 +263,14 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
               handleGatewayNotification(payload);
             },
           ));
+          unsubscribers.push(subscribeHostEvent('gateway:health', (payload) => {
+            const current = get().health;
+            set({ health: { ...(current ?? { ok: true }), ok: true, openclawHealth: payload } });
+          }));
+          unsubscribers.push(subscribeHostEvent('gateway:presence', (payload) => {
+            const current = get().health;
+            set({ health: { ...(current ?? { ok: true }), presence: payload } });
+          }));
           unsubscribers.push(subscribeHostEvent('gateway:chat-message', (payload) => {
             handleGatewayChatMessage(payload);
           }));
