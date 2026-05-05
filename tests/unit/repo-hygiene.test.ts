@@ -98,4 +98,13 @@ describe('repository hygiene', () => {
   it('keeps renderer backend access behind the approved boundary modules', () => {
     expect(findRendererBoundaryViolations(listTrackedRendererSourceFiles())).toEqual([]);
   });
+
+  it('keeps the renderer backend boundary guide checked in', () => {
+    const guide = readFileSync('docs/renderer-backend-boundary.md', 'utf8');
+
+    expect(guide).toContain('Renderer Backend Boundary');
+    expect(guide).toContain('src/lib/api-client.ts');
+    expect(guide).toContain('src/lib/host-api.ts');
+    expect(guide).toContain('tests/unit/repo-hygiene.test.ts');
+  });
 });

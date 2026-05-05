@@ -82,7 +82,6 @@ const WEB_SEARCH_PROVIDER_DESCRIPTORS: WebSearchProviderDescriptor[] = [
           'glm-search-pro',
           'glm-search-pro-sogou',
           'glm-search-pro-quark',
-          'jina-search-v1',
         ],
       },
     ],

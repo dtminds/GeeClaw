@@ -180,11 +180,12 @@ describe('openclaw-web-search-config', () => {
             'glm-search-pro',
             'glm-search-pro-sogou',
             'glm-search-pro-quark',
-            'jina-search-v1',
           ],
         }),
       ]),
     });
+    const modelField = geesearch?.fields.find((field) => field.key === 'model');
+    expect(modelField?.enumValues).not.toContain('jina-search-v1');
     expect(providers.find((provider) => provider.providerId === 'searxng')).toMatchObject({
       pluginId: 'searxng',
       availabilityKind: 'config',
