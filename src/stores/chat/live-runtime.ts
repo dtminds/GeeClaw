@@ -183,27 +183,6 @@ function getAttachmentIdentity(file: Pick<AttachedFileMeta, 'filePath' | 'url' |
   return file.filePath || file.url || file.preview || file.fileName || undefined;
 }
 
-function assistantMessagesEquivalent(current: RawMessage, history: RawMessage): boolean {
-  if (current.id && history.id && current.id === history.id) {
-    return true;
-  }
-  if (current.role !== 'assistant' || history.role !== 'assistant') {
-    return false;
-  }
-
-  const currentText = getMessageText(current.content).trim();
-  const historyText = getMessageText(history.content).trim();
-  if (!currentText || !historyText || currentText !== historyText) {
-    return false;
-  }
-
-  if (typeof current.timestamp !== 'number' || typeof history.timestamp !== 'number') {
-    return true;
-  }
-
-  return Math.abs(toMs(current.timestamp) - toMs(history.timestamp)) < 5000;
-}
-
 function mergeAttachedFilesFromHistory(message: RawMessage, historyMessage: RawMessage): RawMessage {
   const historyFiles = historyMessage._attachedFiles || [];
   if (historyFiles.length === 0) {
@@ -240,14 +219,24 @@ function mergeAttachedFilesFromHistory(message: RawMessage, historyMessage: RawM
   };
 }
 
+type HistoryAssistantWithFiles = {
+  message: RawMessage;
+  text: string;
+  timestamp: number | null;
+};
+
 export function mergeHistoryToolStatusesIntoMessages(
   currentMessages: RawMessage[],
   historyMessages: RawMessage[],
 ): RawMessage[] {
   const updatesByToolCallId = new Map<string, ToolStatus[]>();
-  const historyAssistantMessagesWithFiles = historyMessages.filter((message) => (
-    message.role === 'assistant' && (message._attachedFiles?.length ?? 0) > 0
-  ));
+  const historyAssistantMessagesWithFiles: HistoryAssistantWithFiles[] = historyMessages
+    .filter((message) => message.role === 'assistant' && (message._attachedFiles?.length ?? 0) > 0)
+    .map((message) => ({
+      message,
+      text: getMessageText(message.content).trim(),
+      timestamp: typeof message.timestamp === 'number' ? toMs(message.timestamp) : null,
+    }));
 
   for (const historyMessage of historyMessages) {
     for (const update of collectHistoryToolResultUpdates(historyMessage)) {
@@ -275,9 +264,20 @@ export function mergeHistoryToolStatusesIntoMessages(
       }
     }
 
-    const historyMessageWithFiles = historyAssistantMessagesWithFiles.find((historyMessage) => (
-      assistantMessagesEquivalent(message, historyMessage)
-    ));
+    const currentText = getMessageText(message.content).trim();
+    const currentTimestamp = typeof message.timestamp === 'number' ? toMs(message.timestamp) : null;
+    const historyMessageWithFiles = historyAssistantMessagesWithFiles.find((historyMessage) => {
+      if (message.id && historyMessage.message.id && message.id === historyMessage.message.id) {
+        return true;
+      }
+      if (!currentText || !historyMessage.text || currentText !== historyMessage.text) {
+        return false;
+      }
+      if (currentTimestamp === null || historyMessage.timestamp === null) {
+        return true;
+      }
+      return Math.abs(currentTimestamp - historyMessage.timestamp) < 5000;
+    })?.message;
 
     if (updates.length === 0 && !historyMessageWithFiles) {
       return message;
