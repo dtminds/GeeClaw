@@ -180,4 +180,86 @@ describe('sanitizeOpenClawConfig bundled plugin allowlist reconciliation', () =>
 
     expect(allow).toContain('openai');
   });
+
+  it('normalizes provider aliases from models.providers before preserving bundled provider plugins', async () => {
+    await writeBundledPluginManifest('browser', { enabledByDefault: true });
+    await writeBundledPluginManifest('acpx', { enabledByDefault: true });
+    await writeBundledPluginManifest('memory-core', { enabledByDefault: true });
+    await writeBundledPluginManifest('openai', {
+      enabledByDefault: true,
+      providers: ['openai'],
+    });
+
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          workspace: join(openclawConfigDir, 'workspace'),
+          heartbeat: { every: '2h' },
+          maxConcurrent: 3,
+        },
+      },
+      models: {
+        providers: {
+          'openai-codex': {},
+        },
+      },
+      plugins: {
+        allow: ['custom-plugin'],
+        entries: {
+          'custom-plugin': { enabled: true },
+        },
+      },
+      commands: {
+        restart: true,
+      },
+    });
+
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    await sanitizeOpenClawConfig();
+
+    const result = await readOpenClawJson();
+    const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
+
+    expect(allow).toContain('openai');
+  });
+
+  it('normalizes provider aliases from the default primary model before preserving bundled provider plugins', async () => {
+    await writeBundledPluginManifest('browser', { enabledByDefault: true });
+    await writeBundledPluginManifest('acpx', { enabledByDefault: true });
+    await writeBundledPluginManifest('memory-core', { enabledByDefault: true });
+    await writeBundledPluginManifest('openai', {
+      enabledByDefault: true,
+      providers: ['openai'],
+    });
+
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          workspace: join(openclawConfigDir, 'workspace'),
+          heartbeat: { every: '2h' },
+          maxConcurrent: 3,
+          model: {
+            primary: 'openai-codex/gpt-5',
+          },
+        },
+      },
+      plugins: {
+        allow: ['custom-plugin'],
+        entries: {
+          'custom-plugin': { enabled: true },
+        },
+      },
+      commands: {
+        restart: true,
+      },
+    });
+
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    await sanitizeOpenClawConfig();
+
+    const result = await readOpenClawJson();
+    const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
+
+    expect(allow).toContain('openai');
+  });
 });

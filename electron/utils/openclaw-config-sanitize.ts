@@ -214,6 +214,7 @@ async function collectActiveProviderIdsFromConfig(config: Record<string, unknown
   if (providers) {
     for (const key of Object.keys(providers)) {
       activeProviders.add(key);
+      activeProviders.add(normalizeAuthProfileProviderKey(key));
     }
   }
 
@@ -233,7 +234,9 @@ async function collectActiveProviderIdsFromConfig(config: Record<string, unknown
   const modelConfig = defaults && isPlainRecord(defaults.model) ? defaults.model : undefined;
   const primaryModel = typeof modelConfig?.primary === 'string' ? modelConfig.primary : undefined;
   if (primaryModel?.includes('/')) {
-    activeProviders.add(primaryModel.split('/')[0]);
+    const provider = primaryModel.split('/')[0];
+    activeProviders.add(provider);
+    activeProviders.add(normalizeAuthProfileProviderKey(provider));
   }
 
   const auth = isPlainRecord(config.auth) ? config.auth : undefined;
