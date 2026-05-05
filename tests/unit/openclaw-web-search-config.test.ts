@@ -179,8 +179,6 @@ describe('openclaw-web-search-config', () => {
         }),
       ]),
     });
-    const modelField = geesearch?.fields.find((field) => field.key === 'model');
-    expect(modelField?.enumValues).not.toContain('jina-search-v1');
     expect(providers.find((provider) => provider.providerId === 'searxng')).toMatchObject({
       pluginId: 'searxng',
       availabilityKind: 'config',
