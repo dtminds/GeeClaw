@@ -37,6 +37,9 @@ Standard dev commands are in `package.json` scripts and `README.md`. Key ones:
   - Do not call Gateway HTTP endpoints directly from renderer (`fetch('http://127.0.0.1:28788/...')` etc.). Use Main-process proxy channels (`hostapi:fetch`, `gateway:httpProxy`) to avoid CORS/env drift.
   - Transport policy is Main-owned and fixed as `WS -> HTTP -> IPC fallback`; renderer should not implement protocol switching UI/business logic.
 - **Doc sync rule**: After any functional or architecture change, review `README.md` and `README.zh-CN.md` for required updates; if behavior/flows/interfaces changed, update docs in the same PR/commit.
+- **Spec-driven harness rule**: AI Coding tasks that touch backend communication must start from a task spec under `harness/specs/tasks/` and reference `gateway-backend-communication` when the change involves renderer/Main/host-api/api-client/Gateway/OpenClaw runtime paths. Run `pnpm harness validate --spec <task-spec>` before implementation review, and `pnpm harness run --spec <task-spec>` or `--dry-run` when checking the selected validation flow.
+- **Spec/rule growth rule**: When adding a new feature, user-visible OpenClaw scenario, or recurring AI Coding constraint, add or update the relevant harness scenario spec and rule spec in the same PR so future AI work can validate the behavior instead of relying on tribal knowledge.
+- **Harness CI/local parity**: Run `pnpm run harness:ci` to exercise the same baseline harness checks used by GitHub Actions. Real task specs should be validated without `--no-diff`; `--no-diff` is only for structural checks of checked-in examples.
 
 ### Modal design conventions
 
