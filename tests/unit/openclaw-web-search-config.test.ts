@@ -175,12 +175,7 @@ describe('openclaw-web-search-config', () => {
         expect.objectContaining({
           key: 'model',
           type: 'enum',
-          enumValues: [
-            'glm-search-std',
-            'glm-search-pro',
-            'glm-search-pro-sogou',
-            'glm-search-pro-quark',
-          ],
+          enumValues: ['glm-search-std', 'glm-search-pro', 'glm-search-pro-sogou', 'glm-search-pro-quark'],
         }),
       ]),
     });
