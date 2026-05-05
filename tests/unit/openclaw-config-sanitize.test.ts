@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'fs/promises';
 
 let openclawConfigDir = '/tmp/openclaw-config-sanitize-test';
 let openclawResolvedDir = '/tmp/openclaw-runtime-test';
@@ -58,6 +58,32 @@ async function writeBundledPluginManifest(pluginId: string, data: Record<string,
     JSON.stringify({ id: pluginId, ...data }, null, 2),
     'utf8',
   );
+}
+
+async function writeSymlinkedBundledPluginManifest(pluginId: string, data: Record<string, unknown> = {}): Promise<void> {
+  const realPluginDir = join(openclawResolvedDir, 'real-plugins', pluginId);
+  const symlinkPath = join(openclawResolvedDir, 'dist', 'extensions', pluginId);
+  await mkdir(realPluginDir, { recursive: true });
+  await mkdir(join(openclawResolvedDir, 'dist', 'extensions'), { recursive: true });
+  await writeFile(
+    join(realPluginDir, 'openclaw.plugin.json'),
+    JSON.stringify({ id: pluginId, ...data }, null, 2),
+    'utf8',
+  );
+  await symlink(realPluginDir, symlinkPath, 'dir');
+}
+
+async function writeSymlinkedInstalledExtensionManifest(pluginId: string, data: Record<string, unknown> = {}): Promise<void> {
+  const realPluginDir = join(openclawConfigDir, 'real-installed-extensions', pluginId);
+  const symlinkPath = join(openclawConfigDir, 'extensions', pluginId);
+  await mkdir(realPluginDir, { recursive: true });
+  await mkdir(join(openclawConfigDir, 'extensions'), { recursive: true });
+  await writeFile(
+    join(realPluginDir, 'openclaw.plugin.json'),
+    JSON.stringify({ id: pluginId, ...data }, null, 2),
+    'utf8',
+  );
+  await symlink(realPluginDir, symlinkPath, 'dir');
 }
 
 async function writeAgentAuthProfiles(agentId: string, data: unknown): Promise<void> {
@@ -300,5 +326,75 @@ describe('sanitizeOpenClawConfig bundled plugin allowlist reconciliation', () =>
     const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
 
     expect(allow).toContain('groq');
+  });
+
+  it('discovers symlinked bundled plugin manifests when preserving active provider plugins', async () => {
+    await writeBundledPluginManifest('browser', { enabledByDefault: true });
+    await writeBundledPluginManifest('acpx', { enabledByDefault: true });
+    await writeBundledPluginManifest('memory-core', { enabledByDefault: true });
+    await writeSymlinkedBundledPluginManifest('openai', {
+      enabledByDefault: true,
+      providers: ['openai'],
+    });
+
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          workspace: join(openclawConfigDir, 'workspace'),
+          heartbeat: { every: '2h' },
+          maxConcurrent: 3,
+        },
+      },
+      models: {
+        providers: {
+          openai: {},
+        },
+      },
+      plugins: {
+        allow: ['custom-plugin'],
+        entries: {
+          'custom-plugin': { enabled: true },
+        },
+      },
+      commands: {
+        restart: true,
+      },
+    });
+
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    await sanitizeOpenClawConfig();
+
+    const result = await readOpenClawJson();
+    const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
+
+    expect(allow).toContain('openai');
+  });
+
+  it('preserves symlinked installed external plugins in the allowlist', async () => {
+    await writeSymlinkedInstalledExtensionManifest('external-symlink');
+
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          workspace: join(openclawConfigDir, 'workspace'),
+          heartbeat: { every: '2h' },
+          maxConcurrent: 3,
+        },
+      },
+      plugins: {
+        allow: ['external-symlink'],
+      },
+      commands: {
+        restart: true,
+      },
+    });
+
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    await sanitizeOpenClawConfig();
+
+    const result = await readOpenClawJson();
+    const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
+
+    expect(allow).toContain('external-symlink');
   });
 });

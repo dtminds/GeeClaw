@@ -116,7 +116,7 @@ async function discoverBundledPluginManifests(): Promise<BundledPluginManifest[]
 
     const manifestResults = await Promise.all(
       entries
-        .filter((entry) => entry.isDirectory())
+        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
         .map((entry) => readJsonFile<{
           id?: unknown;
           enabledByDefault?: unknown;
@@ -271,7 +271,7 @@ async function discoverInstalledExtensionPluginIds(): Promise<Set<string>> {
   }
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     const manifest = await readJsonFile<{ id?: unknown }>(
       join(getOpenClawConfigDir(), 'extensions', entry.name, 'openclaw.plugin.json'),
     );
