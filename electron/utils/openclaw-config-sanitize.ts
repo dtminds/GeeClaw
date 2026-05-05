@@ -114,14 +114,17 @@ async function discoverBundledPluginManifests(): Promise<BundledPluginManifest[]
       continue;
     }
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    const manifestResults = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => readJsonFile<{
+          id?: unknown;
+          enabledByDefault?: unknown;
+          providers?: unknown;
+        }>(join(root, entry.name, 'openclaw.plugin.json'))),
+    );
 
-      const parsed = await readJsonFile<{
-        id?: unknown;
-        enabledByDefault?: unknown;
-        providers?: unknown;
-      }>(join(root, entry.name, 'openclaw.plugin.json'));
+    for (const parsed of manifestResults) {
       if (typeof parsed?.id !== 'string' || !parsed.id.trim()) continue;
 
       const existing = manifests.get(parsed.id) ?? {
@@ -473,11 +476,11 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           return activeProviderIds.has(pluginId)
             || providerIds.some((providerId) => activeProviderIds.has(providerId));
         });
-        const requiredBundledPluginIds = [...new Set([
+        const requiredBundledPluginIds = new Set([
           ...BUNDLED_ALLOWLIST_PRESERVE_IDS,
           ...activeBundledProviderPluginIds,
           ...explicitlyEnabledBundledPluginIds,
-        ])].filter((pluginId) => bundled.all.has(pluginId));
+        ].filter((pluginId) => bundled.all.has(pluginId)));
 
         const externalPluginIds: string[] = [];
         for (const pluginId of allow) {
@@ -500,17 +503,18 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
           externalPluginIds.push(pluginId);
         }
 
-        const retainedBundledPluginIds = allow.filter((pluginId) => requiredBundledPluginIds.includes(pluginId));
-        const nextAllow = [...new Set([...externalPluginIds, ...retainedBundledPluginIds])];
-        if (nextAllow.length > 0) {
+        const retainedBundledPluginIds = allow.filter((pluginId) => requiredBundledPluginIds.has(pluginId));
+        const nextAllowSet = new Set([...externalPluginIds, ...retainedBundledPluginIds]);
+        if (nextAllowSet.size > 0) {
           for (const pluginId of requiredBundledPluginIds) {
-            if (!nextAllow.includes(pluginId)) {
-              nextAllow.push(pluginId);
+            if (!nextAllowSet.has(pluginId)) {
+              nextAllowSet.add(pluginId);
               changed = true;
               console.log(`[sanitize] Preserved required bundled plugin "${pluginId}" in plugins.allow`);
             }
           }
         }
+        const nextAllow = [...nextAllowSet];
 
         if (JSON.stringify(nextAllow) !== JSON.stringify(allow)) {
           if (nextAllow.length > 0) {
