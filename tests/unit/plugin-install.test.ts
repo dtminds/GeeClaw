@@ -246,8 +246,20 @@ describe('reconcileBundledPluginLoadPaths', () => {
         getAlwaysEnabledBundledPluginIds,
       } = await import('@electron/utils/plugin-install');
 
-      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual(['lossless-claw', 'geeclaw-plugin']);
-      expect(getAlwaysEnabledBundledPluginIds()).toEqual(['lossless-claw', 'geeclaw-plugin']);
+      expect(ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS).toEqual([
+        'lossless-claw',
+        'geeclaw-plugin',
+        'browser',
+        'acpx',
+        'memory-core',
+      ]);
+      expect(getAlwaysEnabledBundledPluginIds()).toEqual([
+        'lossless-claw',
+        'geeclaw-plugin',
+        'browser',
+        'acpx',
+        'memory-core',
+      ]);
 
       const result = await ensureAlwaysEnabledBundledPluginsConfigured();
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
@@ -271,9 +283,16 @@ describe('reconcileBundledPluginLoadPaths', () => {
 
       expect(result).toEqual({
         success: true,
-        updated: ['lossless-claw', 'geeclaw-plugin'],
+        updated: ['lossless-claw', 'geeclaw-plugin', 'browser', 'acpx', 'memory-core'],
       });
-      expect(config.plugins?.allow).toEqual(['custom-plugin', 'lossless-claw', 'geeclaw-plugin']);
+      expect(config.plugins?.allow).toEqual([
+        'custom-plugin',
+        'lossless-claw',
+        'geeclaw-plugin',
+        'browser',
+        'acpx',
+        'memory-core',
+      ]);
       expect(config.plugins?.entries).toEqual({
         'lossless-claw': {
           enabled: false,
@@ -294,6 +313,15 @@ describe('reconcileBundledPluginLoadPaths', () => {
         'geeclaw-plugin': {
           enabled: true,
         },
+        browser: {
+          enabled: true,
+        },
+        acpx: {
+          enabled: true,
+        },
+        'memory-core': {
+          enabled: true,
+        },
       });
       expect(config.plugins?.entries?.['lossless-claw']).toEqual({
         enabled: false,
@@ -312,6 +340,15 @@ describe('reconcileBundledPluginLoadPaths', () => {
         },
       });
       expect(config.plugins?.entries?.['geeclaw-plugin']).toEqual({
+        enabled: true,
+      });
+      expect(config.plugins?.entries?.browser).toEqual({
+        enabled: true,
+      });
+      expect(config.plugins?.entries?.acpx).toEqual({
+        enabled: true,
+      });
+      expect(config.plugins?.entries?.['memory-core']).toEqual({
         enabled: true,
       });
     } finally {
