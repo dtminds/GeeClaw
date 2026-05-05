@@ -849,28 +849,16 @@ export class GatewayManager extends EventEmitter {
     const transport = await this.checkTransportHealth();
     let version: string | undefined;
 
-    if (transport.ok && this.status.state === 'running' && this.status.gatewayReady === false) {
-      const startedAt = Date.now();
+    if (transport.ok && this.status.state === 'running' && !this.status.gatewayReady) {
       try {
         await this.rpc('system-presence', {}, 3_000);
-        this.capabilityMonitor.recordCoreProbe({
-          ok: true,
-          checkedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
-        });
         this.setStatus({ gatewayReady: true });
-      } catch (error) {
-        this.capabilityMonitor.recordCoreProbe({
-          ok: false,
-          checkedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      } catch {
+        // Core probe success/failure is recorded by rpc().
       }
     } else if (transport.ok && this.status.state === 'running') {
       const timeoutMs = options?.probe ? 8_000 : 3_000;
-      const startedAt = Date.now();
-      const [healthResult, statusResult] = await Promise.allSettled([
+      const [healthResult] = await Promise.allSettled([
         this.rpc<{ uptime?: number; uptimeMs?: number; version?: string }>(
           'health',
           { probe: options?.probe === true },
@@ -880,16 +868,7 @@ export class GatewayManager extends EventEmitter {
       ]);
 
       if (healthResult.status === 'fulfilled') {
-        this.capabilityMonitor.recordOpenClawHealth(healthResult.value, Date.now() - startedAt);
         version = healthResult.value?.version;
-      } else {
-        this.capabilityMonitor.recordCapabilityFailure('openclawHealth', healthResult.reason, Date.now() - startedAt);
-      }
-
-      if (statusResult.status === 'fulfilled') {
-        this.capabilityMonitor.recordOpenClawStatus(statusResult.value, Date.now() - startedAt);
-      } else {
-        this.capabilityMonitor.recordCapabilityFailure('openclawStatus', statusResult.reason, Date.now() - startedAt);
       }
     }
 
