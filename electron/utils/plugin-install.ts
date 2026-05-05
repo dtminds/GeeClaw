@@ -36,7 +36,13 @@ const MANAGED_CHANNEL_PLUGIN_IDS_BY_CHANNEL: Record<string, string> = {
   feishu: 'openclaw-lark',
 };
 
-export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = ['lossless-claw', 'geeclaw-plugin'] as const;
+export const ALWAYS_ENABLED_BUNDLED_PLUGIN_IDS = [
+  'lossless-claw',
+  'geeclaw-plugin',
+  'browser',
+  'acpx',
+  'memory-core',
+] as const;
 
 const ALWAYS_ENABLED_BUNDLED_PLUGIN_POLICIES: Record<string, {
   allowedConfigKeys?: string[];
