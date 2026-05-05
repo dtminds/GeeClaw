@@ -59,7 +59,7 @@ interface SkillDetailDialogProps {
   skill: Skill | null;
   agentId: string;
   isOpen: boolean;
-  gatewayReady: boolean;
+  gatewayReady?: boolean;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
   onUninstall?: (skill: Pick<Skill, 'id' | 'slug' | 'baseDir'>) => Promise<void> | void;
@@ -215,7 +215,7 @@ function getSkillIssueMessages(skill: Skill, labels: SkillIssueLabels): string[]
   return issues;
 }
 
-export function SkillDetailDialog({ skill, agentId, isOpen, gatewayReady, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
+export function SkillDetailDialog({ skill, agentId, isOpen, gatewayReady = true, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
   const { t } = useTranslation(['skills', 'common']);
   const { fetchSkills } = useSkillsStore();
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
