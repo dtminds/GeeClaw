@@ -77,38 +77,61 @@ describe('GatewayManager heartbeat recovery', () => {
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
 
-  it('checks semantic gateway health through the registered health rpc', async () => {
+  it('reports transport health and probes OpenClaw health/status capabilities', async () => {
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 
     (manager as unknown as { ws: { readyState: number } }).ws = { readyState: 1 };
-    (manager as unknown as { status: { state: string; port: number; connectedAt: number } }).status = {
+    (manager as unknown as { status: { state: string; port: number; connectedAt: number; gatewayReady: boolean } }).status = {
       state: 'running',
       port: 28788,
       connectedAt: Date.now() - 5000,
+      gatewayReady: true,
     };
-    const rpc = vi.spyOn(manager, 'rpc').mockResolvedValue({ uptimeMs: 5000 });
+    const rpc = vi.spyOn(manager, 'rpc').mockResolvedValue({ ok: true, uptimeMs: 5000 });
 
     await expect(manager.checkHealth()).resolves.toMatchObject({ ok: true, uptime: 5 });
 
-    expect(rpc).toHaveBeenCalledWith('health', { probe: false }, 5000);
+    expect(rpc).toHaveBeenCalledWith('health', { probe: false }, 3000);
+    expect(rpc).toHaveBeenCalledWith('status', {}, 3000);
   });
 
-  it('returns unhealthy when the registered health rpc fails', async () => {
+  it.each([false, undefined])(
+    'uses system-presence as a core readiness probe when gatewayReady is %s',
+    async (gatewayReady) => {
+      const { GatewayManager } = await import('@electron/gateway/manager');
+      const manager = new GatewayManager();
+
+      (manager as unknown as { ws: { readyState: number } }).ws = { readyState: 1 };
+      (manager as unknown as { status: { state: string; port: number; connectedAt: number; gatewayReady?: boolean } }).status = {
+        state: 'running',
+        port: 28788,
+        connectedAt: Date.now() - 5000,
+        gatewayReady,
+      };
+      const rpc = vi.spyOn(manager, 'rpc').mockResolvedValue({ present: true });
+
+      await expect(manager.checkHealth()).resolves.toMatchObject({ ok: true, uptime: 5 });
+
+      expect(rpc).toHaveBeenCalledWith('system-presence', {}, 3000);
+      expect(rpc).not.toHaveBeenCalledWith('health', expect.anything(), expect.any(Number));
+      expect(manager.getCapabilitySnapshot().core.rpcRouter).toBe('ready');
+    },
+  );
+
+  it('treats slow OpenClaw health/status probes as non-fatal to Gateway transport health', async () => {
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 
     (manager as unknown as { ws: { readyState: number } }).ws = { readyState: 1 };
-    (manager as unknown as { status: { state: string; port: number; connectedAt: number } }).status = {
+    (manager as unknown as { status: { state: string; port: number; connectedAt: number; gatewayReady: boolean } }).status = {
       state: 'running',
       port: 28788,
       connectedAt: Date.now() - 5000,
+      gatewayReady: true,
     };
-    vi.spyOn(manager, 'rpc').mockRejectedValue(new Error('health unavailable'));
+    vi.spyOn(manager, 'rpc').mockRejectedValue(new Error('RPC timeout: health'));
 
-    await expect(manager.checkHealth()).resolves.toMatchObject({
-      ok: false,
-      error: 'Error: health unavailable',
-    });
+    await expect(manager.checkHealth()).resolves.toMatchObject({ ok: true, uptime: 5 });
   });
 });

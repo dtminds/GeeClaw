@@ -157,6 +157,182 @@ describe('skills page manual membership editing', () => {
     expect(selector.className).not.toContain('shadow');
   });
 
+  it('does not fetch installed skills while the gateway process is running but not ready', async () => {
+    const fetchSkills = vi.fn().mockResolvedValue(undefined);
+
+    useGatewayStore.setState({
+      ...initialGatewayState,
+      status: {
+        ...initialGatewayState.status,
+        state: 'running',
+        gatewayReady: false,
+      },
+    });
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [],
+      fetchSkills,
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace',
+        agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        mainSessionKey: 'main',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'main',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=main']}>
+          <Skills />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(fetchSkills).not.toHaveBeenCalled();
+  });
+
+  it('disables installed skill toggles while the gateway process is running but not ready', async () => {
+    const fetchSkills = vi.fn().mockResolvedValue(undefined);
+    const updateAgentSettings = vi.fn().mockResolvedValue(undefined);
+
+    useGatewayStore.setState({
+      ...initialGatewayState,
+      status: {
+        ...initialGatewayState.status,
+        state: 'running',
+        gatewayReady: false,
+      },
+    });
+    useSkillsStore.setState({
+      ...initialSkillsState,
+      loading: false,
+      error: null,
+      skills: [{
+        id: 'writer-tool',
+        slug: 'writer-tool',
+        name: 'Writer Tool',
+        description: 'Writer helper',
+        enabled: false,
+        configuredEnabled: false,
+        eligible: true,
+        blockedByAllowlist: false,
+        hidden: false,
+        icon: '🧩',
+        isBundled: false,
+        isCore: false,
+        source: 'agents-skills-personal',
+      }],
+      fetchSkills,
+      fetchMarketplaceCatalog: vi.fn().mockResolvedValue(undefined),
+      fetchCategorySkills: vi.fn().mockResolvedValue(undefined),
+      installSkill: vi.fn().mockResolvedValue(undefined),
+      uninstallSkill: vi.fn().mockResolvedValue(undefined),
+      enableSkill: vi.fn().mockResolvedValue(undefined),
+      disableSkill: vi.fn().mockResolvedValue(undefined),
+      setSkills: vi.fn(),
+      updateSkill: vi.fn(),
+      installing: {},
+      marketplaceCatalog: null,
+      marketplaceLoading: false,
+      marketplaceError: null,
+      categorySkills: [],
+      categorySkillsTotal: 0,
+      categorySkillsLoading: false,
+    });
+    useAgentsStore.setState({
+      ...initialAgentsState,
+      agents: [{
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-5.4',
+        inheritedModel: false,
+        workspace: '~/geeclaw/workspace',
+        agentDir: '~/.openclaw-geeclaw/agents/main/agent',
+        mainSessionKey: 'main',
+        channelTypes: [],
+        channelAccounts: [],
+        source: 'custom',
+        managed: false,
+        lockedFields: [],
+        canUnmanage: false,
+        managedFiles: [],
+        skillScope: { mode: 'default' },
+        presetSkills: [],
+        canUseDefaultSkillScope: true,
+        avatarPresetId: 'gradient-sunset',
+        avatarSource: 'default',
+      }],
+      defaultAgentId: 'main',
+      fetchAgents: vi.fn().mockResolvedValue(undefined),
+      updateAgentSettings,
+    });
+
+    const { Skills } = await import('@/pages/Skills/index');
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/skills?agentId=main']}>
+          <Skills />
+        </MemoryRouter>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('All').closest('button') as HTMLButtonElement);
+    });
+
+    const writerRow = screen.getByText('Writer Tool').closest('div.group');
+    expect(writerRow).not.toBeNull();
+    const toggle = within(writerRow as HTMLElement).getByRole('switch');
+    expect(toggle).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+
+    expect(updateAgentSettings).not.toHaveBeenCalled();
+    expect(fetchSkills).not.toHaveBeenCalled();
+  });
+
   it('bottom-aligns the secondary filter row so the active underline sits on the tab baseline', async () => {
     useSkillsStore.setState({
       ...initialSkillsState,

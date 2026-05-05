@@ -32,8 +32,23 @@ export async function handleGatewayRoutes(
   }
 
   if (url.pathname === '/api/gateway/health' && req.method === 'GET') {
-    const health = await ctx.gatewayManager.checkHealth();
+    const health = await ctx.gatewayManager.checkHealth({
+      probe: url.searchParams.get('probe') === '1' || url.searchParams.get('probe') === 'true',
+    });
     sendJson(res, 200, health);
+    return true;
+  }
+
+  if (url.pathname === '/api/gateway/diagnostics' && req.method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      capturedAt: new Date().toISOString(),
+      gateway: {
+        status: ctx.gatewayManager.getStatus(),
+        diagnostics: ctx.gatewayManager.getDiagnostics(),
+        capabilities: ctx.gatewayManager.getCapabilitySnapshot(),
+      },
+    });
     return true;
   }
 

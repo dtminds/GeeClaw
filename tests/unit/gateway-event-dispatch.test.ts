@@ -42,6 +42,32 @@ describe('gateway event dispatch', () => {
     });
   });
 
+  it('dispatches native gateway readiness and health events outside generic notifications', () => {
+    const emit = vi.fn();
+
+    dispatchProtocolEvent({ emit }, 'ready', { ready: true });
+    dispatchProtocolEvent({ emit }, 'gateway.ready', { ready: true, phase: 'plugins' });
+    dispatchProtocolEvent({ emit }, 'health', { ok: true, version: '1.2.3' });
+    dispatchProtocolEvent({ emit }, 'presence', [{ mode: 'gateway', ts: 1 }]);
+
+    expect(emit).toHaveBeenCalledWith('gateway:ready', { ready: true });
+    expect(emit).toHaveBeenCalledWith('gateway:ready', { ready: true, phase: 'plugins' });
+    expect(emit).toHaveBeenCalledWith('gateway:health', { ok: true, version: '1.2.3' });
+    expect(emit).toHaveBeenCalledWith('gateway:presence', [{ mode: 'gateway', ts: 1 }]);
+    expect(emit).not.toHaveBeenCalledWith('notification', expect.objectContaining({ method: 'health' }));
+    expect(emit).not.toHaveBeenCalledWith('notification', expect.objectContaining({ method: 'presence' }));
+  });
+
+  it('supports both gateway channel status event spellings', () => {
+    const emit = vi.fn();
+
+    dispatchProtocolEvent({ emit }, 'channel.status', { channelId: 'wecom', status: 'connected' });
+    dispatchProtocolEvent({ emit }, 'channel.status_changed', { channelId: 'telegram', status: 'running' });
+
+    expect(emit).toHaveBeenCalledWith('channel:status', { channelId: 'wecom', status: 'connected' });
+    expect(emit).toHaveBeenCalledWith('channel:status', { channelId: 'telegram', status: 'running' });
+  });
+
   it('forwards approval notifications unchanged through the generic notification channel', () => {
     const emit = vi.fn();
 

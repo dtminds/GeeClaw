@@ -59,6 +59,7 @@ interface SkillDetailDialogProps {
   skill: Skill | null;
   agentId: string;
   isOpen: boolean;
+  gatewayReady?: boolean;
   onClose: () => void;
   onToggle: (enabled: boolean) => void;
   onUninstall?: (skill: Pick<Skill, 'id' | 'slug' | 'baseDir'>) => Promise<void> | void;
@@ -214,7 +215,7 @@ function getSkillIssueMessages(skill: Skill, labels: SkillIssueLabels): string[]
   return issues;
 }
 
-export function SkillDetailDialog({ skill, agentId, isOpen, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
+export function SkillDetailDialog({ skill, agentId, isOpen, gatewayReady = true, onClose, onToggle, onUninstall, onOpenFolder }: SkillDetailDialogProps) {
   const { t } = useTranslation(['skills', 'common']);
   const { fetchSkills } = useSkillsStore();
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
@@ -586,7 +587,7 @@ export function SkillDetailDialog({ skill, agentId, isOpen, onClose, onToggle, o
                     onToggle(!skill.enabled);
                   }
                 }}
-                disabled={isUnavailable && (skill.isBundled || skill.isCore)}
+                disabled={!gatewayReady || (isUnavailable && (skill.isBundled || skill.isCore))}
               >
                 {!skill.isBundled && onUninstall
                   ? t('detail.uninstall', 'Uninstall')
@@ -852,6 +853,7 @@ export function Skills() {
   const [skillHubInstalling, setSkillHubInstalling] = useState(false);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
+  const isGatewayReady = isGatewayRunning && gatewayStatus.gatewayReady !== false;
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
   const mainAgent = agents.find((agent) => agent.id === 'main');
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
@@ -936,10 +938,10 @@ export function Skills() {
 
   // Fetch skills on mount
   useEffect(() => {
-    if (isGatewayRunning) {
+    if (isGatewayReady) {
       void fetchSkills(selectedAgentId);
     }
-  }, [fetchSkills, isGatewayRunning, selectedAgentId]);
+  }, [fetchSkills, isGatewayReady, selectedAgentId]);
 
   // Filter skills
   const agentScopedSkills = useMemo(() => safeSkills.map((skill) => {
@@ -1281,7 +1283,7 @@ export function Skills() {
               variant="outline"
               size="icon"
               onClick={() => activeTab === 'marketplace' ? fetchMarketplaceCatalog(true) : fetchSkills(selectedAgentId)}
-              disabled={activeTab === 'all' ? !isGatewayRunning : (marketplaceLoading || categorySkillsLoading)}
+              disabled={activeTab === 'all' ? !isGatewayReady : (marketplaceLoading || categorySkillsLoading)}
               className="surface-hover ml-1 h-8 w-8 rounded-md border-black/10 bg-transparent text-muted-foreground shadow-none dark:border-white/10"
               title="Refresh"
             >
@@ -1488,7 +1490,7 @@ export function Skills() {
                         <Switch
                           checked={skill.enabled}
                           onCheckedChange={(checked) => handleToggle(skill.id, checked)}
-                          disabled={skill.isCore || isUnavailable || presetSkillSet.has(skill.id)}
+                          disabled={!isGatewayReady || skill.isCore || isUnavailable || presetSkillSet.has(skill.id)}
                         />
                       </div>
                     </div>
@@ -1686,6 +1688,7 @@ export function Skills() {
         skill={resolvedSelectedSkill}
         agentId={selectedAgentId}
         isOpen={!!resolvedSelectedSkill}
+        gatewayReady={isGatewayReady}
         onClose={() => setSelectedSkill(null)}
         onToggle={(enabled) => {
           if (!resolvedSelectedSkill) return;
