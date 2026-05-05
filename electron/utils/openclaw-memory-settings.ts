@@ -8,6 +8,7 @@ import { getManagedBundledPluginPolicy } from './plugin-install';
 import type { OpenClawConfigDocument } from './openclaw-config-coordinator';
 import { mutateOpenClawConfigDocument } from './openclaw-config-coordinator';
 import { getOpenClawConfigDir } from './paths';
+import { isVersionAtLeast } from '../../src/shared/version-compatibility';
 
 function getRequiredManagedPluginVersion(pluginId: string): string {
   const plugin = getManagedPlugin(pluginId);
@@ -114,7 +115,7 @@ function arraysEqual(left: unknown[], right: unknown[]): boolean {
 }
 
 function isRequiredVersionInstalled(installedVersion: string, requiredVersion: string): boolean {
-  return installedVersion === requiredVersion;
+  return isVersionAtLeast(installedVersion, requiredVersion);
 }
 
 async function readLosslessClawInstallState(): Promise<LosslessClawInstallState> {
