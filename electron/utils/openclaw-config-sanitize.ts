@@ -466,7 +466,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             const entry = isPlainRecord(entries[pluginId]) ? entries[pluginId] : {};
             return entry.enabled === true;
           });
-        const activeBundledProviderPluginIds = bundled.enabledByDefault.filter((pluginId) => {
+        const activeBundledProviderPluginIds = [...bundled.all].filter((pluginId) => {
           const manifest = bundled.manifestsById.get(pluginId);
           const providerIds = manifest?.providers ?? [];
           const isProviderPlugin = providerIds.length > 0
