@@ -14,7 +14,13 @@ const MANAGED_AGENT_HEARTBEAT_EVERY = '2h';
 const MANAGED_AGENT_MAX_CONCURRENT = 3;
 const CHANNELS_EXCLUDING_TOP_LEVEL_MIRROR = new Set(['dingtalk']);
 const CHANNELS_SKIPPING_DEFAULT_ACCOUNT_MIRROR = new Set(['wecom']);
-const BUNDLED_ALLOWLIST_PRESERVE_IDS = new Set(['browser', 'acpx', 'memory-core']);
+const BUNDLED_ALLOWLIST_PRESERVE_IDS = new Set([
+  'lossless-claw',
+  'geeclaw-plugin',
+  'browser',
+  'acpx',
+  'memory-core',
+]);
 const OPTIONAL_PROVIDER_LIKE_BUNDLED_PLUGIN_IDS = new Set([
   'alibaba',
   'deepgram',

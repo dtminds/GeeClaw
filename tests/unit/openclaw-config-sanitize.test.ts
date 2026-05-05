@@ -328,6 +328,44 @@ describe('sanitizeOpenClawConfig bundled plugin allowlist reconciliation', () =>
     expect(allow).toContain('groq');
   });
 
+  it('preserves GeeClaw always-enabled bundled plugins during sanitize reconciliation', async () => {
+    await writeBundledPluginManifest('browser', { enabledByDefault: true });
+    await writeBundledPluginManifest('acpx', { enabledByDefault: true });
+    await writeBundledPluginManifest('memory-core', { enabledByDefault: true });
+    await writeBundledPluginManifest('lossless-claw', { enabledByDefault: false });
+    await writeBundledPluginManifest('geeclaw-plugin', { enabledByDefault: false });
+
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          workspace: join(openclawConfigDir, 'workspace'),
+          heartbeat: { every: '2h' },
+          maxConcurrent: 3,
+        },
+      },
+      plugins: {
+        allow: ['custom-plugin', 'lossless-claw', 'geeclaw-plugin'],
+        entries: {
+          'custom-plugin': { enabled: true },
+          'lossless-claw': { enabled: false },
+          'geeclaw-plugin': { enabled: true },
+        },
+      },
+      commands: {
+        restart: true,
+      },
+    });
+
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-config-sanitize');
+    await sanitizeOpenClawConfig();
+
+    const result = await readOpenClawJson();
+    const allow = ((result.plugins as Record<string, unknown>).allow as string[]);
+
+    expect(allow).toContain('lossless-claw');
+    expect(allow).toContain('geeclaw-plugin');
+  });
+
   it('discovers symlinked bundled plugin manifests when preserving active provider plugins', async () => {
     await writeBundledPluginManifest('browser', { enabledByDefault: true });
     await writeBundledPluginManifest('acpx', { enabledByDefault: true });
