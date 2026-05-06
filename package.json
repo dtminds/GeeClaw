@@ -59,6 +59,8 @@
         "lint:check": "eslint .",
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
+        "harness": "pnpm --filter @geeclaw/harness start --",
+        "harness:ci": "pnpm harness list && pnpm harness validate --spec harness/specs/scenarios/gateway-backend-communication.md --no-diff && pnpm harness validate --spec harness/specs/tasks/fix-chat-history-gateway-timeout.example.md --no-diff && pnpm harness run --spec harness/specs/scenarios/gateway-backend-communication.md --dry-run --no-diff && pnpm exec vitest run tests/unit/harness-specs.test.ts tests/unit/harness-git.test.ts",
         "openclaw-sidecar:build": "node scripts/build-openclaw-sidecar.mjs",
         "openclaw-sidecar:download": "node scripts/download-openclaw-sidecar.mjs",
         "openclaw-sidecar:merge-version-manifest": "node scripts/merge-openclaw-sidecar-version-manifest.mjs",
