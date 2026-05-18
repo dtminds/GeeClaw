@@ -56,20 +56,23 @@ function copyBundledBinRuntimeResources(projectRoot, resourcesDir, platform, arc
 exports.copyBundledBinRuntimeResources = copyBundledBinRuntimeResources;
 
 function copyBundledOpenClawPluginMirrors(sourceRoot, destRoot, platform, arch) {
-  if (!existsSync(sourceRoot)) {
+  const normalizedSourceRoot = normWin(sourceRoot);
+  const normalizedDestRoot = normWin(destRoot);
+
+  if (!existsSync(normalizedSourceRoot)) {
     return { copiedPlugins: 0 };
   }
 
-  const pluginDirs = readdirSync(sourceRoot, { withFileTypes: true })
+  const pluginDirs = readdirSync(normalizedSourceRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
 
-  rmSync(normWin(destRoot), { recursive: true, force: true });
-  mkdirSync(normWin(destRoot), { recursive: true });
+  rmSync(normalizedDestRoot, { recursive: true, force: true });
+  mkdirSync(normalizedDestRoot, { recursive: true });
 
   for (const pluginId of pluginDirs) {
     const sourceDir = join(sourceRoot, pluginId);
-    const pluginDestDir = join(destRoot, pluginId);
+    const pluginDestDir = normWin(join(destRoot, pluginId));
     copyPathPreservingLinks(sourceDir, pluginDestDir);
 
     const pluginNM = join(pluginDestDir, 'node_modules');
@@ -94,7 +97,7 @@ function copyPathPreservingLinks(sourcePath, destPath, normalizePath = normWin) 
   if (stats.isSymbolicLink()) {
     const linkTarget = readlinkSync(normalizedSourcePath);
     rmSync(normalizedDestPath, { recursive: true, force: true });
-    mkdirSync(normalizePath(dirname(destPath)), { recursive: true });
+    mkdirSync(dirname(normalizedDestPath), { recursive: true });
     symlinkSync(linkTarget, normalizedDestPath);
     return;
   }
@@ -107,7 +110,7 @@ function copyPathPreservingLinks(sourcePath, destPath, normalizePath = normWin) 
     return;
   }
 
-  mkdirSync(normalizePath(dirname(destPath)), { recursive: true });
+  mkdirSync(dirname(normalizedDestPath), { recursive: true });
   cpSync(normalizedSourcePath, normalizedDestPath, {
     dereference: false,
     force: true,
