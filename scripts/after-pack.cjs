@@ -55,6 +55,36 @@ function copyBundledBinRuntimeResources(projectRoot, resourcesDir, platform, arc
 
 exports.copyBundledBinRuntimeResources = copyBundledBinRuntimeResources;
 
+function copyBundledOpenClawPluginMirrors(sourceRoot, destRoot, platform, arch) {
+  if (!existsSync(sourceRoot)) {
+    return { copiedPlugins: 0 };
+  }
+
+  const pluginDirs = readdirSync(sourceRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  rmSync(normWin(destRoot), { recursive: true, force: true });
+  mkdirSync(normWin(destRoot), { recursive: true });
+
+  for (const pluginId of pluginDirs) {
+    const sourceDir = join(sourceRoot, pluginId);
+    const pluginDestDir = join(destRoot, pluginId);
+    copyPathPreservingLinks(sourceDir, pluginDestDir);
+
+    const pluginNM = join(pluginDestDir, 'node_modules');
+    cleanupUnnecessaryFiles(pluginDestDir);
+    if (existsSync(pluginNM)) {
+      cleanupKoffi(pluginNM, platform, arch);
+      cleanupNativePlatformPackages(pluginNM, platform, arch);
+    }
+  }
+
+  return { copiedPlugins: pluginDirs.length };
+}
+
+exports.copyBundledOpenClawPluginMirrors = copyBundledOpenClawPluginMirrors;
+
 function copyPathPreservingLinks(sourcePath, destPath) {
   const stats = lstatSync(sourcePath);
 
@@ -1180,21 +1210,7 @@ exports.default = async function afterPack(context) {
       .map((entry) => entry.name);
 
     console.log(`[after-pack] Copying ${pluginDirs.length} prebuilt OpenClaw plugin mirror(s) to ${pluginsDestRoot} ...`);
-    rmSync(pluginsDestRoot, { recursive: true, force: true });
-    mkdirSync(pluginsDestRoot, { recursive: true });
-
-    for (const pluginId of pluginDirs) {
-      const sourceDir = join(bundledPluginsBuildRoot, pluginId);
-      const pluginDestDir = join(pluginsDestRoot, pluginId);
-      cpSync(sourceDir, pluginDestDir, { recursive: true, dereference: true });
-
-      const pluginNM = join(pluginDestDir, 'node_modules');
-      cleanupUnnecessaryFiles(pluginDestDir);
-      if (existsSync(pluginNM)) {
-        cleanupKoffi(pluginNM, platform, arch);
-        cleanupNativePlatformPackages(pluginNM, platform, arch);
-      }
-    }
+    copyBundledOpenClawPluginMirrors(bundledPluginsBuildRoot, pluginsDestRoot, platform, arch);
   } else {
     const fallbackLogger = createPrefixedLogger('[after-pack] ');
     const { plugins } = bundlePluginMirrors({
