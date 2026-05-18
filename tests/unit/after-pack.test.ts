@@ -67,6 +67,29 @@ describe('after-pack bundled runtime sync', () => {
     expect(readlinkSync(copiedLink)).toBe('../shiki/dist/langs/json5.d.mts');
   });
 
+  it('normalizes source paths while recursively copying deep directory trees', async () => {
+    const { copyPathPreservingLinks } = await import('../../scripts/after-pack.cjs');
+
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-copy-src-'));
+    const destRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-copy-dest-'));
+    tempDirs.push(sourceRoot, destRoot);
+
+    const sourceNodeModules = join(sourceRoot, 'node_modules');
+    const sourceEntry = join(sourceNodeModules, 'pkg', 'index.js');
+    mkdirSync(join(sourceNodeModules, 'pkg'), { recursive: true });
+    writeFileSync(sourceEntry, 'module.exports = true;\n', 'utf8');
+
+    const normalizedPaths: string[] = [];
+    copyPathPreservingLinks(sourceNodeModules, join(destRoot, 'node_modules'), (targetPath: string) => {
+      normalizedPaths.push(targetPath);
+      return targetPath;
+    });
+
+    expect(normalizedPaths).toContain(sourceNodeModules);
+    expect(normalizedPaths).toContain(sourceEntry);
+    expect(existsSync(join(destRoot, 'node_modules', 'pkg', 'index.js'))).toBe(true);
+  });
+
   it('copies bundled plugin mirrors with deep transitive node_modules intact', async () => {
     const { copyBundledOpenClawPluginMirrors } = await import('../../scripts/after-pack.cjs');
 
@@ -128,6 +151,46 @@ describe('after-pack bundled runtime sync', () => {
     expect(
       existsSync(copiedDeepDepPackage),
     ).toBe(true);
+  });
+
+  it('removes non-target prebuilds from bundled plugin mirrors', async () => {
+    const { copyBundledOpenClawPluginMirrors } = await import('../../scripts/after-pack.cjs');
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-plugin-src-'));
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-plugin-resources-'));
+    tempDirs.push(projectRoot, resourcesDir);
+
+    const prebuildsDir = join(
+      projectRoot,
+      'build',
+      'openclaw-plugins',
+      'native-plugin',
+      'node_modules',
+      'native-helper',
+      'prebuilds',
+    );
+    mkdirSync(join(prebuildsDir, 'win32-x64'), { recursive: true });
+    mkdirSync(join(prebuildsDir, 'darwin-arm64'), { recursive: true });
+    writeFileSync(join(prebuildsDir, 'win32-x64', 'native.node'), 'win\n', 'utf8');
+    writeFileSync(join(prebuildsDir, 'darwin-arm64', 'native.node'), 'darwin\n', 'utf8');
+
+    copyBundledOpenClawPluginMirrors(
+      join(projectRoot, 'build', 'openclaw-plugins'),
+      join(resourcesDir, 'openclaw-plugins'),
+      'win32',
+      'x64',
+    );
+
+    const copiedPrebuilds = join(
+      resourcesDir,
+      'openclaw-plugins',
+      'native-plugin',
+      'node_modules',
+      'native-helper',
+      'prebuilds',
+    );
+    expect(existsSync(join(copiedPrebuilds, 'win32-x64', 'native.node'))).toBe(true);
+    expect(existsSync(join(copiedPrebuilds, 'darwin-arm64'))).toBe(false);
   });
 
   it('removes declaration-only mts and cts files during packaged cleanup', async () => {

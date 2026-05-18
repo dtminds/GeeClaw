@@ -172,6 +172,7 @@ function copyPackageDependencyTree(packageRoot, outputDir, options = {}, state) 
     nodeModulesDir,
     ancestryRealPaths = [],
     ancestryOutputDirs = [],
+    rootOutputDir = outputDir,
   } = options;
   const currentState = state || {
     copiedDests: new Set(),
@@ -232,7 +233,12 @@ function copyPackageDependencyTree(packageRoot, outputDir, options = {}, state) 
       throw new Error(`Failed to resolve runtime dependency "${depName}" while bundling ${packageRoot}`);
     }
 
-    const depDest = path.join(destNodeModules, ...depName.split('/'));
+    const rootDepDest = path.join(rootOutputDir, 'node_modules', ...depName.split('/'));
+    const existingRootDepRealPath = currentState.destRealPaths.get(rootDepDest);
+    const canUseRootDepDest = !existingRootDepRealPath || existingRootDepRealPath === realDepPath;
+    const depDest = canUseRootDepDest
+      ? rootDepDest
+      : path.join(destNodeModules, ...depName.split('/'));
     if (currentState.copiedDests.has(depDest)) {
       continue;
     }
@@ -259,6 +265,7 @@ function copyPackageDependencyTree(packageRoot, outputDir, options = {}, state) 
     copyPackageDependencyTree(realDepPath, depDest, {
       ancestryRealPaths: [...ancestry],
       ancestryOutputDirs: [...ancestryOutputDirs, outputDir],
+      rootOutputDir,
     }, currentState);
   }
 

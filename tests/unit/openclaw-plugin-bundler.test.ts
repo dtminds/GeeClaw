@@ -286,7 +286,7 @@ describe('openclaw plugin bundler helpers', () => {
       JSON.parse(
         await import('node:fs/promises').then(({ readFile }) =>
           readFile(
-            join(outputDir, 'node_modules', 'pdf-parse', 'node_modules', '@napi-rs', 'canvas', 'package.json'),
+            join(outputDir, 'node_modules', '@napi-rs', 'canvas', 'package.json'),
             'utf8',
           ),
         ),
@@ -296,7 +296,7 @@ describe('openclaw plugin bundler helpers', () => {
       JSON.parse(
         await import('node:fs/promises').then(({ readFile }) =>
           readFile(
-            join(outputDir, 'node_modules', 'pdf-parse', 'node_modules', 'pdfjs-dist', 'node_modules', '@napi-rs', 'canvas', 'package.json'),
+            join(outputDir, 'node_modules', 'pdfjs-dist', 'node_modules', '@napi-rs', 'canvas', 'package.json'),
             'utf8',
           ),
         ),
@@ -391,6 +391,67 @@ describe('openclaw plugin bundler helpers', () => {
 
     expect(existsSync(join(outputDir, 'node_modules', 'shared', 'package.json'))).toBe(true);
     expect(existsSync(join(outputDir, 'node_modules', 'dep-a', 'node_modules', 'shared'))).toBe(false);
+  });
+
+  it('hoists same-version transitive dependencies to keep packaged plugin paths shallow', async () => {
+    const { copyPackageDependencyTree } = await import('../../scripts/lib/openclaw-plugin-bundler.cjs');
+
+    const root = mkdtempSync(join(tmpdir(), 'geeclaw-plugin-bundler-'));
+    tempDirs.push(root);
+
+    const storeRoot = join(root, 'virtual-store');
+    const pluginStoreRoot = join(storeRoot, 'plugin@1.0.0', 'node_modules');
+    const depAStoreRoot = join(storeRoot, 'dep-a@1.0.0', 'node_modules');
+    const depBStoreRoot = join(storeRoot, 'dep-b@1.0.0', 'node_modules');
+    const sharedStoreRoot = join(storeRoot, 'shared@1.0.0', 'node_modules');
+    const pluginRoot = join(pluginStoreRoot, 'plugin');
+    const depARoot = join(depAStoreRoot, 'dep-a');
+    const depBRoot = join(depBStoreRoot, 'dep-b');
+    const sharedRoot = join(sharedStoreRoot, 'shared');
+
+    createPackage(pluginRoot, {
+      name: 'plugin',
+      version: '1.0.0',
+      main: 'index.js',
+      dependencies: {
+        'dep-a': '^1.0.0',
+      },
+    });
+    createPackage(depARoot, {
+      name: 'dep-a',
+      version: '1.0.0',
+      main: 'index.js',
+      dependencies: {
+        'dep-b': '^1.0.0',
+      },
+    });
+    createPackage(depBRoot, {
+      name: 'dep-b',
+      version: '1.0.0',
+      main: 'index.js',
+      dependencies: {
+        shared: '^1.0.0',
+      },
+    });
+    createPackage(sharedRoot, {
+      name: 'shared',
+      version: '1.0.0',
+      main: 'index.js',
+    });
+    symlinkSync(depARoot, join(pluginStoreRoot, 'dep-a'));
+    symlinkSync(depBRoot, join(depAStoreRoot, 'dep-b'));
+    symlinkSync(sharedRoot, join(depBStoreRoot, 'shared'));
+
+    const outputDir = join(root, 'plugin-output');
+    mkdirSync(outputDir, { recursive: true });
+
+    copyPackageDependencyTree(pluginRoot, outputDir);
+
+    expect(existsSync(join(outputDir, 'node_modules', 'dep-a', 'package.json'))).toBe(true);
+    expect(existsSync(join(outputDir, 'node_modules', 'dep-b', 'package.json'))).toBe(true);
+    expect(existsSync(join(outputDir, 'node_modules', 'shared', 'package.json'))).toBe(true);
+    expect(existsSync(join(outputDir, 'node_modules', 'dep-a', 'node_modules', 'dep-b'))).toBe(false);
+    expect(existsSync(join(outputDir, 'node_modules', 'dep-b', 'node_modules', 'shared'))).toBe(false);
   });
 
   it('can source extra required packages from the app root node_modules when the plugin package does not declare them', async () => {
