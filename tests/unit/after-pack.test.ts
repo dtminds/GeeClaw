@@ -67,6 +67,69 @@ describe('after-pack bundled runtime sync', () => {
     expect(readlinkSync(copiedLink)).toBe('../shiki/dist/langs/json5.d.mts');
   });
 
+  it('copies bundled plugin mirrors with deep transitive node_modules intact', async () => {
+    const { copyBundledOpenClawPluginMirrors } = await import('../../scripts/after-pack.cjs');
+
+    const projectRoot = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-plugin-src-'));
+    const resourcesDir = mkdtempSync(join(tmpdir(), 'geeclaw-after-pack-plugin-resources-'));
+    tempDirs.push(projectRoot, resourcesDir);
+
+    const pluginRoot = join(projectRoot, 'build', 'openclaw-plugins', 'wecom-openclaw-plugin');
+    const deepDepRoot = join(
+      pluginRoot,
+      'node_modules',
+      '@wecom',
+      'aibot-node-sdk',
+      'node_modules',
+      'axios',
+      'node_modules',
+      'form-data',
+      'node_modules',
+      'es-set-tostringtag',
+      'node_modules',
+      'get-intrinsic',
+      'node_modules',
+      'es-object-atoms',
+    );
+    mkdirSync(deepDepRoot, { recursive: true });
+    writeFileSync(join(pluginRoot, 'openclaw.plugin.json'), '{"id":"wecom-openclaw-plugin"}\n', 'utf8');
+    writeFileSync(join(pluginRoot, 'package.json'), '{"name":"@wecom/wecom-openclaw-plugin","version":"2026.4.29"}\n', 'utf8');
+    writeFileSync(join(deepDepRoot, 'package.json'), '{"name":"es-object-atoms","version":"1.1.1"}\n', 'utf8');
+    writeFileSync(join(deepDepRoot, 'index.js'), 'module.exports = Object;\n', 'utf8');
+
+    expect(
+      copyBundledOpenClawPluginMirrors(
+        join(projectRoot, 'build', 'openclaw-plugins'),
+        join(resourcesDir, 'openclaw-plugins'),
+        'win32',
+        'x64',
+      ),
+    ).toEqual({ copiedPlugins: 1 });
+
+    const copiedDeepDepPackage = join(
+      resourcesDir,
+      'openclaw-plugins',
+      'wecom-openclaw-plugin',
+      'node_modules',
+      '@wecom',
+      'aibot-node-sdk',
+      'node_modules',
+      'axios',
+      'node_modules',
+      'form-data',
+      'node_modules',
+      'es-set-tostringtag',
+      'node_modules',
+      'get-intrinsic',
+      'node_modules',
+      'es-object-atoms',
+      'package.json',
+    );
+    expect(
+      existsSync(copiedDeepDepPackage),
+    ).toBe(true);
+  });
+
   it('removes declaration-only mts and cts files during packaged cleanup', async () => {
     const { cleanupUnnecessaryFiles } = await import('../../scripts/after-pack.cjs');
 
