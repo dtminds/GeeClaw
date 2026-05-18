@@ -42,6 +42,11 @@ export function getBundledNpmPath(): string | null {
   return getBundledScriptPath('npm');
 }
 
+export function getBundledNpmExecPath(): string | null {
+  const npmCliPath = join(getBundledExecutableDir(), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  return existsSync(npmCliPath) ? npmCliPath : null;
+}
+
 export function getBundledNpxPath(): string | null {
   return getBundledScriptPath('npx');
 }

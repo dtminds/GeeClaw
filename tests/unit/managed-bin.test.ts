@@ -136,4 +136,28 @@ describe('managed-bin paths', () => {
     expect(getBundledNpmPath()).toBe(npmCmdPath);
     expect(getBundledNpxPath()).toBe(npxCmdPath);
   });
+
+  it('resolves bundled npm-cli.js for packaged Windows builds', async () => {
+    setPlatform('win32');
+    setArch('x64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: 'C:/Program Files/GeeClaw/resources',
+      configurable: true,
+      writable: true,
+    });
+
+    const npmCliPath = join(
+      'C:/Program Files/GeeClaw/resources',
+      'bin',
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    );
+    mockExistsSync.mockImplementation((value: string) => value === npmCliPath);
+
+    const { getBundledNpmExecPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNpmExecPath()).toBe(npmCliPath);
+  });
 });

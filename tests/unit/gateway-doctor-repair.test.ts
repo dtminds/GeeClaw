@@ -2,6 +2,8 @@ import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const forkMock = vi.fn();
+let bundledNpmExecPath: string | null = null;
+const originalPlatform = process.platform;
 
 vi.mock('electron', () => ({
   app: {
@@ -30,6 +32,7 @@ vi.mock('@electron/utils/paths', () => ({
 
 vi.mock('@electron/utils/managed-bin', () => ({
   getBundledNodePath: vi.fn(() => null),
+  getBundledNpmExecPath: vi.fn(() => bundledNpmExecPath),
 }));
 
 vi.mock('@electron/utils/runtime-path', () => ({
@@ -86,6 +89,8 @@ class MockUtilityChild extends EventEmitter {
 describe('runOpenClawDoctorRepair', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    bundledNpmExecPath = null;
+    Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
   });
 
   it('runs doctor repair without GeeClaw-specific bundled-plugin overrides', async () => {
@@ -114,6 +119,23 @@ describe('runOpenClawDoctorRepair', () => {
 
     const forkOptions = forkMock.mock.calls[0]?.[2];
     expect(forkOptions?.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS).toBeUndefined();
+  });
+
+  it('passes bundled npm_execpath to OpenClaw doctor repair when available', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32', writable: true });
+    bundledNpmExecPath = 'C:\\Program Files\\GeeClaw\\resources\\bin\\node_modules\\npm\\bin\\npm-cli.js';
+    forkMock.mockImplementation((_entryPath: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      const child = new MockUtilityChild();
+      queueMicrotask(() => child.emit('exit', 0));
+      return Object.assign(child, { options });
+    });
+
+    const { runOpenClawDoctorRepair } = await import('@electron/gateway/supervisor');
+
+    await expect(runOpenClawDoctorRepair()).resolves.toBe(true);
+
+    const forkOptions = forkMock.mock.calls[0]?.[2];
+    expect(forkOptions?.env.npm_execpath).toBe(bundledNpmExecPath);
   });
 
   it('does not log success after timing out and later receiving exit 0', async () => {
