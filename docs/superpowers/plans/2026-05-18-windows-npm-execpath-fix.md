@@ -33,9 +33,10 @@ Expected: fail because the helper does not exist yet.
 
 ```ts
 export function getBundledNpmExecPath(): string | null {
-  const npmCliPath = process.platform === 'win32'
-    ? join(getBundledExecutableDir(), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-    : join(getBundledExecutableDir(), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  const npmRootDir = process.platform === 'win32'
+    ? join(getBundledBinDir(), 'node_modules')
+    : join(getBundledBinDir(), 'lib', 'node_modules');
+  const npmCliPath = join(npmRootDir, 'npm', 'bin', 'npm-cli.js');
   return existsSync(npmCliPath) ? npmCliPath : null;
 }
 ```
@@ -61,7 +62,7 @@ git commit -m "fix: resolve bundled npm execpath"
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-expect(forkEnv.npm_execpath).toBe('/opt/openclaw/bin/node_modules/npm/bin/npm-cli.js');
+expect(forkEnv.npm_execpath).toBe('C:\\Program Files\\GeeClaw\\resources\\bin\\node_modules\\npm\\bin\\npm-cli.js');
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -102,7 +103,7 @@ git commit -m "fix: pass bundled npm execpath to gateway"
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-expect(forkOptions?.env.npm_execpath).toBe('/opt/openclaw/bin/node_modules/npm/bin/npm-cli.js');
+expect(forkOptions?.env.npm_execpath).toBe('C:\\Program Files\\GeeClaw\\resources\\bin\\node_modules\\npm\\bin\\npm-cli.js');
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -155,4 +156,3 @@ Expected: no TypeScript errors.
 ```bash
 gh pr create --base main --head codex/fix-windows-openclaw-npm-execpath --title "fix: inject bundled npm execpath for Windows OpenClaw startup" --body $'Summary:\n- resolve bundled npm-cli.js and pass it as npm_execpath for OpenClaw startup on Windows\n- keep macOS and Linux behavior unchanged\n- cover gateway and doctor-repair launch envs with unit tests\n\nValidation:\n- pnpm test tests/unit/managed-bin.test.ts tests/unit/gateway-config-sync.test.ts tests/unit/gateway-doctor-repair.test.ts\n- pnpm run typecheck\n'
 ```
-

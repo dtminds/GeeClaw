@@ -43,7 +43,10 @@ export function getBundledNpmPath(): string | null {
 }
 
 export function getBundledNpmExecPath(): string | null {
-  const npmCliPath = join(getBundledExecutableDir(), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  const npmRootDir = process.platform === 'win32'
+    ? join(getBundledBinDir(), 'node_modules')
+    : join(getBundledBinDir(), 'lib', 'node_modules');
+  const npmCliPath = join(npmRootDir, 'npm', 'bin', 'npm-cli.js');
   return existsSync(npmCliPath) ? npmCliPath : null;
 }
 

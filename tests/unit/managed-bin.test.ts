@@ -160,4 +160,29 @@ describe('managed-bin paths', () => {
     const { getBundledNpmExecPath } = await import('@electron/utils/managed-bin');
     expect(getBundledNpmExecPath()).toBe(npmCliPath);
   });
+
+  it('resolves bundled npm-cli.js from lib for packaged macOS builds', async () => {
+    setPlatform('darwin');
+    setArch('arm64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+
+    const npmCliPath = join(
+      '/Applications/GeeClaw.app/Contents/Resources',
+      'bin',
+      'lib',
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    );
+    mockExistsSync.mockImplementation((value: string) => value === npmCliPath);
+
+    const { getBundledNpmExecPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNpmExecPath()).toBe(npmCliPath);
+  });
 });
