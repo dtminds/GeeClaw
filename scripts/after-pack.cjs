@@ -74,6 +74,7 @@ function copyBundledOpenClawPluginMirrors(sourceRoot, destRoot, platform, arch) 
 
     const pluginNM = join(pluginDestDir, 'node_modules');
     cleanupUnnecessaryFiles(pluginDestDir);
+    cleanupNativePrebuilds(pluginDestDir, platform, arch);
     if (existsSync(pluginNM)) {
       cleanupKoffi(pluginNM, platform, arch);
       cleanupNativePlatformPackages(pluginNM, platform, arch);
@@ -85,27 +86,29 @@ function copyBundledOpenClawPluginMirrors(sourceRoot, destRoot, platform, arch) 
 
 exports.copyBundledOpenClawPluginMirrors = copyBundledOpenClawPluginMirrors;
 
-function copyPathPreservingLinks(sourcePath, destPath) {
-  const stats = lstatSync(sourcePath);
+function copyPathPreservingLinks(sourcePath, destPath, normalizePath = normWin) {
+  const normalizedSourcePath = normalizePath(sourcePath);
+  const normalizedDestPath = normalizePath(destPath);
+  const stats = lstatSync(normalizedSourcePath);
 
   if (stats.isSymbolicLink()) {
-    const linkTarget = readlinkSync(sourcePath);
-    rmSync(normWin(destPath), { recursive: true, force: true });
-    mkdirSync(normWin(dirname(destPath)), { recursive: true });
-    symlinkSync(linkTarget, normWin(destPath));
+    const linkTarget = readlinkSync(normalizedSourcePath);
+    rmSync(normalizedDestPath, { recursive: true, force: true });
+    mkdirSync(normalizePath(dirname(destPath)), { recursive: true });
+    symlinkSync(linkTarget, normalizedDestPath);
     return;
   }
 
   if (stats.isDirectory()) {
-    mkdirSync(normWin(destPath), { recursive: true });
-    for (const entry of readdirSync(sourcePath)) {
-      copyPathPreservingLinks(join(sourcePath, entry), join(destPath, entry));
+    mkdirSync(normalizedDestPath, { recursive: true });
+    for (const entry of readdirSync(normalizedSourcePath)) {
+      copyPathPreservingLinks(join(sourcePath, entry), join(destPath, entry), normalizePath);
     }
     return;
   }
 
-  mkdirSync(normWin(dirname(destPath)), { recursive: true });
-  cpSync(normWin(sourcePath), normWin(destPath), {
+  mkdirSync(normalizePath(dirname(destPath)), { recursive: true });
+  cpSync(normalizedSourcePath, normalizedDestPath, {
     dereference: false,
     force: true,
   });
