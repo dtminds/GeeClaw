@@ -49,7 +49,7 @@ import {
 import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
-import { getBundledNodePath, getManagedBinDir } from '../utils/managed-bin';
+import { getBundledNodePath, getBundledNpmExecPath, getManagedBinDir } from '../utils/managed-bin';
 import { mutateOpenClawConfigDocument } from '../utils/openclaw-config-coordinator';
 
 const OPENCLAW_SETUP_TIMEOUT_MS = 300000;
@@ -212,10 +212,12 @@ export function buildGatewayForkEnv(options: {
     forwardedEnvRecord,
     getGeeClawRuntimePath({ ...forwardedEnvRecord, PATH: options.finalPath }, { includeBundled: false }),
   );
+  const bundledNpmExecPath = process.platform === 'win32' ? getBundledNpmExecPath() : null;
 
   return {
     ...forwardedEnvWithPath,
     ...options.injectedEnv,
+    ...(bundledNpmExecPath ? { npm_execpath: bundledNpmExecPath } : {}),
     PNPM_HOME: getManagedBinDir(),
     OPENCLAW_STATE_DIR: options.openclawConfigDir,
     OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(options.openclawConfigDir),

@@ -42,6 +42,14 @@ export function getBundledNpmPath(): string | null {
   return getBundledScriptPath('npm');
 }
 
+export function getBundledNpmExecPath(): string | null {
+  const npmRootDir = process.platform === 'win32'
+    ? join(getBundledBinDir(), 'node_modules')
+    : join(getBundledBinDir(), 'lib', 'node_modules');
+  const npmCliPath = join(npmRootDir, 'npm', 'bin', 'npm-cli.js');
+  return existsSync(npmCliPath) ? npmCliPath : null;
+}
+
 export function getBundledNpxPath(): string | null {
   return getBundledScriptPath('npx');
 }

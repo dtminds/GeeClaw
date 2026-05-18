@@ -5,6 +5,7 @@ import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSy
 
 const forkMock = vi.fn();
 const spawnMock = vi.fn();
+const getBundledNpmExecPathMock = vi.fn<() => string | null>();
 let openclawConfigDir = '/Users/test/.openclaw-geeclaw';
 let homeDir = '/Users/test';
 let openclawRuntimeDir = join(process.cwd(), 'openclaw-runtime/node_modules/openclaw');
@@ -16,6 +17,8 @@ let providerAccounts: Array<{
   updatedAt: string;
 }> = [];
 const runtimeDirsToCleanup = new Set<string>();
+const originalPlatform = process.platform;
+const originalArch = process.arch;
 
 function createMockOpenClawRuntime(prefix: string): string {
   const runtimeDir = mkdtempSync(join(tmpdir(), prefix));
@@ -160,6 +163,14 @@ vi.mock('@electron/utils/managed-plugin-installer', () => ({
   ensureManagedPluginsReadyBeforeGatewayLaunch: vi.fn(async () => []),
 }));
 
+vi.mock('@electron/utils/managed-bin', async () => {
+  const actual = await vi.importActual<typeof import('@electron/utils/managed-bin')>('@electron/utils/managed-bin');
+  return {
+    ...actual,
+    getBundledNpmExecPath: getBundledNpmExecPathMock,
+  };
+});
+
 vi.mock('@electron/utils/proxy', () => ({
   buildProxyEnv: vi.fn(() => ({})),
   resolveProxySettings: vi.fn(() => ({
@@ -203,9 +214,12 @@ beforeEach(() => {
   openclawRuntimeDir = createMockOpenClawRuntime('geeclaw-openclaw-runtime-');
   openclawRuntimeSource = 'bundled';
   providerAccounts = [];
+  getBundledNpmExecPathMock.mockReturnValue(null);
 });
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+  Object.defineProperty(process, 'arch', { value: originalArch, writable: true });
   for (const runtimeDir of runtimeDirsToCleanup) {
     rmSync(runtimeDir, { recursive: true, force: true });
   }
@@ -485,6 +499,27 @@ describe('buildGatewayForkEnv', () => {
     });
 
     expect(forkEnv.PNPM_HOME).toBe(`${process.cwd()}/resources/managed-bin/posix`);
+  });
+
+  it('sets Windows npm_execpath to the bundled npm-cli.js when available', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32', writable: true });
+    Object.defineProperty(process, 'arch', { value: 'x64', writable: true });
+    const npmCliPath = join(process.cwd(), 'resources', 'bin', 'win32-x64', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    getBundledNpmExecPathMock.mockReturnValue(npmCliPath);
+
+    const { buildGatewayForkEnv } = await import('@electron/gateway/config-sync');
+
+    const forkEnv = buildGatewayForkEnv({
+      baseEnv: {
+        PATH: 'C:\\Windows\\System32',
+      },
+      finalPath: 'C:\\Program Files\\GeeClaw\\resources\\bin;C:\\Windows\\System32',
+      injectedEnv: {},
+      openclawConfigDir: 'C:\\Users\\test\\.openclaw-geeclaw',
+      gatewayPort: 28788,
+    });
+
+    expect(forkEnv.npm_execpath).toBe(npmCliPath);
   });
 });
 

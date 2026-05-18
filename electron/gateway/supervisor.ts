@@ -15,6 +15,7 @@ import { PORTS } from '../utils/config';
 import { logger } from '../utils/logger';
 import { setPathEnvValue } from '../utils/env-path';
 import { getGeeClawRuntimePath, getGeeClawRuntimePathEntries } from '../utils/runtime-path';
+import { getBundledNpmExecPath } from '../utils/managed-bin';
 import type { ManagedGatewayProcess } from './process-launcher';
 
 export function warmupManagedPythonReadiness(): void {
@@ -572,6 +573,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
   const uvEnv = await getUvMirrorEnv();
   const openclawConfigDir = getOpenClawConfigDir();
   const doctorArgs = buildManagedOpenClawArgs('doctor', ['--fix', '--yes', '--non-interactive']);
+  const bundledNpmExecPath = process.platform === 'win32' ? getBundledNpmExecPath() : null;
   logger.info(
     `Running OpenClaw doctor repair (runtime=${runtime.source}, command="${commandPath}", entry="${runtime.entryPath ?? 'n/a'}", args="${doctorArgs.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
   );
@@ -580,6 +582,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
     const forkEnv: Record<string, string | undefined> = {
       ...baseEnvPatched,
       ...uvEnv,
+      ...(bundledNpmExecPath ? { npm_execpath: bundledNpmExecPath } : {}),
       OPENCLAW_STATE_DIR: openclawConfigDir,
       OPENCLAW_CONFIG_PATH: getManagedOpenClawConfigPath(openclawConfigDir),
       OPENCLAW_GATEWAY_PORT: String(PORTS.OPENCLAW_GATEWAY),

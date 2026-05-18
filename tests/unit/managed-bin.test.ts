@@ -136,4 +136,53 @@ describe('managed-bin paths', () => {
     expect(getBundledNpmPath()).toBe(npmCmdPath);
     expect(getBundledNpxPath()).toBe(npxCmdPath);
   });
+
+  it('resolves bundled npm-cli.js for packaged Windows builds', async () => {
+    setPlatform('win32');
+    setArch('x64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: 'C:/Program Files/GeeClaw/resources',
+      configurable: true,
+      writable: true,
+    });
+
+    const npmCliPath = join(
+      'C:/Program Files/GeeClaw/resources',
+      'bin',
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    );
+    mockExistsSync.mockImplementation((value: string) => value === npmCliPath);
+
+    const { getBundledNpmExecPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNpmExecPath()).toBe(npmCliPath);
+  });
+
+  it('resolves bundled npm-cli.js from lib for packaged macOS builds', async () => {
+    setPlatform('darwin');
+    setArch('arm64');
+    mockIsPackagedGetter.value = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/Applications/GeeClaw.app/Contents/Resources',
+      configurable: true,
+      writable: true,
+    });
+
+    const npmCliPath = join(
+      '/Applications/GeeClaw.app/Contents/Resources',
+      'bin',
+      'lib',
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    );
+    mockExistsSync.mockImplementation((value: string) => value === npmCliPath);
+
+    const { getBundledNpmExecPath } = await import('@electron/utils/managed-bin');
+    expect(getBundledNpmExecPath()).toBe(npmCliPath);
+  });
 });
