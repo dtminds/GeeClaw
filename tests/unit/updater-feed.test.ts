@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resolveFeedTarget } from '@electron/main/updater';
+import { configureAutoUpdaterFeed, resolveFeedTarget } from '@electron/main/updater';
 
 describe('updater feed target', () => {
   it('uses arch-specific OSS directories for macOS auto-updates', () => {
@@ -32,5 +32,39 @@ describe('updater feed target', () => {
       channel: 'latest',
       url: 'https://geeclaw.dtminds.com/latest/darwin-arm64',
     });
+  });
+
+  it('keeps downgrade checks disabled after selecting a release channel', () => {
+    let selectedChannel: string | null = null;
+    const setFeedURL = vi.fn();
+    const autoUpdater = {
+      allowDowngrade: false,
+      channel: null as string | null,
+      setFeedURL,
+    };
+
+    Object.defineProperty(autoUpdater, 'channel', {
+      get() {
+        return selectedChannel;
+      },
+      set(value: string | null) {
+        selectedChannel = value;
+        autoUpdater.allowDowngrade = true;
+      },
+      configurable: true,
+    });
+
+    configureAutoUpdaterFeed(autoUpdater, {
+      channel: 'beta',
+      url: 'https://geeclaw.dtminds.com/beta',
+    });
+
+    expect(autoUpdater.channel).toBe('beta');
+    expect(setFeedURL).toHaveBeenCalledWith({
+      provider: 'generic',
+      url: 'https://geeclaw.dtminds.com/beta',
+      useMultipleRangeRequest: false,
+    });
+    expect(autoUpdater.allowDowngrade).toBe(false);
   });
 });

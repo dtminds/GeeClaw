@@ -77,6 +77,29 @@ export function resolveFeedTarget(input: FeedTargetInput): FeedTarget {
   return { channel, url };
 }
 
+type ConfigurableAutoUpdater = {
+  channel: string | null;
+  allowDowngrade: boolean;
+  setFeedURL(options: {
+    provider: 'generic';
+    url: string;
+    useMultipleRangeRequest: boolean;
+  }): void;
+};
+
+export function configureAutoUpdaterFeed(
+  autoUpdater: ConfigurableAutoUpdater,
+  feedTarget: FeedTarget,
+): void {
+  autoUpdater.channel = feedTarget.channel;
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: feedTarget.url,
+    useMultipleRangeRequest: false,
+  });
+  autoUpdater.allowDowngrade = false;
+}
+
 export class AppUpdater extends EventEmitter {
   private mainWindow: BrowserWindow | null = null;
   private status: UpdateStatus = { status: 'idle' };
@@ -135,12 +158,7 @@ export class AppUpdater extends EventEmitter {
       `[Updater] Version: ${options.version}, platform: ${process.platform}/${process.arch}, channel: ${feedTarget.channel}, feedUrl: ${feedTarget.url}`,
     );
 
-    autoUpdater.channel = feedTarget.channel;
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: feedTarget.url,
-      useMultipleRangeRequest: false,
-    });
+    configureAutoUpdaterFeed(autoUpdater, feedTarget);
   }
 
   private getAutoUpdaterOrThrow(): AutoUpdaterType {
