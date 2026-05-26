@@ -45,14 +45,43 @@ function readHydratedStamp(runtimeRoot) {
   return fs.readFileSync(stampPath, 'utf8').trim() || null;
 }
 
+function readPayloadChecksum(archiveRoot, payloadName = 'payload.tar.gz') {
+  const checksumsPath = path.join(archiveRoot, 'SHA256SUMS');
+  if (!fs.existsSync(checksumsPath)) {
+    return null;
+  }
+
+  const expectedNames = new Set([payloadName, `./${payloadName}`]);
+  for (const rawLine of fs.readFileSync(checksumsPath, 'utf8').split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    const match = line.match(/^(\S+)\s+\*?(.+)$/u);
+    if (!match) {
+      continue;
+    }
+
+    const [, checksum, fileName] = match;
+    const normalizedFileName = fileName.trim().replace(/\\/gu, '/');
+    if (expectedNames.has(normalizedFileName) || path.basename(normalizedFileName) === payloadName) {
+      return checksum;
+    }
+  }
+
+  return null;
+}
+
 function resolveArchiveStamp(archiveRoot, versionOverride) {
+  const payloadChecksum = readPayloadChecksum(archiveRoot);
   if (typeof versionOverride === 'string' && versionOverride.length > 0) {
-    return versionOverride;
+    return payloadChecksum ? `${versionOverride}:${payloadChecksum}` : versionOverride;
   }
 
   const metadata = readArchiveMetadata(archiveRoot);
   if (typeof metadata?.version === 'string' && metadata.version.length > 0) {
-    return metadata.version;
+    return payloadChecksum ? `${metadata.version}:${payloadChecksum}` : metadata.version;
   }
 
   const archivePath = path.join(archiveRoot, 'payload.tar.gz');
@@ -65,7 +94,7 @@ export function resolvePrebuiltOpenClawSidecarArchiveRoot(projectRoot, target) {
 }
 
 export function resolvePrebuiltOpenClawSidecarRuntimeRoot(projectRoot, target) {
-  return path.join(projectRoot, 'build', 'prebuilt-sidecar-runtime', parseOpenClawSidecarTarget(target).target);
+  return path.join(projectRoot, 'build', 'prebuilt-sidecar-runtime', parseOpenClawSidecarTarget(target).target, 'openclaw-sidecar');
 }
 
 export function findHydratedOpenClawSidecarRuntime(projectRoot, target, version) {

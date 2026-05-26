@@ -11,7 +11,7 @@ import { getGeeClawAgentStore } from "../services/agents/store-instance";
 
 import { getGeeClawChannelStore } from "../services/channels/store-instance";
 import { isDeepStrictEqual } from 'node:util';
-import { getOpenClawResolvedDir, getOpenClawConfigDir } from './paths';
+import { getOpenClawResolvedDir, getOpenClawConfigDir, getOpenClawPluginStageDir } from './paths';
 import { buildManagedOpenClawArgs } from './openclaw-managed-profile';
 import { reconcileBundledPluginLoadPaths } from './plugin-install';
 import * as logger from './logger';
@@ -1601,6 +1601,7 @@ export async function validateChannelConfig(channelType: string): Promise<Valida
 
     try {
         const openclawPath = getOpenClawResolvedDir();
+        const pluginStageDir = getOpenClawPluginStageDir(openclawPath);
         const doctorArgs = buildManagedOpenClawArgs('doctor', ['--json']).join(' ');
 
         // Run openclaw doctor command to validate config (async to avoid
@@ -1616,6 +1617,7 @@ export async function validateChannelConfig(channelType: string): Promise<Valida
                         OPENCLAW_STATE_DIR: OPENCLAW_DIR,
                         OPENCLAW_CONFIG_PATH: CONFIG_FILE,
                         OPENCLAW_NO_RESPAWN: '1',
+                        ...(pluginStageDir ? { OPENCLAW_PLUGIN_STAGE_DIR: pluginStageDir } : {}),
                     },
                     timeout: 30000,
                     windowsHide: true,

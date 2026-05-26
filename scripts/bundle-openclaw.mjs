@@ -16,6 +16,11 @@ import { copyInstalledNodeModules, shouldSkipBundledPackage } from './lib/opencl
 import { copyTreeWithFallback } from './lib/openclaw-copy-tree.mjs';
 import { cleanDirectorySync } from './lib/fs-utils.mjs';
 import { resolveOpenClawBundleSource } from './lib/openclaw-bundle-source.mjs';
+import {
+  BUNDLED_EXTENSION_RUNTIME_DEP_PLUGIN_IDS,
+  BUNDLED_EXTENSION_RUNTIME_DEPS_MANIFEST,
+  writeBundledExtensionRuntimeDepsManifest,
+} from './lib/openclaw-bundled-runtime-deps.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -386,6 +391,11 @@ if (fs.existsSync(extensionsDir)) {
 if (mergedExtensionCount > 0) {
   echo`   Merged ${mergedExtensionCount} extension packages into top-level node_modules`;
 }
+
+const bundledRuntimeDepsManifest = writeBundledExtensionRuntimeDepsManifest(OUTPUT);
+const bundledRuntimeDepsCount = Object.values(bundledRuntimeDepsManifest.plugins)
+  .reduce((total, deps) => total + deps.length, 0);
+echo`   Wrote ${BUNDLED_EXTENSION_RUNTIME_DEPS_MANIFEST} for ${BUNDLED_EXTENSION_RUNTIME_DEP_PLUGIN_IDS.length} selected bundled extension(s), ${bundledRuntimeDepsCount} runtime dep(s)`;
 
 // 6. Clean up the bundle to reduce package size
 //

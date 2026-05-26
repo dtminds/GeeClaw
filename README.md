@@ -376,6 +376,7 @@ pnpm dev
 - `pnpm dev` and `openclaw-runtime:prepare` use the repo-local `openclaw-runtime/` install. `prepare` automatically refreshes it when the installed OpenClaw version or direct dependency set drifts from `openclaw-runtime/package.json`; it does not download a sidecar by default.
 - Set `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` to force development builds to load the agent marketplace catalog from a remote URL instead of `site/res/agent-marketplace-catalog-v2.json`.
 - Use `pnpm run openclaw-runtime:install` when you need a clean reinstall or want to refresh the local runtime explicitly.
+- When upgrading OpenClaw, keep the selected built-in plugin runtime deps mirrored in `openclaw-runtime/package.json`. `scripts/bundle-openclaw.mjs` writes `geeclaw-bundled-runtime-deps.json` and fails if the staged bundle would make OpenClaw install those deps during Gateway startup.
 
 ### GitHub Pages Landing Page
 

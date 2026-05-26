@@ -11,6 +11,7 @@ import {
   parseOpenClawSidecarTarget,
   readOpenClawSidecarVersionManifest,
 } from './lib/openclaw-sidecar-artifacts.mjs';
+import { validateBundledExtensionRuntimeDeps } from './lib/openclaw-bundled-runtime-deps.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,6 +204,7 @@ export async function buildOpenClawSidecar({
     afterPack.cleanupNativePlatformPackages(path.join(stagedOpenClawRoot, 'node_modules'), resolvedTarget.platform, resolvedTarget.arch);
     afterPack.cleanupExtensionNativePlatformPackages(stagedOpenClawRoot, resolvedTarget.platform, resolvedTarget.arch);
     afterPack.cleanupNativePrebuilds(stagedOpenClawRoot, resolvedTarget.platform, resolvedTarget.arch);
+    validateBundledExtensionRuntimeDeps(stagedOpenClawRoot);
 
     if (resolvedTarget.platform === 'darwin') {
       signingConfig = await resolveStandaloneMacCodeSigningConfig(projectRoot);

@@ -93,4 +93,57 @@ describe('packaged OpenClaw sidecar materialization', () => {
     const reusedRoot = await materializePackagedOpenClawSidecar();
     expect(reusedRoot).toBe(extractedRoot);
   });
+
+  it('re-extracts a packaged sidecar when the payload checksum changes without a version bump', async () => {
+    const resourcesRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-resources-'));
+    const userDataRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-userdata-'));
+    const payloadStageRoot = mkdtempSync(join(tmpdir(), 'geeclaw-sidecar-stage-'));
+    tempDirs.push(resourcesRoot, userDataRoot, payloadStageRoot);
+
+    Object.defineProperty(process, 'resourcesPath', {
+      value: resourcesRoot,
+      configurable: true,
+      writable: true,
+    });
+    mockElectron.getPath.mockImplementation((name: string) => (
+      name === 'userData' ? userDataRoot : '/tmp'
+    ));
+
+    const packagedSidecarRoot = join(resourcesRoot, 'runtime', 'openclaw');
+    const payloadPath = join(packagedSidecarRoot, 'payload.tar.gz');
+    const archiveMetadataPath = join(packagedSidecarRoot, 'archive.json');
+    const checksumPath = join(packagedSidecarRoot, 'SHA256SUMS');
+    mkdirSync(payloadStageRoot, { recursive: true });
+    mkdirSync(packagedSidecarRoot, { recursive: true });
+    writeFileSync(
+      archiveMetadataPath,
+      JSON.stringify({ format: 'tar.gz', path: 'payload.tar.gz', version: '2026.4.27-r1' }) + '\n',
+      'utf8',
+    );
+
+    writeFileSync(join(payloadStageRoot, 'openclaw.mjs'), 'export const runtime = "first";\n', 'utf8');
+    execFileSync(tarCommand(), ['-czf', payloadPath, '-C', payloadStageRoot, '.']);
+    writeFileSync(checksumPath, 'aaa  payload.tar.gz\n', 'utf8');
+
+    const { materializePackagedOpenClawSidecar } = await import('@electron/utils/openclaw-sidecar');
+
+    const extractedRoot = await materializePackagedOpenClawSidecar();
+    const extractedEntry = join(userDataRoot, 'runtime', 'openclaw-sidecar', 'openclaw.mjs');
+    const stampPath = join(userDataRoot, 'runtime', 'openclaw-sidecar', '.archive-stamp');
+
+    expect(readFileSync(extractedEntry, 'utf8')).toContain('"first"');
+    expect(readFileSync(stampPath, 'utf8')).toBe('2026.4.27-r1:aaa');
+
+    rmSync(payloadStageRoot, { recursive: true, force: true });
+    mkdirSync(payloadStageRoot, { recursive: true });
+    writeFileSync(join(payloadStageRoot, 'openclaw.mjs'), 'export const runtime = "second";\n', 'utf8');
+    execFileSync(tarCommand(), ['-czf', payloadPath, '-C', payloadStageRoot, '.']);
+    writeFileSync(checksumPath, 'bbb  payload.tar.gz\n', 'utf8');
+
+    const rehydratedRoot = await materializePackagedOpenClawSidecar();
+
+    expect(rehydratedRoot).toBe(extractedRoot);
+    expect(readFileSync(extractedEntry, 'utf8')).toContain('"second"');
+    expect(readFileSync(stampPath, 'utf8')).toBe('2026.4.27-r1:bbb');
+  });
 });

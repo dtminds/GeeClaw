@@ -367,7 +367,7 @@ pnpm package:mac:dir:quick # 本地快速验证 macOS 目录包；复用已有 b
 GeeClaw 现在提供了基于 Playwright 的 macOS Electron 冒烟测试，用来覆盖桌面主壳启动链路。
 
 - `pnpm run test:e2e` 会先构建应用，再从 `dist-electron/main/index.js` 启动真实的 Electron 主进程。
-- 在 Electron 启动前，E2E 流程会先把当前平台已 pin 的 OpenClaw sidecar archive 下载到 `build/prebuilt-sidecar/`，再解压还原到 `build/prebuilt-sidecar-runtime/`，并带着 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 启动。
+- 在 Electron 启动前，E2E 流程会先把当前平台已 pin 的 OpenClaw sidecar archive 下载到 `build/prebuilt-sidecar/`，再解压还原到 `build/prebuilt-sidecar-runtime/<target>/openclaw-sidecar/`，并带着 `GEECLAW_USE_PREBUILT_OPENCLAW_SIDECAR=1` 启动。
 - 测试会使用独立的临时 `HOME` 和 Electron `userData` 目录，不会污染你平时使用的 GeeClaw 配置。
 - E2E 模式只会跳过 setup / 登录 / provider 这几道前置门槛；进入主界面前仍然要求真实的托管 OpenClaw/Gateway 成功启动。
 - 当前 smoke 覆盖会验证应用能够进入主界面，并在 Dashboard、Skills、Channels 之间完成基础导航。
@@ -398,6 +398,7 @@ pnpm dev
 - 设置 `GEECLAW_AGENT_MARKETPLACE_CATALOG_URL` 可以让开发模式优先从远程 URL 加载智能体广场 catalog，而不是读取 `site/res/agent-marketplace-catalog-v2.json`。
 - 当你需要干净重装，或者想明确刷新本地 runtime 时，再执行 `pnpm run openclaw-runtime:install`。
 - sidecar 应该被视为 release 产物，而不是默认的开发输入。
+- 升级 OpenClaw 时，需要把选定内置插件的 runtime 依赖同步到 `openclaw-runtime/package.json`。`scripts/bundle-openclaw.mjs` 会写出 `geeclaw-bundled-runtime-deps.json`，如果打包后的 runtime 仍会触发 OpenClaw 在 Gateway 启动时安装这些依赖，就会直接失败。
 
 要更新 release CI 使用的 sidecar pin 版本，可以这样做：
 

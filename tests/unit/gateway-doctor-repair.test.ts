@@ -17,15 +17,16 @@ vi.mock('@electron/utils/openclaw-runtime', () => ({
     source: 'bundled',
     packageExists: true,
     isBuilt: true,
-    dir: '/opt/openclaw',
-    entryPath: '/opt/openclaw/openclaw.mjs',
-    commandPath: '/opt/openclaw/openclaw.mjs',
+    dir: '/opt/runtime/openclaw-sidecar',
+    entryPath: '/opt/runtime/openclaw-sidecar/openclaw.mjs',
+    commandPath: '/opt/runtime/openclaw-sidecar/openclaw.mjs',
     displayName: 'Bundled OpenClaw',
   })),
 }));
 
 vi.mock('@electron/utils/paths', () => ({
   getOpenClawConfigDir: vi.fn(() => '/Users/test/.openclaw-geeclaw'),
+  getOpenClawPluginStageDir: vi.fn(() => '/opt/runtime'),
 }));
 
 vi.mock('@electron/utils/managed-bin', () => ({
@@ -88,7 +89,7 @@ describe('runOpenClawDoctorRepair', () => {
     vi.clearAllMocks();
   });
 
-  it('runs doctor repair without GeeClaw-specific bundled-plugin overrides', async () => {
+  it('runs doctor repair with the sidecar plugin stage dir', async () => {
     forkMock.mockImplementation((_entryPath: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
       const child = new MockUtilityChild();
       queueMicrotask(() => child.emit('exit', 0));
@@ -100,14 +101,15 @@ describe('runOpenClawDoctorRepair', () => {
     await expect(runOpenClawDoctorRepair()).resolves.toBe(true);
 
     expect(forkMock).toHaveBeenCalledWith(
-      '/opt/openclaw/openclaw.mjs',
+      '/opt/runtime/openclaw-sidecar/openclaw.mjs',
       ['--profile', 'geeclaw', 'doctor', '--fix', '--yes', '--non-interactive'],
       expect.objectContaining({
-        cwd: '/opt/openclaw',
+        cwd: '/opt/runtime/openclaw-sidecar',
         stdio: 'pipe',
         env: expect.objectContaining({
           OPENCLAW_STATE_DIR: '/Users/test/.openclaw-geeclaw',
           OPENCLAW_CONFIG_PATH: '/Users/test/.openclaw-geeclaw/openclaw.json',
+          OPENCLAW_PLUGIN_STAGE_DIR: '/opt/runtime',
         }),
       }),
     );

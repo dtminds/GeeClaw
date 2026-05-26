@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { tmpdir } from 'node:os';
 import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 
@@ -107,6 +107,9 @@ vi.mock('@electron/utils/openclaw-runtime', () => ({
 vi.mock('@electron/utils/paths', () => ({
   getOpenClawConfigDir: vi.fn(() => openclawConfigDir),
   getGeeClawConfigDir: vi.fn(() => join(homeDir, '.geeclaw')),
+  getOpenClawPluginStageDir: vi.fn((openclawDir: string) => (
+    openclawDir.endsWith('/openclaw-sidecar') ? dirname(openclawDir) : null
+  )),
 }));
 
 vi.mock('@electron/utils/managed-agent-workspace', () => ({
@@ -489,6 +492,37 @@ describe('buildGatewayForkEnv', () => {
 });
 
 describe('prepareGatewayLaunchContext', () => {
+  it('passes plugin stage dir for staged sidecar runtimes', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
+    openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));
+    const runtimeParent = mkdtempSync(join(tmpdir(), 'geeclaw-runtime-'));
+    openclawRuntimeDir = join(runtimeParent, 'openclaw-sidecar');
+
+    const entryPath = join(openclawRuntimeDir, 'openclaw.mjs');
+    const sessionsDir = join(openclawConfigDir, 'agents', 'main', 'sessions');
+    const managedWorkspaceDir = join(homeDir, 'geeclaw', 'workspace');
+
+    mkdirSync(join(openclawRuntimeDir, 'node_modules'), { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
+    mkdirSync(managedWorkspaceDir, { recursive: true });
+    writeFileSync(entryPath, 'export {};', 'utf-8');
+
+    vi.resetModules();
+    const { prepareGatewayLaunchContext } = await import('@electron/gateway/config-sync');
+
+    try {
+      const context = await prepareGatewayLaunchContext(28788);
+
+      expect(context.pluginStageDir).toBe(runtimeParent);
+      expect(context.forkEnv.OPENCLAW_PLUGIN_STAGE_DIR).toBe(runtimeParent);
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      rmSync(runtimeParent, { recursive: true, force: true });
+      rmSync(openclawConfigDir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not link extension deps into system runtimes', async () => {
     homeDir = mkdtempSync(join(tmpdir(), 'geeclaw-home-'));
     openclawConfigDir = mkdtempSync(join(tmpdir(), 'geeclaw-config-'));

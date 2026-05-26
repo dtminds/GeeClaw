@@ -102,10 +102,12 @@ pnpm run openclaw-runtime:clean
 
 如果要把 `openclaw` 从一个版本升级到另一个版本，最少需要同步这几步：
 
-1. 修改 [`openclaw-runtime/package.json`](./package.json)
-2. 在 `openclaw-runtime/` 目录里运行 `npm install`
-3. 提交更新后的 [`openclaw-runtime/package-lock.json`](./package-lock.json)
-4. 回到根目录执行 `pnpm run openclaw-runtime:install`
+1. 修改 [`openclaw-runtime/package.json`](./package.json) 里的 `openclaw` 版本
+2. 对照新版 OpenClaw 的内置插件声明，把 `acpx`、`bonjour`、`browser`、`discord`、`qqbot`、`telegram` 这些白名单插件的 `dependencies` / `optionalDependencies` 同步成 `openclaw-runtime/package.json` 的直接依赖
+3. 在 `openclaw-runtime/` 目录里运行 `npm install`
+4. 提交更新后的 [`openclaw-runtime/package-lock.json`](./package-lock.json)
+5. 回到根目录执行 `pnpm run openclaw-runtime:install`
+6. 运行 `pnpm exec zx scripts/bundle-openclaw.mjs`，确认 `geeclaw-bundled-runtime-deps.json` 能生成且打包后的 runtime 依赖校验通过
 
 如果只改版本号、不刷新 `package-lock.json`，`install-runtime.mjs` 里的 `npm ci`
 就会因为 lockfile 不匹配而报错，然后退回到 `npm install`。
@@ -131,9 +133,11 @@ pnpm dev
 建议按这个顺序理解：
 
 1. 修改 [`openclaw-runtime/package.json`](./package.json)
-2. 在 `openclaw-runtime/` 里刷新 lockfile
-3. 回到仓库根目录执行 `pnpm run openclaw-runtime:install`
-4. 用 `pnpm dev` 验证开发态是否能正常启动
+2. 同步白名单内置插件的 runtime 依赖
+3. 在 `openclaw-runtime/` 里刷新 lockfile
+4. 回到仓库根目录执行 `pnpm run openclaw-runtime:install`
+5. 执行 `pnpm exec zx scripts/bundle-openclaw.mjs` 验证 sidecar 输入不会缺插件依赖
+6. 用 `pnpm dev` 验证开发态是否能正常启动
 
 如果只是想强制刷新本地 runtime，不需要动 sidecar，直接执行：
 
@@ -162,6 +166,7 @@ pnpm run openclaw-runtime:install
 - `openclaw-runtime/node_modules/openclaw`
 - `scripts/bundle-openclaw.mjs`
 - `build/openclaw`
+- `build/openclaw/geeclaw-bundled-runtime-deps.json`
 - `after-pack` 归档成 `Contents/Resources/runtime/openclaw/payload.tar.gz`
 
 可直接执行：

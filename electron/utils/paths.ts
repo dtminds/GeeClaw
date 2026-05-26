@@ -3,7 +3,7 @@
  * Cross-platform path resolution helpers
  */
 import { app } from 'electron';
-import { join } from 'path';
+import { basename, dirname, join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
 import { logger } from './logger';
@@ -113,7 +113,7 @@ function resolveDevelopmentPrebuiltOpenClawSidecarRoot(): string | null {
     return null;
   }
 
-  return join(process.cwd(), 'build', 'prebuilt-sidecar-runtime', target);
+  return join(process.cwd(), 'build', 'prebuilt-sidecar-runtime', target, 'openclaw-sidecar');
 }
 
 /**
@@ -199,6 +199,24 @@ export function getOpenClawResolvedDir(): string {
  */
 export function getOpenClawEntryPath(): string {
   return join(getOpenClawDir(), 'openclaw.mjs');
+}
+
+/**
+ * Get the external bundled-plugin runtime dependency stage directory.
+ *
+ * Modern OpenClaw can reuse an existing `openclaw-*` package root under
+ * OPENCLAW_PLUGIN_STAGE_DIR. Our hydrated sidecar is named `openclaw-sidecar`,
+ * so pointing the stage dir at its parent lets OpenClaw find the packaged
+ * top-level node_modules instead of installing plugin runtime deps on startup.
+ */
+export function getOpenClawPluginStageDir(openclawDir = getOpenClawDir()): string | null {
+  if (!basename(openclawDir).startsWith('openclaw-')) {
+    return null;
+  }
+  if (!existsSync(join(openclawDir, 'geeclaw-bundled-runtime-deps.json'))) {
+    return null;
+  }
+  return dirname(openclawDir);
 }
 
 /**
